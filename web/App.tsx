@@ -52,7 +52,7 @@ export default function App() {
   const { filters } = settings;
   const hub = hubById(settings.hubId);
   const center = useMemo<LatLng>(() => ({ lat: hub.lat, lng: hub.lng }), [hub.lat, hub.lng]);
-  const { data, loading, error, polling, reload } = usePlaces(hub.id, filters.radius);
+  const { data, loading, error, polling, reload } = usePlaces(hub.id);
   const now = useNow();
   const personal = usePersonal();
   const { isExcluded, record } = personal;
@@ -82,8 +82,8 @@ export default function App() {
       sortPlaces(filterPlaces(data?.places ?? [], filters, now), filters.sort).filter((p) => !isExcluded(p.id)),
     [data, filters, now, isExcluded],
   );
-  // R34: 필터 전 전체 목록(지금 거점·반경) 기준 평점 상위 N%
-  const ranks = useMemo(() => topPercents(data?.places ?? []), [data]);
+  // R34: 필터 전 전체 목록(지금 거점·반경) 기준 평점 상위 N%. R42: 1000m 목록 중 화면 반경 안에서 매긴다
+  const ranks = useMemo(() => topPercents(data?.places ?? [], filters.radius), [data, filters.radius]);
 
   // R13: 목록 응답에는 메뉴가 3개뿐이라 카드를 열면 단건 조회로 전체 상세를 한 번 받아 합친다
   const [fullDetails, setFullDetails] = useState<Record<string, ApiDetail>>({});

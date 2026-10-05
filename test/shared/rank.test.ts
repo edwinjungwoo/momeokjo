@@ -46,4 +46,17 @@ describe("R34 근처 상위 N%", () => {
     expect(topPercents([rated("only", 5.0)]).size).toBe(0);
     expect(topPercents([]).size).toBe(0);
   });
+
+  it("R42: 거점의 1000m 목록을 받아도 순위는 화면 반경 안의 가게끼리 매긴다", () => {
+    const near = Array.from({ length: 4 }, (_, i) => apiPlace(`n${i}`, { distance: 100 + i }, { rating: 4.0 - i * 0.1, reviewCount: 50 }));
+    const far = Array.from({ length: 6 }, (_, i) => apiPlace(`f${i}`, { distance: 800 }, { rating: 4.9, reviewCount: 50 }));
+    const all = [...near, ...far];
+    // 1000m 전체로 매기면 가까운 곳은 30% 밖
+    expect(topPercents(all).has("n0")).toBe(false);
+    // 반경 500m 안에서만 매기면 n0이 1위(4곳 중 1위 = 25%)
+    const m = topPercents(all, 500);
+    expect(m.get("n0")).toBe(25);
+    expect(m.has("f0")).toBe(false);
+    expect(m.size).toBe(1);
+  });
 });

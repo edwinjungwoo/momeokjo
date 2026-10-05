@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { MAX_RADIUS, MIN_RADIUS, RADIUS_STEP } from "../shared/constants";
+import { MAX_RADIUS } from "../shared/constants";
 import type { PlacesResponse } from "../shared/types";
 import { fetchPlaces } from "./api";
 
@@ -10,15 +10,14 @@ const MAX_POLLS = 10;
 type State = { data: PlacesResponse | null; loading: boolean; error: boolean; polling: boolean };
 
 /**
- * R29: 거점/반경이 바뀌면 250ms 디바운스 후 불러오고,
+ * R29: 거점이 바뀌면 250ms 디바운스 후 불러오고,
  * pending 또는 incompleteTiles가 남아 있으면 3초 간격으로 최대 10번 다시 불러온다.
  * 다시 불러오는 동안 이전 data를 유지한다 (loading=true로 흐리게만 표시).
+ * R42: 반경과 상관없이 거점의 1000m 목록을 한 번 받는다 — 화면 반경은 filterPlaces가 거리로 거른다.
  */
-export function usePlaces(hubId: string, rawRadius: number) {
+export function usePlaces(hubId: string) {
   const [state, setState] = useState<State>({ data: null, loading: true, error: false, polling: false });
   const [reloadKey, setReloadKey] = useState(0);
-  // 서버는 50m 단위만 받는다 (응답 캐시 키를 적게) — 혹시 어긋난 값이 와도 맞춘다
-  const radius = Math.min(MAX_RADIUS, Math.max(MIN_RADIUS, Math.round(rawRadius / RADIUS_STEP) * RADIUS_STEP));
 
   useEffect(() => {
     const ctrl = new AbortController();
@@ -26,7 +25,7 @@ export function usePlaces(hubId: string, rawRadius: number) {
     let timer: number | undefined;
     const load = async () => {
       try {
-        const data = await fetchPlaces(hubId, radius, ctrl.signal);
+        const data = await fetchPlaces(hubId, MAX_RADIUS, ctrl.signal);
         if (ctrl.signal.aborted) return;
         const more = (data.pending > 0 || data.incompleteTiles > 0) && polls < MAX_POLLS;
         setState({ data, loading: false, error: false, polling: more });
@@ -45,7 +44,7 @@ export function usePlaces(hubId: string, rawRadius: number) {
       window.clearTimeout(debounce);
       window.clearTimeout(timer);
     };
-  }, [hubId, radius, reloadKey]);
+  }, [hubId, reloadKey]);
 
   const reload = useCallback(() => setReloadKey((k) => k + 1), []);
   return { ...state, reload };
