@@ -31,13 +31,22 @@ type Props = {
   radius: number;
   places: ApiPlace[];
   selectedId: string | null;
+  /** R22′: 뽑힌 후보 id (순서 = 번호 1/2/3). 모두 강조하고 번호를 단다 */
+  picks: string[];
+  /** 펼친 후보 id. 그 핀으로 이동하고 맨 위에 둔다 */
+  focusId: string | null;
   onSelect: (id: string) => void;
 };
+
+/** 데스크톱은 결과 오버레이가 지도 왼쪽을, 모바일은 바텀 시트가 지도 아래를 가린다 */
+const isDesktop = () => window.matchMedia?.("(min-width: 900px)").matches ?? false;
+const MIN_FIT_LEVEL = 3;
+const FIT_PAD = 40;
 
 const hasSize = (node: HTMLElement) => node.clientWidth > 0 && node.clientHeight > 0;
 
 /** R28: 거점 핀, 반경 원(점선), 후보 핀(CustomOverlay 버튼). 선택된 핀은 커지고 한 번 퍼진다. */
-export function MapView({ center, radius, places, selectedId, onSelect }: Props) {
+export function MapView({ center, radius, places, selectedId, picks, focusId, onSelect }: Props) {
   const el = useRef<HTMLDivElement>(null);
   const map = useRef<any>(undefined);
   const circle = useRef<any>(undefined);
@@ -183,17 +192,72 @@ export function MapView({ center, radius, places, selectedId, onSelect }: Props)
         existing.set(p.id, ov);
       }
       const selected = p.id === selectedId;
+      const rank = picks.indexOf(p.id) + 1;
+      const focus = rank > 0 && p.id === focusId;
       const top = (p.detail?.rating ?? 0) >= TOP_RATING;
       const node = ov.getContent() as HTMLElement;
       // 바뀐 것만 건드린다. 클래스가 새로 붙을 때만 펄스 애니메이션이 돈다
-      if (node.classList.contains("pin--selected") !== selected) node.classList.toggle("pin--selected", selected);
-      if (node.classList.contains("pin--top") !== top) node.classList.toggle("pin--top", top);
+      const want: Record<string, boolean> = {
+        "pin--selected": selected,
+        "pin--pick": rank > 0,
+        "pin--focus": focus,
+        "pin--top": top,
+      };
+      for (const [cls, on] of Object.entries(want)) {
+        if (node.classList.contains(cls) !== on) node.classList.toggle(cls, on);
+      }
+      const rankText = rank > 0 ? String(rank) : "";
+      if ((node.dataset.rank ?? "") !== rankText) {
+        if (rankText) node.dataset.rank = rankText;
+        else delete node.dataset.rank;
+      }
       const text = chipText(p);
       const chip = node.firstChild as HTMLElement;
       if (chip.textContent !== text) chip.textContent = text;
-      ov.setZIndex(selected ? 10 : top ? 2 : 1);
+      ov.setZIndex(focus || selected ? 12 : rank > 0 ? 11 - rank : top ? 2 : 1);
     }
-  }, [ready, places, selectedId]);
+  }, [ready, places, selectedId, picks, focusId]);
+
+  // R22′: 새 후보가 뽑히면 먼저 3곳이 다 보이게 맞춘다
+  const picksKey = picks.join(",");
+  useEffect(() => {
+    if (!ready || !picksKey) return;
+    const kakao = window.kakao;
+    const pts = picksKey
+      .split(",")
+      .map((id) => overlays.current.get(id))
+      .filter(Boolean)
+      .map((ov) => ov.getPosition());
+    if (pts.length === 0) return;
+    const m = map.current;
+    if (pts.length === 1) {
+      m.panTo(pts[0]);
+      return;
+    }
+    const bounds = new kakao.maps.LatLngBounds();
+    for (const pt of pts) bounds.extend(pt);
+    // 위: 이름표 자리. 결과 시트가 지도를 가리는 만큼(모바일은 아래, 데스크톱은 왼쪽) 여백을 더 둔다
+    let bottom = FIT_PAD;
+    let left = FIT_PAD;
+    const node = el.current;
+    const sheet = node?.closest(".map-wrap")?.querySelector<HTMLElement>(".sheet");
+    if (node && sheet) {
+      const mr = node.getBoundingClientRect();
+      const sr = sheet.getBoundingClientRect();
+      if (isDesktop()) left = Math.max(FIT_PAD, sr.right - mr.left + 24);
+      else bottom = Math.max(FIT_PAD, mr.bottom - sr.top + 24);
+    }
+    m.setBounds(bounds, 56, FIT_PAD, bottom, left);
+    if (m.getLevel() < MIN_FIT_LEVEL) m.setLevel(MIN_FIT_LEVEL);
+    // places가 바뀔 때마다(폴링)가 아니라 새로 뽑혔을 때만 맞춘다
+  }, [ready, picksKey]);
+
+  // 펼친 후보로 이동
+  useEffect(() => {
+    if (!ready || !focusId) return;
+    const ov = overlays.current.get(focusId);
+    if (ov) map.current.panTo(ov.getPosition());
+  }, [ready, focusId]);
 
   // 선택이 바뀌면 그 핀으로 이동 (모바일에서 뽑은 뒤 지도가 결과를 따라간다)
   useEffect(() => {
@@ -205,7 +269,7 @@ export function MapView({ center, radius, places, selectedId, onSelect }: Props)
   return (
     <>
       {/* 지도 컨테이너의 class는 SDK 몫이라 건드리지 않고, 핀 모양 전환 data-zoom은 감싸는 요소에 둔다 */}
-      <div className="map-zoom" data-zoom={zoom}>
+      <div className="map-zoom" data-zoom={zoom} data-focus={focusId ? "1" : undefined}>
         <div ref={el} className="map" />
       </div>
       {failed && (

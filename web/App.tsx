@@ -1,8 +1,8 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { haversine, walkMinutes } from "../shared/geo";
 import { hubById } from "../shared/hubs";
 import { topPercents } from "../shared/rank";
-import { draw, filterPlaces, sortPlaces, type Filters } from "../shared/recommend";
+import { TRIO_SIZE, drawTrio, filterPlaces, sortPlaces, type Filters } from "../shared/recommend";
 import { shareText } from "../shared/share";
 import type { ApiDetail, ApiPlace, LatLng } from "../shared/types";
 import { fetchPlace } from "./api";
@@ -17,7 +17,9 @@ import { PlaceList } from "./components/PlaceList";
 import { SkeletonList } from "./components/Skeleton";
 import { StatusLine } from "./components/StatusLine";
 import { Toast, useToast } from "./components/Toast";
+import { TrioSheet } from "./components/TrioSheet";
 import { statusOf } from "./format";
+import { usePersonal } from "./personal";
 import { shareOrCopy } from "./shareAction";
 import { usePlaces } from "./usePlaces";
 import { useSettings } from "./useSettings";
@@ -39,6 +41,11 @@ function useNow() {
   return now;
 }
 
+/** R22′: 지금 보여주는 후보 3곳. 객체는 목록에 없을 때(공유받은 곳 등)를 위한 대비값이고, 화면은 최신 목록 객체를 우선한다 */
+type Trio = { ids: string[]; source: "drawn" | "received"; fallback: Record<string, ApiPlace> };
+
+const byId = (ps: ApiPlace[]) => Object.fromEntries(ps.map((p) => [p.id, p]));
+
 export default function App() {
   const { settings, share, update } = useSettings();
   const { filters } = settings;
@@ -46,52 +53,79 @@ export default function App() {
   const center = useMemo<LatLng>(() => ({ lat: hub.lat, lng: hub.lng }), [hub.lat, hub.lng]);
   const { data, loading, error, polling, reload } = usePlaces(hub.id, filters.radius);
   const now = useNow();
+  const personal = usePersonal();
+  const { isExcluded, record } = personal;
+  const [trio, setTrio] = useState<Trio | null>(null);
+  const [focusId, setFocusId] = useState<string | null>(null);
+  /** 목록·핀에서 연 한 곳 (뽑기 결과 위에 잠깐 겹쳐 연다) */
   const [selected, setSelected] = useState<ApiPlace | null>(null);
-  const [drawn, setDrawn] = useState(false);
+  const [receivedSingle, setReceivedSingle] = useState<string | null>(null);
   const drawnIds = useRef(new Set<string>());
+  const shareCtrl = useRef<AbortController | null>(null);
   const shuffle = useSlotShuffle();
   const toast = useToast();
   const tip = useFirstTip();
 
+  // R37: "여긴 빼줘"한 곳은 후보(목록·지도·뽑기)에 나오지 않는다
   const candidates = useMemo(
-    () => sortPlaces(filterPlaces(data?.places ?? [], filters, now), filters.sort),
-    [data, filters, now],
+    () =>
+      sortPlaces(filterPlaces(data?.places ?? [], filters, now), filters.sort).filter((p) => !isExcluded(p.id)),
+    [data, filters, now, isExcluded],
   );
   // R34: 필터 전 전체 목록(지금 거점·반경) 기준 평점 상위 N%
   const ranks = useMemo(() => topPercents(data?.places ?? []), [data]);
-  // 셔플이 끝날 때 최신 목록에서 같은 가게를 다시 찾기 위해 (M2)
-  const latestData = useRef(data);
-  latestData.current = data;
-  // 지도에는 후보만 찍되, 후보 밖에서 연 가게(공유 링크 등)도 보이게 한다
-  const mapPlaces = useMemo(
-    () => (selected && !candidates.some((c) => c.id === selected.id) ? [...candidates, selected] : candidates),
-    [candidates, selected],
-  );
 
   // R13: 목록 응답에는 메뉴가 3개뿐이라 카드를 열면 단건 조회로 전체 상세를 한 번 받아 합친다
   const [fullDetails, setFullDetails] = useState<Record<string, ApiDetail>>({});
-  const requestedFull = useRef(new Set<string>());
-  const selectedId = selected?.id ?? null;
+  const [detailPending, setDetailPending] = useState<string | null>(null);
+  const detailId = selected?.id ?? focusId;
+  const haveFull = detailId === null || detailId in fullDetails;
   useEffect(() => {
-    if (!selectedId || requestedFull.current.has(selectedId)) return;
-    requestedFull.current.add(selectedId);
-    fetchPlace(selectedId)
+    if (detailId === null || haveFull) return;
+    // 다른 카드로 바뀌면 이전 요청은 버린다
+    const ctrl = new AbortController();
+    setDetailPending(detailId);
+    fetchPlace(detailId, ctrl.signal)
       .then((p) => {
+        setDetailPending(null);
         const detail = p.detail;
         if (detail) setFullDetails((m) => ({ ...m, [p.id]: detail }));
       })
-      .catch(() => requestedFull.current.delete(selectedId));
-  }, [selectedId]);
-  const cardPlace = useMemo(() => {
-    const full = selected ? fullDetails[selected.id] : undefined;
-    return selected && full ? { ...selected, detail: full } : selected;
-  }, [selected, fullDetails]);
+      .catch(() => {
+        if (!ctrl.signal.aborted) setDetailPending(null);
+      });
+    return () => ctrl.abort();
+  }, [detailId, haveFull]);
 
-  // 폴링으로 상세가 채워지면 열린 카드도 최신 객체로 바꾼다
-  useEffect(() => {
-    if (!data) return;
-    setSelected((cur) => (cur ? (data.places.find((p) => p.id === cur.id) ?? cur) : cur));
-  }, [data]);
+  // 폴링으로 목록이 바뀌면 최신 객체를 쓰고, 받아 둔 전체 상세와 현재 거점 기준 도보 시간을 붙인다
+  const latest = useMemo(() => new Map((data?.places ?? []).map((p) => [p.id, p])), [data]);
+  const resolve = useCallback(
+    (p: ApiPlace) => {
+      const base = latest.get(p.id) ?? p;
+      const full = fullDetails[p.id];
+      return withWalk(full ? { ...base, detail: full } : base, center);
+    },
+    [latest, fullDetails, center],
+  );
+  const trioPlaces = useMemo(
+    () =>
+      trio
+        ? trio.ids
+            // 공유받은 후보는 친구가 고른 곳이라 빼둔 곳이어도 보여준다
+            .filter((id) => trio.source === "received" || !isExcluded(id))
+            .map((id) => resolve(trio.fallback[id]))
+        : [],
+    [trio, isExcluded, resolve],
+  );
+  const cardPlace = useMemo(() => (selected ? resolve(selected) : null), [selected, resolve]);
+  // 지도에는 후보만 찍되, 후보 밖의 결과(공유받은 곳 등)도 보이게 한다
+  const mapPlaces = useMemo(() => {
+    const extra = [...trioPlaces, ...(cardPlace ? [cardPlace] : [])].filter(
+      (p, i, all) => !candidates.some((c) => c.id === p.id) && all.findIndex((q) => q.id === p.id) === i,
+    );
+    return extra.length > 0 ? [...candidates, ...extra] : candidates;
+  }, [candidates, trioPlaces, cardPlace]);
+  const picks = useMemo(() => trioPlaces.map((p) => p.id), [trioPlaces]);
 
   // 뽑기·공유 뒤에 뜨는 마스코트는 첫 응답이 오면 미리 받아둔다
   const hasData = data !== null;
@@ -99,43 +133,64 @@ export default function App() {
     if (hasData) warmPoses(["search", "thumbsup", "love"]);
   }, [hasData]);
 
-  // R23: 공유 링크로 들어오면 첫 응답 뒤 해당 가게 카드를 연다. 목록에 없으면 R13으로 가져온다.
-  const shareHandled = useRef(false);
-  const showToast = toast.show;
+  // R23′: 공유 링크의 가게는 목록과 상관없이 바로 id로 받아 온다 (목록이 실패해도 보여준다)
+  const shareStarted = useRef(false);
+  const { show: showToast } = toast;
   useEffect(() => {
-    const id = share.placeId;
-    if (shareHandled.current || !id || !data) return;
-    shareHandled.current = true;
-    const found = data.places.find((p) => p.id === id);
-    if (found) {
-      setSelected(found);
-      return;
-    }
-    requestedFull.current.add(id);
-    fetchPlace(id)
-      .then((p) => {
-        const detail = p.detail;
-        if (detail) setFullDetails((m) => ({ ...m, [p.id]: detail }));
-        setSelected(withWalk(p, center));
-      })
-      .catch(() => showToast("공유된 가게를 찾지 못했어요"));
-  }, [data, share.placeId, center, showToast]);
+    const ids = share.placeIds;
+    if (shareStarted.current || ids.length === 0) return;
+    shareStarted.current = true;
+    const ctrl = new AbortController();
+    shareCtrl.current = ctrl;
+    void Promise.allSettled(ids.map((id) => fetchPlace(id, ctrl.signal))).then((results) => {
+      if (ctrl.signal.aborted) return;
+      const found = results.flatMap((r) => (r.status === "fulfilled" ? [r.value] : []));
+      if (found.length === 0) {
+        showToast("공유된 가게를 찾지 못했어요");
+        return;
+      }
+      setFullDetails((m) => {
+        const next = { ...m };
+        for (const p of found) if (p.detail) next[p.id] = p.detail;
+        return next;
+      });
+      record("received", found);
+      if (ids.length === 1) {
+        setReceivedSingle(found[0].id);
+        setSelected(found[0]);
+      } else {
+        setTrio({ ids: found.map((p) => p.id), source: "received", fallback: byId(found) });
+      }
+      const missing = ids.length - found.length;
+      if (missing > 0) showToast(`${missing}곳은 찾지 못했어요`);
+    });
+  }, [share.placeIds, showToast, record]);
 
-  const setFilters = (f: Filters) => update((s) => ({ ...s, filters: f }));
+  /** 거점·반경이 바뀌면 진행 중인 셔플과 공유 불러오기를 멈추고 결과를 비운다 (QA S-3) */
+  const clearTrio = () => {
+    shuffle.cancel();
+    shareCtrl.current?.abort();
+    setTrio(null);
+    setFocusId(null);
+  };
+  const setFilters = (f: Filters) => {
+    if (f.radius !== filters.radius) clearTrio();
+    update((s) => ({ ...s, filters: f }));
+  };
   const setHub = (hubId: string) => {
-    if (shuffle.running) return;
+    clearTrio();
     update((s) => ({ ...s, hubId }));
     setSelected(null);
-    setDrawn(false);
     drawnIds.current.clear();
   };
-  const closeCard = () => {
+  const closeTrio = () => {
     if (shuffle.running) return;
-    setSelected(null);
-    setDrawn(false);
+    setTrio(null);
+    setFocusId(null);
   };
+  const closeCard = () => setSelected(null);
 
-  // R21/R22: 가중 뽑기 → 0.8초 셔플 → 카드 안착 + 지도 이동 + 짧은 진동
+  // R21′/R22′: 3곳 가중 뽑기 → 0.8초 셔플 → 카드 3장 + 지도 번호 + 짧은 진동
   const onDraw = () => {
     if (shuffle.running) return;
     if (tip.open) tip.dismiss();
@@ -143,48 +198,70 @@ export default function App() {
       toast.show("가게 정보를 불러오는 중이에요");
       return;
     }
-    const r = draw(candidates, filters.party, drawnIds.current, Math.random);
+    const r = drawTrio(candidates, filters.party, drawnIds.current, Math.random, {
+      multiplier: personal.multiplier(Date.now()),
+    });
     if (!r) {
-      closeCard();
+      setTrio(null);
+      setFocusId(null);
+      setSelected(null);
       toast.show("조건에 맞는 곳이 없어요");
       document.getElementById("empty")?.scrollIntoView({ block: "center", behavior: "smooth" });
       return;
     }
     if (r.reset) {
       drawnIds.current.clear();
-      toast.show("후보를 다 돌아서 처음부터 다시 뽑아요");
+      toast.show(
+        candidates.length <= TRIO_SIZE ? `조건에 맞는 곳이 ${candidates.length}곳뿐이에요` : "후보를 다 돌아서 처음부터 다시 뽑아요",
+      );
     }
-    drawnIds.current.add(r.place.id);
+    for (const p of r.places) drawnIds.current.add(p.id);
     setSelected(null);
-    setDrawn(true);
+    setTrio(null);
+    setFocusId(null);
     shuffle.run(
       candidates.map((c) => c.name),
       () => {
-        // 셔플(0.8초) 동안 폴링으로 목록이 바뀌었을 수 있으니 최신 객체를 쓴다
-        setSelected(latestData.current?.places.find((p) => p.id === r.place.id) ?? r.place);
+        setTrio({ ids: r.places.map((p) => p.id), source: "drawn", fallback: byId(r.places) });
+        record("shown", r.places);
         navigator.vibrate?.(15);
       },
     );
   };
 
-  // 셔플 중에는 목록·핀 선택을 받지 않는다 (M2)
+  // 셔플 중에는 목록·핀 선택을 받지 않는다 (M2). 결과 3곳 중 하나면 그 카드를 펼친다
   const onSelect = (p: ApiPlace) => {
     if (shuffle.running) return;
+    if (picks.includes(p.id)) {
+      setSelected(null);
+      setFocusId(p.id);
+      return;
+    }
     setSelected(p);
-    setDrawn(false);
   };
 
-  // R23: 폰은 시스템 공유 시트, 아니면 클립보드 복사
-  const onShare = async (p: ApiPlace) => {
-    const outcome = await shareOrCopy(shareText(p, filters, hub.id, window.location.origin));
+  // R23′: 폰은 시스템 공유 시트, 아니면 클립보드 복사. 공유한 곳은 R37 신호로 남긴다
+  const onShare = async (ps: ApiPlace[]) => {
+    const outcome = await shareOrCopy(shareText(ps, filters, hub.id, window.location.origin));
+    if (outcome === "shared" || outcome === "copied") record("shared", ps);
     if (outcome === "shared") toast.show("공유했어요", "love");
     else if (outcome === "copied") toast.show("복사했어요", "love");
     else if (outcome === "failed") toast.show("복사하지 못했어요");
   };
+  const onKakao = (p: ApiPlace) => record("kakao_open", [p]);
+  // R37: "여긴 빼줘" → 되돌리기 5초
+  const onExclude = (p: ApiPlace) => {
+    personal.exclude(p.id);
+    setFocusId(null);
+    toast.show("다음부터 빼고 골라요", undefined, {
+      ms: 5000,
+      action: { label: "되돌리기", onClick: () => personal.include(p.id) },
+    });
+  };
 
   const status = statusOf(data, polling, error);
-  const sheetOpen = shuffle.display !== null || selected !== null;
-  const drawLabel = shuffle.running ? "고르는 중…" : drawn && selected ? "다시 뽑기" : "모먹죠?";
+  const trioOpen = selected === null && (shuffle.display !== null || trioPlaces.length > 0);
+  const drawLabel = shuffle.running ? "고르는 중…" : trio?.source === "drawn" ? "다시 뽑기" : "모먹죠?";
 
   let list: ReactNode;
   if (!data) {
@@ -201,7 +278,7 @@ export default function App() {
     list = (
       <PlaceList
         places={candidates}
-        selectedId={selected?.id ?? null}
+        selectedId={selected?.id ?? focusId}
         ranks={ranks}
         sort={filters.sort}
         now={now}
@@ -213,7 +290,7 @@ export default function App() {
   }
 
   return (
-    <div className="app">
+    <div className={`app${trioOpen || cardPlace ? " has-sheet" : ""}`}>
       <header className="topbar">
         <h1 className="logo">
           <img src="/brand/logo.png" alt="모먹죠" width={63} height={28} draggable={false} />
@@ -227,22 +304,40 @@ export default function App() {
             radius={filters.radius}
             places={mapPlaces}
             selectedId={selected?.id ?? null}
+            picks={picks}
+            focusId={selected ? null : focusId}
             onSelect={(id) => {
               const p = mapPlaces.find((x) => x.id === id);
               if (p) onSelect(p);
             }}
           />
-          {sheetOpen && (
+          {cardPlace && (
             <PlaceCard
-              key={shuffle.display !== null ? "slot" : (selected?.id ?? "none")}
+              key={cardPlace.id}
               place={cardPlace}
-              slotName={shuffle.display}
-              drawn={drawn}
-              topPercent={cardPlace ? ranks.get(cardPlace.id) : undefined}
+              eyebrow={cardPlace.id === receivedSingle ? "공유받은 곳" : undefined}
+              topPercent={ranks.get(cardPlace.id)}
               now={now}
               onClose={closeCard}
+              onShare={(p) => onShare([p])}
+              onKakao={onKakao}
+            />
+          )}
+          {trioOpen && (
+            <TrioSheet
+              slotName={shuffle.display}
+              places={trioPlaces}
+              received={trio?.source === "received"}
+              focusId={focusId}
+              detailLoading={detailPending !== null && detailPending === focusId}
+              ranks={ranks}
+              now={now}
+              onFocus={setFocusId}
+              onClose={closeTrio}
               onRedraw={onDraw}
               onShare={onShare}
+              onKakao={onKakao}
+              onExclude={onExclude}
             />
           )}
         </section>
@@ -252,13 +347,19 @@ export default function App() {
           {status && <StatusLine status={status} onRetry={error ? reload : undefined} />}
           {list}
           <div className="draw-bar">
-            <button type="button" className="draw" aria-busy={shuffle.running} disabled={shuffle.running} onClick={onDraw}>
+            <button
+              type="button"
+              className={`draw${trioOpen && !shuffle.running ? " is-secondary" : ""}`}
+              aria-busy={shuffle.running}
+              disabled={shuffle.running}
+              onClick={onDraw}
+            >
               {drawLabel}
             </button>
           </div>
         </aside>
       </main>
-      <Toast msg={toast.msg} />
+      <Toast msg={toast.msg} onAction={toast.hide} />
     </div>
   );
 }

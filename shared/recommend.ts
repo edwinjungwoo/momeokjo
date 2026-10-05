@@ -83,24 +83,55 @@ export function weightOf(p: ApiPlace, party: Party): number {
   return w;
 }
 
-export type DrawResult = { place: ApiPlace; reset: boolean };
+/** R21′: 같은 그룹이 이미 뽑혔으면 다음 뽑기에서 이만큼 곱한다 (하나 뽑힐 때마다 한 번씩) */
+export const SAME_GROUP_FACTOR = 0.35;
+export const TRIO_SIZE = 3;
 
-export function draw(
-  candidates: ApiPlace[], party: Party, exclude: ReadonlySet<string>, rng: () => number,
-): DrawResult | null {
-  if (candidates.length === 0) return null;
-  let pool = candidates.filter((p) => !exclude.has(p.id));
-  let reset = false;
-  if (pool.length === 0) {
-    pool = candidates;
-    reset = true;
+export type TrioResult = { places: ApiPlace[]; reset: boolean };
+export type DrawOptions = {
+  /** R37 개인화 배수. 0이면 후보에서 뺀다 ("여긴 빼줘") */
+  multiplier?: (p: ApiPlace) => number;
+};
+
+/** 가중 비복원 추출. 이미 뽑힌 그룹은 SAME_GROUP_FACTOR로 낮춘다 (강제 아님) */
+function sampleInto(
+  out: ApiPlace[], pool: ApiPlace[], n: number, weight: (p: ApiPlace) => number, rng: () => number,
+) {
+  const left = [...pool];
+  while (out.length < n && left.length > 0) {
+    const ws = left.map((p) => weight(p) * SAME_GROUP_FACTOR ** out.filter((q) => q.group === p.group).length);
+    const total = ws.reduce((a, b) => a + b, 0);
+    let x = rng() * total;
+    let i = 0;
+    for (; i < left.length - 1; i++) {
+      x -= ws[i];
+      if (x < 0) break;
+    }
+    out.push(left[i]);
+    left.splice(i, 1);
   }
-  const weights = pool.map((p) => weightOf(p, party));
-  const total = weights.reduce((a, b) => a + b, 0);
-  let x = rng() * total;
-  for (let i = 0; i < pool.length; i++) {
-    x -= weights[i];
-    if (x < 0) return { place: pool[i], reset };
+}
+
+/**
+ * R21′: 서로 다른 후보 최대 3곳을 가중 랜덤으로 뽑는다 (0곳이면 null).
+ * exclude(이번 세션에 이미 보여준 곳)는 빼고 뽑는다. 남은 곳이 3곳보다 적으면
+ * 남은 곳을 먼저 넣고 제외를 풀어 나머지를 채운다(reset: true) — 한 결과 안에서는 중복이 없다.
+ */
+export function drawTrio(
+  candidates: ApiPlace[], party: Party, exclude: ReadonlySet<string>, rng: () => number, opts: DrawOptions = {},
+): TrioResult | null {
+  const mult = opts.multiplier ?? (() => 1);
+  const eligible = candidates.filter((p) => mult(p) > 0);
+  if (eligible.length === 0) return null;
+  const weight = (p: ApiPlace) => weightOf(p, party) * mult(p);
+  const n = Math.min(TRIO_SIZE, eligible.length);
+  const fresh = eligible.filter((p) => !exclude.has(p.id));
+  const out: ApiPlace[] = [];
+  if (fresh.length >= n) {
+    sampleInto(out, fresh, n, weight, rng);
+    return { places: out, reset: false };
   }
-  return { place: pool[pool.length - 1], reset };
+  sampleInto(out, fresh, fresh.length, weight, rng);
+  sampleInto(out, eligible.filter((p) => !out.includes(p)), n, weight, rng);
+  return { places: out, reset: true };
 }

@@ -42,12 +42,12 @@ describe("settings", () => {
   });
 
   it("R23/R25: 공유 파라미터(거점, 반경)가 저장값보다 우선한다", () => {
-    const s = applyShareParams(DEFAULT_SETTINGS, { placeId: "1", hubId: "ddp", radius: 300 });
+    const s = applyShareParams(DEFAULT_SETTINGS, { placeIds: ["1"], hubId: "ddp", radius: 300 });
     expect(s.hubId).toBe("ddp");
     expect(s.filters.radius).toBe(300);
-    expect(applyShareParams(DEFAULT_SETTINGS, { placeId: null, hubId: null, radius: 850 })).toEqual({
+    expect(applyShareParams(DEFAULT_SETTINGS, { placeIds: [], hubId: null, radius: 850 })).toEqual({
       ...DEFAULT_SETTINGS, filters: { ...DEFAULT_FILTERS, radius: 850 },
     });
-    expect(applyShareParams(DEFAULT_SETTINGS, { placeId: null, hubId: null, radius: null })).toEqual(DEFAULT_SETTINGS);
+    expect(applyShareParams(DEFAULT_SETTINGS, { placeIds: [], hubId: null, radius: null })).toEqual(DEFAULT_SETTINGS);
   });
 });

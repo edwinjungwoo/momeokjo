@@ -1,41 +1,52 @@
 import { lastLevel } from "./category";
 import { isValidRadius } from "./constants";
-import { isHubId } from "./hubs";
+import { hubById, isHubId } from "./hubs";
 import type { Filters } from "./recommend";
 import type { ApiPlace } from "./types";
 
-/** R23: ?p={장소 id}&h={거점 id}&r={반경} */
-export function shareUrl(origin: string, id: string, hubId: string, radius: number): string {
-  const u = new URL("/", origin);
-  u.searchParams.set("p", id);
-  u.searchParams.set("h", hubId);
-  u.searchParams.set("r", String(radius));
-  return u.toString();
+const PLACE_ID = /^\d{1,15}$/;
+const MAX_SHARED = 3;
+
+/** R23′: ?t={id1},{id2},{id3}&h={거점 id}&r={반경}. id는 숫자, 거점 id는 URL에 안전한 글자라 쉼표를 그대로 둔다 */
+export function shareUrl(origin: string, ids: string[], hubId: string, radius: number): string {
+  const base = new URL("/", origin).toString();
+  return `${base}?t=${ids.join(",")}&h=${encodeURIComponent(hubId)}&r=${radius}`;
 }
 
-export function shareText(p: ApiPlace, f: Filters, hubId: string, origin: string): string {
-  const who = f.party === 4 ? "4명+" : `${f.party}명`;
+function line(p: ApiPlace, i: number): string {
   const rating = p.detail?.rating;
-  const meta = [
-    lastLevel(p.category),
-    rating !== null && rating !== undefined ? `⭐${rating.toFixed(1)}` : null,
+  return [
+    `${i + 1}. ${p.name}`,
+    lastLevel(p.category) || null,
+    rating !== null && rating !== undefined ? `★${rating.toFixed(1)}` : null,
     p.walkMinutes !== undefined ? `도보 ${p.walkMinutes}분` : null,
   ]
     .filter(Boolean)
     .join(" · ");
-  return `🍚 ${who} · 반경 ${f.radius}m → ${p.name} 어때요?\n${meta}\n${shareUrl(origin, p.id, hubId, f.radius)}`;
 }
 
-export type ShareParams = { placeId: string | null; hubId: string | null; radius: number | null };
+/** R23′: 뽑힌 후보(최대 3곳)를 한 번에 제안하는 공유 문구 */
+export function shareText(places: ApiPlace[], f: Filters, hubId: string, origin: string): string {
+  const who = f.party === 4 ? "4명+" : `${f.party}명`;
+  const ask = places.length === 1 ? "여기 어때요?" : "이 중에 어디 갈래요?";
+  return [
+    `🍚 점심 고? (${who} · ${hubById(hubId).name} 반경 ${f.radius}m)`,
+    ...places.map(line),
+    `${ask} 👉 ${shareUrl(origin, places.map((p) => p.id), hubId, f.radius)}`,
+  ].join("\n");
+}
 
-/** 예전 링크의 lat/lng는 무시한다 */
+export type ShareParams = { placeIds: string[]; hubId: string | null; radius: number | null };
+
+/** t(쉼표로 이은 id 1~3개)를 읽고, 없으면 예전 p(1개)를 읽는다. 예전 링크의 lat/lng는 무시한다 */
 export function parseShareParams(search: string): ShareParams {
   const q = new URLSearchParams(search);
+  const fromT = [...new Set((q.get("t") ?? "").split(",").filter((id) => PLACE_ID.test(id)))].slice(0, MAX_SHARED);
   const p = q.get("p");
   const h = q.get("h");
   const r = Number(q.get("r"));
   return {
-    placeId: p && /^\d{1,15}$/.test(p) ? p : null,
+    placeIds: fromT.length > 0 ? fromT : p && PLACE_ID.test(p) ? [p] : [],
     hubId: isHubId(h) ? h : null,
     radius: q.has("r") && isValidRadius(r) ? r : null,
   };

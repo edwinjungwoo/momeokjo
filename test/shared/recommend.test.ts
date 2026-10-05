@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
-  DEFAULT_FILTERS, draw, filterPlaces, sortPlaces, weightOf, type Filters,
+  DEFAULT_FILTERS, drawTrio, filterPlaces, sortPlaces, weightOf, type Filters,
 } from "../../shared/recommend";
+import type { ApiPlace, CategoryGroup } from "../../shared/types";
 import { apiPlace } from "../helpers/apiPlace";
 
 const NOON_MON = new Date("2026-10-05T12:00:00+09:00");
@@ -105,27 +106,102 @@ describe("R19/R21 가중치", () => {
   });
 });
 
-describe("R21 뽑기", () => {
-  // 가중치 1 : 3 이 되도록 구성 (rating 4 → 1 × log10(90+10)=2, rating 6 → 3 × 2 = 6)
-  const a = apiPlace("a", {}, { rating: 4, reviewCount: 90 });
-  const b = apiPlace("b", {}, { rating: 6, reviewCount: 90 });
+describe("R21′ 3곳 뽑기", () => {
+  // 가중치: rating 4 → 1 × log10(90+10) = 2, rating 6 → 3 × 2 = 6
+  const w2 = (id: string, group: CategoryGroup = "korean") => apiPlace(id, { group }, { rating: 4, reviewCount: 90 });
+  const w6 = (id: string, group: CategoryGroup = "korean") => apiPlace(id, { group }, { rating: 6, reviewCount: 90 });
+  const GROUPS: CategoryGroup[] = ["korean", "chinese", "japanese", "western", "asian"];
+  const cands = (n: number) => Array.from({ length: n }, (_, i) => w2(`c${i}`, GROUPS[i % GROUPS.length]));
+  /** 주어진 값을 차례로 돌려주고, 다 쓰면 처음부터 다시 */
+  const seq = (...xs: number[]) => {
+    let i = 0;
+    return () => xs[i++ % xs.length];
+  };
+  const none = new Set<string>();
 
-  it("R21: 가중치 비율대로 뽑힌다 (경계값)", () => {
-    expect(draw([a, b], 2, new Set(), () => 0)!.place.id).toBe("a");
-    expect(draw([a, b], 2, new Set(), () => 0.249)!.place.id).toBe("a");
-    expect(draw([a, b], 2, new Set(), () => 0.251)!.place.id).toBe("b");
-    expect(draw([a, b], 2, new Set(), () => 0.9999)!.place.id).toBe("b");
+  it("R21′: 후보가 3곳 이상이면 서로 다른 3곳", () => {
+    const r = drawTrio(cands(10), 2, none, seq(0.1, 0.5, 0.9))!;
+    expect(r.places).toHaveLength(3);
+    expect(new Set(ids(r.places)).size).toBe(3);
+    expect(r.reset).toBe(false);
   });
 
-  it("R21: 이미 뽑힌 곳은 제외한다", () => {
-    expect(draw([a, b], 2, new Set(["b"]), () => 0.9)).toEqual({ place: a, reset: false });
+  it("R21′: 첫 곳은 가중치 비율대로 뽑는다 (경계값)", () => {
+    const a = w2("a"), b = w6("b", "chinese");
+    expect(drawTrio([a, b], 2, none, seq(0))!.places[0].id).toBe("a");
+    expect(drawTrio([a, b], 2, none, seq(0.249, 0))!.places[0].id).toBe("a");
+    expect(drawTrio([a, b], 2, none, seq(0.251, 0))!.places[0].id).toBe("b");
+    expect(drawTrio([a, b], 2, none, seq(0.9999, 0))!.places[0].id).toBe("b");
   });
 
-  it("R21: 다 뽑았으면 제외 목록을 비우고 다시 시작한다", () => {
-    expect(draw([a, b], 2, new Set(["a", "b"]), () => 0)).toEqual({ place: a, reset: true });
+  it("R21′: 뽑은 곳은 다음 뽑기에서 빠진다 (비복원)", () => {
+    const ps = [w2("a", "korean"), w2("b", "chinese"), w2("c", "japanese")];
+    expect(ids(drawTrio(ps, 2, none, seq(0))!.places)).toEqual(["a", "b", "c"]);
+    expect(ids(drawTrio(ps, 2, none, seq(0.9999))!.places)).toEqual(["c", "b", "a"]);
   });
 
-  it("R21: 후보가 없으면 null", () => {
-    expect(draw([], 2, new Set(), () => 0)).toBeNull();
+  it("R21′: 이미 뽑힌 그룹은 다음 뽑기에서 가중치 ×0.35 (다양성)", () => {
+    // k1을 뽑은 뒤: k2 = 2 × 0.35 = 0.7, c1 = 2 → 합 2.7. 0.3 × 2.7 = 0.81 → c1 (보정이 없으면 0.3 × 4 = 1.2 → k2)
+    const ps = [w2("k1", "korean"), w2("k2", "korean"), w2("c1", "chinese")];
+    expect(ids(drawTrio(ps, 2, none, seq(0, 0.3, 0))!.places)).toEqual(["k1", "c1", "k2"]);
+    // 경계: 0.25 × 2.7 = 0.675 < 0.7 → 같은 그룹도 여전히 뽑힐 수 있다 (강제가 아님)
+    expect(ids(drawTrio(ps, 2, none, seq(0, 0.25, 0))!.places)).toEqual(["k1", "k2", "c1"]);
+  });
+
+  it("R21′: 그룹이 하나뿐이어도 3곳을 채운다", () => {
+    const ps = [w2("a"), w2("b"), w2("c"), w2("d")];
+    expect(drawTrio(ps, 2, none, seq(0.5))!.places).toHaveLength(3);
+  });
+
+  it("R21′: 다시 뽑기는 이미 보여준 곳을 빼고 뽑는다", () => {
+    const shown = new Set(["c0", "c1", "c2", "c3", "c4", "c5"]);
+    for (const x of [0, 0.3, 0.6, 0.9999]) {
+      const r = drawTrio(cands(9), 2, shown, seq(x))!;
+      expect(ids(r.places).filter((id) => shown.has(id))).toEqual([]);
+      expect(r.places).toHaveLength(3);
+      expect(r.reset).toBe(false);
+    }
+  });
+
+  it("R21′: 남은 후보가 3곳보다 적으면 남은 곳을 먼저 쓰고 초기화해서 채운다 (같은 결과 안에 중복 없음)", () => {
+    const r = drawTrio(cands(5), 2, new Set(["c0", "c1", "c2", "c3"]), seq(0))!;
+    expect(r.reset).toBe(true);
+    expect(r.places[0].id).toBe("c4");
+    expect(r.places).toHaveLength(3);
+    expect(new Set(ids(r.places)).size).toBe(3);
+  });
+
+  it("R21′: 다 보여줬으면 처음부터 다시 3곳", () => {
+    const r = drawTrio(cands(3), 2, new Set(["c0", "c1", "c2"]), seq(0))!;
+    expect(r).toMatchObject({ reset: true });
+    expect(ids(r.places).sort()).toEqual(["c0", "c1", "c2"]);
+  });
+
+  it("R21′: 후보가 2곳이면 2곳, 1곳이면 1곳, 0곳이면 null", () => {
+    expect(ids(drawTrio(cands(2), 2, none, seq(0))!.places)).toEqual(["c0", "c1"]);
+    expect(ids(drawTrio(cands(1), 2, none, seq(0))!.places)).toEqual(["c0"]);
+    expect(drawTrio([], 2, none, seq(0))).toBeNull();
+  });
+
+  it("R21′: 가중치가 아주 작은 후보만 있어도 3곳을 뽑는다", () => {
+    const ps = ["a", "b", "c", "d"].map((id) => apiPlace(id, {}, { rating: 3, reviewCount: 0 }));
+    expect(drawTrio(ps, 2, none, seq(0.7))!.places).toHaveLength(3);
+  });
+
+  it("R21′: rng가 1에 가까워도 범위를 넘지 않는다", () => {
+    const r = drawTrio(cands(4), 2, none, () => 0.9999999999)!;
+    expect(r.places).toHaveLength(3);
+    expect(r.places.every(Boolean)).toBe(true);
+  });
+
+  it("R37: 개인화 배수를 가중치에 곱하고, 0이면 후보에서 뺀다", () => {
+    const a = w2("a"), b = w6("b", "chinese");
+    // a: 2 × 3 = 6, b: 6 → 반반
+    const triple = { multiplier: (p: ApiPlace) => (p.id === "a" ? 3 : 1) };
+    expect(drawTrio([a, b], 2, none, seq(0.49, 0), triple)!.places[0].id).toBe("a");
+    expect(drawTrio([a, b], 2, none, seq(0.51, 0), triple)!.places[0].id).toBe("b");
+    const hideA = { multiplier: (p: ApiPlace) => (p.id === "a" ? 0 : 1) };
+    expect(ids(drawTrio([a, b], 2, none, seq(0), hideA)!.places)).toEqual(["b"]);
+    expect(drawTrio([a], 2, none, seq(0), hideA)).toBeNull();
   });
 });

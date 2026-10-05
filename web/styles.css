@@ -223,6 +223,9 @@ input[type="range"] { width: 100%; height: 44px; margin: 0; accent-color: var(--
   transition: transform 0.18s var(--spring), background-color 0.12s;
 }
 .draw:active { transform: scale(0.97); background: var(--accent-press); transition-duration: 0.1s; }
+/* 결과 3곳이 열려 있으면 주 행동은 시트의 "공유"라서 "다시 뽑기"는 보조 버튼으로 낮춘다 */
+.draw.is-secondary { background: var(--fill); color: var(--text); }
+.draw.is-secondary:active { background: var(--fill-press); }
 /* 셔플 중에도 색은 유지한다 (잠깐의 진행 상태라 비활성처럼 보이지 않게) */
 .draw[aria-busy="true"] { cursor: default; }
 
@@ -490,9 +493,79 @@ input[type="range"] { width: 100%; height: 44px; margin: 0; accent-color: var(--
 }
 .actions > *:active { transform: scale(0.97); transition-duration: 0.1s; }
 .actions .tint { background: var(--accent-soft); color: var(--accent-ink); }
+.actions .primary { background: var(--accent-strong); color: #fff; }
+.actions .primary:active { background: var(--accent-press); }
 /* 모바일에서는 바로 아래 뽑기 바가 "다시 뽑기" 역할을 한다 */
 .sheet .redraw { display: none; }
 .source { margin-top: 8px; font-size: 12px; color: var(--text-3); text-align: right; }
+
+/* ── 뽑기 결과 3곳 (R22′): 작은 카드 3장, 누르면 그 자리에서 펼친다 ── */
+.trio-head { display: flex; align-items: center; gap: 10px; padding-right: 40px; }
+.trio-head-text { flex: 1; min-width: 0; }
+.trio-title { font-size: 19px; font-weight: 700; letter-spacing: -0.03em; line-height: 1.3; word-break: keep-all; }
+.trio-hint { font-size: 13px; color: var(--text-3); word-break: keep-all; }
+/* 선택 배경이 글자에 붙지 않게 양옆 12px 넓힌다 (시트 안쪽 여백 20px 안이라 넘치지 않는다) */
+.trio-list { list-style: none; display: grid; grid-template-columns: minmax(0, 1fr); margin: 8px -12px 0; padding: 0; }
+.trio-card { position: relative; min-width: 0; border-radius: 14px; transition: background-color 0.15s; }
+.trio-card + .trio-card::before { content: ""; position: absolute; top: 0; left: 12px; right: 12px; border-top: 1px solid var(--divider); }
+.trio-card.is-open { background: var(--accent-wash); }
+.trio-card.is-open::before, .trio-card.is-open + .trio-card::before { border-color: transparent; }
+.trio-row {
+  width: 100%;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 0;
+  border-radius: 14px;
+  background: none;
+  text-align: left;
+}
+.trio-row:active { background: var(--fill); }
+.trio-card.is-open .trio-row:active { background: none; }
+.trio-thumb { position: relative; flex: none; width: 56px; height: 56px; border-radius: 12px; background: var(--bg-2); }
+.trio-thumb img { display: block; width: 56px; height: 56px; border-radius: 12px; object-fit: cover; }
+.trio-thumb.is-empty::after { content: ""; position: absolute; inset: 0; border-radius: 12px; background: url("/brand/pose/dish.png") center / 34px auto no-repeat; opacity: 0.32; }
+/* 지도 핀 번호와 같은 모양 */
+.trio-rank {
+  position: absolute;
+  top: -5px;
+  left: -5px;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border: 2px solid #fff;
+  border-radius: 50%;
+  background: var(--accent-strong);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+.trio-text { flex: 1; min-width: 0; display: grid; grid-template-columns: minmax(0, 1fr); gap: 2px; }
+.trio-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 16px; font-weight: 700; letter-spacing: -0.02em; }
+.trio-facts { display: flex; align-items: baseline; gap: 6px; min-width: 0; overflow: hidden; white-space: nowrap; font-size: 14px; color: var(--text-2); }
+.trio-facts > * { flex: none; }
+.trio-facts > * + *::before { content: "·"; margin-right: 6px; color: var(--text-3); font-weight: 400; }
+.trio-facts > .rank-pill::before { content: none; }
+.trio-facts > b { font-weight: 600; color: var(--text); }
+.trio-rating { font-weight: 700; color: var(--accent-ink); font-variant-numeric: tabular-nums; }
+.trio-rating .star { margin-right: 2px; color: var(--accent); font-size: 0.9em; font-weight: 400; }
+.trio-sub { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; color: var(--text-3); }
+.trio-chev { color: var(--text-3); transition: transform 0.2s; }
+.trio-card.is-open .trio-chev { transform: rotate(180deg); }
+.trio-detail { padding: 0 12px 4px; animation: fade-up 0.2s ease-out; }
+.trio-line { display: flex; flex-wrap: wrap; gap: 2px 6px; margin-top: 4px; font-size: 14px; color: var(--text-2); overflow-wrap: anywhere; }
+.trio-line > * + *::before { content: "·"; margin-right: 6px; color: var(--text-3); }
+.trio-line.is-loading { color: var(--text-3); }
+.trio-menus { margin-top: 10px; padding-top: 10px; font-size: 14px; }
+.trio-links { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 4px; }
+.trio-links a { display: inline-flex; align-items: center; min-height: 44px; color: var(--accent-ink); font-size: 14px; font-weight: 600; text-decoration: none; }
+.trio-hide { min-height: 44px; padding: 0 2px; border: 0; background: none; color: var(--text-3); font-size: 13px; text-decoration: underline; text-underline-offset: 3px; }
 
 /* ── 거점 칩 (R24) ───────────────────────────── */
 .hub-chip { position: relative; min-width: 0; max-width: 62vw; }
@@ -605,7 +678,8 @@ input[type="range"] { width: 100%; height: 44px; margin: 0; accent-color: var(--
   font-size: 12px;
   box-shadow: 0 2px 6px rgba(60, 47, 37, 0.3);
 }
-.pin--selected::after {
+.pin--selected::after,
+.pin--pick::after {
   content: attr(data-name);
   position: absolute;
   bottom: calc(100% + 2px);
@@ -623,6 +697,31 @@ input[type="range"] { width: 100%; height: 44px; margin: 0; accent-color: var(--
   font-weight: 600;
   pointer-events: none;
 }
+/* R22′: 뽑힌 3곳 — 확대 수준과 상관없이 번호가 든 큰 마커 + 이름표 */
+.pin--pick::before,
+[data-zoom] .pin--pick::before {
+  content: attr(data-rank);
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border: 2px solid #fff;
+  border-radius: 50%;
+  background: var(--accent-strong);
+  color: #fff;
+  opacity: 1;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  box-shadow: 0 1px 4px rgba(60, 47, 37, 0.35);
+  animation: pin-pulse 0.7s ease-out 1;
+}
+[data-zoom] .pin--pick .pin-chip { display: none; }
+.pin--focus::before,
+[data-zoom] .pin--focus::before { width: 30px; height: 30px; font-size: 14px; animation: pin-pulse-focus 0.7s ease-out 1; }
+/* 펼친 후보가 있으면 그 이름표만 남긴다 (겹침 방지) */
+[data-focus] .pin--pick:not(.pin--focus)::after { display: none; }
 .center-pin { width: 18px; height: 18px; border: 3px solid #fff; border-radius: 50%; background: var(--text); box-shadow: 0 1px 6px rgba(60, 47, 37, 0.35); pointer-events: none; }
 .map-fallback { position: absolute; inset: 0; z-index: 1; display: grid; place-content: center; justify-items: center; gap: 12px; background: var(--bg-2); color: var(--text-2); font-size: 15px; }
 
@@ -646,6 +745,10 @@ input[type="range"] { width: 100%; height: 44px; margin: 0; accent-color: var(--
   animation: toast-in 0.22s var(--spring);
 }
 .toast.has-pose { display: flex; align-items: center; gap: 8px; padding: 6px 18px 6px 10px; }
+/* 시트가 열려 있으면 시트 아래쪽 행동(공유)을 가리지 않게 위쪽에 띄운다 */
+.has-sheet .toast { bottom: auto; top: calc(var(--topbar-h) + env(safe-area-inset-top) + 12px); animation-name: toast-in-top; }
+.toast.has-action { display: flex; align-items: center; gap: 12px; padding: 6px 6px 6px 18px; }
+.toast-action { flex: none; min-height: 40px; padding: 0 12px; border: 0; border-radius: 10px; background: rgba(255, 255, 255, 0.14); color: #ffd2bf; font-size: 14px; font-weight: 700; }
 
 /* ── 데스크톱 (≥ 900px): 왼쪽 패널 + 오른쪽 지도 ── */
 @media (min-width: 900px) {
@@ -683,6 +786,9 @@ input[type="range"] { width: 100%; height: 44px; margin: 0; accent-color: var(--
   .chip:hover:not([aria-pressed="true"]) { background: var(--fill-press); }
   .menu button:hover { background: var(--fill); }
   .draw:hover { background: var(--accent-press); }
+  .draw.is-secondary:hover { background: var(--fill-press); }
+  .trio-row:hover { background: #fbf7f3; }
+  .trio-card.is-open .trio-row:hover { background: none; }
 }
 
 /* ── 애니메이션 ───────────────────────────────── */
@@ -693,11 +799,16 @@ input[type="range"] { width: 100%; height: 44px; margin: 0; accent-color: var(--
   from { box-shadow: 0 0 0 0 rgba(255, 104, 61, 0.55); }
   to { box-shadow: 0 0 0 16px rgba(255, 104, 61, 0); }
 }
+@keyframes pin-pulse-focus {
+  from { box-shadow: 0 0 0 0 rgba(255, 104, 61, 0.55); }
+  to { box-shadow: 0 0 0 18px rgba(255, 104, 61, 0); }
+}
 @keyframes progress { to { left: 100%; } }
 @keyframes shimmer { from { background-position: 100% 0; } to { background-position: 0 0; } }
 @keyframes blink { 50% { opacity: 0.3; } }
 @keyframes fade-up { from { transform: translateY(6px); opacity: 0; } }
 @keyframes toast-in { from { transform: translate(-50%, 8px); opacity: 0; } }
+@keyframes toast-in-top { from { transform: translate(-50%, -8px); opacity: 0; } }
 @media (prefers-reduced-motion: reduce) {
   .mascot-bob { animation: none !important; }
   /* 진행 막대는 움직이지 않는 막대로 */

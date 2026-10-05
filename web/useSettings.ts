@@ -24,7 +24,7 @@ export function useSettings() {
   // 공유 파라미터는 처음 한 번만 쓴다. 새로고침하면 저장값으로 돌아가도록 주소창에서 지운다 (예전 링크의 lat/lng 포함)
   useEffect(() => {
     const q = new URLSearchParams(window.location.search);
-    if (["p", "h", "r", "lat", "lng"].some((k) => q.has(k))) window.history.replaceState(null, "", window.location.pathname);
+    if (["t", "p", "h", "r", "lat", "lng"].some((k) => q.has(k))) window.history.replaceState(null, "", window.location.pathname);
   }, []);
 
   useEffect(() => {

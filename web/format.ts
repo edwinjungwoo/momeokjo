@@ -1,4 +1,4 @@
-import { isOpenDuring } from "../shared/hours";
+import { isOpenDuring, kstParts } from "../shared/hours";
 import type { Filters } from "../shared/recommend";
 import type { ApiPlace, PlacesResponse } from "../shared/types";
 
@@ -54,4 +54,18 @@ export function statusOf(data: PlacesResponse | null, polling: boolean, error: b
       : { text: `${data.pending}곳은 아직 정보를 못 불러왔어요`, tone: "info", busy: false };
   }
   return null;
+}
+
+const hhmm = (m: number) => {
+  const t = m % 1440;
+  return `${String(Math.floor(t / 60)).padStart(2, "0")}:${String(t % 60).padStart(2, "0")}`;
+};
+
+/** 펼친 카드의 "오늘 11:00~15:00, 17:00~21:00" / "오늘 휴무". 정보가 없으면 null */
+export function todayHoursText(p: ApiPlace, now: Date): string | null {
+  const day = p.detail?.hours?.[kstParts(now).dow];
+  if (!day) return null;
+  if (day === "closed") return "오늘 휴무";
+  if (day.length === 0) return null;
+  return `오늘 ${day.map(([a, b]) => `${hhmm(a)}~${hhmm(b)}`).join(", ")}`;
 }
