@@ -1,4 +1,4 @@
-import type { Signal } from "./personal";
+import { isNew, type Seen } from "./seen";
 import type { ApiPlace } from "./types";
 
 /**
@@ -7,8 +7,8 @@ import type { ApiPlace } from "./types";
  */
 export type Reason = "제일 가까워요" | "평점 최고" | "가성비" | "처음 보는 곳";
 
-/** "처음 보는 곳"은 신호가 이만큼은 쌓인 사람에게만 (처음 쓰는 사람에겐 다 처음이라) */
-export const NEW_PLACE_MIN_SIGNALS = 5;
+/** "처음 보는 곳"은 이 기기에서 본 곳이 이만큼은 쌓였을 때만 (처음 쓰는 사람에겐 다 처음이라) */
+export const NEW_PLACE_MIN_SEEN = 15;
 export const TOP_RATING_MIN = 4.0;
 export const VALUE_RATING_MIN = 3.8;
 /** 예산 필터(R18)와 같은 경계: 1만 이하 / 1.5만 이하 / 2만 이하 / 그 위 */
@@ -29,18 +29,20 @@ function soleBest(values: (number | null)[], min: number): number | null {
 }
 
 /**
- * now: 결과를 띄운 시각. 그 뒤에 남은 신호(이번 결과의 shown, 카카오맵 열기 등)는 보지 않는다.
+ * seen: 이 결과를 띄우기 *전*의 본 곳 기억(`shared/seen.ts`) — 이번 결과를 기록한 뒤의 것을 넘기면 "처음 보는 곳"이 사라진다.
+ * outside: R41 완화로 들어온 곳. 그 카드는 "조건 밖" 표시 하나만 두고 이유는 붙이지 않는다(다른 카드에 넘기지도 않는다 — 그건 참이 아니라서).
  * 순서(가까움 → 평점 → 가성비 → 처음)대로 그 이유의 주인이 아직 이유가 없으면 붙인다.
  */
-export function trioReasons(places: ApiPlace[], now: number, ctx: { signals: readonly Signal[] }): (Reason | null)[] {
+export function trioReasons(
+  places: ApiPlace[], ctx: { seen: Seen; outside?: ReadonlySet<string> },
+): (Reason | null)[] {
   const out: (Reason | null)[] = places.map(() => null);
   if (places.length < 2) return out;
   const rating = (p: ApiPlace) => p.detail?.rating ?? null;
   const price = (p: ApiPlace) => p.detail?.price ?? null;
 
-  const past = ctx.signals.filter((s) => s.at < now);
-  const seen = new Set(past.map((s) => s.id));
-  const fresh = places.map((p) => (past.length >= NEW_PLACE_MIN_SIGNALS && !seen.has(p.id) ? 0 : null));
+  const enough = Object.keys(ctx.seen).length >= NEW_PLACE_MIN_SEEN;
+  const fresh = places.map((p) => (enough && isNew(ctx.seen, p.id) ? 0 : null));
 
   const candidates: [Reason, number | null][] = [
     // 도보 분을 모르는 곳이 하나라도 있으면 "제일 가까워요"라고 할 수 없다
@@ -56,5 +58,5 @@ export function trioReasons(places: ApiPlace[], now: number, ctx: { signals: rea
     if (reason === "가성비" && (r === null || r < VALUE_RATING_MIN)) continue;
     out[i] = reason;
   }
-  return out;
+  return out.map((r, i) => (ctx.outside?.has(places[i].id) ? null : r));
 }

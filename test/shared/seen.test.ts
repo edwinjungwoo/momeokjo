@@ -1,0 +1,59 @@
+import { describe, expect, it } from "vitest";
+import { MAX_SEEN, SEEN_TTL_MS, isNew, markSeen, parseSeen, pruneSeen, type Seen } from "../../shared/seen";
+
+const NOW = Date.parse("2026-10-06T12:00:00+09:00");
+const D = 24 * 3600_000;
+
+describe("R46 이 기기에서 본 곳 (seen)", () => {
+  it("R46: 30일 동안, 최대 500곳까지 기억한다", () => {
+    expect(SEEN_TTL_MS).toBe(30 * D);
+    expect(MAX_SEEN).toBe(500);
+  });
+
+  it("R46: markSeen은 보여준 곳마다 마지막으로 본 시각을 남긴다 (다시 보면 시각만 새로)", () => {
+    const a = markSeen({}, ["1", "2"], NOW - D);
+    expect(a).toEqual({ 1: NOW - D, 2: NOW - D });
+    const b = markSeen(a, ["2", "3"], NOW);
+    expect(b).toEqual({ 1: NOW - D, 2: NOW, 3: NOW });
+    // 원래 객체는 바꾸지 않는다 (결과를 띄우기 전 스냅숏으로 쓴다)
+    expect(a).toEqual({ 1: NOW - D, 2: NOW - D });
+    expect(markSeen(a, [], NOW)).toEqual(a);
+  });
+
+  it("R46: isNew는 기억에 없는 곳만 참", () => {
+    const s = markSeen({}, ["1"], NOW);
+    expect(isNew(s, "1")).toBe(false);
+    expect(isNew(s, "2")).toBe(true);
+    expect(isNew({}, "1")).toBe(true);
+  });
+
+  it("R46: pruneSeen은 30일 지난 곳을 버린다 (시계가 어긋난 미래 시각은 남긴다)", () => {
+    const s: Seen = { 1: NOW - 30 * D, 2: NOW - 30 * D - 1, 3: NOW + D };
+    expect(pruneSeen(s, NOW)).toEqual({ 1: NOW - 30 * D, 3: NOW + D });
+    // markSeen도 같은 정리를 한다
+    expect(markSeen(s, ["4"], NOW)).toEqual({ 1: NOW - 30 * D, 3: NOW + D, 4: NOW });
+  });
+
+  it("R46: 500곳을 넘으면 가장 오래전에 본 곳부터 버린다", () => {
+    const full: Record<string, number> = {};
+    for (let i = 0; i < MAX_SEEN; i++) full[String(1000 + i)] = NOW - D + i;
+    const s = markSeen(full, ["1", "2"], NOW);
+    expect(Object.keys(s)).toHaveLength(MAX_SEEN);
+    expect(s["1"]).toBe(NOW);
+    expect(s["2"]).toBe(NOW);
+    expect("1000" in s).toBe(false);
+    expect("1001" in s).toBe(false);
+    expect(s["1002"]).toBe(NOW - D + 2);
+  });
+
+  it("R46: parseSeen은 깨진 값을 버리고 올바른 항목(숫자 id 1~15자리 → 유한한 시각)만 남긴다", () => {
+    expect(parseSeen(null)).toEqual({});
+    expect(parseSeen("")).toEqual({});
+    expect(parseSeen("{")).toEqual({});
+    expect(parseSeen("[1,2]")).toEqual({});
+    expect(parseSeen("null")).toEqual({});
+    expect(parseSeen(JSON.stringify({ 1: NOW, abc: NOW, 2: "x", 3: null, "1234567890123456": NOW, 4: NOW - D }))).toEqual({
+      1: NOW, 4: NOW - D,
+    });
+  });
+});

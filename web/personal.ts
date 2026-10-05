@@ -66,7 +66,5 @@ export function usePersonal() {
 
   /** R39: 이 기기에 개인화 신호가 하나라도 있으면 재방문자 */
   const hasSignals = state.signals.length > 0;
-  /** R46 "처음 보는 곳" 판단용 (기기 밖으로 나가지 않는다) */
-  const signals = state.signals;
-  return { record, exclude, include, isExcluded, multiplier, hasSignals, signals };
+  return { record, exclude, include, isExcluded, multiplier, hasSignals };
 }

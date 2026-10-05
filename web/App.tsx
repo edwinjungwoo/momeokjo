@@ -5,6 +5,7 @@ import { hubById } from "../shared/hubs";
 import { kstDay } from "../shared/kst";
 import { topPercents } from "../shared/rank";
 import { trioReasons } from "../shared/reasons";
+import type { Seen } from "../shared/seen";
 import {
   TRIO_SIZE, drawTrio, filterPlaces, relaxNotice, relaxToFill, relaxedBy, sortPlaces, type Filters,
 } from "../shared/recommend";
@@ -29,6 +30,7 @@ import { Toast, useToast } from "./components/Toast";
 import { TrioSheet } from "./components/TrioSheet";
 import { statusOf } from "./format";
 import { usePersonal } from "./personal";
+import { recordSeen, seenSnapshot } from "./seen";
 import { shareOrCopy } from "./shareAction";
 import { usePlaces } from "./usePlaces";
 import { useSettings } from "./useSettings";
@@ -52,10 +54,10 @@ function useNow() {
 
 /**
  * R22′: 지금 보여주는 후보 3곳. 객체는 목록에 없을 때(공유받은 곳 등)를 위한 대비값이고, 화면은 최신 목록 객체를 우선한다.
- * outside: R41 완화로 들어온 곳. at: 결과를 띄운 시각 (R46 "처음 보는 곳"은 이 전의 신호만 본다)
+ * outside: R41 완화로 들어온 곳. seen: 이 결과를 띄우기 전의 본 곳 기억 (R46 "처음 보는 곳"은 이것으로만 판단한다)
  */
 type Trio = {
-  ids: string[]; source: "drawn" | "received"; fallback: Record<string, ApiPlace>; outside?: ReadonlySet<string>; at: number;
+  ids: string[]; source: "drawn" | "received"; fallback: Record<string, ApiPlace>; outside?: ReadonlySet<string>; seen: Seen;
 };
 
 /** R13 단건에서만 오는 것: 전체 상세(메뉴 전부), 전화(R49), 상세를 가져온 시각(R48) */
@@ -165,12 +167,16 @@ export default function App() {
     return extra.length > 0 ? [...candidates, ...extra] : candidates;
   }, [candidates, trioPlaces, cardPlace]);
   const picks = useMemo(() => trioPlaces.map((p) => p.id), [trioPlaces]);
-  // R46: 보여주는 곳들 안에서 참인 "왜" 한 단어 (카드당 하나)
-  const { signals } = personal;
+  // R46: 보여주는 곳들 안에서 참인 "왜" 한 단어 (카드당 하나, "조건 밖" 카드는 없음)
   const reasons = useMemo(
-    () => (trio ? trioReasons(trioPlaces, trio.at, { signals }) : []),
-    [trio, trioPlaces, signals],
+    () => (trio ? trioReasons(trioPlaces, { seen: trio.seen, outside: trio.outside }) : []),
+    [trio, trioPlaces],
   );
+  // R46: 목록·핀에서 연 카드(공유받은 한 곳 포함)도 본 곳으로 기억한다
+  const selectedId = selected?.id ?? null;
+  useEffect(() => {
+    if (selectedId !== null) recordSeen([selectedId]);
+  }, [selectedId]);
 
   // 뽑기·공유 뒤에 뜨는 마스코트는 첫 응답이 오면 미리 받아둔다
   const hasData = data !== null;
@@ -203,14 +209,15 @@ export default function App() {
         }
         return next;
       });
-      // R46: 결과 시각은 received 신호를 남기기 전 — 이번에 받은 곳을 "본 곳"으로 치지 않게
-      const at = Date.now();
+      // R46: 본 곳 기억은 이번에 받은 곳을 기록하기 전의 것으로 — 이번 결과를 "본 곳"으로 치지 않게
+      const seen = seenSnapshot();
+      recordSeen(found.map((p) => p.id));
       record("received", found);
       if (ids.length === 1) {
         setReceivedSingle(found[0].id);
         setSelected(found[0]);
       } else {
-        setTrio({ ids: found.map((p) => p.id), source: "received", fallback: byId(found), at });
+        setTrio({ ids: found.map((p) => p.id), source: "received", fallback: byId(found), seen });
       }
       const missing = ids.length - found.length;
       if (missing > 0) showToast(`${missing}곳은 찾지 못했어요`);
@@ -308,7 +315,11 @@ export default function App() {
       [...candidates, ...extra].map((c) => c.name),
       () => {
         for (const p of r.places) drawnIds.current.add(p.id);
-        setTrio({ ids: r.places.map((p) => p.id), source: "drawn", fallback: byId(r.places), outside, at: Date.now() });
+        const ids = r.places.map((p) => p.id);
+        // R46: 자동 뽑기도 보여준 것이라 본 곳으로 기억한다 (R37 shown 신호와 달리). 판단은 기록하기 전의 기억으로
+        const seen = seenSnapshot();
+        recordSeen(ids);
+        setTrio({ ids, source: "drawn", fallback: byId(r.places), outside, seen });
         if (!auto) record("shown", r.places);
         track(kind, {
           props: {
