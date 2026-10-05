@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { areasFromArgs } from "./area.mjs";
-import { on429 } from "./warmRetry.mjs";
+import { on429, RATE_LIMIT_RETRIES } from "./warmRetry.mjs";
 
 const base = process.env.MMJ_BASE ?? "https://mmj.itmz.me";
 const fromDevVars = () => {
@@ -31,7 +31,7 @@ async function warm({ label, lat, lng, radius }) {
       if (next.action === "retry") {
         // R36: 관리자 전용 제한(ADMIN_LIMITER)에 걸렸다 — 창이 지나길 기다렸다 같은 요청을 다시 한다
         rateLimited++;
-        console.error(`#${i} HTTP 429 ${body} — 요청이 너무 잦아요. ${next.waitMs / 1000}초 기다렸다 다시 해요 (${rateLimited}/3)`);
+        console.error(`#${i} HTTP 429 ${body} — 요청이 너무 잦아요. ${next.waitMs / 1000}초 기다렸다 다시 해요 (${rateLimited}/${RATE_LIMIT_RETRIES})`);
         await wait(next.waitMs);
         i--;
         continue;
@@ -40,7 +40,7 @@ async function warm({ label, lat, lng, radius }) {
         // R38: 오늘 D1 읽기가 소프트 한도(D1_READ_SOFT_CAP)를 넘었다. 다시 두드리면 읽기만 더 쓴다
         console.error(`#${i} HTTP 429 ${body} — 오늘 D1 읽기 예산을 다 써서 멈춰요. 내일(KST) 다시 실행하세요.`);
       } else if (next.reason === "rate_limited") {
-        console.error(`#${i} HTTP 429 ${body} — 3번 기다려도 요청 제한이 풀리지 않아 멈춰요. 몇 분 뒤 다시 실행하세요.`);
+        console.error(`#${i} HTTP 429 ${body} — ${RATE_LIMIT_RETRIES}번 기다려도 요청 제한이 풀리지 않아 멈춰요. 몇 분 뒤 다시 실행하세요.`);
       } else {
         console.error(`#${i} HTTP 429 ${body} — 알 수 없는 429라 멈춰요.`);
       }
