@@ -81,3 +81,9 @@ export function resolveStart(stored: string | null, pathname: string, search: st
   const replaceUrl = hasParams ? (isShare ? "/" : pathname) : null;
   return { settings, share, saveHub, replaceUrl };
 }
+
+/**
+ * R43: 손으로 거점을 바꿨을 때 주소창에 둘 값. 지금 주소가 거점 경로(/{거점 id})면 "/"(쿼리 없이) —
+ * 그대로 두면 새로고침할 때 북마크 거점으로 되돌아가서 방금 고른 거점(저장값)을 덮는다. 아니면 null(그대로).
+ */
+export const urlAfterHubChange = (pathname: string): string | null => (parseHubPath(pathname) !== null ? "/" : null);

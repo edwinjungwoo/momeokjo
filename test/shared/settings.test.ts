@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { MAX_RADIUS, MIN_RADIUS, PREWARM_RADIUS, isValidRadius } from "../../shared/constants";
 import { DEFAULT_FILTERS } from "../../shared/recommend";
-import { DEFAULT_SETTINGS, applyShareParams, parseSettings, resolveStart } from "../../shared/settings";
+import { DEFAULT_SETTINGS, applyShareParams, parseSettings, resolveStart, urlAfterHubChange } from "../../shared/settings";
 
 describe("settings", () => {
   it("R16: 반경은 100~1000m, 50m 단위이고 상한은 Cron 사전 수집 반경과 같다", () => {
@@ -107,5 +107,14 @@ describe("settings", () => {
     const stored = JSON.stringify({ ...DEFAULT_SETTINGS, hubId: "naebang" });
     expect(resolveStart(stored, "/brand", "")).toMatchObject({ saveHub: null, replaceUrl: null, settings: { hubId: "naebang" } });
     expect(resolveStart(stored, "/", "")).toMatchObject({ saveHub: null, replaceUrl: null, settings: { hubId: "naebang" } });
+  });
+
+  it("R43/R25: 거점 경로로 연 뒤 손으로 거점을 바꾸면 주소를 /로 돌린다 (새로고침이 북마크 거점으로 되돌리지 않게)", () => {
+    expect(urlAfterHubChange("/ddp")).toBe("/");
+    expect(urlAfterHubChange("/pangyo/")).toBe("/");
+    // 거점 경로가 아니면 주소를 건드리지 않는다
+    expect(urlAfterHubChange("/")).toBeNull();
+    expect(urlAfterHubChange("/brand")).toBeNull();
+    expect(urlAfterHubChange("/admin")).toBeNull();
   });
 });

@@ -7,6 +7,7 @@ import { topPercents } from "../shared/rank";
 import {
   TRIO_SIZE, drawTrio, filterPlaces, relaxNotice, relaxToFill, relaxedBy, sortPlaces, type Filters,
 } from "../shared/recommend";
+import { urlAfterHubChange } from "../shared/settings";
 import { shareText } from "../shared/share";
 import type { ApiDetail, ApiPlace, LatLng } from "../shared/types";
 import { filterProps, setTrackingHub, startTracking, track, trackFilters } from "./analytics";
@@ -221,6 +222,9 @@ export default function App() {
     if (hubId !== hub.id) {
       setTrackingHub(hubId);
       track("hub_change");
+      // R43: 북마크 거점 경로로 열었으면 주소를 /로 돌린다 (새로고침이 북마크 거점으로 되돌리지 않게)
+      const url = urlAfterHubChange(window.location.pathname);
+      if (url !== null) window.history.replaceState(null, "", url);
     }
   };
   const closeTrio = () => {
