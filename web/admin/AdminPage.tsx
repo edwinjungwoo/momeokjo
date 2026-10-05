@@ -106,11 +106,11 @@ function Stats({ data }: { data: StatsResponse }) {
       <section className="stat-grid" aria-label="요약">
         <Card label="사용자" value={n(t.users)} sub={`세션 ${n(t.sessions)}`} />
         <Card label="세션" value={n(t.sessions)} sub={`세션당 뽑기 ${data.drawsPerSession === null ? "–" : data.drawsPerSession.toFixed(1)}`} />
-        <Card label="뽑기" value={n(draws)} sub={`다시 뽑기 ${n(t.redraws)}`} />
+        <Card label="뽑기" value={n(draws)} sub={`다시 뽑기 ${n(t.redraws)} · 자동 ${n(t.autoDraws)}`} />
         <Card label="공유율" value={pct(data.conversion.toShare)} sub={`카카오맵 ${pct(data.conversion.toKakao)}`} />
       </section>
       <p className="admin-note">
-        공유율·카카오맵은 뽑기한 세션 {n(data.conversion.drawSessions)}개 중 그 행동까지 간 비율이에요. 공유 {n(t.shares)}번 · 받은
+        공유율·카카오맵은 직접 뽑기한 세션 {n(data.conversion.drawSessions)}개 중 그 행동까지 간 비율이에요(자동 뽑기는 뽑기 수·비율에서 빼요). 공유 {n(t.shares)}번 · 받은
         링크 열림 {n(t.shareOpens)}번.
       </p>
 

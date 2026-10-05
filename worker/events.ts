@@ -35,6 +35,10 @@ export async function pruneOldEvents(db: D1Database, now: number): Promise<void>
 }
 
 const DRAWS = "('draw', 'redraw')";
+/** R39 자동 뽑기(props.auto = true)인가. t는 테이블 별칭 접두사 */
+const isAuto = (t = "") => `json_extract(${t}props, '$.auto') = 1`;
+/** 사용자가 직접 한 뽑기: 뽑기·시간대·거점·많이 뽑힌 가게·전환율·세션당 뽑기는 이것만 센다 */
+const manualDraw = (t = "") => `(${t}type IN ${DRAWS} AND coalesce(json_extract(${t}props, '$.auto'), 0) = 0)`;
 /** 일별·거점별 행동 수 집계에 쓰는 타입 (filter_change 같은 잦은 이벤트는 읽지 않는다) */
 const ACTION_TYPES = "('draw', 'redraw', 'share', 'open_kakao', 'share_open', 'expand_card', 'exclude_place')";
 
@@ -46,6 +50,7 @@ const ratio = (a: number, b: number) => (b > 0 ? a / b : null);
 /**
  * R36: 관리자 통계. 범위 [from, to]의 이벤트를 (type, day) 인덱스로 타입별로 좁혀 읽는다.
  * 쿼리 5개 + 이름 1개: app_open(사용자·세션), 행동 수, 시간대, 상위 가게(picks), 세션 전환.
+ * R39 자동 뽑기는 사용자가 한 행동이 아니라서 뽑기 수·전환율 등에서 빼고 totals.autoDraws로만 센다.
  */
 export async function eventStats(
   db: D1Database, opts: { days: number; hub: string; now: number; readSoftCap: number },
@@ -64,27 +69,28 @@ export async function eventStats(
       .all<{ day: string; hub: string; anon: string; n: number }>(),
     db
       .prepare(
-        `SELECT day, hub, type, json_extract(props, '$.rank') AS rank, count(*) AS n FROM events
-         WHERE type IN ${ACTION_TYPES} AND ${range} GROUP BY day, hub, type, rank`,
+        `SELECT day, hub, CASE WHEN type IN ${DRAWS} AND ${isAuto()} THEN 'auto_draw' ELSE type END AS kind,
+                json_extract(props, '$.rank') AS rank, count(*) AS n FROM events
+         WHERE type IN ${ACTION_TYPES} AND ${range} GROUP BY day, hub, kind, rank`,
       )
       .bind(...args())
-      .all<{ day: string; hub: string; type: string; rank: number | null; n: number }>(),
+      .all<{ day: string; hub: string; kind: string; rank: number | null; n: number }>(),
     db
-      .prepare(`SELECT hour, count(*) AS n FROM events WHERE type IN ${DRAWS} AND ${range} GROUP BY hour`)
+      .prepare(`SELECT hour, count(*) AS n FROM events WHERE ${manualDraw()} AND ${range} GROUP BY hour`)
       .bind(...args())
       .all<{ hour: number; n: number }>(),
     db
       .prepare(
         // json_each에도 type 열이 있어서 events 열은 e.로 적는다
         `SELECT j.value AS id, count(*) AS n FROM events AS e, json_each(e.props, '$.picks') AS j
-         WHERE e.type IN ${DRAWS} AND ${inRange("e.")} GROUP BY j.value ORDER BY n DESC, j.value LIMIT 10`,
+         WHERE ${manualDraw("e.")} AND ${inRange("e.")} GROUP BY j.value ORDER BY n DESC, j.value LIMIT 10`,
       )
       .bind(...args())
       .all<{ id: string; n: number }>(),
     db
       .prepare(
         `SELECT coalesce(sum(d), 0) AS drawSessions, coalesce(sum(d * s), 0) AS shareSessions, coalesce(sum(d * k), 0) AS kakaoSessions
-         FROM (SELECT max(type IN ${DRAWS}) AS d, max(type = 'share') AS s, max(type = 'open_kakao') AS k
+         FROM (SELECT max(${manualDraw()}) AS d, max(type = 'share') AS s, max(type = 'open_kakao') AS k
                FROM events WHERE type IN ('draw', 'redraw', 'share', 'open_kakao') AND ${range} GROUP BY session)`,
       )
       .bind(...args())
@@ -123,11 +129,15 @@ export async function eventStats(
   const ranks = { expand: [0, 0, 0], kakao: [0, 0, 0], exclude: [0, 0, 0] };
   let expands = 0;
   let excludes = 0;
+  let autoDraws = 0;
   for (const a of actions.results) {
     const d = daily.get(a.day);
     if (!d) continue;
     const slot = typeof a.rank === "number" && a.rank >= 1 && a.rank <= 3 ? a.rank - 1 : null;
-    switch (a.type) {
+    switch (a.kind) {
+      case "auto_draw":
+        autoDraws += a.n;
+        break;
       case "draw":
         d.draws += a.n;
         hubOf(a.hub).draws += a.n;
@@ -170,6 +180,7 @@ export async function eventStats(
     shareOpens: sum("shareOpens"),
     expands,
     excludes,
+    autoDraws,
   };
 
   const hourly = Array.from({ length: 24 }, () => 0);

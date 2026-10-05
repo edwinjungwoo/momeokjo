@@ -303,7 +303,7 @@ describe("GET /api/admin/stats", () => {
     expect(r.daily[5]).toEqual({ day: "2027-01-14", users: 1, sessions: 1, draws: 1, redraws: 0, shares: 0, openKakao: 0, shareOpens: 0 });
     expect(r.daily[6]).toEqual({ day: "2027-01-15", users: 3, sessions: 3, draws: 2, redraws: 1, shares: 1, openKakao: 2, shareOpens: 1 });
     expect(r.totals).toEqual({
-      users: 3, sessions: 4, draws: 3, redraws: 1, shares: 1, openKakao: 2, shareOpens: 1, expands: 2, excludes: 1,
+      users: 3, sessions: 4, draws: 3, redraws: 1, shares: 1, openKakao: 2, shareOpens: 1, expands: 2, excludes: 1, autoDraws: 0,
     });
     const hourly = Array(24).fill(0);
     hourly[12] = 3;
@@ -323,6 +323,34 @@ describe("GET /api/admin/stats", () => {
     expect(r.conversion.toShare).toBeCloseTo(1 / 3);
     expect(r.conversion.toKakao).toBeCloseTo(2 / 3);
     expect(r.drawsPerSession).toBe(1);
+  });
+
+  it("R36/R39: 자동 뽑기는 뽑기·시간대·거점·많이 뽑힌 가게·전환율·세션당 뽑기에서 빼고 totals.autoDraws로 따로 센다", async () => {
+    await seed([
+      // 자동 뽑기만 보고 공유한 세션 → 전환율의 분모·분자 모두에서 빠진다
+      { anon: A, session: s(6), ts: noonToday, hub: "bongeunsa", type: "app_open" },
+      { anon: A, session: s(6), ts: noonToday, hub: "bongeunsa", type: "draw", props: { picks: ["1", "2", "3"], auto: true } },
+      { anon: A, session: s(6), ts: noonToday, hub: "bongeunsa", type: "share", props: { picks: ["1", "2", "3"] } },
+      // 자동 뽑기 뒤 직접 다시 뽑고 카카오맵
+      { anon: B, session: s(7), ts: onePm, hub: "ddp", type: "app_open" },
+      { anon: B, session: s(7), ts: onePm, hub: "ddp", type: "draw", props: { picks: ["4", "5", "6"], auto: true } },
+      { anon: B, session: s(7), ts: onePm, hub: "ddp", type: "redraw", props: { picks: ["7", "8", "9"] } },
+      { anon: B, session: s(7), ts: onePm, hub: "ddp", type: "open_kakao", placeId: "7", props: { rank: 1 } },
+    ]);
+    const { app } = setup();
+    const r = await (await get(app, "?days=1")).json<StatsResponse>();
+    expect(r.totals).toMatchObject({ sessions: 2, draws: 0, redraws: 1, autoDraws: 2, shares: 1, openKakao: 1 });
+    expect(r.daily[0]).toMatchObject({ draws: 0, redraws: 1 });
+    const hourly = Array(24).fill(0);
+    hourly[13] = 1;
+    expect(r.hourly).toEqual(hourly);
+    expect(r.hubs).toEqual([
+      { hub: "bongeunsa", users: 1, sessions: 1, draws: 0, shares: 1 },
+      { hub: "ddp", users: 1, sessions: 1, draws: 1, shares: 0 },
+    ]);
+    expect(r.top.map((t) => t.placeId)).toEqual(["7", "8", "9"]);
+    expect(r.conversion).toEqual({ drawSessions: 1, toShare: 0, toKakao: 1 });
+    expect(r.drawsPerSession).toBe(0.5);
   });
 
   it("R36: 거점을 고르면 그 거점 이벤트만, 오늘만 고르면 오늘만 센다", async () => {
