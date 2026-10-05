@@ -41,21 +41,23 @@ export function turnOffAutoDraw(day: string) {
   }
 }
 
-/** 문서에서 처음 누르거나(pointerdown) 키를 누르면 true가 되는 ref */
+/** 사용자가 이미 무언가 한 것으로 치는 첫 입력 (누름, 키, 휠 스크롤, 터치 시작) */
+const INTERACTIONS = ["pointerdown", "keydown", "wheel", "touchstart"] as const;
+
+/** 문서에서 처음 누르거나 키를 누르거나 휠·터치로 스크롤하기 시작하면 true가 되는 ref */
 export function useInteracted() {
   const ref = useRef(false);
   useEffect(() => {
+    const off = () => {
+      for (const t of INTERACTIONS) document.removeEventListener(t, on, true);
+    };
     const on = () => {
       ref.current = true;
-      document.removeEventListener("pointerdown", on, true);
-      document.removeEventListener("keydown", on, true);
+      off();
     };
-    document.addEventListener("pointerdown", on, true);
-    document.addEventListener("keydown", on, true);
-    return () => {
-      document.removeEventListener("pointerdown", on, true);
-      document.removeEventListener("keydown", on, true);
-    };
+    // 휠·터치는 스크롤을 막지 않게 passive로 듣는다
+    for (const t of INTERACTIONS) document.addEventListener(t, on, { capture: true, passive: true });
+    return off;
   }, []);
   return ref;
 }

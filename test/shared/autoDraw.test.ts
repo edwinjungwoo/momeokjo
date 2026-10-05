@@ -3,7 +3,7 @@ import { shouldAutoDraw, type AutoDrawInput } from "../../shared/autoDraw";
 
 const OK: AutoDrawInput = {
   returning: true, shareLink: false, drawnThisSession: false, interacted: false,
-  offDay: null, today: "2027-01-15", hasData: true, pool: 5,
+  offDay: null, today: "2027-01-15", hasData: true, settled: true, pool: 5,
 };
 
 describe("R39 열자마자 3곳", () => {
@@ -23,5 +23,10 @@ describe("R39 열자마자 3곳", () => {
     expect(shouldAutoDraw({ ...OK, offDay: "2027-01-15" })).toBe(false);
     expect(shouldAutoDraw({ ...OK, hasData: false })).toBe(false);
     expect(shouldAutoDraw({ ...OK, pool: 0 })).toBe(false);
+  });
+
+  it("R39: 목록이 아직 채워지는 중(pending 폴링 중)이면 기다린다 — 일부만 온 목록으로 뽑지 않는다", () => {
+    expect(shouldAutoDraw({ ...OK, settled: false })).toBe(false);
+    expect(shouldAutoDraw({ ...OK, settled: false, pool: 40 })).toBe(false);
   });
 });
