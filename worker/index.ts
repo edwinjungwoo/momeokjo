@@ -1,7 +1,11 @@
+import { createApp } from "./app";
+import type { FetchFn } from "./fetchFn";
+
+const realFetch: FetchFn = (input, init) => fetch(input, init);
+const app = createApp({ fetcher: realFetch });
+
 export default {
-  async fetch(request: Request): Promise<Response> {
-    const url = new URL(request.url);
-    if (url.pathname === "/api/health") return Response.json({ ok: true });
-    return new Response("Not found", { status: 404 });
+  fetch(request, env, ctx) {
+    return app.fetch(request, env, ctx);
   },
 } satisfies ExportedHandler<Env>;
