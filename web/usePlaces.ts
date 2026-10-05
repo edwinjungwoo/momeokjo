@@ -2,12 +2,22 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { MAX_RADIUS } from "../shared/constants";
 import type { PlacesResponse } from "../shared/types";
 import { fetchPlaces } from "./api";
+import { readCachedPlaces, saveCachedPlaces } from "./placesCache";
 
 const DEBOUNCE_MS = 250;
 const POLL_MS = 3000;
 const MAX_POLLS = 10;
 
-type State = { data: PlacesResponse | null; loading: boolean; error: boolean; polling: boolean };
+type State = {
+  data: PlacesResponse | null;
+  loading: boolean;
+  error: boolean;
+  polling: boolean;
+  /** data가 어느 거점 목록인가 */
+  hub: string | null;
+  /** data가 기기 저장본이면 저장 시각과 신선도 (새로 받은 목록이면 null) */
+  cache: { savedAt: number; fresh: boolean } | null;
+};
 
 /**
  * R29: 거점이 바뀌면 250ms 디바운스 후 불러오고,
@@ -15,9 +25,13 @@ type State = { data: PlacesResponse | null; loading: boolean; error: boolean; po
  * 다시 불러오는 동안 이전 data를 유지한다 (loading=true로 흐리게만 표시).
  * R42: 반경과 상관없이 거점의 1000m 목록을 한 번 받는다 — 화면 반경은 filterPlaces가 거리로 거른다.
  * R45: 디바운스는 거점을 바꿀 때만 한다. 처음 열 때와 "다시 시도"는 바로 부른다 (첫 목록이 250ms 늦지 않게).
+ * R45: 이 거점의 기기 저장본이 있으면 새 목록이 오기 전에 먼저 보여준다 (24시간 안이면 그대로, 넘었으면 흐리게).
+ * 새 목록이 오면 바꾸고, 폴링이 끝난 마지막 응답을 다시 저장한다.
  */
 export function usePlaces(hubId: string) {
-  const [state, setState] = useState<State>({ data: null, loading: true, error: false, polling: false });
+  const [state, setState] = useState<State>({
+    data: null, loading: true, error: false, polling: false, hub: null, cache: null,
+  });
   const [reloadKey, setReloadKey] = useState(0);
   const lastHub = useRef(hubId);
 
@@ -25,23 +39,46 @@ export function usePlaces(hubId: string) {
     const ctrl = new AbortController();
     let polls = 0;
     let timer: number | undefined;
+    let received = false;
     const load = async () => {
       try {
-        const data = await fetchPlaces(hubId, MAX_RADIUS, ctrl.signal);
+        const { data, text } = await fetchPlaces(hubId, MAX_RADIUS, ctrl.signal);
         if (ctrl.signal.aborted) return;
+        received = true;
         // R44: 강등 모드면 pending이 줄지 않으므로 그것 때문에 다시 부르지 않는다
         const waitDetails = data.pending > 0 && (data.detailsFrozenSince ?? null) === null;
         const more = (waitDetails || data.incompleteTiles > 0) && polls < MAX_POLLS;
-        setState({ data, loading: false, error: false, polling: more });
+        setState({ data, loading: false, error: false, polling: more, hub: hubId, cache: null });
         if (more) {
           polls += 1;
           timer = window.setTimeout(load, POLL_MS);
+        } else {
+          void saveCachedPlaces(hubId, text);
         }
       } catch {
         if (!ctrl.signal.aborted) setState((s) => ({ ...s, loading: false, error: true, polling: false }));
       }
     };
     setState((s) => ({ ...s, loading: true, error: false }));
+    // 저장본은 디바운스 없이 바로 읽는다. 이 거점의 새 목록을 이미 들고 있으면(다시 시도) 쓰지 않는다
+    void readCachedPlaces(hubId).then((c) => {
+      if (!c || received || ctrl.signal.aborted) return;
+      let data: PlacesResponse;
+      try {
+        data = JSON.parse(c.text) as PlacesResponse;
+      } catch {
+        return;
+      }
+      setState((s) =>
+        s.data !== null && s.hub === hubId && s.cache === null
+          ? s
+          : {
+              data, hub: hubId, cache: { savedAt: c.savedAt, fresh: c.fresh },
+              // 하루 넘은 저장본은 새 목록이 올 때까지 흐리게 둔다
+              loading: s.loading && !c.fresh, error: s.error, polling: false,
+            },
+      );
+    });
     const hubChanged = lastHub.current !== hubId;
     lastHub.current = hubId;
     const debounce = window.setTimeout(load, hubChanged ? DEBOUNCE_MS : 0);
@@ -53,5 +90,8 @@ export function usePlaces(hubId: string) {
   }, [hubId, reloadKey]);
 
   const reload = useCallback(() => setReloadKey((k) => k + 1), []);
-  return { ...state, reload };
+  const { data, loading, error, polling, cache } = state;
+  /** 지금 data가 기기 저장본인가 ("stale" = 24시간 넘음 → 자동 뽑기는 새 목록을 기다린다) */
+  const fromCache = cache === null ? null : cache.fresh ? "fresh" : "stale";
+  return { data, loading, error, polling, fromCache, reload } as const;
 }

@@ -58,7 +58,7 @@ export default function App() {
   const { filters } = settings;
   const hub = hubById(settings.hubId);
   const center = useMemo<LatLng>(() => ({ lat: hub.lat, lng: hub.lng }), [hub.lat, hub.lng]);
-  const { data, loading, error, polling, reload } = usePlaces(hub.id);
+  const { data, loading, error, polling, fromCache, reload } = usePlaces(hub.id);
   const now = useNow();
   const personal = usePersonal();
   const { isExcluded, record } = personal;
@@ -290,7 +290,9 @@ export default function App() {
   };
 
   // R39: 재방문자는 목록이 오면 한 번 자동으로 뽑는다 (사용자가 아직 아무것도 누르지 않았을 때만)
+  // R45: 24시간 안의 기기 저장본이면 그걸로 바로 뽑고, 그보다 오래됐으면 새 목록을 기다린다
   const autoPool = candidates.length + relax.extra.length;
+  const drawReady = hasData && fromCache !== "stale";
   const autoDone = useRef(false);
   useEffect(() => {
     if (autoDone.current || interacted.current) return;
@@ -301,7 +303,7 @@ export default function App() {
       interacted: interacted.current,
       offDay: autoDrawOffDay(),
       today: kstDay(Date.now()),
-      hasData,
+      hasData: drawReady,
       pool: autoPool,
     });
     if (!go) return;
@@ -309,7 +311,7 @@ export default function App() {
     markAutoDrawn();
     onDraw({ auto: true });
     // onDraw는 매 렌더 새로 만들어지지만, 목록이 처음 준비됐을 때 한 번만 부르면 된다
-  }, [hasData, autoPool, returning, share.placeIds]);
+  }, [drawReady, autoPool, returning, share.placeIds]);
 
   // 셔플 중에는 목록·핀 선택을 받지 않는다 (M2). 결과 3곳 중 하나면 그 카드를 펼친다
   const onSelect = (p: ApiPlace) => {
