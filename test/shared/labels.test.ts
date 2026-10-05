@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
-  LABEL_EDGE, PICK_BADGE, PICK_LABEL, clampLabelX, hiddenLabels, keptChips, layoutPicks, pickBadgeBox, pickLabelBox,
+  LABEL_EDGE, PICK_BADGE, PICK_LABEL, chipToggles, clampLabelX, hiddenLabels, keptChips, layoutPicks, pickBadgeBox, pickLabelBox,
   type ChipBox, type LabelBox,
 } from "../../shared/labels";
 
@@ -147,5 +147,23 @@ describe("R28 가까이 본 지도의 평점 칩 겹침", () => {
     expect(a).toEqual(b);
     expect(a.size).toBeGreaterThan(20);
     expect(a.size).toBeLessThan(900);
+  });
+});
+
+describe("R28 칩 표시 토글 (.pin--nochip)", () => {
+  const dom = (o: Record<string, boolean>) => (id: string) => o[id];
+
+  it("R28: 지금 DOM 상태와 다른 핀만 바꾼다", () => {
+    const want = new Map([["a", true], ["b", false], ["c", true], ["d", false]]);
+    expect(chipToggles(want, dom({ a: false, b: true, c: true, d: false }))).toEqual([["a", true], ["b", false]]);
+  });
+
+  it("R28: 필터로 사라졌다 다시 만든 핀(클래스 없음)도 점으로 바꾼다 — 예전에 점이었다는 기억과 비교하지 않는다", () => {
+    // 다시 만든 "re"는 새 버튼이라 .pin--nochip이 없다
+    expect(chipToggles(new Map([["re", true]]), dom({ re: false }))).toEqual([["re", true]]);
+  });
+
+  it("R28: 핀이 없는 id는 건너뛴다", () => {
+    expect(chipToggles(new Map([["gone", true], ["x", false]]), dom({ x: true }))).toEqual([["x", false]]);
   });
 });

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { keptChips, layoutPicks, pickBadgeBox, pickLabelBox, type ChipBox, type LabelBox } from "../../shared/labels";
+import { chipToggles, keptChips, layoutPicks, pickBadgeBox, pickLabelBox, type ChipBox, type LabelBox } from "../../shared/labels";
 import type { ApiPlace, CategoryGroup, LatLng } from "../../shared/types";
 import { loadKakaoMaps } from "../kakaoLoader";
 
@@ -295,11 +295,13 @@ export function MapView({ center, radius, places, selectedId, picks, focusId, on
     }
     // 멀리서 보면 모두 점이라 표시를 지운다. 화면 밖 핀은 다음 계산까지 그대로 둔다
     for (const id of noChip.current) if (!want.has(id) && (z === "far" || picksRef.current.includes(id))) want.set(id, false);
+    // 기억해 둔 집합이 아니라 지금 핀의 클래스와 비교한다 (다시 만든 핀은 클래스가 없다, layoutLabels의 pin--nolabel과 같게)
+    const pinOf = (id: string) => overlays.current.get(id)?.getContent() as HTMLElement | undefined;
+    for (const [id, on] of chipToggles(want, (id) => pinOf(id)?.classList.contains("pin--nochip"))) {
+      pinOf(id)!.classList.toggle("pin--nochip", on);
+    }
     for (const [id, on] of want) {
-      if (noChip.current.has(id) === on) continue;
-      const pin = overlays.current.get(id)?.getContent() as HTMLElement | undefined;
-      pin?.classList.toggle("pin--nochip", on);
-      if (on) noChip.current.add(id);
+      if (on && overlays.current.has(id)) noChip.current.add(id);
       else noChip.current.delete(id);
     }
     performance.clearMeasures?.("mmj:chips");
@@ -316,6 +318,9 @@ export function MapView({ center, radius, places, selectedId, picks, focusId, on
       if (!wanted.has(id)) {
         ov.setMap(null);
         existing.delete(id);
+        // 다시 만들면 새 버튼이라 예전 표시(점, 민 이름표)를 기억하지 않는다
+        noChip.current.delete(id);
+        shifted.current.delete(id);
       }
     }
     for (const p of places) {

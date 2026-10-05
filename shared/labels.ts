@@ -163,3 +163,19 @@ export function keptChips(chips: ChipBox[], obstacles: LabelBox[]): Set<string> 
   }
   return kept;
 }
+
+/**
+ * R28: .pin--nochip을 바꿀 핀만 고른다. 기억해 둔 id 집합이 아니라 지금 DOM 상태와 비교한다 —
+ * 필터로 핀이 사라졌다 다시 만들어지면 새 버튼에는 클래스가 없어서 기억("점이었음")과 어긋난다.
+ * @param want id → 점으로 그릴지(true) 칩으로 그릴지(false)
+ * @param hasNoChip 지금 그 핀에 .pin--nochip이 있는지. 핀이 없으면 undefined (건너뛴다)
+ * @returns 바꿀 [id, 점으로 그릴지] (want 순서)
+ */
+export function chipToggles(want: Map<string, boolean>, hasNoChip: (id: string) => boolean | undefined): [string, boolean][] {
+  const out: [string, boolean][] = [];
+  for (const [id, on] of want) {
+    const now = hasNoChip(id);
+    if (now !== undefined && now !== on) out.push([id, on]);
+  }
+  return out;
+}
