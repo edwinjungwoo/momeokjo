@@ -18,11 +18,18 @@ export function kakaoPhotoUrl(raw: string | null | undefined): string | null {
   }
 }
 
-export function photoThumbUrl(url: string, px: number): string {
-  return `https://img1.kakaocdn.net/cthumb/local/C${px}x${px}.q50/?fname=${encodeURIComponent(url)}`;
+/**
+ * R45: 썸네일 서버가 WebP로 바꿔 준다(`.fwebp` 다음에 `.q70`을 붙여야 품질이 WebP에 적용된다).
+ * 원본이 PNG인 가게가 많아서 예전 C320x320.q50은 장당 200KB, R640x0.q50은 1MB를 넘었다.
+ */
+const THUMB = "https://img1.kakaocdn.net/cthumb/local";
+
+/** 목록(64px)·결과 카드(56px) 썸네일: 허용 크기 중 64px의 2배인 128 */
+export function photoThumbUrl(url: string): string {
+  return `${THUMB}/C128x128.fwebp.q70/?fname=${encodeURIComponent(url)}`;
 }
 
 /** 카드 상단 사진용: 가로 640 기준으로 비율 유지 리사이즈 */
 export function photoWideUrl(url: string): string {
-  return `https://img1.kakaocdn.net/cthumb/local/R640x0.q50/?fname=${encodeURIComponent(url)}`;
+  return `${THUMB}/R640x0.fwebp.q70/?fname=${encodeURIComponent(url)}`;
 }

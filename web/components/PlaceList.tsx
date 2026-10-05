@@ -26,7 +26,7 @@ function Thumb({ url }: { url: string | null }) {
   return (
     <img
       className="row-thumb"
-      src={photoThumbUrl(url, 320)}
+      src={photoThumbUrl(url)}
       alt=""
       width={64}
       height={64}

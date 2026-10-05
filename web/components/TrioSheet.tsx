@@ -36,7 +36,7 @@ function Thumb({ url, rank }: { url: string | null; rank: number }) {
   return (
     <span className={`trio-thumb${!url || failed ? " is-empty" : ""}`} aria-hidden="true">
       {url && !failed && (
-        <img src={photoThumbUrl(url, 320)} alt="" width={56} height={56} loading="lazy" decoding="async" onError={() => setFailed(true)} />
+        <img src={photoThumbUrl(url)} alt="" width={56} height={56} loading="lazy" decoding="async" onError={() => setFailed(true)} />
       )}
       <span className="trio-rank">{rank}</span>
     </span>

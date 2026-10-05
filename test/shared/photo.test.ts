@@ -21,14 +21,15 @@ describe("photo", () => {
     expect(kakaoPhotoUrl("https://t1.kakaocdn.net:8443/a")).toBeNull();
     expect(kakaoPhotoUrl("http://t1.kakaocdn.net:80/a")).toBeNull();
   });
-  it("R33: 썸네일은 카카오 썸네일 서버를 거친다", () => {
-    expect(photoThumbUrl("https://t1.kakaocdn.net/a?original", 320)).toBe(
-      "https://img1.kakaocdn.net/cthumb/local/C320x320.q50/?fname=https%3A%2F%2Ft1.kakaocdn.net%2Fa%3Foriginal",
+  it("R33/R45: 썸네일은 카카오 썸네일 서버에서 128px(64px 칸의 2배) WebP q70으로 받는다", () => {
+    // 썸네일 서버가 허용하는 크기는 정해져 있다 (120·128·160·200·320 등, 112·144·256은 403). 원본이 PNG면 C320은 200KB가 넘는다
+    expect(photoThumbUrl("https://t1.kakaocdn.net/a?original")).toBe(
+      "https://img1.kakaocdn.net/cthumb/local/C128x128.fwebp.q70/?fname=https%3A%2F%2Ft1.kakaocdn.net%2Fa%3Foriginal",
     );
   });
-  it("R33: 카드용 사진은 가로 640 리사이즈", () => {
+  it("R33/R45: 카드용 사진은 가로 640 리사이즈, WebP q70 (원본 PNG 1.3MB → 70KB 안팎)", () => {
     expect(photoWideUrl("https://t1.kakaocdn.net/a?original")).toBe(
-      "https://img1.kakaocdn.net/cthumb/local/R640x0.q50/?fname=https%3A%2F%2Ft1.kakaocdn.net%2Fa%3Foriginal",
+      "https://img1.kakaocdn.net/cthumb/local/R640x0.fwebp.q70/?fname=https%3A%2F%2Ft1.kakaocdn.net%2Fa%3Foriginal",
     );
   });
 });
