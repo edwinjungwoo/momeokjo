@@ -52,14 +52,17 @@ function openDb(): Promise<IDBDatabase | null> {
   return p;
 }
 
-/** 연 뒤 읽기·저장이 실패하면 그 연결을 닫고, 다음 호출이 새로 열게 한다 */
-function resetDb(db: IDBDatabase | null) {
+/**
+ * 연 뒤 읽기·저장이 실패하면 그 연결을 닫고, 다음 호출이 새로 열게 한다.
+ * 그 사이 다른 호출이 새로 연 연결(p가 아닌 dbPromise)은 그대로 둔다
+ */
+function resetDb(p: Promise<IDBDatabase | null> | null, db: IDBDatabase | null) {
   try {
     db?.close();
   } catch {
     /* 이미 닫힘 */
   }
-  dbPromise = null;
+  if (p && dbPromise === p) dbPromise = null;
 }
 
 const done = <T>(req: IDBRequest<T>) =>
@@ -70,24 +73,28 @@ const done = <T>(req: IDBRequest<T>) =>
 
 /** 이 거점의 쓸 수 있는 저장본 (없거나 못 읽으면 null) */
 export async function readCachedPlaces(hub: string): Promise<CachedPlacesView | null> {
+  let p: Promise<IDBDatabase | null> | null = null;
   let db: IDBDatabase | null = null;
   try {
-    db = await openDb();
+    p = openDb();
+    db = await p;
     if (!db) return null;
     const raw = await done(db.transaction(STORE, "readonly").objectStore(STORE).get(hub));
     return readPlacesCache(raw, hub, Date.now());
   } catch {
-    resetDb(db);
+    resetDb(p, db);
     return null;
   }
 }
 
 /** 응답 원문을 저장하고, 오래된 거점은 지운다 (최근 3곳) */
 export async function saveCachedPlaces(hub: string, text: string): Promise<void> {
+  let p: Promise<IDBDatabase | null> | null = null;
   let db: IDBDatabase | null = null;
   try {
     const entry = placesCacheEntry(hub, text, Date.now());
-    db = await openDb();
+    p = openDb();
+    db = await p;
     if (!db) return;
     const store = db.transaction(STORE, "readwrite").objectStore(STORE);
     // 너무 커서 못 저장하면 옛 저장본도 지운다 (새 응답보다 오래된 목록이 남지 않게)
@@ -111,7 +118,7 @@ export async function saveCachedPlaces(hub: string, text: string): Promise<void>
       cur.onerror = () => reject(cur.error);
     });
   } catch {
-    resetDb(db);
+    resetDb(p, db);
     /* 저장하지 못해도 화면은 그대로 */
   }
 }

@@ -1,12 +1,12 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 /** IndexedDB 대역: open()마다 시나리오 하나를 꺼내 비동기로 이벤트를 쏜다 */
-type Scenario = "error" | "blocked-then-success" | "success" | "broken-db";
-type FakeDb = { close: ReturnType<typeof vi.fn>; transaction: (...a: unknown[]) => unknown; onclose?: unknown; onversionchange?: unknown };
+type Scenario = "error" | "blocked-then-success" | "success" | "broken-db" | "slow-fail-db";
+type FakeDb = { close: ReturnType<typeof vi.fn>; transaction: (...a: unknown[]) => unknown; onclose?: () => void; onversionchange?: unknown };
 
 function fakeIndexedDb(scenarios: Scenario[]) {
   const dbs: FakeDb[] = [];
-  const makeDb = (broken: boolean): FakeDb => {
+  const makeDb = (broken: boolean, slowFail = false): FakeDb => {
     const db: FakeDb = {
       close: vi.fn(),
       transaction: () => {
@@ -14,8 +14,10 @@ function fakeIndexedDb(scenarios: Scenario[]) {
         return {
           objectStore: () => ({
             get: () => {
-              const req: { result: unknown; onsuccess?: () => void } = { result: undefined };
-              setTimeout(() => req.onsuccess?.(), 0);
+              const req: { result: unknown; error?: unknown; onsuccess?: () => void; onerror?: () => void } = { result: undefined };
+              // slowFail: 읽기가 한참 뒤에 실패한다
+              if (slowFail) setTimeout(() => ((req.error = new Error("AbortError")), req.onerror?.()), 30);
+              else setTimeout(() => req.onsuccess?.(), 0);
               return req;
             },
           }),
@@ -35,7 +37,7 @@ function fakeIndexedDb(scenarios: Scenario[]) {
         req.result = makeDb(false);
         return setTimeout(() => req.onsuccess?.(), 0);
       }
-      req.result = makeDb(kind === "broken-db");
+      req.result = makeDb(kind === "broken-db", kind === "slow-fail-db");
       req.onsuccess?.();
     }, 0);
     return req;
@@ -83,5 +85,20 @@ describe("R45 기기 저장본 — 저장소 열기 실패", () => {
     expect(await mod.readCachedPlaces("bongeunsa")).toBeNull();
     expect(open).toHaveBeenCalledTimes(3);
     expect(dbs[2].close).not.toHaveBeenCalled();
+  });
+
+  it("R45: 옛 연결의 늦은 읽기 실패가 그 사이 새로 연 연결을 버리지 않는다 (dbPromise === p일 때만 비움)", async () => {
+    const { open, dbs, mod } = await load(["slow-fail-db", "success"]);
+    const slow = mod.readCachedPlaces("bongeunsa");
+    await tick();
+    // 그 사이 WebKit이 옛 연결을 끊어서 다음 호출이 새로 연다
+    dbs[0].onclose?.();
+    expect(await mod.readCachedPlaces("bongeunsa")).toBeNull();
+    expect(open).toHaveBeenCalledTimes(2);
+    // 옛 연결의 읽기가 이제야 실패한다
+    expect(await slow).toBeNull();
+    await mod.readCachedPlaces("bongeunsa");
+    expect(open).toHaveBeenCalledTimes(2);
+    expect(dbs[1].close).not.toHaveBeenCalled();
   });
 });
