@@ -162,6 +162,36 @@ describe("POST /api/events", () => {
     }
   });
 
+  it("R38: /api/events는 요청마다 하는 사용량 UPSERT 대신 같은 배치에서 쓰기 추정치(이벤트당 4행)만 더한다", async () => {
+    const { app } = setup();
+    let prepared: string[] = [];
+    const DB = new Proxy(env.DB, {
+      get(t, k) {
+        if (k === "prepare") return (q: string) => (prepared.push(q), t.prepare(q));
+        const v = Reflect.get(t, k);
+        return typeof v === "function" ? v.bind(t) : v;
+      },
+    });
+    const ctx = createExecutionContext();
+    const body = JSON.stringify({ anon: ANON, session: SESSION, events: [ev(), ev(), ev()] });
+    const res = await app.fetch(new Request("http://localhost/api/events", { method: "POST", body }), { ...env, DB }, ctx);
+    await waitOnExecutionContext(ctx);
+    expect(res.status).toBe(204);
+    expect(await rows()).toHaveLength(3);
+    expect(await d1UsageOn(env.DB, "2027-01-15")).toEqual({ read: 0, written: 12 });
+    // 읽기 키는 건드리지 않는다
+    expect(prepared.filter((q) => q.includes("INSERT INTO meta"))).toHaveLength(1);
+    prepared = [];
+    // 이벤트가 없는 요청(전부 버림)은 meta에 아무것도 쓰지 않는다
+    await app.fetch(
+      new Request("http://localhost/api/events", { method: "POST", body: JSON.stringify({ anon: ANON, session: SESSION, events: [ev({ hub: "x" })] }) }),
+      { ...env, DB },
+      ctx,
+    );
+    await waitOnExecutionContext(ctx);
+    expect(prepared.filter((q) => q.includes("INSERT INTO meta"))).toHaveLength(0);
+  });
+
   it("R35: 유효한 이벤트가 하나도 없으면 D1에 쓰지 않는다", async () => {
     const { app } = setup();
     const res = await post(app, JSON.stringify({ anon: ANON, session: SESSION, events: [ev({ hub: "x" })] }));

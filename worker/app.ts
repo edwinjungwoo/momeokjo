@@ -67,8 +67,14 @@ export function createApp(deps: AppDeps) {
   const now = deps.now ?? (() => Date.now());
   const rateLimit = deps.rateLimit ?? (async (env: Env, key: string) => (await env.RATE_LIMITER.limit({ key })).success);
 
-  // R38: 요청마다 D1 사용량을 모아서, 이어지는 작업(waitUntil)까지 끝난 뒤 한 번만 기록한다
+  // R38: 요청마다 D1 사용량을 모아서, 이어지는 작업(waitUntil)까지 끝난 뒤 한 번만 기록한다.
+  // 이벤트 수집은 읽기가 거의 없어서 기록하지 않는다 (쓰기 추정치는 insertEvents가 같은 배치로 더한다)
   app.use("/api/*", async (c, next) => {
+    if (c.req.path === "/api/events") {
+      c.set("db", c.env.DB);
+      c.set("defer", (p) => c.executionCtx.waitUntil(p));
+      return next();
+    }
     const usage: D1Usage = { read: 0, written: 0 };
     const later: Promise<unknown>[] = [];
     c.set("db", meteredDb(c.env.DB, usage));
@@ -159,7 +165,7 @@ export function createApp(deps: AppDeps) {
     try {
       if (!(await rateLimit(c.env, `ev:${batch.anon}`))) return c.body(null, 204);
       if (await overWriteBudget(c.var.db, c.env, now())) return c.body(null, 204);
-      await insertEvents(c.var.db, batch.anon, batch.session, batch.events);
+      await insertEvents(c.var.db, batch.anon, batch.session, batch.events, now());
     } catch (e) {
       // 통계는 화면을 막지 않는다 — 실패는 기록만 하고 204
       console.error("event ingest failed", e);

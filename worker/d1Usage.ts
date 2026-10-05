@@ -68,6 +68,19 @@ export function meteredDb(db: D1Database, usage: D1Usage): D1Database {
 const ADD_UPSERT = `INSERT INTO meta (key, value) VALUES (?, ?), (?, ?)
   ON CONFLICT(key) DO UPDATE SET value = CAST(meta.value AS INTEGER) + CAST(excluded.value AS INTEGER)`;
 
+/** 이벤트 한 개를 넣을 때 쓰는 행 수 (표 + 인덱스 2 + 일련번호; 로컬 측정) */
+export const EVENT_ROWS_WRITTEN = 4;
+
+/** 오늘(UTC) 쓰기 추정치만 더하는 문장 (R35 이벤트 배치에 같이 넣는다) */
+export function addWrittenStatement(db: D1Database, rows: number, now: number): D1PreparedStatement {
+  return db
+    .prepare(
+      `INSERT INTO meta (key, value) VALUES (?, ?)
+       ON CONFLICT(key) DO UPDATE SET value = CAST(meta.value AS INTEGER) + CAST(excluded.value AS INTEGER)`,
+    )
+    .bind(writtenKey(utcDay(now)), String(Math.round(rows)));
+}
+
 /** 오늘(UTC) 사용량에 더한다 — UPSERT 한 문장. 이 기록 자체(몇 행)는 세지 않는다 */
 export async function recordD1Usage(db: D1Database, usage: D1Usage, now: number): Promise<void> {
   if (usage.read <= 0 && usage.written <= 0) return;

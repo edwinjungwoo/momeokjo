@@ -1,14 +1,22 @@
 import { EVENT_RETENTION_DAYS, type DayStats, type StatsResponse, type StoredEvent } from "../shared/events";
 import { DAY_MS, kstDay, kstDayHour, utcDay } from "../shared/kst";
-import { d1UsageOn, pruneD1Usage } from "./d1Usage";
+import { EVENT_ROWS_WRITTEN, addWrittenStatement, d1UsageOn, pruneD1Usage } from "./d1Usage";
 
-/** R35: 한 요청의 이벤트를 db.batch 한 번으로 넣는다 */
-export async function insertEvents(db: D1Database, anon: string, session: string, events: StoredEvent[]): Promise<void> {
+/**
+ * R35: 한 요청의 이벤트를 db.batch 한 번으로 넣는다. R38: 같은 배치 끝에 오늘(UTC) 쓰기 추정치(이벤트당 4행)를 더한다 —
+ * 이벤트 요청은 요청마다 하는 사용량 UPSERT(읽기·쓰기 2키)를 하지 않고, 쓰기 상한이 이벤트 쓰기를 셀 수 있게 이것만 남긴다.
+ */
+export async function insertEvents(
+  db: D1Database, anon: string, session: string, events: StoredEvent[], now: number,
+): Promise<void> {
   if (events.length === 0) return;
   const stmt = db.prepare(
     "INSERT INTO events (ts, day, hour, anon, session, hub, type, place_id, props) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
   );
-  await db.batch(events.map((e) => stmt.bind(e.ts, e.day, e.hour, anon, session, e.hub, e.type, e.placeId, e.props)));
+  await db.batch([
+    ...events.map((e) => stmt.bind(e.ts, e.day, e.hour, anon, session, e.hub, e.type, e.placeId, e.props)),
+    addWrittenStatement(db, events.length * EVENT_ROWS_WRITTEN, now),
+  ]);
 }
 
 /** Cron은 5분마다 돈다 — KST 04:00~04:04에 걸리는 한 번만 정리한다 */
