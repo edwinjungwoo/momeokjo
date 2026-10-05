@@ -4,6 +4,7 @@ import { HUBS, type Hub } from "../shared/hubs";
 import type { LatLng } from "../shared/types";
 import { Budget } from "./budget";
 import { limitsFrom } from "./config";
+import { meteredDb, overReadBudget, recordD1Usage, type D1Usage } from "./d1Usage";
 import { enrichDetails } from "./detailEnricher";
 import type { FetchFn } from "./fetchFn";
 import {
@@ -21,9 +22,17 @@ export type WarmDeps = {
   now: number;
   sleep?: (ms: number) => Promise<void>;
 };
-export type WarmResult = { incompleteTiles: number; pending: number; enriched: number; failed: number };
+/** pending: 남은 상세 수. 세지 않을 때는 0(끝) 또는 "more"(더 있을 수 있음) */
+export type WarmResult = { incompleteTiles: number; pending: number | "more"; enriched: number; failed: number };
 
-export async function warmOnce(deps: WarmDeps, center: LatLng, radiusM: number): Promise<WarmResult> {
+/**
+ * R31: 한 번 수집·보충한다. 남은 수(pending)를 세려고 격자 전체를 다시 훑지 않는다(R38) —
+ * 이번에 고른 상세가 배치를 다 채우지 못했고 예산·쿨다운으로 멈추지 않았으면 남은 것이 없다.
+ * opts.count면 예전처럼 정확히 센다(전체 스캔, 명시적으로 요청할 때만).
+ */
+export async function warmOnce(
+  deps: WarmDeps, center: LatLng, radiusM: number, opts: { count?: boolean } = {},
+): Promise<WarmResult> {
   const budget = new Budget(deps.budgetSize);
   const tiles = await collectTiles(
     { db: deps.db, fetcher: deps.fetcher, restKey: deps.restKey, budget, now: deps.now },
@@ -34,12 +43,13 @@ export async function warmOnce(deps: WarmDeps, center: LatLng, radiusM: number):
     center,
     radiusM,
   );
-  return {
-    incompleteTiles: tiles.incomplete.length + tiles.failed.length,
-    pending: await countNeedingDetail(deps.db, center, radiusM, deps.now),
-    enriched: e.enriched,
-    failed: e.failed,
-  };
+  let pending: WarmResult["pending"];
+  if (opts.count) pending = await countNeedingDetail(deps.db, center, radiusM, deps.now);
+  else {
+    const done = e.enriched + e.failed < deps.batchSize && budget.left > 0 && deps.now >= (await placeBlockedUntil(deps.db));
+    pending = done ? 0 : "more";
+  }
+  return { incompleteTiles: tiles.incomplete.length + tiles.failed.length, pending, enriched: e.enriched, failed: e.failed };
 }
 
 // Cron 주기: wrangler.jsonc의 5분 간격 스케줄과 맞춘다
@@ -58,6 +68,8 @@ export type CronResult = {
   tiles: { total: number; collected: number; incomplete: number };
   enriched: number;
   failed: number;
+  /** R38: 오늘 D1 읽기가 소프트 한도를 넘어 수집·보충을 건너뛰었다 */
+  skipped?: "read_budget";
 };
 
 /**
@@ -71,11 +83,29 @@ export async function runScheduled(
   env: Env,
   opts: { fetcher: FetchFn; now: number; sleep?: (ms: number) => Promise<void>; hubs?: Hub[] },
 ): Promise<CronResult> {
-  const db = env.DB;
+  // R38: 이번 실행이 읽고 쓴 행 수를 모아 끝에 한 번 기록한다
+  const usage: D1Usage = { read: 0, written: 0 };
+  const db = meteredDb(env.DB, usage);
+  try {
+    return await maintain(env, db, opts);
+  } finally {
+    await recordD1Usage(env.DB, usage, opts.now).catch((e) => console.error("d1 usage record failed", e));
+  }
+}
+
+async function maintain(
+  env: Env, db: D1Database, opts: { fetcher: FetchFn; now: number; sleep?: (ms: number) => Promise<void>; hubs?: Hub[] },
+): Promise<CronResult> {
   const { budgetSize, batchSize } = limitsFrom(env);
   const budget = new Budget(budgetSize);
   const hubs = hubOrder(opts.hubs ?? HUBS, opts.now);
   const keys = [...new Set(hubs.flatMap((h) => tilesCoveringCircle(h, PREWARM_RADIUS)))];
+  if (await overReadBudget(db, env, opts.now)) {
+    return {
+      order: hubs.map((h) => h.id), tiles: { total: keys.length, collected: 0, incomplete: 0 }, enriched: 0, failed: 0,
+      skipped: "read_budget",
+    };
+  }
 
   const tiles = await collectTiles({ db, fetcher: opts.fetcher, restKey: env.KAKAO_REST_KEY, budget, now: opts.now }, keys);
   const result: CronResult = {

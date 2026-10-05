@@ -4,6 +4,7 @@ import { MAX_RADIUS, MIN_RADIUS, isValidRadius } from "../shared/constants";
 import { HUBS, isHubId } from "../shared/hubs";
 import { auditArea } from "./audit";
 import { limitsFrom } from "./config";
+import { meteredDb, overReadBudget, recordD1Usage, type D1Usage } from "./d1Usage";
 import type { FetchFn } from "./fetchFn";
 import { warmOnce } from "./maintenance";
 import { getPlace, getPlaces, type ServiceDeps } from "./placesService";
@@ -44,23 +45,47 @@ export type AppDeps = {
   rateLimit?: (env: Env, key: string) => Promise<boolean>;
 };
 
-type Ctx = Context<{ Bindings: Env }>;
+type Vars = {
+  /** R38: 이 요청이 읽고 쓴 행 수를 세는 D1 */
+  db: D1Database;
+  /** 응답 뒤에 이어지는 작업. 끝난 뒤에 이 요청의 D1 사용량을 기록한다 */
+  defer: (p: Promise<unknown>) => void;
+};
+type AppEnv = { Bindings: Env; Variables: Vars };
+type Ctx = Context<AppEnv>;
 
 export function createApp(deps: AppDeps) {
-  const app = new Hono<{ Bindings: Env }>();
+  const app = new Hono<AppEnv>();
   const now = deps.now ?? (() => Date.now());
   const rateLimit = deps.rateLimit ?? (async (env: Env, key: string) => (await env.RATE_LIMITER.limit({ key })).success);
+
+  // R38: 요청마다 D1 사용량을 모아서, 이어지는 작업(waitUntil)까지 끝난 뒤 한 번만 기록한다
+  app.use("/api/*", async (c, next) => {
+    const usage: D1Usage = { read: 0, written: 0 };
+    const later: Promise<unknown>[] = [];
+    c.set("db", meteredDb(c.env.DB, usage));
+    c.set("defer", (p) => later.push(p));
+    try {
+      await next();
+    } finally {
+      c.executionCtx.waitUntil(
+        Promise.allSettled(later)
+          .then(() => recordD1Usage(c.env.DB, usage, now()))
+          .catch((e) => console.error("d1 usage record failed", e)),
+      );
+    }
+  });
 
   const serviceDeps = (c: Ctx): ServiceDeps => {
     const key = c.req.header("cf-connecting-ip") ?? "anonymous";
     return {
-      db: c.env.DB,
+      db: c.var.db,
       fetcher: deps.fetcher,
       restKey: c.env.KAKAO_REST_KEY,
       ...limitsFrom(c.env),
       now: now(),
       rateLimit: () => rateLimit(c.env, key),
-      waitUntil: (p) => c.executionCtx.waitUntil(p),
+      waitUntil: (p) => c.var.defer(p),
       sleep: deps.sleep,
     };
   };
@@ -112,10 +137,13 @@ export function createApp(deps: AppDeps) {
   app.post("/api/admin/warm", async (c) => {
     const q = AreaQuery.safeParse(c.req.query());
     if (!q.success) return c.json({ error: "invalid_params" }, 400);
+    // R38: 오늘 D1 읽기가 소프트 한도를 넘었으면 더 수집하지 않는다 (scripts/warm.mjs는 429에서 멈춘다)
+    if (await overReadBudget(c.var.db, c.env, now())) return c.json({ error: "read_budget" }, 429);
     const r = await warmOnce(
-      { db: c.env.DB, fetcher: deps.fetcher, restKey: c.env.KAKAO_REST_KEY, ...limitsFrom(c.env), now: now(), sleep: deps.sleep },
+      { db: c.var.db, fetcher: deps.fetcher, restKey: c.env.KAKAO_REST_KEY, ...limitsFrom(c.env), now: now(), sleep: deps.sleep },
       { lat: q.data.lat, lng: q.data.lng },
       q.data.radius,
+      { count: c.req.query("count") === "1" },
     );
     return c.json(r);
   });
@@ -123,7 +151,7 @@ export function createApp(deps: AppDeps) {
   app.get("/api/admin/audit", async (c) => {
     const q = AreaQuery.safeParse(c.req.query());
     if (!q.success) return c.json({ error: "invalid_params" }, 400);
-    return c.json(await auditArea(c.env.DB, { lat: q.data.lat, lng: q.data.lng }, q.data.radius));
+    return c.json(await auditArea(c.var.db, { lat: q.data.lat, lng: q.data.lng }, q.data.radius));
   });
 
   app.notFound((c) => c.json({ error: "not_found" }, 404));

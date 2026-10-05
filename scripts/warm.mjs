@@ -23,6 +23,11 @@ async function warm({ label, lat, lng, radius }) {
       method: "POST",
       headers: { Authorization: `Bearer ${token}` },
     });
+    if (res.status === 429) {
+      // R38: 오늘 D1 읽기가 소프트 한도(D1_READ_SOFT_CAP)를 넘었다. 다시 두드리면 읽기만 더 쓴다
+      console.error(`#${i} HTTP 429 ${await res.text()} — 오늘 D1 읽기 예산을 다 써서 멈춰요. 내일(KST) 다시 실행하세요.`);
+      process.exit(2);
+    }
     if (!res.ok) {
       console.error(`#${i} HTTP ${res.status} ${await res.text()}`);
       await wait(3000);
