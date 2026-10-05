@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
-  EMPTY_PERSONAL, MAX_SIGNALS, addSignals, decay, excludePlace, groupBoost, includePlace, parsePersonal,
+  EMPTY_PERSONAL, MAX_SIGNALS, addSignals, categoryFatigue, decay, excludePlace, groupBoost, includePlace, parsePersonal,
   personalMultiplier, recencyFactor, type PersonalState, type Signal,
 } from "../../shared/personal";
 
@@ -132,5 +132,58 @@ describe("R37 개인화 (기기 안에서만)", () => {
       signals: [{ id: "1", group: "korean", kind: "shared", at: NOW }],
       excluded: { "5": NOW },
     });
+  });
+});
+
+describe("R40 최근 먹은 종류 피로도", () => {
+  const withCat = (kind: Signal["kind"], ageMs: number, cat: string | undefined, id = "9"): Signal => ({
+    ...sig(kind, ageMs, id), ...(cat === undefined ? {} : { cat }),
+  });
+  const gukbap = (id: string, group: Signal["group"] = "korean") => ({ id, group, category: "음식점 > 한식 > 국밥" });
+
+  it("R40: 어제 카카오맵을 연 '국밥'은 오늘 ×0.6, 36시간 뒤엔 1", () => {
+    expect(categoryFatigue(state(withCat("kakao_open", 20 * H, "국밥")), "국밥", NOW)).toBeCloseTo(0.6, 9);
+    expect(categoryFatigue(state(withCat("kakao_open", 36 * H, "국밥")), "국밥", NOW)).toBeCloseTo(0.6, 9);
+    expect(categoryFatigue(state(withCat("kakao_open", 36 * H + 1, "국밥")), "국밥", NOW)).toBe(1);
+    // 다른 종류, 보여줌·받음, cat이 없는 예전 신호, 빈 종류는 세지 않는다
+    expect(categoryFatigue(state(withCat("kakao_open", H, "라멘")), "국밥", NOW)).toBe(1);
+    expect(categoryFatigue(state(withCat("shown", H, "국밥"), withCat("received", H, "국밥")), "국밥", NOW)).toBe(1);
+    expect(categoryFatigue(state(withCat("kakao_open", H, undefined)), "국밥", NOW)).toBe(1);
+    expect(categoryFatigue(state(withCat("kakao_open", H, "")), "", NOW)).toBe(1);
+  });
+
+  it("R40: 1번마다 ×0.6, 바닥 0.4, 같은 시각(공유 1번)은 1번으로 센다", () => {
+    const s2 = state(withCat("kakao_open", H, "국밥", "1"), withCat("shared", 2 * H, "국밥", "2"));
+    expect(categoryFatigue(s2, "국밥", NOW)).toBeCloseTo(0.4, 9); // 0.36 → 바닥 0.4
+    const oneShare = state(withCat("shared", H, "국밥", "1"), withCat("shared", H, "국밥", "2"));
+    expect(categoryFatigue(oneShare, "국밥", NOW)).toBeCloseTo(0.6, 9);
+  });
+
+  it("R40: 피로도와 30일 그룹 가산은 함께 곱한다", () => {
+    const s = state(withCat("kakao_open", 20 * H, "국밥", "1"));
+    // 다른 국밥집 2: 최근 신호 없음(1) × 그룹 가산 1.15 × 피로도 0.6
+    expect(personalMultiplier(s, gukbap("2"), NOW)).toBeCloseTo(1.15 * 0.6, 9);
+    // 종류가 다른 한식집: 피로도 없음
+    expect(personalMultiplier(s, { id: "3", group: "korean", category: "음식점 > 한식 > 냉면" }, NOW)).toBeCloseTo(1.15, 9);
+    // 카테고리를 모르는 곳(예전 호출)은 피로도 없음
+    expect(personalMultiplier(s, place("4"), NOW)).toBeCloseTo(1.15, 9);
+  });
+
+  it("R40: 저장값의 cat은 30자 이하 글자만 남기고, 없거나 틀리면 cat 없이 신호를 살린다", () => {
+    const raw = JSON.stringify({
+      signals: [
+        { id: "1", group: "korean", kind: "shared", at: NOW, cat: "국밥" },
+        { id: "2", group: "korean", kind: "shared", at: NOW, cat: 5 },
+        { id: "3", group: "korean", kind: "shared", at: NOW, cat: "가".repeat(31) },
+        { id: "4", group: "korean", kind: "shared", at: NOW },
+      ],
+      excluded: {},
+    });
+    expect(parsePersonal(raw).signals).toEqual([
+      { id: "1", group: "korean", kind: "shared", at: NOW, cat: "국밥" },
+      { id: "2", group: "korean", kind: "shared", at: NOW },
+      { id: "3", group: "korean", kind: "shared", at: NOW },
+      { id: "4", group: "korean", kind: "shared", at: NOW },
+    ]);
   });
 });

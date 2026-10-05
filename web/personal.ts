@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import {
   addSignals, excludePlace, includePlace, parsePersonal, personalMultiplier, type PersonalState, type SignalKind,
 } from "../shared/personal";
+import { lastLevel } from "../shared/category";
 import type { ApiPlace } from "../shared/types";
 
 const KEY = "mmj:personal:v1";
@@ -40,7 +41,17 @@ export function usePersonal() {
     (kind: SignalKind, places: ApiPlace[]) => {
       if (places.length === 0) return;
       const now = Date.now();
-      change((s) => addSignals(s, places.map((p) => ({ id: p.id, group: p.group, kind, at: now })), now));
+      change((s) =>
+        addSignals(
+          s,
+          places.map((p) => {
+            // R40: 세부 종류(카테고리 마지막 단계)를 같이 남긴다
+            const cat = lastLevel(p.category);
+            return { id: p.id, group: p.group, kind, at: now, ...(cat ? { cat } : {}) };
+          }),
+          now,
+        ),
+      );
     },
     [change],
   );

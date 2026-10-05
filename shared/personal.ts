@@ -1,12 +1,15 @@
+import { lastLevel } from "./category";
 import type { CategoryGroup } from "./types";
 
 /**
  * R37: 기기 안에서만 쓰는 자동 개인화 (서버로 보내지 않는다).
  * 최근에 카카오맵을 열었거나 공유했거나 보여준 곳은 잠깐 덜 나오게 하고,
  * 최근 30일에 카카오맵·공유를 한 그룹은 조금 더 나오게 한다. "여긴 빼줘"는 되돌릴 때까지 0.
+ * R40: 최근 36시간에 카카오맵·공유를 한 세부 종류(cat)는 잠깐 덜 나오게 한다.
  */
 export type SignalKind = "kakao_open" | "shared" | "received" | "shown";
-export type Signal = { id: string; group: CategoryGroup; kind: SignalKind; at: number };
+/** cat: 카테고리 마지막 단계(R40). 예전 신호에는 없다 */
+export type Signal = { id: string; group: CategoryGroup; kind: SignalKind; at: number; cat?: string };
 export type PersonalState = { signals: Signal[]; excluded: Record<string, number> };
 
 export const EMPTY_PERSONAL: PersonalState = { signals: [], excluded: {} };
@@ -22,6 +25,10 @@ export const RECENCY_FLOOR = 0.05;
 const BOOST_STEP = 0.15;
 const BOOST_MAX = 1.45;
 const PREFERENCE_KINDS: ReadonlySet<SignalKind> = new Set(["kakao_open", "shared"]);
+export const FATIGUE_WINDOW_MS = 36 * HOUR;
+export const FATIGUE_STEP = 0.6;
+export const FATIGUE_FLOOR = 0.4;
+const MAX_CAT_LENGTH = 30;
 
 /** 1(방금) → 0(창이 지남)으로 직선. 미래 시각(시계 어긋남)은 방금으로 본다 */
 export function decay(kind: SignalKind, ageMs: number): number {
@@ -47,9 +54,26 @@ export function groupBoost(s: PersonalState, group: CategoryGroup, now: number):
   return Math.min(BOOST_MAX, 1 + BOOST_STEP * events.size);
 }
 
-export function personalMultiplier(s: PersonalState, p: { id: string; group: CategoryGroup }, now: number): number {
+/**
+ * R40: 최근 36시간에 카카오맵을 열었거나 공유한 세부 종류는 1번마다 ×0.6, 바닥 0.4.
+ * 공유 1번이 같은 종류 여러 곳을 기록해도 같은 시각이므로 1번으로 센다. 빈 종류·cat 없는 신호는 세지 않는다.
+ */
+export function categoryFatigue(s: PersonalState, cat: string, now: number): number {
+  if (!cat) return 1;
+  const events = new Set<number>();
+  for (const x of s.signals) {
+    if (x.cat === cat && PREFERENCE_KINDS.has(x.kind) && now - x.at <= FATIGUE_WINDOW_MS) events.add(x.at);
+  }
+  return Math.max(FATIGUE_FLOOR, FATIGUE_STEP ** events.size);
+}
+
+/** category(카카오 카테고리 전체 문자열)가 없으면 피로도는 보지 않는다 */
+export function personalMultiplier(
+  s: PersonalState, p: { id: string; group: CategoryGroup; category?: string }, now: number,
+): number {
   if (Object.hasOwn(s.excluded, p.id)) return 0;
-  return recencyFactor(s, p.id, now) * groupBoost(s, p.group, now);
+  const fatigue = p.category === undefined ? 1 : categoryFatigue(s, lastLevel(p.category), now);
+  return recencyFactor(s, p.id, now) * groupBoost(s, p.group, now) * fatigue;
 }
 
 /** 신호가 아직 효과가 있는 동안만 남긴다: 취향 신호는 30일, 나머지는 감쇠 창이 끝날 때까지 */
@@ -81,6 +105,9 @@ const GROUPS: ReadonlySet<string> = new Set<CategoryGroup>([
   "korean", "chinese", "japanese", "western", "asian", "snack", "bar", "dessert", "etc",
 ]);
 
+const isCat = (x: unknown): x is string => typeof x === "string" && x.length > 0 && x.length <= MAX_CAT_LENGTH;
+
+/** cat은 따로 검사한다 (틀려도 신호는 살리고 cat만 버린다) */
 function isSignal(x: unknown): x is Signal {
   if (typeof x !== "object" || x === null) return false;
   const o = x as Record<string, unknown>;
@@ -104,7 +131,9 @@ export function parsePersonal(raw: string | null): PersonalState {
   if (typeof json !== "object" || json === null) return EMPTY_PERSONAL;
   const o = json as Record<string, unknown>;
   const signals = Array.isArray(o.signals)
-    ? o.signals.filter(isSignal).map(({ id, group, kind, at }) => ({ id, group, kind, at }))
+    ? o.signals.filter(isSignal).map(({ id, group, kind, at, cat }): Signal => ({
+        id, group, kind, at, ...(isCat(cat) ? { cat } : {}),
+      }))
     : [];
   const excluded: Record<string, number> = {};
   if (typeof o.excluded === "object" && o.excluded !== null && !Array.isArray(o.excluded)) {
