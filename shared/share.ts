@@ -7,10 +7,16 @@ import type { ApiPlace } from "./types";
 const PLACE_ID = /^\d{1,15}$/;
 const MAX_SHARED = 3;
 
-/** R23′: ?t={id1},{id2},{id3}&h={거점 id}&r={반경}. id는 숫자, 거점 id는 URL에 안전한 글자라 쉼표를 그대로 둔다 */
+/** R23′/R43: /{거점 id}?t={id1},{id2},{id3}&r={반경}. id는 숫자, 거점 id는 URL에 안전한 글자라 쉼표를 그대로 둔다 */
 export function shareUrl(origin: string, ids: string[], hubId: string, radius: number): string {
-  const base = new URL("/", origin).toString();
-  return `${base}?t=${ids.join(",")}&h=${encodeURIComponent(hubId)}&r=${radius}`;
+  const base = new URL(`/${encodeURIComponent(hubId)}`, origin).toString();
+  return `${base}?t=${ids.join(",")}&r=${radius}`;
+}
+
+/** R43: 경로가 정확히 /{거점 id}(끝 / 허용)이면 그 거점 id, 아니면 null */
+export function parseHubPath(pathname: string): string | null {
+  const m = /^\/([a-z0-9-]+)\/?$/.exec(pathname);
+  return m && isHubId(m[1]) ? m[1] : null;
 }
 
 function line(p: ApiPlace, i: number): string {
@@ -38,8 +44,11 @@ export function shareText(places: ApiPlace[], f: Filters, hubId: string, origin:
 
 export type ShareParams = { placeIds: string[]; hubId: string | null; radius: number | null };
 
-/** t(쉼표로 이은 id 1~3개)를 읽고, 없으면 예전 p(1개)를 읽는다. 예전 링크의 lat/lng는 무시한다 */
-export function parseShareParams(search: string): ShareParams {
+/**
+ * t(쉼표로 이은 id 1~3개)를 읽고, 없으면 예전 p(1개)를 읽는다. 예전 링크의 lat/lng는 무시한다.
+ * 거점은 경로(R43)가 우선이고, 없으면 예전 h를 읽는다.
+ */
+export function parseShareParams(search: string, pathname = "/"): ShareParams {
   const q = new URLSearchParams(search);
   const fromT = [...new Set((q.get("t") ?? "").split(",").filter((id) => PLACE_ID.test(id)))].slice(0, MAX_SHARED);
   const p = q.get("p");
@@ -47,7 +56,7 @@ export function parseShareParams(search: string): ShareParams {
   const r = Number(q.get("r"));
   return {
     placeIds: fromT.length > 0 ? fromT : p && PLACE_ID.test(p) ? [p] : [],
-    hubId: isHubId(h) ? h : null,
+    hubId: parseHubPath(pathname) ?? (isHubId(h) ? h : null),
     radius: q.has("r") && isValidRadius(r) ? r : null,
   };
 }

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { MAX_RADIUS, MIN_RADIUS, PREWARM_RADIUS, isValidRadius } from "../../shared/constants";
 import { DEFAULT_FILTERS } from "../../shared/recommend";
-import { DEFAULT_SETTINGS, applyShareParams, parseSettings } from "../../shared/settings";
+import { DEFAULT_SETTINGS, applyShareParams, parseSettings, resolveStart } from "../../shared/settings";
 
 describe("settings", () => {
   it("R16: 반경은 100~1000m, 50m 단위이고 상한은 Cron 사전 수집 반경과 같다", () => {
@@ -49,5 +49,38 @@ describe("settings", () => {
       ...DEFAULT_SETTINGS, filters: { ...DEFAULT_FILTERS, radius: 850 },
     });
     expect(applyShareParams(DEFAULT_SETTINGS, { placeIds: [], hubId: null, radius: null })).toEqual(DEFAULT_SETTINGS);
+  });
+
+  it("R43/R25: 거점 경로로 열면 그 거점을 쓰고 저장한다 (주소창은 그대로)", () => {
+    const stored = JSON.stringify({ ...DEFAULT_SETTINGS, hubId: "ddp" });
+    const r = resolveStart(stored, "/pangyo", "");
+    expect(r.settings.hubId).toBe("pangyo");
+    expect(r.saveHub).toBe("pangyo");
+    expect(r.replaceUrl).toBeNull();
+    // 공유가 아닌 다른 파라미터만 있으면 지우되 경로는 남긴다
+    const q = resolveStart(stored, "/pangyo/", "?r=700");
+    expect(q.settings).toMatchObject({ hubId: "pangyo", filters: { radius: 700 } });
+    expect(q.saveHub).toBe("pangyo");
+    expect(q.replaceUrl).toBe("/pangyo/");
+  });
+
+  it("R43/R25: 공유 링크의 거점 경로는 이번에만 쓰고 저장하지 않으며, 주소는 /로 돌린다", () => {
+    const stored = JSON.stringify({ ...DEFAULT_SETTINGS, hubId: "pangyo" });
+    const r = resolveStart(stored, "/bongeunsa", "?t=1,2&r=700");
+    expect(r.settings).toMatchObject({ hubId: "bongeunsa", filters: { radius: 700 } });
+    expect(r.share.placeIds).toEqual(["1", "2"]);
+    expect(r.saveHub).toBeNull();
+    expect(r.replaceUrl).toBe("/");
+    // 예전 링크도 같다
+    const old = resolveStart(stored, "/", "?t=1&h=ddp&r=300");
+    expect(old.settings.hubId).toBe("ddp");
+    expect(old.saveHub).toBeNull();
+    expect(old.replaceUrl).toBe("/");
+  });
+
+  it("R43/R25: 모르는 경로와 파라미터 없는 루트는 저장값 그대로", () => {
+    const stored = JSON.stringify({ ...DEFAULT_SETTINGS, hubId: "naebang" });
+    expect(resolveStart(stored, "/brand", "")).toMatchObject({ saveHub: null, replaceUrl: null, settings: { hubId: "naebang" } });
+    expect(resolveStart(stored, "/", "")).toMatchObject({ saveHub: null, replaceUrl: null, settings: { hubId: "naebang" } });
   });
 });

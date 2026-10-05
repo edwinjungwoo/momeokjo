@@ -2,7 +2,7 @@ import { z } from "zod";
 import { isValidRadius } from "./constants";
 import { DEFAULT_HUB_ID, isHubId } from "./hubs";
 import { DEFAULT_FILTERS, type Filters } from "./recommend";
-import type { ShareParams } from "./share";
+import { parseHubPath, parseShareParams, type ShareParams } from "./share";
 
 /** R25: 필터와 선택한 거점 id */
 export type Settings = { filters: Filters; hubId: string };
@@ -41,4 +41,34 @@ export function applyShareParams(s: Settings, share: ShareParams): Settings {
   if (share.hubId) next = { ...next, hubId: share.hubId };
   if (share.radius !== null) next = { ...next, filters: { ...next.filters, radius: share.radius } };
   return next;
+}
+
+/** 주소에서 지우는 공유 파라미터 (예전 링크의 lat/lng 포함) */
+const SHARE_KEYS = ["t", "p", "h", "r", "lat", "lng"];
+
+export type Start = {
+  settings: Settings;
+  share: ShareParams;
+  /** R43: 북마크 거점 경로로 열었으면 저장할 거점 id */
+  saveHub: string | null;
+  /** 주소창을 바꿀 값 (바꿀 필요가 없으면 null) */
+  replaceUrl: string | null;
+};
+
+/**
+ * R25/R43: 처음 열 때의 설정. 저장값 → 거점 경로(공유 링크가 아니면 저장) → 공유 파라미터(이번에만).
+ * 공유 링크(t·p)의 거점 경로는 예전 h처럼 이번에만 쓰고, 주소는 /로 돌린다 (받은 사람의 저장 거점을 덮지 않게).
+ */
+export function resolveStart(stored: string | null, pathname: string, search: string): Start {
+  const share = parseShareParams(search, pathname);
+  const pathHub = parseHubPath(pathname);
+  const isShare = share.placeIds.length > 0;
+  const saveHub = pathHub !== null && !isShare ? pathHub : null;
+  let settings = parseSettings(stored);
+  if (saveHub) settings = { ...settings, hubId: saveHub };
+  settings = applyShareParams(settings, share);
+  const q = new URLSearchParams(search);
+  const hasParams = SHARE_KEYS.some((k) => q.has(k));
+  const replaceUrl = hasParams ? (isShare ? "/" : pathname) : null;
+  return { settings, share, saveHub, replaceUrl };
 }

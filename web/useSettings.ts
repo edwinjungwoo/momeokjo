@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { applyShareParams, parseSettings, type Settings } from "../shared/settings";
-import { parseShareParams } from "../shared/share";
+import { parseSettings, resolveStart, type Settings } from "../shared/settings";
 
 const KEY = "mmj:settings:v1";
 
@@ -12,20 +11,26 @@ function readStored(): string | null {
   }
 }
 
-/** R25: 저장값 → 공유 파라미터 우선 적용. 사용자가 바꾸기 전에는 저장하지 않는다 (공유값이 저장값을 덮지 않게) */
+/**
+ * R25: 저장값 → 공유 파라미터 우선 적용. 사용자가 바꾸기 전에는 저장하지 않는다 (공유값이 저장값을 덮지 않게).
+ * R43: /{거점 id} 북마크로 열면 그 거점을 저장한다 (공유 링크의 거점 경로는 저장하지 않는다).
+ */
 export function useSettings() {
-  const [init] = useState(() => {
-    const share = parseShareParams(window.location.search);
-    return { share, settings: applyShareParams(parseSettings(readStored()), share) };
-  });
+  const [init] = useState(() => resolveStart(readStored(), window.location.pathname, window.location.search));
   const [settings, setSettings] = useState<Settings>(init.settings);
   const touched = useRef(false);
 
   // 공유 파라미터는 처음 한 번만 쓴다. 새로고침하면 저장값으로 돌아가도록 주소창에서 지운다 (예전 링크의 lat/lng 포함)
   useEffect(() => {
-    const q = new URLSearchParams(window.location.search);
-    if (["t", "p", "h", "r", "lat", "lng"].some((k) => q.has(k))) window.history.replaceState(null, "", window.location.pathname);
-  }, []);
+    if (init.replaceUrl !== null) window.history.replaceState(null, "", init.replaceUrl);
+    if (init.saveHub === null) return;
+    // 북마크 거점은 저장값의 거점만 바꾼다 (다른 파라미터는 이번에만)
+    try {
+      localStorage.setItem(KEY, JSON.stringify({ ...parseSettings(readStored()), hubId: init.saveHub }));
+    } catch {
+      /* 저장할 수 없는 환경이면 이번 세션만 */
+    }
+  }, [init]);
 
   useEffect(() => {
     if (!touched.current) return;
