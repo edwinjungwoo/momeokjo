@@ -1,4 +1,8 @@
-/** 브랜드 v2 스티커 포즈 (public/brand/pose/*.png, 투명 배경). 값은 원본 픽셀 크기 — 비율 계산용 */
+/**
+ * 브랜드 v2 스티커 포즈 (투명 배경). 값은 원본(public/brand/pose/*.png) 픽셀 크기 — 비율 계산용.
+ * R45: 화면은 원본 대신 가장 크게 쓰는 높이의 2배로 줄인 WebP(*.webp, 장당 4~13KB)를 쓴다.
+ * 더 크게 쓰는 자리가 생기면 원본 PNG에서 다시 만든다.
+ */
 const POSES = {
   search: [194, 231],
   thumbsup: [204, 198],
@@ -12,7 +16,7 @@ const POSES = {
 
 export type Pose = keyof typeof POSES;
 
-export const poseSrc = (pose: Pose) => `/brand/pose/${pose}.png`;
+export const poseSrc = (pose: Pose) => `/brand/pose/${pose}.webp`;
 
 type Props = {
   pose: Pose;

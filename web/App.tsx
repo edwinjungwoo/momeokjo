@@ -408,7 +408,7 @@ export default function App() {
     <div className={`app${trioOpen || cardPlace ? " has-sheet" : ""}`}>
       <header className="topbar">
         <h1 className="logo">
-          <img src="/brand/logo.png" alt="모먹죠" width={63} height={28} draggable={false} />
+          <img src="/brand/logo.webp" alt="모먹죠" width={63} height={28} draggable={false} />
         </h1>
         <HubChip hub={hub} onChange={setHub} />
       </header>
