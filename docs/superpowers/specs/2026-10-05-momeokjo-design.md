@@ -135,6 +135,19 @@ CREATE INDEX idx_places_lat_lng ON places(lat, lng);
 -- tiles_changed_at / unfetched_cleared_at = Cron 미수집 확인 신호(R11)
 CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
 CREATE INDEX idx_places_status_fetched_at ON places(status, fetched_at); -- R11 만료 후보
+-- meta에는 R38 날짜별 D1 사용량도 둔다: d1_read:{KST yyyy-mm-dd}, d1_written:{...} (90일 뒤 R35 정리 때 지움)
+
+-- R35 익명 사용 이벤트 (0004). IP·User-Agent·위치·자유 입력은 저장하지 않는다. 90일 보관
+CREATE TABLE events (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  ts INTEGER NOT NULL,   -- 서버가 확인한 epoch ms (클라이언트 시각 ±10분 밖이면 서버 시각)
+  day TEXT NOT NULL,     -- KST yyyy-mm-dd
+  hour INTEGER NOT NULL, -- KST 0–23
+  anon TEXT NOT NULL, session TEXT NOT NULL, hub TEXT NOT NULL, type TEXT NOT NULL,
+  place_id TEXT, props TEXT  -- 검증한 props의 짧은 JSON
+);
+CREATE INDEX idx_events_day ON events(day);
+CREATE INDEX idx_events_type_day ON events(type, day);
 ```
 
 카카오맵 링크는 `https://place.map.kakao.com/{id}`로 만든다.
@@ -186,6 +199,7 @@ CREATE INDEX idx_places_status_fetched_at ON places(status, fetched_at); -- R11 
   - (1) 만료된 격자를 수집하고 (2) 남은 예산으로 상세 정보(없거나 만료된 것)를 보충한다. 만료된 상세의 갱신은 Cron만 한다(R12).
   - D1 읽기 절약: 만료 후보는 `places(status, fetched_at)` 인덱스로 "ok는 3일 전, failed는 6시간 전"보다 오래된 행만 읽고 지터는 메모리에서 다시 확인한다. 미수집 ID(격자에는 있고 places 행이 없는 것)는 `meta.tiles_changed_at`(격자 ID를 기록할 때마다 갱신)이 `meta.unfetched_cleared_at`(Cron이 미수집 0개를 확인한 시각) 이후일 때만 훑는다. 쿨다운 중이거나 예산이 없으면 상세 후보를 읽지 않는다. `pending`은 세지 않는다(R31 warm 응답에서만 센다).
   - 할 일이 없으면 D1 조회만 하고 끝난다. 새 거점의 최초 대량 수집은 R31로 한다.
+  - R38: 그날(KST) D1 읽기가 소프트 한도를 넘었으면 수집·보충을 건너뛰고(`skipped: "read_budget"`) 캐시된 데이터만 보여준다. KST 04:00~04:04에 걸리는 실행은 먼저 R35 보관 정리를 한다(한도를 넘은 날에도).
 
 ### 5.4 API
 
@@ -271,7 +285,18 @@ CREATE INDEX idx_places_status_fetched_at ON places(status, fetched_at); -- R11 
 
 ### 5.5.1 관리 기능
 
-- **R31 워밍 엔드포인트.** `POST /api/admin/warm?lat&lng&radius`(관리용이라 임의 좌표를 받는다)는 `Authorization: Bearer {ADMIN_TOKEN}`이 맞을 때만 동작하고, 틀리면 401이다. R10 예산 안에서 격자 수집과 상세 보충을 한 번 수행하고 `{incompleteTiles, pending, enriched, failed}`를 반환한다. `scripts/warm.mjs`는 이 엔드포인트를 `incompleteTiles === 0 && pending === 0`이 될 때까지(최대 300회, 호출 간 1초) 반복 호출한다. 요청이 매번 새 실행이라 무료 플랜 한도 안에서 빠르게 채울 수 있다. 인자: 없으면 기본 거점(봉은사역) 1000m, `--hub <id>`, `--all`(모든 거점 차례로), 또는 `lat lng [radius]`. `scripts/audit.mjs`도 같은 인자를 받는다(`--all` 제외).
+- **R31 워밍 엔드포인트.** `POST /api/admin/warm?lat&lng&radius`(관리용이라 임의 좌표를 받는다)는 `Authorization: Bearer {ADMIN_TOKEN}`이 맞을 때만 동작하고, 틀리면 401이다. R10 예산 안에서 격자 수집과 상세 보충을 한 번 수행하고 `{incompleteTiles, pending, enriched, failed}`를 반환한다. `pending`을 세려고 격자 전체를 다시 훑지 않는다(R38): 이번에 처리한 상세가 배치(`DETAIL_BATCH_SIZE`)보다 적고 예산이 남았고 쿨다운 중이 아니면 `0`, 아니면 `"more"`다. `?count=1`일 때만 남은 수를 정확히 센다(전체 스캔). 그날 D1 읽기가 소프트 한도를 넘었으면 아무것도 하지 않고 429 `{error: "read_budget"}`를 준다. `scripts/warm.mjs`는 이 엔드포인트를 `incompleteTiles === 0 && pending === 0`이 될 때까지(최대 300회, 호출 간 1초) 반복 호출하고, 429를 받으면 안내를 출력하고 종료 코드 2로 멈춘다. 요청이 매번 새 실행이라 무료 플랜 한도 안에서 빠르게 채울 수 있다. 인자: 없으면 기본 거점(봉은사역) 1000m, `--hub <id>`, `--all`(모든 거점 차례로), 또는 `lat lng [radius]`. `scripts/audit.mjs`도 같은 인자를 받는다(`--all` 제외).
+- **R35 익명 사용 이벤트.** 로그인 없이 브라우저마다 무작위 id(`crypto.randomUUID()`, localStorage `mmj:anon:v1`, 저장 불가면 이번 페이지만)와 탭 세션 id(sessionStorage `mmj:session:v1`, 30분 무활동이면 새로)만 쓴다. IP, User-Agent, 정확한 위치, 자유 입력 글자는 받지도 저장하지도 않는다. R37 개인화 상태는 여전히 서버로 보내지 않는다(이벤트는 그와 별개인 익명 집계용).
+  - 이벤트(`shared/events.ts`, zod strict — 다른 키가 있으면 그 이벤트를 버림): `{t, ts, hub(거점 id), placeId?(숫자 1~15자리), props?}`. `props`는 `radius`(50m 단위), `party`(1~4), `groups`(필터 그룹 id), `priceCap`("all"|"10000"|"15000"|"20000"), `minRating`(0|3.5|4), `openOnly`, `candidates`(0~5000), `picks`(장소 id 최대 3개), `rank`(1~3)만.
+  - 타입: `app_open`(세션마다 한 번), `draw`/`redraw`(결과가 떠 있을 때 다시 뽑기; `candidates`, `picks`), `share`(공유·복사 성공 뒤; `picks`), `open_kakao`(`rank`), `select_place`(목록·핀), `expand_card`(`rank`), `exclude_place`("여긴 빼줘"; `rank`), `undo_exclude`, `share_open`(받은 `t=` 링크를 엶; `picks`), `hub_change`, `filter_change`(1초 디바운스, 바뀐 뒤의 필터 스냅숏; 정렬만 바꾼 것은 제외), `empty_result`(필터를 바꾼 뒤 후보 0곳).
+  - 브라우저(`web/analytics.ts`): 메모리 큐에 쌓아 10초마다, 10개가 차면, `visibilitychange → hidden`·`pagehide`에 `navigator.sendBeacon`(안 되면 `fetch(..., {keepalive: true})`)으로 보낸다. 요청당 최대 20개, 큐는 100개까지. 예외를 던지지 않고 실패는 버린다. 운영 빌드에서만 보내고 개발 서버는 `?track=1`일 때만. `/admin`은 세지 않는다.
+  - `POST /api/events` 본문 `{anon, session, events}`(anon·session은 `^[0-9a-f-]{36}$`, 1~20개, 8KB 이하; 아니면 400). 이벤트는 하나씩 검증해 틀린 것만 버리고 `x-mmj-dropped` 헤더로 센다. 클라이언트 시각이 서버 시각 ±10분 밖이면 서버 시각을 쓰고, KST 날짜·시를 미리 계산해 `db.batch` 한 번으로 넣는다. 항상 204.
+  - 남용: 익명 id별 `RATE_LIMITER`(분당 10회 × 20개)만 쓰고 넘으면 조용히 버린다(204). 하루 개수 상한(익명 id당 300개)은 두지 않는다 — 세려면 요청마다 그날 이벤트를 훑어야 해서(하루 수천 행 × 요청 수) R38 읽기 예산에 맞지 않고, 익명 id는 브라우저가 만드는 값이라 어차피 우회된다. 사무실은 IP 하나를 함께 쓰므로 IP 기준 제한은 쓰지 않는다.
+  - 보관: Cron이 KST 04:00~04:04 실행에서 `day < 오늘 − 90일`인 이벤트를 지운다(`ts` 대신 `day`로 지워 인덱스 범위만 읽음).
+- **R36 관리자 통계.** `GET /api/admin/stats?days=1..30&hub=all|{거점 id}`(R31과 같은 인증, 기본 7일·전체; 틀리면 400). KST 기준 오늘 포함 최근 N일의 일별 사용자(app_open의 익명 id 수)·세션(app_open 수)·뽑기·다시 뽑기·공유·카카오맵·공유 링크 열림(빈 날은 0), 시간대(0~23시)별 뽑기, 거점별 사용자·세션·뽑기·공유, 많이 뽑힌 가게 10곳(`picks` 기준, 이름은 places에서), 결과 카드 번호(1~3)별 펼침·카카오맵·빼줘, 뽑기한 세션 중 공유·카카오맵까지 간 세션 비율, 세션당 뽑기, 오늘 D1 읽기·쓰기 추정치와 소프트 한도(R38)를 준다. 집계는 `(type, day)` 인덱스로 타입을 좁힌 쿼리 5개 + 이름 1개.
+  - 화면 `/admin`(메인 화면에서 링크하지 않음, 따로 불러오는 청크; Worker의 SPA 대체 응답이 index.html을 준다): 토큰 입력(이 탭의 sessionStorage에만, 주소에는 넣지 않음, 401이면 지우고 "토큰이 맞지 않아요"), 기간 세그먼트(오늘/7일/30일), 거점 선택, 요약 카드(사용자, 세션, 뽑기, 공유율), 시간대별·일별 막대(차트 라이브러리 없이 CSS, 누르거나 가리키면 값; 일별은 "표로 보기"), 많이 뽑힌 가게·카드 번호별·거점별 표, 오늘 D1 읽기 막대. 앱과 같은 토큰을 쓴다.
+  - Cloudflare Web Analytics는 코드가 아니라 대시보드에서 켠다(비콘 토큰이 필요하면 그때 `index.html`에 넣는다).
+- **R38 D1 읽기 예산 가드.** 무료 플랜은 하루 읽기 5,000,000행을 넘으면 그날 D1이 멈춘다(2026-10-05 밤, 대량 warm 반복으로 실제로 소진). API 요청과 Cron 실행마다 D1 결과의 `meta.rows_read`/`rows_written`을 메모리에 모으고(`worker/d1Usage.ts`의 계측 DB, `waitUntil`로 이어지는 보충까지 포함), 끝날 때 UPSERT 한 문장으로 `meta.d1_read:{KST 날짜}`·`d1_written:{...}`에 더한다(기록 자체의 몇 행은 세지 않는 추정치). 그날 읽기가 `D1_READ_SOFT_CAP`(기본 3,000,000) 이상이면 R31 warm은 429 `{error: "read_budget"}`, Cron(R11)은 수집·보충을 건너뛴다. 목록·단건 API는 그대로 동작한다.
 - **R32 감사 엔드포인트.** `GET /api/admin/audit?lat&lng&radius`(같은 인증)는 §7의 Q1~Q4 수치를 JSON으로 반환한다. `scripts/audit.mjs`는 이를 표로 출력하고, Q1 또는 Q2를 통과하지 못하면 종료 코드 1로 끝난다.
 
 - **R33 대표 사진.** 상세 응답의 `summary.main_photo_url`이 카카오 CDN(`*.kakaocdn.net`) 주소면(http/https만, 사용자 정보나 포트가 붙은 주소는 거부) https로 바꿔 `places.photo_url`에 기록한다(사진 파일은 저장하지 않음). 다른 호스트(네이버 블로그 등 외부 사이트에서 막히는 이미지)는 기록하지 않는다. 화면에서는 카카오 썸네일 서버(`img1.kakaocdn.net/cthumb/local/C{px}x{px}.q50/?fname=`)를 거쳐 결과 카드 상단과 목록 썸네일로 보여주고, 사진이 없거나 불러오지 못하면 사진 자리를 숨긴다.
@@ -333,9 +358,9 @@ Q1, Q2, Q5를 통과해야 UI 마일스톤으로 넘어간다.
 
 | 층위 | 도구 | 대상 | 요구사항 |
 |---|---|---|---|
-| 단위 (순수) | Vitest | geo, category, price, hours, recommend, share, personal | R1, R5, R7, R8, R16~R21, R23, R26, R37 |
+| 단위 (순수) | Vitest | geo, category, price, hours, recommend, share, personal, events | R1, R5, R7, R8, R16~R21, R23, R26, R35, R37 |
 | 계약 | Vitest + 녹화 픽스처 + zod | kakaoLocal 파서, detailParser | R2(응답 형식), R6 |
-| 통합 | `@cloudflare/vitest-pool-workers` (D1 miniflare), fetch 모킹 | TileCollector, DetailEnricher, API 라우트, scheduled | R2~R4, R9~R15 |
+| 통합 | `@cloudflare/vitest-pool-workers` (D1 miniflare), fetch 모킹 | TileCollector, DetailEnricher, API 라우트, scheduled, 이벤트 수집·통계·보관, 읽기 예산 | R2~R4, R9~R15, R31, R35, R36, R38 |
 | 데이터 | `npm run audit` | 실제 수집 데이터 | Q1~Q5 |
 | 수동 | 브라우저 | UI | R22, R24, R27~R30 |
 
@@ -345,7 +370,7 @@ Q1, Q2, Q5를 통과해야 UI 마일스톤으로 넘어간다.
 ## 9. 배포와 설정
 
 - Worker 이름 `momeokjo`, 정적 에셋은 `@cloudflare/vite-plugin`으로 빌드한다.
-- 바인딩: D1 `DB`, Rate Limiting `RATE_LIMITER`, 시크릿 `KAKAO_REST_KEY`·`ADMIN_TOKEN`, 변수 `SUBREQUEST_BUDGET`, `DETAIL_BATCH_SIZE`
+- 바인딩: D1 `DB`, Rate Limiting `RATE_LIMITER`, 시크릿 `KAKAO_REST_KEY`·`ADMIN_TOKEN`, 변수 `SUBREQUEST_BUDGET`, `DETAIL_BATCH_SIZE`, `D1_READ_SOFT_CAP`(R38, 기본 3000000)
 - `compatibility_date`는 `2026-08-01`(로컬 workerd가 지원하는 최신 날짜 이하)
 - 프론트엔드 환경 변수: `VITE_KAKAO_JS_KEY` (공개 키)
 - Custom Domain: `mmj.itmz.me`
@@ -362,6 +387,13 @@ Q1, Q2, Q5를 통과해야 UI 마일스톤으로 넘어간다.
 | `/api/places` 캐시 적중 | D1 0행, CPU 최소 (거점 3 × 반경 19단계 = 키 57개, 60초) | — |
 | 상세 갱신 쓰기 | 장소 ~4,500곳 × (3일 + 평균 12시간)마다 1번 → 하루 ~1,300곳, 인덱스 포함 수천 행 | 쓰기 5% 안팎 |
 | 외부 호출 | 실행당 최대 40회(`SUBREQUEST_BUDGET`), 상세 보충 10곳(`DETAIL_BATCH_SIZE`) | 50회 한도 안 |
+| R31 warm | 호출마다 격자 상태 + 덮는 격자의 `tile_places`(1000m면 수천 행)를 한 번 읽는다. 예전에는 `pending`을 세려고 한 번 더 훑었다(R38에서 제거, `?count=1`일 때만) | 반복 호출 300회면 수백만 행 → 소프트 한도에서 429 |
+| R35 이벤트 쓰기 | 사용자 50명 × 하루 5세션 × 세션당 ~6.4개 ≈ 1,600개/일. 한 개 = 4행(표 + 인덱스 2 + 일련번호; 로컬 측정). 요청(세션당 ~3번, ~750회)마다 사용량 UPSERT 몇 행 | 쓰기 ~6,400 + ~3,000행/일 ≈ 10%. 90일 뒤부터 정리 DELETE가 비슷한 만큼 더 |
+| R35 이벤트 읽기 | 수집은 읽기 0에 가깝다 (하루 개수 상한을 세지 않는 이유) | — |
+| R36 통계 | 위 트래픽에서 한 번 볼 때 오늘 ~8,000행, 7일 ~53,000행, 30일 ~229,000행(로컬 측정; GROUP BY 임시 B-트리와 `json_each`도 읽기로 센다) | 7일을 하루 5번 보면 ~0.27M행(5%) |
+| R38 기록 | 요청·실행마다 UPSERT 1문장(읽기 1~2행), 가드 확인 2행 | 무시할 수준 |
+
+R38 가드는 그날 읽기가 3,000,000행(60%)을 넘으면 수집을 멈춰서 목록 서비스에 2,000,000행을 남긴다. 집계는 요청이 끝난 뒤에 더하므로 동시에 도는 warm 몇 회만큼 넘칠 수 있다.
 
 캐시 미스 응답의 CPU는 JSON 크기에 비례한다. 큰 거점(동대문)에서 10ms를 넘기 쉬우므로 캐시 적중을 기본으로 보고, 더 줄일 때는 목록의 영업시간·메뉴 표현을 압축한다.
 
