@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { hiddenLabels, pickBadgeBox, pickLabelBox } from "../../shared/labels";
 import type { ApiPlace, CategoryGroup, LatLng } from "../../shared/types";
 import { loadKakaoMaps } from "../kakaoLoader";
 
@@ -45,6 +46,15 @@ const FIT_PAD = 40;
 
 const hasSize = (node: HTMLElement) => node.clientWidth > 0 && node.clientHeight > 0;
 
+/** 이름표 글자 너비 (.pin--pick::after와 같은 12px 굵기 600). 캔버스 하나를 다시 쓴다 */
+let measureCtx: CanvasRenderingContext2D | null | undefined;
+function labelTextWidth(text: string, fontFamily: string): number {
+  measureCtx ??= document.createElement("canvas").getContext("2d");
+  if (!measureCtx) return text.length * 12;
+  measureCtx.font = `600 12px ${fontFamily}`;
+  return measureCtx.measureText(text).width;
+}
+
 /** R28: 거점 핀, 반경 원(점선), 후보 핀(CustomOverlay 버튼). 선택된 핀은 커지고 한 번 퍼진다. */
 export function MapView({ center, radius, places, selectedId, picks, focusId, onSelect }: Props) {
   const el = useRef<HTMLDivElement>(null);
@@ -54,6 +64,9 @@ export function MapView({ center, radius, places, selectedId, picks, focusId, on
   const overlays = useRef(new Map<string, any>());
   const needsFit = useRef(true);
   const handlers = useRef({ onSelect });
+  /** 뽑힌 후보 id (순서 = 번호). 지도 이벤트(확대·이동 끝)에서 이름표 겹침을 다시 계산할 때 읽는다 */
+  const picksRef = useRef<string[]>(picks);
+  const layoutLabels = useRef(() => {});
   const [ready, setReady] = useState(false);
   const [failed, setFailed] = useState(false);
   const [attempt, setAttempt] = useState(0);
@@ -101,7 +114,12 @@ export function MapView({ center, radius, places, selectedId, picks, focusId, on
         const dot = document.createElement("div");
         dot.className = "center-pin";
         const pin = new kakao.maps.CustomOverlay({ map: m, position: pos, content: dot, zIndex: 3 });
-        kakao.maps.event.addListener(m, "zoom_changed", () => setZoom(zoomOf(m.getLevel())));
+        kakao.maps.event.addListener(m, "zoom_changed", () => {
+          setZoom(zoomOf(m.getLevel()));
+          layoutLabels.current();
+        });
+        // 확대·이동이 끝나면 이름표 겹침을 다시 본다 (확대하면 떨어져서 다시 보일 수 있다)
+        kakao.maps.event.addListener(m, "idle", () => layoutLabels.current());
         let lastWidth = node.clientWidth;
         const observer = new ResizeObserver(() => {
           if (!hasSize(node)) return;
@@ -151,6 +169,32 @@ export function MapView({ center, radius, places, selectedId, picks, focusId, on
     centerPin.current.setPosition(pos);
     fitCircle();
   }, [ready, center.lat, center.lng, radius]);
+
+  // R22′: 뽑힌 3곳의 이름표가 앞 번호의 이름표·배지와 겹치면 그 이름표를 숨긴다 (번호 배지는 남는다). 핀 좌표를 화면 px로 바꿔 상자를 비교한다
+  layoutLabels.current = () => {
+    const m = map.current;
+    const node = el.current;
+    if (!m || !node || typeof m.getProjection !== "function") return;
+    const proj = m.getProjection();
+    const font = getComputedStyle(node).fontFamily;
+    const boxes = [];
+    const badges = [];
+    for (const id of picksRef.current) {
+      const ov = overlays.current.get(id);
+      if (!ov) continue;
+      const pt = proj.containerPointFromCoords(ov.getPosition());
+      const name = (ov.getContent() as HTMLElement).dataset.name ?? "";
+      boxes.push(pickLabelBox(id, { x: pt.x, y: pt.y }, labelTextWidth(name, font)));
+      badges.push(pickBadgeBox(id, { x: pt.x, y: pt.y }));
+    }
+    // 앞 번호의 이름표나 번호 배지를 덮는 이름표를 숨긴다
+    const hide = hiddenLabels(boxes, 2, badges);
+    for (const [id, ov] of overlays.current) {
+      const pin = ov.getContent() as HTMLElement;
+      const want = hide.has(id);
+      if (pin.classList.contains("pin--nolabel") !== want) pin.classList.toggle("pin--nolabel", want);
+    }
+  };
 
   // 후보 핀: 바뀐 것만 붙이고 뗀다
   useEffect(() => {
@@ -216,6 +260,8 @@ export function MapView({ center, radius, places, selectedId, picks, focusId, on
       if (chip.textContent !== text) chip.textContent = text;
       ov.setZIndex(focus || selected ? 12 : rank > 0 ? 11 - rank : top ? 2 : 1);
     }
+    picksRef.current = picks;
+    layoutLabels.current();
   }, [ready, places, selectedId, picks, focusId]);
 
   // R22′: 새 후보가 뽑히면 먼저 3곳이 다 보이게 맞춘다
@@ -249,6 +295,7 @@ export function MapView({ center, radius, places, selectedId, picks, focusId, on
     }
     m.setBounds(bounds, 56, FIT_PAD, bottom, left);
     if (m.getLevel() < MIN_FIT_LEVEL) m.setLevel(MIN_FIT_LEVEL);
+    layoutLabels.current();
     // places가 바뀔 때마다(폴링)가 아니라 새로 뽑혔을 때만 맞춘다
   }, [ready, picksKey]);
 
