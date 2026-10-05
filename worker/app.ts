@@ -246,6 +246,11 @@ export function createApp(deps: AppDeps) {
   });
 
   app.notFound((c) => c.json({ error: "not_found" }, 404));
+  // 처리하지 못한 오류: 원인(스택·메시지)은 Workers 로그에만 남기고 화면에는 JSON 한 줄만 준다
+  app.onError((e, c) => {
+    console.error("unhandled", c.req.method, c.req.path, e);
+    return c.json({ error: "internal" }, 500);
+  });
 
   return app;
 }
