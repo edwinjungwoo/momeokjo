@@ -8,7 +8,7 @@ import {
   countNeedingDetail, countUnfetched, detailGate, detailJitterMs, expiredDetailStates, getMeta, recordPlaceBlock,
   tilesChangedAt, unfetchedStates, getTiles, idsNeedingDetail, isDetailDue, isTileDue, markTile,
   placeById, placesByIds, placesInBox, replaceTilePlaces, saveDetail, saveDetailFailure, tilePlaceStates,
-  EXPIRED_SCAN_LIMIT, EXPIRED_SCAN_SQL, LIST_BACKFILL_LIMIT, backfillListJson,
+  EXPIRED_RESET_PAGES, EXPIRED_SCAN_LIMIT, EXPIRED_SCAN_SQL, LIST_BACKFILL_LIMIT, backfillListJson,
 } from "../../worker/repo";
 import { LIST_JSON_PREFIX, storedListJson } from "../../worker/present";
 import { makeSummary, sampleDetail, seedPlace } from "../helpers/places";
@@ -140,34 +140,88 @@ describe("repo", () => {
   });
 
   it("R11/R38: 만료 후보 조회는 (status, fetched_at) 인덱스를 범위로 읽고 places 전체 스캔·정렬용 임시 B-트리를 쓰지 않는다", async () => {
-    const r = await env.DB.prepare(`EXPLAIN QUERY PLAN ${EXPIRED_SCAN_SQL}`).bind("ok", 0, NOW, 300).all<{ detail: string }>();
+    const r = await env.DB.prepare(`EXPLAIN QUERY PLAN ${EXPIRED_SCAN_SQL}`).bind("ok", 0, 0, NOW, 300).all<{ detail: string }>();
     const plan = r.results.map((x) => x.detail).join("\n");
+    expect(plan).toMatch(/SEARCH p USING INDEX idx_places_status_fetched_at \(status=\? AND fetched_at=\? AND rowid>\?\)/);
     expect(plan).toMatch(/SEARCH p USING INDEX idx_places_status_fetched_at \(status=\? AND fetched_at>\? AND fetched_at<\?\)/);
     expect(plan).not.toMatch(/SCAN p\b/);
     expect(plan).not.toMatch(/TEMP B-TREE/);
   });
 
-  it("R11/R38: 거점 격자 밖 만료 행(갱신되지 않음)은 한 번 지나가면 다음 실행부터 읽지 않는다 — 격자 ID가 바뀌면 처음부터 다시", async () => {
-    const outside = Array.from({ length: 400 }, (_, i) => `o${i}`);
+  /** 만료 후보를 한 번 고르고 읽은 행 수를 같이 돌려준다 */
+  const scan = async (keys: string[], now = NOW) => {
+    const { db, log } = recordingDb(env.DB);
+    const ids = (await expiredDetailStates(db, keys, now)).map((t) => t.id);
+    return { ids, read: log.reduce((n, x) => n + x.read, 0), cursorWrites: log.filter((x) => /INSERT INTO meta/.test(x.sql)).length };
+  };
+  /** 후보 한 행을 읽는 비용: 인덱스 항목 + 표 행 + 격자 붙이기 */
+  const READS_PER_ROW = 3;
+  /** 거점 밖(KB) 오래된 만료 행 n개 + 거점(KA) 행 h1, h2 */
+  async function seedOutsideAndHub(n: number) {
+    const outside = Array.from({ length: n }, (_, i) => `o${i}`);
     await seedMany(outside.map((id, i) => [id, NOW - 10 * DETAIL_OK_TTL_MS + i]));
     await replaceTilePlaces(env.DB, KB, outside, NOW, false);
     await seedMany([["h1", NOW - DETAIL_OK_TTL_MS - 3], ["h2", NOW - DETAIL_OK_TTL_MS - 2]]);
     await replaceTilePlaces(env.DB, KA, ["h1", "h2"], NOW, false);
-    const run = async () => {
-      const { db, log } = recordingDb(env.DB);
-      const ids = (await expiredDetailStates(db, [KA], NOW)).map((t) => t.id);
-      return { ids, read: log.reduce((n, x) => n + x.read, 0) };
-    };
-    // 처음 두 번은 거점 밖 400행을 300행씩 지나간다
-    expect((await run()).ids).toEqual([]);
-    expect((await run()).ids).toEqual(["h1", "h2"]);
+  }
+
+  it("R11/R38: 거점 격자 밖 만료 행(갱신되지 않음)은 한 번 지나가면 다음 실행부터 읽지 않는다 — 격자 ID가 바뀌면 처음부터 다시", async () => {
+    await seedOutsideAndHub(400);
+    // 커서가 없거나 재설정되면 같은 실행에서 거점 행이 나올 때까지(최대 3 × 300행) 더 읽는다
+    expect(EXPIRED_RESET_PAGES).toBe(3);
+    expect((await scan([KA])).ids).toEqual(["h1", "h2"]);
     // 그다음부터는 첫 거점 행부터 읽는다
-    const steady = await run();
+    const steady = await scan([KA]);
     expect(steady.ids).toEqual(["h1", "h2"]);
     expect(steady.read).toBeLessThan(30);
     // 격자 ID가 바뀌면(거점 격자에 오래된 행이 새로 들어왔을 수 있다) 처음부터 다시 훑는다
     await replaceTilePlaces(env.DB, KA, ["h1", "h2", "o0"], NOW + 1, false);
-    expect((await run()).ids).toEqual(["o0"]);
+    expect((await scan([KA])).ids).toEqual(["o0"]);
+  });
+
+  it("R11/R38: 재설정 뒤에도 한 실행은 상태마다 3 × 300행까지만 읽고, 다음 실행이 그 자리부터 잇는다", async () => {
+    await seedOutsideAndHub(1000);
+    const first = await scan([KA]);
+    expect(first.ids).toEqual([]);
+    expect(first.read).toBeLessThanOrEqual(READS_PER_ROW * EXPIRED_RESET_PAGES * EXPIRED_SCAN_LIMIT + 10);
+    expect((await scan([KA])).ids).toEqual(["h1", "h2"]);
+  });
+
+  it("R11: 격자 ID가 바뀐 시각이 커서를 쓴 시각보다 이르게 기록돼도(경합) 값이 달라졌으면 처음부터 다시 훑는다", async () => {
+    await seedOutsideAndHub(400);
+    await scan([KA]);
+    expect((await scan([KA])).ids).toEqual(["h1", "h2"]);
+    // 요청 하나가 Cron보다 먼저 시각을 잡고 늦게 격자를 기록했다 (tiles_changed_at < 커서를 쓴 시각)
+    await replaceTilePlaces(env.DB, KA, ["h1", "h2", "o5"], NOW - 60_000, false);
+    expect(await tilesChangedAt(env.DB)).toBe(NOW - 60_000);
+    expect((await scan([KA])).ids).toEqual(["o5"]);
+  });
+
+  it("R11: 거점 격자 집합이 바뀌면(거점 추가 등) 커서를 처음부터 다시 쓴다", async () => {
+    await seedOutsideAndHub(400);
+    await scan([KA]);
+    expect((await scan([KA])).ids).toEqual(["h1", "h2"]);
+    // KB가 거점 격자가 되면 커서 앞의 오래된 KB 행도 후보다
+    const both = await scan([KA, KB]);
+    expect(both.ids.slice(0, 3)).toEqual(["o0", "o1", "o2"]);
+    expect(both.ids).toHaveLength(EXPIRED_SCAN_LIMIT);
+    // 같은 집합(순서·중복만 다름)이면 재설정하지 않는다 (커서가 그대로라 다시 쓰지 않는다)
+    expect((await scan([KB, KA, KB])).cursorWrites).toBe(0);
+  });
+
+  it("R11/R38: fetched_at이 같은 행이 한 쪽(300행)보다 많아도 커서가 (fetched_at, rowid)로 넘어가 멈추지 않는다", async () => {
+    const T = NOW - 10 * DETAIL_OK_TTL_MS;
+    const ties = Array.from({ length: 1000 }, (_, i) => `t${i}`);
+    await seedMany(ties.map((id) => [id, T]));
+    await replaceTilePlaces(env.DB, KB, ties, NOW, false);
+    await seedMany([["h1", T]]); // 같은 시각, 더 큰 rowid
+    await replaceTilePlaces(env.DB, KA, ["h1"], NOW, false);
+    expect((await scan([KA])).ids).toEqual([]); // 재설정: 3 × 300행
+    const next = await scan([KA]);
+    expect(next.ids).toEqual(["h1"]);
+    // 남은 ~100행만 읽는다 (같은 시각의 앞 900행을 다시 읽지 않는다)
+    expect(next.read).toBeLessThanOrEqual(READS_PER_ROW * 110);
+    expect((await scan([KA])).ids).toEqual(["h1"]);
   });
 
   it("R11: 갱신한 상세의 다음 만료에도 id별 지터가 붙는다 (3일 파도가 다시 한꺼번에 오지 않게)", async () => {

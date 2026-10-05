@@ -241,27 +241,53 @@ export const countUnfetchedIn = (states: TilePlaceState[]) =>
 
 /** Cron 만료 후보를 상태(ok/failed)마다 이만큼까지만 읽는다 (한 실행이 갱신하는 건 DETAIL_BATCH_SIZE곳뿐) */
 export const EXPIRED_SCAN_LIMIT = 300;
+/** 커서를 처음부터 다시 읽을 때(재설정) 같은 실행에서 거점 행이 나올 때까지 더 읽는 쪽 수 — 상태마다 최대 3 × 300행 */
+export const EXPIRED_RESET_PAGES = 3;
+const EXPIRED_COLS = `SELECT p.rowid AS rid, p.id AS id, p.status AS status, p.fetched_at AS fetched_at,
+    p.fail_reason AS fail_reason, tp.tile_key AS tile_key
+  FROM places p INDEXED BY idx_places_status_fetched_at LEFT JOIN tile_places tp ON tp.place_id = p.id`;
 /**
  * (status, fetched_at) 인덱스를 오래된 순으로 범위만 읽는다. 격자는 행마다 place_id 인덱스로 붙인다.
- * 바인드: status, from(포함), before(포함), limit
+ * 위치는 (fetched_at, rowid)로 정해서 같은 fetched_at이 한 쪽보다 많아도 넘어간다. 인덱스 키가 (status, fetched_at, rowid)라
+ * "같은 fetched_at의 rowid 이후" + "더 늦은 fetched_at" 두 범위를 인덱스 순서대로 합친다(MERGE, 정렬용 임시 B-트리 없음).
+ * (행 값 비교 (fetched_at, rowid) >= (?, ?)는 SQLite가 fetched_at까지만 탐색에 써서 같은 시각 행을 처음부터 다시 읽는다)
+ * 바인드: ?1 status, ?2 from(포함), ?3 fromRowid(포함), ?4 before(포함), ?5 limit
  */
-export const EXPIRED_SCAN_SQL = `SELECT p.id AS id, p.status AS status, p.fetched_at AS fetched_at, p.fail_reason AS fail_reason,
-    tp.tile_key AS tile_key
-  FROM places p INDEXED BY idx_places_status_fetched_at LEFT JOIN tile_places tp ON tp.place_id = p.id
-  WHERE p.status = ? AND p.fetched_at >= ? AND p.fetched_at <= ?
-  ORDER BY p.fetched_at LIMIT ?`;
+export const EXPIRED_SCAN_SQL = `${EXPIRED_COLS}
+  WHERE p.status = ?1 AND p.fetched_at = ?2 AND p.rowid >= ?3
+UNION ALL
+${EXPIRED_COLS}
+  WHERE p.status = ?1 AND p.fetched_at > ?2 AND p.fetched_at <= ?4
+ORDER BY fetched_at, rid LIMIT ?5`;
 const EXPIRED_FROM_PREFIX = "expired_from:";
-type ScanCursor = { from: number; at: number };
+/** from·rid: 다음 실행이 읽기 시작할 위치. changedAt·keys: 커서를 쓸 때 본 tiles_changed_at과 거점 격자 집합 지문 */
+type ScanCursor = { from: number; rid: number; changedAt: number; keys: string };
 
 function parseCursor(raw: string | undefined): ScanCursor | null {
   if (!raw) return null;
   try {
-    const o = JSON.parse(raw) as { from?: unknown; at?: unknown };
-    return typeof o.from === "number" && typeof o.at === "number" ? { from: o.from, at: o.at } : null;
+    const o = JSON.parse(raw) as Partial<Record<keyof ScanCursor, unknown>>;
+    const { from, rid, changedAt, keys } = o;
+    return typeof from === "number" && typeof rid === "number" && typeof changedAt === "number" && typeof keys === "string"
+      ? { from, rid, changedAt, keys }
+      : null;
   } catch {
     return null;
   }
 }
+
+/** 격자 집합의 지문 (순서·중복 무관): 개수 + FNV-1a 32비트 */
+export function tileSetFingerprint(keys: Iterable<string>): string {
+  const sorted = [...new Set(keys)].sort();
+  let h = 0x811c9dc5;
+  for (const k of sorted) {
+    for (let i = 0; i < k.length; i++) h = Math.imul(h ^ k.charCodeAt(i), 0x01000193);
+    h = Math.imul(h ^ 0x2c, 0x01000193); // 구분자
+  }
+  return `${sorted.length}:${(h >>> 0).toString(16)}`;
+}
+
+type ExpiredRow = { rid: number; id: string; status: string; fetched_at: number; fail_reason: string | null; tile_key: string | null };
 
 /**
  * Cron용(R11): 주어진 격자(= 모든 거점의 PREWARM_RADIUS 격자)의 장소 중 만료됐을 수 있는 것.
@@ -269,13 +295,17 @@ function parseCursor(raw: string | undefined): ScanCursor | null {
  *
  * R38 읽기 예산: 상태마다 (status, fetched_at) 인덱스를 오래된 순으로 EXPIRED_SCAN_LIMIT행까지만 읽는다.
  * 거점 밖 행(예전 warm의 ASEM 1500m 고리, 격자에 없는 단건 조회)은 갱신되지 않아 늘 인덱스 맨 앞에 남으므로,
- * 상태마다 "여기부터 읽는다" 커서(meta expired_from:{status})를 둔다 — 첫 거점 행의 fetched_at,
+ * 상태마다 "여기부터 읽는다" 커서(meta expired_from:{status} = (fetched_at, rowid))를 둔다 — 첫 거점 행의 위치,
  * 거점 행이 없었으면 지나간 마지막 행(다 읽었으면 before). 그 앞에는 거점 행이 없으니 다음 실행은 건너뛴다.
- * 거점 행은 갱신되면 fetched_at이 앞으로 가므로 커서 앞에 새로 생기지 않는다 — 격자 ID가 바뀌었을 때만
- * (오래된 행이 거점 격자에 새로 들어왔을 수 있다) 처음부터 다시 읽는다. 격자 집합이 늘 같은 Cron만 부른다.
+ * 거점 행은 갱신되면 fetched_at이 앞으로 가므로 커서 앞에 새로 생기지 않는다. 처음부터 다시 읽는(재설정) 때:
+ * - 커서를 쓸 때 본 tiles_changed_at과 지금 값이 다르다 (오래된 행이 거점 격자에 새로 들어왔을 수 있다).
+ *   크기가 아니라 같은지로 본다 — 요청이 Cron보다 이른 시각으로 늦게 기록해도 놓치지 않는다.
+ * - 거점 격자 집합(keys)의 지문이 다르다 (거점 추가·변경).
+ * 재설정이면 같은 실행에서 거점 행이 나올 때까지 EXPIRED_RESET_PAGES쪽까지 이어 읽는다 (다음 실행은 한 쪽씩).
  */
 export async function expiredDetailStates(db: D1Database, keys: string[], now: number): Promise<TilePlaceState[]> {
   const wanted = new Set(keys);
+  const fingerprint = tileSetFingerprint(wanted);
   const changedAt = await tilesChangedAt(db);
   const statuses = [
     ["ok", now - DETAIL_OK_TTL_MS],
@@ -290,21 +320,33 @@ export async function expiredDetailStates(db: D1Database, keys: string[], now: n
   for (const [status, before] of statuses) {
     const key = EXPIRED_FROM_PREFIX + status;
     const cursor = parseCursor(saved.results.find((x) => x.key === key)?.value);
-    const reset = cursor === null || changedAt > cursor.at;
-    const from = reset ? 0 : cursor.from;
-    const r = await db
-      .prepare(EXPIRED_SCAN_SQL)
-      .bind(status, from, before, EXPIRED_SCAN_LIMIT)
-      .all<{ id: string; status: string; fetched_at: number; fail_reason: string | null; tile_key: string | null }>();
-    let next: number | null = null;
-    for (const x of r.results) {
-      if (x.tile_key === null || !wanted.has(x.tile_key)) continue;
-      next ??= x.fetched_at;
-      out.push({ id: x.id, tileKey: x.tile_key, meta: metaOf(x.status, x.fetched_at, x.fail_reason) });
+    const reset = cursor === null || cursor.changedAt !== changedAt || cursor.keys !== fingerprint;
+    let pos = reset ? { from: 0, rid: 0 } : { from: cursor.from, rid: cursor.rid };
+    let next: { from: number; rid: number } | null = null;
+    for (let page = 0; page < (reset ? EXPIRED_RESET_PAGES : 1) && next === null; page++) {
+      const r = await db
+        .prepare(EXPIRED_SCAN_SQL)
+        .bind(status, pos.from, pos.rid, before, EXPIRED_SCAN_LIMIT)
+        .all<ExpiredRow>();
+      for (const x of r.results) {
+        if (x.tile_key === null || !wanted.has(x.tile_key)) continue;
+        next ??= { from: x.fetched_at, rid: x.rid };
+        out.push({ id: x.id, tileKey: x.tile_key, meta: metaOf(x.status, x.fetched_at, x.fail_reason) });
+      }
+      if (next !== null) break;
+      if (r.results.length < EXPIRED_SCAN_LIMIT) {
+        // before까지 다 읽었다 — 다음 실행은 before부터
+        pos = { from: Math.max(pos.from, before), rid: 0 };
+        break;
+      }
+      // 한 쪽을 다 읽었는데 거점 행이 없다 — 마지막 행부터 잇는다 (포함: 두 칸에 기록된 가게가 쪽 경계에서 잘려도 놓치지 않게)
+      const last = r.results[r.results.length - 1];
+      pos = { from: last.fetched_at, rid: last.rid };
     }
-    if (next === null) next = r.results.length >= EXPIRED_SCAN_LIMIT ? r.results[r.results.length - 1].fetched_at : Math.max(from, before);
-    if (reset || next !== cursor.from) {
-      writes.push(db.prepare(META_UPSERT).bind(key, JSON.stringify({ from: next, at: now })));
+    next ??= pos;
+    if (reset || next.from !== cursor.from || next.rid !== cursor.rid) {
+      const value: ScanCursor = { from: next.from, rid: next.rid, changedAt, keys: fingerprint };
+      writes.push(db.prepare(META_UPSERT).bind(key, JSON.stringify(value)));
     }
   }
   if (writes.length > 0) await db.batch(writes);
