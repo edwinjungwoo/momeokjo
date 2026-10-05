@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
-  DEFAULT_FILTERS, drawTrio, filterPlaces, relaxNotice, relaxToFill, sortPlaces, weightOf, type Filters,
+  DEFAULT_FILTERS, drawTrio, filterPlaces, relaxNotice, relaxToFill, relaxedBy, sortPlaces, weightOf, type Filters,
 } from "../../shared/recommend";
 import type { ApiPlace, CategoryGroup } from "../../shared/types";
 import { apiPlace } from "../helpers/apiPlace";
@@ -302,11 +302,35 @@ describe("R41 부족하면 알아서 완화", () => {
   });
 
   it("R41: 토스트 문구는 푼 조건을 한 줄로", () => {
-    expect(relaxNotice([], 0)).toBeNull();
-    expect(relaxNotice(["minRating"], 0)).toBe("조건에 맞는 곳이 적어서 평점 조건을 풀었어요");
-    expect(relaxNotice(["minRating", "priceCap", "groups"], 0)).toBe("조건에 맞는 곳이 적어서 평점·예산·카테고리 조건을 풀었어요");
-    expect(relaxNotice(["radius"], 300)).toBe("조건에 맞는 곳이 적어서 반경을 300m 넓혔어요");
-    expect(relaxNotice(["priceCap", "radius"], 300)).toBe("조건에 맞는 곳이 적어서 예산 조건을 풀고 반경을 300m 넓혔어요");
+    expect(relaxNotice([], 0, 1)).toBeNull();
+    expect(relaxNotice(["minRating"], 0, 1)).toBe("조건에 맞는 곳이 적어서 평점 조건을 풀었어요");
+    expect(relaxNotice(["minRating", "priceCap", "groups"], 0, 2)).toBe("조건에 맞는 곳이 적어서 평점·예산·카테고리 조건을 풀었어요");
+    expect(relaxNotice(["radius"], 300, 1)).toBe("조건에 맞는 곳이 적어서 반경을 300m 넓혔어요");
+    expect(relaxNotice(["priceCap", "radius"], 300, 2)).toBe("조건에 맞는 곳이 적어서 예산 조건을 풀고 반경을 300m 넓혔어요");
+  });
+
+  it("R41: 원래 조건에 맞는 곳이 0곳이면 \"적어서\" 대신 \"없어서\"라고 한다", () => {
+    expect(relaxNotice(["minRating"], 0, 0)).toBe("조건에 맞는 곳이 없어서 평점 조건을 풀었어요");
+    expect(relaxNotice(["radius"], 300, 0)).toBe("조건에 맞는 곳이 없어서 반경을 300m 넓혔어요");
+    expect(relaxNotice([], 0, 0)).toBeNull();
+  });
+
+  it("R41: 토스트에 넣을 조건은 결과에 실제로 뽑힌 완화 후보가 어긴 것만 (완화 후보 전체가 아니라)", () => {
+    const ps = [
+      apiPlace("ok", {}, { rating: 4.5, price: 9000 }),
+      apiPlace("lowRating", {}, { rating: 3.0, price: 9000 }),
+      apiPlace("pricey", {}, { rating: 4.5, price: 18000 }),
+    ];
+    const filters = f({ minRating: 4, priceCap: 10000 });
+    const r = relaxToFill(ps, filters, NOON_MON);
+    expect(r.relaxed).toEqual(["minRating", "priceCap"]);
+    const pick = (id: string) => r.extra.filter((p) => p.id === id);
+    expect(relaxedBy(pick("lowRating"), filters)).toEqual(["minRating"]);
+    expect(relaxedBy(pick("pricey"), filters)).toEqual(["priceCap"]);
+    expect(relaxedBy(r.extra, filters)).toEqual(["minRating", "priceCap"]);
+    expect(relaxedBy([], filters)).toEqual([]);
+    const far = [apiPlace("far", { distance: 650 })];
+    expect(relaxedBy(far, f({ radius: 400 }))).toEqual(["radius"]);
   });
 
   it("R41: 뽑기는 원래 후보를 먼저 넣고 모자란 만큼 완화로 들어온 곳에서 채운다", () => {

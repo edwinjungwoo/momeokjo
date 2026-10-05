@@ -17,11 +17,14 @@ export function relaxOptions(f: Filters): Relax[] {
   return out;
 }
 
-export function EmptyState({ filters, onChange }: { filters: Filters; onChange: (f: Filters) => void }) {
+/** pickedOutside: R41 완화로 조건 밖에서 고른 결과가 떠 있음 */
+export function EmptyState(
+  { filters, onChange, pickedOutside = false }: { filters: Filters; onChange: (f: Filters) => void; pickedOutside?: boolean },
+) {
   const options = relaxOptions(filters);
   return (
     <div className="state" id="empty" role="status">
-      <p className="bubble">앗… 조건에 맞는 맛집이 없어요</p>
+      <p className="bubble">{pickedOutside ? "조건에 딱 맞는 곳은 없어서 조건 밖에서 골랐어요" : "앗… 조건에 맞는 맛집이 없어요"}</p>
       <Mascot pose="sad" height={96} />
       <p className="state-desc">
         {options.length > 0 ? "다른 조건으로 다시 찾아볼까요?" : "다른 거점에서 찾아볼까요?"}

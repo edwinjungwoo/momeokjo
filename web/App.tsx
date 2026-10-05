@@ -4,7 +4,9 @@ import { haversine, walkMinutes } from "../shared/geo";
 import { hubById } from "../shared/hubs";
 import { kstDay } from "../shared/kst";
 import { topPercents } from "../shared/rank";
-import { TRIO_SIZE, drawTrio, filterPlaces, relaxNotice, relaxToFill, sortPlaces, type Filters } from "../shared/recommend";
+import {
+  TRIO_SIZE, drawTrio, filterPlaces, relaxNotice, relaxToFill, relaxedBy, sortPlaces, type Filters,
+} from "../shared/recommend";
 import { shareText } from "../shared/share";
 import type { ApiDetail, ApiPlace, LatLng } from "../shared/types";
 import { filterProps, setTrackingHub, startTracking, track, trackFilters } from "./analytics";
@@ -258,9 +260,11 @@ export default function App() {
       document.getElementById("empty")?.scrollIntoView({ block: "center", behavior: "smooth" });
       return;
     }
-    // R41: 완화로 들어온 곳이 결과에 있으면 무엇을 풀었는지 한 줄로 알린다
-    const outside = new Set(r.places.filter((p) => extra.includes(p)).map((p) => p.id));
-    const notice = outside.size > 0 ? relaxNotice(relax.relaxed, relax.addedRadius) : null;
+    // R41: 완화로 들어온 곳이 결과에 있으면, 그 곳들이 실제로 어긴 조건만 한 줄로 알린다
+    const outsidePicks = r.places.filter((p) => extra.includes(p));
+    const outside = new Set(outsidePicks.map((p) => p.id));
+    const notice =
+      outsidePicks.length > 0 ? relaxNotice(relaxedBy(outsidePicks, filters), relax.addedRadius, candidates.length) : null;
     if (r.reset) {
       drawnIds.current.clear();
       if (!notice) {
@@ -390,7 +394,9 @@ export default function App() {
   } else if (candidates.length === 0 && polling) {
     list = <SkeletonList title="주변 맛집 정보를 모으는 중이에요" desc="조금만 기다려주세요" />;
   } else if (candidates.length === 0) {
-    list = <EmptyState filters={filters} onChange={setFilters} />;
+    // R41: 조건 밖에서 고른 결과가 떠 있으면 "없어요" 대신 그렇게 골랐다고 말한다 (조건 풀기 버튼은 그대로)
+    const pickedOutside = trio?.source === "drawn" && (trio.outside?.size ?? 0) > 0;
+    list = <EmptyState filters={filters} onChange={setFilters} pickedOutside={pickedOutside} />;
   } else {
     list = (
       <PlaceList

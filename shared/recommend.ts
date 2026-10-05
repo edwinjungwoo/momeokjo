@@ -186,6 +186,10 @@ export type Relaxed = {
   addedRadius: number;
 };
 
+/** R41: 주어진 곳들(완화 후보, 또는 결과에 실제로 뽑힌 완화 후보)이 원래 조건 f에서 어긴 단계 (RELAX_ORDER 순) */
+export const relaxedBy = (places: ApiPlace[], f: Filters): RelaxStep[] =>
+  RELAX_ORDER.filter((step) => places.some((p) => violates(p, f, step)));
+
 /**
  * R41: 후보가 min(기본 3)곳보다 적으면 RELAX_ORDER대로 켜진 조건을 하나씩 풀어 min곳이 될 때까지 채운다.
  * keep: 원래 후보·완화 후보 모두에 거는 조건 (R37 빼둔 곳 제외).
@@ -209,18 +213,18 @@ export function relaxToFill(
   }
   const inBase = new Set(candidates.map((p) => p.id));
   const extra = pool.filter((p) => !inBase.has(p.id));
-  const relaxed = RELAX_ORDER.filter((step) => extra.some((p) => violates(p, f, step)));
+  const relaxed = relaxedBy(extra, f);
   return { candidates, extra, relaxed, addedRadius: relaxed.includes("radius") ? g.radius - f.radius : 0 };
 }
 
 const RELAX_LABEL: Record<Exclude<RelaxStep, "radius">, string> = { minRating: "평점", priceCap: "예산", groups: "카테고리" };
 
-/** R41: 완화 토스트 한 줄 (푼 것이 없으면 null) */
-export function relaxNotice(relaxed: RelaxStep[], addedRadius: number): string | null {
+/** R41: 완화 토스트 한 줄 (푼 것이 없으면 null). strict = 원래 조건에 맞는 후보 수 (0이면 "없어서", 아니면 "적어서") */
+export function relaxNotice(relaxed: RelaxStep[], addedRadius: number, strict: number): string | null {
   const conds = relaxed.filter((s): s is Exclude<RelaxStep, "radius"> => s !== "radius").map((s) => RELAX_LABEL[s]).join("·");
   const wider = relaxed.includes("radius") && addedRadius > 0 ? `반경을 ${addedRadius}m 넓혔어요` : "";
   if (!conds && !wider) return null;
-  const head = "조건에 맞는 곳이 적어서";
+  const head = strict === 0 ? "조건에 맞는 곳이 없어서" : "조건에 맞는 곳이 적어서";
   if (conds && wider) return `${head} ${conds} 조건을 풀고 ${wider}`;
   return conds ? `${head} ${conds} 조건을 풀었어요` : `${head} ${wider}`;
 }
