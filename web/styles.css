@@ -254,6 +254,8 @@ input[type="range"] { width: 100%; height: 44px; margin: 0; accent-color: var(--
 .list { list-style: none; display: grid; margin: 0 -12px; padding: 0; transition: opacity 0.2s; }
 .list.is-dim { opacity: 0.5; }
 .list li { position: relative; }
+.list li.list-more { height: 1px; }
+.list li.list-more::before { content: none; }
 .list li + li::before { content: ""; position: absolute; top: 0; left: 12px; right: 12px; border-top: 1px solid var(--divider); }
 .row {
   width: 100%;

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { lastLevel } from "../../shared/category";
 import { photoThumbUrl } from "../../shared/photo";
 import type { SortKey } from "../../shared/recommend";
@@ -37,6 +37,10 @@ function Thumb({ url }: { url: string | null }) {
   );
 }
 
+/** R45: 처음에는 이만큼만 그리고, 끝에 닿으면 더 붙인다 (1000m 후보 900곳을 한꺼번에 그리면 필터 한 번에 0.2초 넘게 멈춘다) */
+const FIRST_ROWS = 60;
+const MORE_ROWS = 120;
+
 /** R20: 후보 목록과 정렬 */
 export function PlaceList({
   places,
@@ -50,6 +54,20 @@ export function PlaceList({
 }: Props) {
   // 사진 있는 가게가 하나라도 있으면 모든 행에 썸네일 칸을 둬서(없으면 크림색 자리) 글자 줄을 맞춘다
   const anyPhoto = places.some((p) => p.photoUrl);
+  // 늘린 개수는 줄이지 않는다 (필터를 바꿔도 보던 자리가 사라지지 않게)
+  const [limit, setLimit] = useState(FIRST_ROWS);
+  const more = places.length > limit;
+  const shown = more ? places.slice(0, limit) : places;
+  const sentinel = useRef<HTMLLIElement>(null);
+  useEffect(() => {
+    const el = sentinel.current;
+    if (!more || !el || typeof IntersectionObserver === "undefined") return;
+    const io = new IntersectionObserver((entries) => {
+      if (entries.some((e) => e.isIntersecting)) setLimit((l) => l + MORE_ROWS);
+    });
+    io.observe(el);
+    return () => io.disconnect();
+  }, [more, limit]);
   return (
     <section className="field" aria-label="후보 목록">
       <div className="list-head">
@@ -68,7 +86,7 @@ export function PlaceList({
         </select>
       </div>
       <ul className={`list${dim ? " is-dim" : ""}`}>
-        {places.map((p) => {
+        {shown.map((p) => {
           const price = priceText(p);
           const open = openState(p, now);
           const category = lastLevel(p.category);
@@ -94,6 +112,7 @@ export function PlaceList({
             </li>
           );
         })}
+        {more && <li ref={sentinel} className="list-more" aria-hidden="true" />}
       </ul>
     </section>
   );
