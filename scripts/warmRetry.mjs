@@ -1,11 +1,11 @@
-// warm.mjs가 429를 받았을 때 할 일 (R36, R38). node와 테스트(workerd) 둘 다에서 돌도록 의존성 없음
+// warm.mjs·backfill.mjs가 429를 받았을 때 할 일 (R36, R38). node와 테스트(workerd) 둘 다에서 돌도록 의존성 없음
 export const RATE_LIMIT_WAIT_MS = 30_000;
 export const RATE_LIMIT_RETRIES = 3;
 
 /**
  * @param {string} bodyText 429 응답 본문
  * @param {number} retries 이번 요청에서 이미 rate_limited로 다시 한 횟수
- * @returns {{ action: "retry", waitMs: number } | { action: "stop", reason: "rate_limited" | "read_budget" | "unknown" }}
+ * @returns {{ action: "retry", waitMs: number } | { action: "stop", reason: "rate_limited" | "read_budget" | "write_budget" | "unknown" }}
  */
 export function on429(bodyText, retries) {
   let error;
@@ -20,5 +20,7 @@ export function on429(bodyText, retries) {
   }
   // R38: 오늘 D1 읽기가 소프트 한도를 넘었다. 다시 두드리면 읽기만 더 쓴다
   if (error === "read_budget") return { action: "stop", reason: "read_budget" };
+  // R38: 오늘 D1 쓰기가 소프트 한도를 넘었다 (backfill)
+  if (error === "write_budget") return { action: "stop", reason: "write_budget" };
   return { action: "stop", reason: "unknown" };
 }

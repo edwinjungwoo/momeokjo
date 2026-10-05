@@ -3,13 +3,17 @@
 // D1만 SQL 앞부분으로 답하는 가짜로 바꾼다. 행은 실제 상세 픽스처를 parseDetail → saveDetail과 같은 열 모양으로 만든다.
 // 두 길을 잰다: list_json 있음(0005 뒤 저장된 행) / 없음(예전 행 — 열 4개 JSON.parse → toApiPlace → stringify).
 // 실행: node scripts/bench-places.mjs [곳 수=2000] [반복=60]
+// Task 28b: node scripts/bench-places.mjs backfill [반복=60] — 관리자 백필(backfillListJsonIn) 한 번이 행 수별로 쓰는 CPU
+//   (list_json이 없는 행 → toRow → listItemJson → UPDATE 묶음 JSON). D1 결과 JSON 해석(workerd가 하는 일)의 근사도 따로 잰다.
 import { build as esbuild } from "esbuild";
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
 const root = join(import.meta.dirname, "..");
-const N = Number(process.argv[2] ?? 2000);
-const RUNS = Number(process.argv[3] ?? 60);
+const BACKFILL = process.argv[2] === "backfill";
+const args = BACKFILL ? process.argv.slice(3) : process.argv.slice(2);
+const N = BACKFILL ? 2000 : Number(args[0] ?? 2000);
+const RUNS = Number((BACKFILL ? args[0] : args[1]) ?? 60);
 const HUB = { lat: 37.5651, lng: 127.00749 }; // 동대문역사문화공원역
 const RADIUS = 1000;
 const NOW = 1_800_000_000_000;
@@ -19,7 +23,7 @@ const out = await esbuild({
     contents: `export { getPlaces } from "./worker/placesService";
       export { parseDetail } from "./worker/detailParser";
       export { placesBody, listItemJson } from "./worker/present";
-      export { detailRow } from "./worker/repo";
+      export { detailRow, backfillListJsonIn, ADMIN_BACKFILL_SQL, ADMIN_BACKFILL_DEFAULT, ADMIN_BACKFILL_MAX } from "./worker/repo";
       export { categoryGroup } from "./shared/category";
       export { tileKeyOf, boundingBox, haversine } from "./shared/geo";`,
     resolveDir: root,
@@ -66,6 +70,65 @@ for (let i = 0; inCircle < N; i++) {
   r.list_json = mod.listItemJson(mod.detailRow(id, { ...s, name: r.name, lat, lng, photoUrl: r.photo_url }, { ...d, menus }, r.fetched_at));
 }
 const tileOf = new Map(rows.map((r) => [r.id, mod.tileKeyOf(r)]));
+const median = (xs) => [...xs].sort((a, b) => a - b)[Math.floor(xs.length / 2)];
+
+if (BACKFILL) {
+  // 가짜 D1: 후보 조회는 list_json을 비운 행 limit+1개, batch는 UPDATE 묶음을 받아 둔다
+  let sent = [];
+  const backfillDb = {
+    prepare(sql) {
+      let args = [];
+      const stmt = {
+        bind: (...a) => ((args = a), stmt),
+        get args() {
+          return args;
+        },
+        async all() {
+          if (sql !== mod.ADMIN_BACKFILL_SQL) throw new Error(`unexpected sql: ${sql}`);
+          return { results: rows.slice(0, args[1]).map((r) => ({ ...r, list_json: null })) };
+        },
+      };
+      return stmt;
+    },
+    async batch(stmts) {
+      sent = stmts;
+      return stmts.map(() => ({ meta: { changes: 100 } }));
+    },
+  };
+  const keys = [...new Set(rows.map((r) => tileOf.get(r.id)))];
+  for (const limit of [100, 200, 300, 400, 500, 1000]) {
+    const input = rows.slice(0, limit + 1).map((r) => ({ ...r, list_json: null }));
+    const wire = JSON.stringify(input);
+    for (let i = 0; i < 15; i++) await mod.backfillListJsonIn(backfillDb, keys, limit);
+    const total = [];
+    const copy = [];
+    const parse = [];
+    for (let i = 0; i < RUNS; i++) {
+      const c0 = performance.now();
+      rows.slice(0, limit + 1).map((r) => ({ ...r, list_json: null }));
+      copy.push(performance.now() - c0);
+      const p0 = performance.now();
+      JSON.parse(wire);
+      parse.push(performance.now() - p0);
+      const t0 = performance.now();
+      await mod.backfillListJsonIn(backfillDb, keys, limit);
+      total.push(performance.now() - t0);
+    }
+    // 보낸 조각이 저장된 조각(saveDetail과 같은 detailRow → listItemJson)과 글자까지 같은지
+    const byId = new Map(rows.map((r) => [r.id, r.list_json]));
+    const sentFills = sent.flatMap((st) => JSON.parse(st.args[0]));
+    const sameJson = sentFills.length === limit && sentFills.every(([id, , json]) => json === byId.get(id));
+    const serializeMs = median(total) - median(copy);
+    const d1ParseMs = median(parse);
+    console.log(JSON.stringify({
+      path: "backfill", node: process.version, limit, runs: RUNS, wireChars: wire.length, sameJson,
+      serializeMs: Number(serializeMs.toFixed(2)), d1ParseMs: Number(d1ParseMs.toFixed(2)),
+      workersEstimateMs: Number(((serializeMs + d1ParseMs) * 3).toFixed(2)),
+    }));
+  }
+  console.log(JSON.stringify({ default: mod.ADMIN_BACKFILL_DEFAULT, max: mod.ADMIN_BACKFILL_MAX }));
+  process.exit(0);
+}
 
 // 3) getPlaces가 부르는 D1 문장만 흉내 낸다 (모든 격자 신선, 상세 모두 있음 → 외부 호출·보충 없음)
 const fakeDb = {
@@ -98,7 +161,6 @@ const deps = {
 
 // 4) 잰다: 응답 만들기(getPlaces) + 본문(placesBody). 가짜 D1이 행을 복사하는 시간은 따로 빼서 보여 준다
 let withJson = true;
-const median = (xs) => [...xs].sort((a, b) => a - b)[Math.floor(xs.length / 2)];
 const build = async () => {
   const { items, ...meta } = await mod.getPlaces(deps, HUB, RADIUS);
   return { body: mod.placesBody(meta, items), count: items.length };

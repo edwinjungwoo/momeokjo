@@ -394,9 +394,25 @@ export async function backfillListJson(db: D1Database): Promise<number> {
     .prepare("SELECT rowid AS rid, * FROM places WHERE rowid > ? ORDER BY rowid LIMIT ?")
     .bind(after, LIST_BACKFILL_LIMIT)
     .all<DbRow & { rid: number }>();
-  const fill = r.results
+  const fill = listJsonFill(r.results);
+  const stmts = listJsonUpdates(db, fill);
+  const last = r.results[r.results.length - 1]?.rid;
+  const next = r.results.length < LIST_BACKFILL_LIMIT ? LIST_BACKFILL_DONE : String(last);
+  stmts.push(db.prepare(META_UPSERT).bind(LIST_BACKFILL_KEY, next));
+  await db.batch(stmts);
+  return fill.length;
+}
+
+type ListJsonFill = readonly [id: string, fetchedAt: number, json: string];
+
+/** 표시 정보가 있고 조각이 없는 행의 조각을 만든다 — Cron과 관리자 백필이 같은 직렬화(toRow → listItemJson)를 쓴다 */
+const listJsonFill = (rows: DbRow[]): ListJsonFill[] =>
+  rows
     .filter((x) => !x.list_json && x.name !== null && x.lat !== null && x.lng !== null)
     .map((x) => [x.id, x.fetched_at, listItemJson(toRow(x))] as const);
+
+/** 100행마다 UPDATE 한 문장. 그 사이 상세가 다시 저장된 행은 건드리지 않는다 (fetched_at이 같고 아직 NULL일 때만) */
+function listJsonUpdates(db: D1Database, fill: ListJsonFill[]): D1PreparedStatement[] {
   const stmts: D1PreparedStatement[] = [];
   for (let i = 0; i < fill.length; i += 100) {
     stmts.push(
@@ -409,11 +425,39 @@ export async function backfillListJson(db: D1Database): Promise<number> {
         .bind(JSON.stringify(fill.slice(i, i + 100))),
     );
   }
-  const last = r.results[r.results.length - 1]?.rid;
-  const next = r.results.length < LIST_BACKFILL_LIMIT ? LIST_BACKFILL_DONE : String(last);
-  stmts.push(db.prepare(META_UPSERT).bind(LIST_BACKFILL_KEY, next));
-  await db.batch(stmts);
-  return fill.length;
+  return stmts;
+}
+
+/**
+ * 관리자 백필(POST /api/admin/backfill) 한 번에 채우는 행 수의 기본값·최댓값 (더 큰 limit은 최댓값으로 줄인다).
+ * Workers CPU 10ms 안에 넉넉히 들게 정했다 — `node scripts/bench-places.mjs backfill`(Node 26, 이 Mac) 중앙값:
+ * 300행 직렬화 1.37ms + D1 결과 해석 근사 0.41ms → ×3 ≈ 5.4ms (≤ 6ms). 400행은 ×3 ≈ 7.2ms, 1000행은 ≈ 18ms라 넘는다.
+ */
+export const ADMIN_BACKFILL_DEFAULT = 300;
+export const ADMIN_BACKFILL_MAX = 300;
+
+/** 관리자 백필 후보: 격자 기록에서 출발해 PK로 가게를 찾는다 (CROSS JOIN으로 순서를 고정 — places 상태 인덱스를 훑지 않게) */
+export const ADMIN_BACKFILL_SQL = `SELECT p.* FROM tile_places tp CROSS JOIN places p ON p.id = tp.place_id
+  WHERE tp.tile_key IN (SELECT value FROM json_each(?))
+    AND p.list_json IS NULL AND p.status = 'ok' AND p.name IS NOT NULL AND p.lat IS NOT NULL AND p.lng IS NOT NULL
+  LIMIT ?`;
+
+/**
+ * 배포 직후 관리자 백필: 주어진 격자(거점)에 기록된 가게 중 list_json이 없는 ok 행을 limit개까지 채운다.
+ * Cron 백필(backfillListJson)과 같은 직렬화·같은 UPDATE를 쓰고, 커서는 쓰지 않는다 (채운 행은 다음 조회에서 빠진다).
+ * 격자 기록(tile_places)에서 출발해 그 거점 가게만 읽는다 (places 전체를 훑지 않는다 — ADMIN_BACKFILL_SQL).
+ * limit + 1행을 읽어서 남은 것이 있는지(more) 알려 준다. filled는 실제로 바뀐 행 수다.
+ */
+export async function backfillListJsonIn(
+  db: D1Database, keys: string[], limit: number,
+): Promise<{ filled: number; remaining: "more" | 0 }> {
+  const r = await db.prepare(ADMIN_BACKFILL_SQL).bind(JSON.stringify(keys), limit + 1).all<DbRow>();
+  // 한 가게가 두 칸에 기록됐으면 두 번 나온다 — 한 번만 채운다 (남은 것이 있는지는 읽은 행 수로 본다)
+  const seen = new Set<string>();
+  const rows = r.results.filter((x) => !seen.has(x.id) && seen.add(x.id)).slice(0, limit);
+  const stmts = listJsonUpdates(db, listJsonFill(rows));
+  const filled = stmts.length === 0 ? 0 : (await db.batch(stmts)).reduce((n, x) => n + (Number(x.meta?.changes) || 0), 0);
+  return { filled, remaining: r.results.length > limit ? "more" : 0 };
 }
 
 export async function placesByIds(db: D1Database, ids: string[]): Promise<PlaceRow[]> {

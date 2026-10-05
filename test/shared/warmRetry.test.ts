@@ -16,4 +16,8 @@ describe("R36: warm.mjs의 429 처리", () => {
     expect(on429("not json", 0)).toEqual({ action: "stop", reason: "unknown" });
     expect(on429(JSON.stringify({ error: "other" }), 0)).toEqual({ action: "stop", reason: "unknown" });
   });
+
+  it("R38: write_budget(오늘 D1 쓰기 예산 소진, backfill.mjs)도 바로 멈춘다", () => {
+    expect(on429(JSON.stringify({ error: "write_budget" }), 0)).toEqual({ action: "stop", reason: "write_budget" });
+  });
 });

@@ -1,17 +1,23 @@
 import { Hono, type Context } from "hono";
 import { z } from "zod";
-import { MAX_RADIUS, MIN_RADIUS, isValidRadius } from "../shared/constants";
+import { MAX_RADIUS, MIN_RADIUS, PREWARM_RADIUS, isValidRadius } from "../shared/constants";
 import { MAX_EVENT_BODY_BYTES, parseEventBatch } from "../shared/events";
+import { tilesCoveringCircle } from "../shared/geo";
 import { HUBS, isHubId } from "../shared/hubs";
+import { utcDay } from "../shared/kst";
 import type { PlacesResponse } from "../shared/types";
 import { auditArea } from "./audit";
 import { limitsFrom } from "./config";
-import { meteredDb, overReadBudget, overWriteBudget, readSoftCap, recordD1Usage, type D1Usage } from "./d1Usage";
+import {
+  d1UsageOn, meteredDb, overReadBudget, overWriteBudget, readSoftCap, recordD1Usage, writeSoftCap, type D1Usage,
+} from "./d1Usage";
 import { eventStats, insertEvents } from "./events";
 import type { FetchFn } from "./fetchFn";
+import { hubTileKeys } from "./hubTiles";
 import { warmOnce } from "./maintenance";
 import { getPlace, getPlaces, type ServiceDeps } from "./placesService";
 import { placesBody, type PlacesMeta } from "./present";
+import { ADMIN_BACKFILL_DEFAULT, ADMIN_BACKFILL_MAX, backfillListJsonIn } from "./repo";
 
 /**
  * R12: 공개 목록 API는 거점 id와 50m 단위 반경만 받는다 (좌표는 서버가 shared/hubs.ts에서 찾는다).
@@ -27,6 +33,12 @@ export const AreaQuery = z.object({
   lat: z.coerce.number().min(33).max(39),
   lng: z.coerce.number().min(124).max(132),
   radius: z.coerce.number().int().min(MIN_RADIUS).max(MAX_RADIUS),
+});
+
+/** R12: 배포 직후 list_json 백필 — 거점(없으면 모든 거점 격자), 한 번에 채울 행 수(최댓값을 넘으면 최댓값) */
+export const BackfillQuery = z.object({
+  hub: z.string().refine(isHubId).optional(),
+  limit: z.coerce.number().int().min(1).default(ADMIN_BACKFILL_DEFAULT).transform((n) => Math.min(n, ADMIN_BACKFILL_MAX)),
 });
 
 /** R36: 오늘/7일/30일 (KST, 오늘 포함), 전체 또는 거점 하나 */
@@ -230,6 +242,24 @@ export function createApp(deps: AppDeps) {
       { count: c.req.query("count") === "1" },
     );
     return c.json(r);
+  });
+
+  // R12: 배포 직후 0005 전 행의 list_json을 빨리 채운다 (Cron은 실행마다 200행뿐이라 2~3.5시간 걸린다). scripts/backfill.mjs가 부른다.
+  // 외부 호출은 없고, 한 번에 ADMIN_BACKFILL_MAX행까지만 직렬화해서 CPU 10ms 안에 든다.
+  app.post("/api/admin/backfill", async (c) => {
+    const q = BackfillQuery.safeParse(c.req.query());
+    if (!q.success) return c.json({ error: "invalid_params" }, 400);
+    // 이 호출이 읽고 쓴 행 수 (요청 전체 사용량은 미들웨어가 따로 기록한다)
+    const usage: D1Usage = { read: 0, written: 0 };
+    const db = meteredDb(c.var.db, usage);
+    // R38: 오늘 D1 읽기·쓰기가 소프트 한도를 넘었으면 채우지 않는다 (scripts/backfill.mjs는 429에서 멈춘다)
+    const today = await d1UsageOn(db, utcDay(now()));
+    if (today.read >= readSoftCap(c.env)) return c.json({ error: "read_budget" }, 429);
+    if (today.written >= writeSoftCap(c.env)) return c.json({ error: "write_budget" }, 429);
+    const hub = HUBS.find((h) => h.id === q.data.hub);
+    const keys = hub ? tilesCoveringCircle(hub, PREWARM_RADIUS) : [...hubTileKeys()];
+    const r = await backfillListJsonIn(db, keys, q.data.limit);
+    return c.json({ ...r, rowsRead: usage.read, rowsWritten: usage.written });
   });
 
   app.get("/api/admin/stats", async (c) => {

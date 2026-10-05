@@ -12,6 +12,7 @@
     "db:migrate:local": "wrangler d1 migrations apply momeokjo --local",
     "db:migrate:remote": "wrangler d1 migrations apply momeokjo --remote",
     "warm": "node scripts/warm.mjs",
+    "backfill": "node scripts/backfill.mjs",
     "audit": "node scripts/audit.mjs"
   },
   "dependencies": {
