@@ -122,7 +122,7 @@ describe("POST /api/events", () => {
       method: "POST",
       headers: {
         "content-type": "application/json", "cf-connecting-ip": "203.0.113.77",
-        "user-agent": "QA-Agent/9.9", origin: "https://qa-origin.example",
+        "user-agent": "QA-Agent/9.9", origin: "https://mmj.itmz.me",
       },
       body: JSON.stringify({ anon: ANON, session: SESSION, events: [ev({ t: "share", placeId: "13583324" })] }),
     });
@@ -130,7 +130,33 @@ describe("POST /api/events", () => {
     const all = (await env.DB.prepare("SELECT * FROM events").all()).results;
     expect(all).toHaveLength(1);
     expect(Object.keys(all[0]).sort()).toEqual(["anon", "day", "hour", "hub", "id", "place_id", "props", "session", "ts", "type"]);
-    expect(JSON.stringify(all)).not.toMatch(/203\.0\.113\.77|QA-Agent|qa-origin/);
+    expect(JSON.stringify(all)).not.toMatch(/203\.0\.113\.77|QA-Agent|mmj\.itmz\.me/);
+  });
+
+  it("R35: Origin이 있는데 운영 주소나 로컬 개발 주소가 아니면 아무것도 저장하지 않고 204 (제한 키도 쓰지 않는다)", async () => {
+    const body = JSON.stringify({ anon: ANON, session: SESSION, events: [ev()] });
+    for (const origin of [
+      "https://evil.example", "http://mmj.itmz.me", "https://mmj.itmz.me.evil.example", "https://x.mmj.itmz.me", "null",
+      "http://172.30.1.2:8080", "http://172.31.1.2:5173", "http://localhost.evil.example", "https://localhost:5173",
+    ]) {
+      const { app, keys } = setup();
+      const res = await callApp(app, "/api/events", { method: "POST", headers: { "content-type": "application/json", origin }, body });
+      expect(res.status, origin).toBe(204);
+      expect(keys, origin).toEqual([]);
+    }
+    expect(await rows()).toHaveLength(0);
+  });
+
+  it("R35: 운영 주소·로컬 개발 주소 Origin과 Origin 없는 요청은 저장한다", async () => {
+    const body = JSON.stringify({ anon: ANON, session: SESSION, events: [ev()] });
+    const origins = ["https://mmj.itmz.me", "http://localhost:5173", "http://localhost:4250", "http://127.0.0.1:4250", "http://172.30.12.34:5173", null];
+    for (const origin of origins) {
+      const { app } = setup();
+      const headers: Record<string, string> = { "content-type": "application/json" };
+      if (origin) headers.origin = origin;
+      expect((await callApp(app, "/api/events", { method: "POST", headers, body })).status, String(origin)).toBe(204);
+    }
+    expect(await rows()).toHaveLength(origins.length);
   });
 
   it("R35: 익명 id별 요청 제한(RATE_LIMITER)을 넘으면 저장하지 않고 204로 조용히 넘긴다", async () => {

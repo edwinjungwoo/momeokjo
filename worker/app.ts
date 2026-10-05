@@ -34,6 +34,11 @@ export const StatsQuery = z.object({
 /** 카카오 장소 ID: 숫자만, 최대 15자리 */
 export const PLACE_ID = /^\d{1,15}$/;
 
+/** R35: 이벤트를 받는 화면 주소 — 운영 주소와 로컬 개발 주소(localhost·127.0.0.1의 아무 포트, 사내망 172.30.x.x의 Vite 5173) */
+const EVENT_ORIGIN = /^(?:https:\/\/mmj\.itmz\.me|http:\/\/(?:localhost|127\.0\.0\.1)(?::\d{1,5})?|http:\/\/172\.30\.\d{1,3}\.\d{1,3}:5173)$/;
+/** Origin이 없으면(curl, 일부 오래된 브라우저) 받고, 있으면 위 주소일 때만 받는다 */
+export const eventOriginAllowed = (origin: string | undefined): boolean => origin === undefined || EVENT_ORIGIN.test(origin);
+
 /** R12 응답 캐시 (Workers Cache API의 일부). 없으면 캐시하지 않는다 */
 export type ResponseCache = {
   match(req: Request): Promise<Response | undefined>;
@@ -160,6 +165,8 @@ export function createApp(deps: AppDeps) {
 
   // R35: 익명 사용 이벤트. 화면을 막지 않게 항상 본문 없이 답한다
   app.post("/api/events", async (c) => {
+    // 다른 사이트가 보낸 이벤트는 읽지도 저장하지도 않는다 (화면을 막지 않게 똑같이 204)
+    if (!eventOriginAllowed(c.req.header("origin"))) return c.body(null, 204);
     if (Number(c.req.header("content-length") ?? 0) > MAX_EVENT_BODY_BYTES) return c.json({ error: "too_large" }, 400);
     const buf = await c.req.arrayBuffer();
     if (buf.byteLength > MAX_EVENT_BODY_BYTES) return c.json({ error: "too_large" }, 400);
