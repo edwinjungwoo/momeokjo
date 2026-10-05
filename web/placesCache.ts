@@ -18,7 +18,15 @@ function openDb(): Promise<IDBDatabase | null> {
           req.result.createObjectStore(STORE, { keyPath: "hub" }).createIndex("savedAt", "savedAt");
         }
       };
-      req.onsuccess = () => resolve(req.result);
+      req.onsuccess = () => {
+        const db = req.result;
+        // 다른 탭이 버전을 올리거나 WebKit이 연결을 끊으면 다음 호출이 새로 연다
+        db.onclose = db.onversionchange = () => {
+          db.close();
+          dbPromise = null;
+        };
+        resolve(db);
+      };
       req.onerror = () => resolve(null);
       req.onblocked = () => resolve(null);
     } catch {
@@ -42,6 +50,7 @@ export async function readCachedPlaces(hub: string): Promise<CachedPlacesView | 
     const raw = await done(db.transaction(STORE, "readonly").objectStore(STORE).get(hub));
     return readPlacesCache(raw, hub, Date.now());
   } catch {
+    dbPromise = null;
     return null;
   }
 }
@@ -51,9 +60,12 @@ export async function saveCachedPlaces(hub: string, text: string): Promise<void>
   try {
     const entry = placesCacheEntry(hub, text, Date.now());
     const db = await openDb();
-    if (!entry || !db) return;
+    if (!db) return;
     const store = db.transaction(STORE, "readwrite").objectStore(STORE);
-    store.put(entry);
+    // 너무 커서 못 저장하면 옛 저장본도 지운다 (새 응답보다 오래된 목록이 남지 않게)
+    if (entry) store.put(entry);
+    else store.delete(hub);
+    if (!entry) return;
     // 원문(거점당 ~1MB)은 읽지 않고 저장 시각 인덱스의 키만 훑는다
     const meta: { hub: string; savedAt: number }[] = [];
     await new Promise<void>((resolve, reject) => {
@@ -71,6 +83,7 @@ export async function saveCachedPlaces(hub: string, text: string): Promise<void>
       cur.onerror = () => reject(cur.error);
     });
   } catch {
+    dbPromise = null;
     /* 저장하지 못해도 화면은 그대로 */
   }
 }

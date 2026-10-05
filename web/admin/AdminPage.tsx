@@ -300,7 +300,7 @@ export default function AdminPage() {
   return (
     <div className="admin">
       <header className="admin-top">
-        <img src="/brand/logo.png" alt="모먹죠" width={63} height={28} draggable={false} />
+        <img src="/brand/logo.webp" alt="모먹죠" width={63} height={28} draggable={false} />
         <h1>사용 통계</h1>
         {token && (
           <button type="button" className="admin-link" onClick={() => logout()}>

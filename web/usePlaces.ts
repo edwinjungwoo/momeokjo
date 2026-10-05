@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { MAX_RADIUS } from "../shared/constants";
 import type { PlacesResponse } from "../shared/types";
+import { mergeCachedPlaces } from "../shared/placesCache";
 import { fetchPlaces } from "./api";
 import { readCachedPlaces, saveCachedPlaces } from "./placesCache";
 
@@ -69,15 +70,7 @@ export function usePlaces(hubId: string) {
       } catch {
         return;
       }
-      setState((s) =>
-        s.data !== null && s.hub === hubId && s.cache === null
-          ? s
-          : {
-              data, hub: hubId, cache: { savedAt: c.savedAt, fresh: c.fresh },
-              // 하루 넘은 저장본은 새 목록이 올 때까지 흐리게 둔다
-              loading: s.loading && !c.fresh, error: s.error, polling: false,
-            },
-      );
+      setState((s) => mergeCachedPlaces(s, hubId, { data, savedAt: c.savedAt, fresh: c.fresh }));
     });
     const hubChanged = lastHub.current !== hubId;
     lastHub.current = hubId;

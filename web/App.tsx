@@ -411,7 +411,7 @@ export default function App() {
         ranks={ranks}
         sort={filters.sort}
         now={now}
-        dim={loading}
+        dim={loading || fromCache === "stale"}
         onSort={(sort) => setFilters({ ...filters, sort })}
         onSelect={onSelect}
       />

@@ -42,3 +42,38 @@ export function placesCacheEvictions(entries: { hub: string; savedAt: number }[]
   const others = entries.filter((e) => e.hub !== keep).sort((a, b) => b.savedAt - a.savedAt);
   return others.slice(PLACES_CACHE_MAX_HUBS - 1).map((e) => e.hub);
 }
+
+/** 화면 상태 중 저장본을 합칠 때 보는 부분 (data의 모양은 여기서 보지 않는다) */
+export type PlacesMergeState<D> = {
+  data: D | null;
+  /** data가 어느 거점 목록인가 */
+  hub: string | null;
+  /** data가 기기 저장본이면 저장 시각과 신선도 (새로 받은 목록이면 null) */
+  cache: { savedAt: number; fresh: boolean } | null;
+  loading: boolean;
+  error: boolean;
+  polling: boolean;
+};
+
+/**
+ * 뒤늦게 읽힌 저장본을 화면 상태에 합친다.
+ * - 이 거점의 새 목록을 이미 들고 있으면(저장본보다 네트워크가 먼저 온 경우, 다시 시도) 저장본은 버린다.
+ * - 아니면 저장본을 보여준다. 거점이 다른 이전 목록은 이 거점의 저장본으로 바뀐다.
+ *   네트워크가 먼저 실패했으면(error) 그 상태는 그대로 두어 "불러오지 못했어요"가 저장본과 함께 보인다.
+ * - 하루 넘은 저장본은 새 목록이 올 때까지 loading(흐리게)을 유지하고, 신선하면 끈다.
+ */
+export function mergeCachedPlaces<D, S extends PlacesMergeState<D>>(
+  s: S,
+  hub: string,
+  cached: { data: D; savedAt: number; fresh: boolean },
+): S {
+  if (s.data !== null && s.hub === hub && s.cache === null) return s;
+  return {
+    ...s,
+    data: cached.data,
+    hub,
+    cache: { savedAt: cached.savedAt, fresh: cached.fresh },
+    loading: s.loading && !cached.fresh,
+    polling: false,
+  };
+}
