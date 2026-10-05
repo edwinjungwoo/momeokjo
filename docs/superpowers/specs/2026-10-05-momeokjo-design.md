@@ -243,6 +243,8 @@ CREATE INDEX idx_places_lat_lng ON places(lat, lng);
 - **R31 워밍 엔드포인트.** `POST /api/admin/warm?lat&lng&radius`는 `Authorization: Bearer {ADMIN_TOKEN}`이 맞을 때만 동작하고, 틀리면 401이다. R10 예산 안에서 격자 수집과 상세 보충을 한 번 수행하고 `{incompleteTiles, pending, enriched, failed}`를 반환한다. `scripts/warm.mjs`는 이 엔드포인트를 `incompleteTiles === 0 && pending === 0`이 될 때까지(최대 300회, 호출 간 1초) 반복 호출한다. 요청이 매번 새 실행이라 무료 플랜 한도 안에서 빠르게 채울 수 있다.
 - **R32 감사 엔드포인트.** `GET /api/admin/audit?lat&lng&radius`(같은 인증)는 §7의 Q1~Q4 수치를 JSON으로 반환한다. `scripts/audit.mjs`는 이를 표로 출력하고, Q1 또는 Q2를 통과하지 못하면 종료 코드 1로 끝난다.
 
+- **R33 대표 사진.** 상세 응답의 `summary.main_photo_url`이 카카오 CDN(`*.kakaocdn.net`) 주소면 https로 바꿔 `places.photo_url`에 기록한다(사진 파일은 저장하지 않음). 다른 호스트(네이버 블로그 등 외부 사이트에서 막히는 이미지)는 기록하지 않는다. 화면에서는 카카오 썸네일 서버(`img1.kakaocdn.net/cthumb/local/C{px}x{px}.q50/?fname=`)를 거쳐 결과 카드 상단과 목록 썸네일로 보여주고, 사진이 없거나 불러오지 못하면 사진 자리를 숨긴다.
+
 ### 5.6 UI
 
 - **R27 레이아웃 (모바일 우선).** 대부분 폰으로 열기 때문에 375×812를 기준으로 설계하고, 900px 이상에서 데스크톱 배치로 바꾼다. 상단 바에는 로고와 기준점 칩이 있다.
