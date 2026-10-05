@@ -37,7 +37,21 @@ describe("R34 근처 상위 N%", () => {
     const m = topPercents(ps);
     // 대상은 평점이 있는 12곳, C = 38.2 / 12 ≈ 3.18
     // top (50×4.9 + 20C)/70 ≈ 4.41 > few (4×5.0 + 20C)/24 ≈ 3.49 > nocount = C ≈ 3.18 > x0 (50×3.0 + 20C)/70 ≈ 3.05
-    expect([...m.entries()]).toEqual([["top", 9], ["few", 17], ["nocount", 25]]);
+    // nocount는 3위(25%)를 차지하지만 리뷰 수가 없어서 알약은 달지 않는다
+    expect([...m.entries()]).toEqual([["top", 9], ["few", 17]]);
+  });
+
+  it("R51: 리뷰 수가 없거나 0개인 곳은 대상 수(n)와 평균(C)에는 들어가지만 자기 알약은 달지 않는다", () => {
+    const ps = [
+      rated("zero", 5.0, 0), rated("null", 5.0, null), rated("a", 4.8, 100), rated("b", 4.5, 100),
+      ...Array.from({ length: 6 }, (_, i) => rated(`x${i}`, 3.0, 100)),
+    ];
+    const m = topPercents(ps);
+    // 대상 10곳, C = (5.0 + 5.0 + 4.8 + 4.5 + 6×3.0) / 10 = 3.73 — zero·null을 빼면 C와 n이 달라져 a·b의 순위가 바뀐다
+    // a (100×4.8 + 20C)/120 ≈ 4.62 > b ≈ 4.37 > zero = null = C = 3.73 > x ≈ 3.12
+    expect([...m.entries()]).toEqual([["a", 10], ["b", 20]]);
+    expect(m.has("zero")).toBe(false);
+    expect(m.has("null")).toBe(false);
   });
 
   it("R51: 리뷰 6개짜리 5.0은 리뷰 300개짜리 4.6보다 아래 (보이는 별점은 그대로라 순위만 바뀐다)", () => {

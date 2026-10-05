@@ -11,7 +11,8 @@ export const RANK_TOP_LIMIT = 30;
  * R51: 대상은 평점이 있는 곳. 순위는 리뷰 수로 보정한 평점 (v × R + m × C) / (v + m)으로 매긴다
  * (v = 리뷰 수(없으면 0), R = 평점, C = 대상 평점 평균, m = 20). 리뷰 6개짜리 5.0점이 1위가 되지 않게 한다.
  * 보이는 별점은 원래 값 그대로이고 이 점수는 순위에만 쓴다. 같은 점수는 더 좋은 순위를 함께 쓴다.
- * 반환: id → 상위 N% (1~30). 대상이 아니거나 30%를 넘으면 넣지 않는다.
+ * 리뷰 수가 없거나 0개인 곳은 대상 수(n)·평균(C)·순위 자리에는 들어가지만 자기 알약은 달지 않는다 (근거가 별점 하나뿐이라).
+ * 반환: id → 상위 N% (1~30). 대상이 아니거나, 리뷰 수가 없거나, 30%를 넘으면 넣지 않는다.
  */
 export function topPercents(places: ApiPlace[], radius = Infinity): Map<string, number> {
   const rated: { id: string; rating: number; reviews: number }[] = [];
@@ -25,14 +26,14 @@ export function topPercents(places: ApiPlace[], radius = Infinity): Map<string, 
   if (n === 0) return out;
   const mean = rated.reduce((a, x) => a + x.rating, 0) / n;
   const m = RANK_PRIOR_REVIEWS;
-  const scored = rated.map((x) => ({ id: x.id, score: (x.reviews * x.rating + m * mean) / (x.reviews + m) }));
+  const scored = rated.map((x) => ({ id: x.id, reviews: x.reviews, score: (x.reviews * x.rating + m * mean) / (x.reviews + m) }));
   scored.sort((a, b) => b.score - a.score);
   let rank = 1;
   for (let i = 0; i < n; i++) {
     if (i > 0 && scored[i].score < scored[i - 1].score) rank = i + 1;
     const top = Math.max(1, Math.ceil((rank / n) * 100));
     if (top > RANK_TOP_LIMIT) break;
-    out.set(scored[i].id, top);
+    if (scored[i].reviews > 0) out.set(scored[i].id, top);
   }
   return out;
 }
