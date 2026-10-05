@@ -6,6 +6,7 @@ import { Budget } from "./budget";
 import { limitsFrom } from "./config";
 import { meteredDb, overReadBudget, recordD1Usage, type D1Usage } from "./d1Usage";
 import { enrichDetails } from "./detailEnricher";
+import { isRetentionWindow, pruneOldEvents } from "./events";
 import type { FetchFn } from "./fetchFn";
 import {
   countNeedingDetail, expiredDetailStates, markUnfetchedCleared, placeBlockedUntil, tilesChangedAt, unfetchedClearedAt,
@@ -100,6 +101,10 @@ async function maintain(
   const budget = new Budget(budgetSize);
   const hubs = hubOrder(opts.hubs ?? HUBS, opts.now);
   const keys = [...new Set(hubs.flatMap((h) => tilesCoveringCircle(h, PREWARM_RADIUS)))];
+  // R35: 하루 한 번 90일 지난 이벤트를 지운다 (지울 행만 인덱스로 읽어서 읽기 예산을 넘은 날에도 돈다)
+  if (isRetentionWindow(opts.now)) {
+    await pruneOldEvents(db, opts.now).catch((e) => console.error("event prune failed", e));
+  }
   if (await overReadBudget(db, env, opts.now)) {
     return {
       order: hubs.map((h) => h.id), tiles: { total: keys.length, collected: 0, incomplete: 0 }, enriched: 0, failed: 0,

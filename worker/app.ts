@@ -1,10 +1,12 @@
 import { Hono, type Context } from "hono";
 import { z } from "zod";
 import { MAX_RADIUS, MIN_RADIUS, isValidRadius } from "../shared/constants";
+import { MAX_EVENT_BODY_BYTES, parseEventBatch } from "../shared/events";
 import { HUBS, isHubId } from "../shared/hubs";
 import { auditArea } from "./audit";
 import { limitsFrom } from "./config";
-import { meteredDb, overReadBudget, recordD1Usage, type D1Usage } from "./d1Usage";
+import { meteredDb, overReadBudget, readSoftCap, recordD1Usage, type D1Usage } from "./d1Usage";
+import { eventStats, insertEvents } from "./events";
 import type { FetchFn } from "./fetchFn";
 import { warmOnce } from "./maintenance";
 import { getPlace, getPlaces, type ServiceDeps } from "./placesService";
@@ -20,6 +22,12 @@ export const AreaQuery = z.object({
   lat: z.coerce.number().min(33).max(39),
   lng: z.coerce.number().min(124).max(132),
   radius: z.coerce.number().int().min(MIN_RADIUS).max(MAX_RADIUS),
+});
+
+/** R36: 오늘/7일/30일 (KST, 오늘 포함), 전체 또는 거점 하나 */
+export const StatsQuery = z.object({
+  days: z.coerce.number().int().min(1).max(30).default(7),
+  hub: z.string().refine((h) => h === "all" || isHubId(h)).default("all"),
 });
 
 /** 카카오 장소 ID: 숫자만, 최대 15자리 */
@@ -128,6 +136,28 @@ export function createApp(deps: AppDeps) {
     return c.json(place);
   });
 
+  // R35: 익명 사용 이벤트. 화면을 막지 않게 항상 본문 없이 답한다
+  app.post("/api/events", async (c) => {
+    if (Number(c.req.header("content-length") ?? 0) > MAX_EVENT_BODY_BYTES) return c.json({ error: "too_large" }, 400);
+    const buf = await c.req.arrayBuffer();
+    if (buf.byteLength > MAX_EVENT_BODY_BYTES) return c.json({ error: "too_large" }, 400);
+    let json: unknown;
+    try {
+      json = JSON.parse(new TextDecoder().decode(buf));
+    } catch {
+      return c.json({ error: "invalid_body" }, 400);
+    }
+    const batch = parseEventBatch(json, now());
+    if (!batch) return c.json({ error: "invalid_body" }, 400);
+    c.header("x-mmj-dropped", String(batch.dropped));
+    // 익명 id별 요청 제한(RATE_LIMITER, 분당 10회 × 최대 20개)으로 남용을 막는다 — D1 조회 없이.
+    // 하루 개수를 세려면 요청마다 그날 이벤트를 훑어야 해서(읽기 예산) 쓰지 않는다
+    if (batch.events.length > 0 && (await rateLimit(c.env, `ev:${batch.anon}`))) {
+      await insertEvents(c.var.db, batch.anon, batch.session, batch.events);
+    }
+    return c.body(null, 204);
+  });
+
   app.use("/api/admin/*", async (c, next) => {
     const token = c.env.ADMIN_TOKEN;
     if (!token || c.req.header("authorization") !== `Bearer ${token}`) return c.json({ error: "unauthorized" }, 401);
@@ -146,6 +176,13 @@ export function createApp(deps: AppDeps) {
       { count: c.req.query("count") === "1" },
     );
     return c.json(r);
+  });
+
+  app.get("/api/admin/stats", async (c) => {
+    c.header("Cache-Control", "no-store");
+    const q = StatsQuery.safeParse(c.req.query());
+    if (!q.success) return c.json({ error: "invalid_params" }, 400);
+    return c.json(await eventStats(c.var.db, { ...q.data, now: now(), readSoftCap: readSoftCap(c.env) }));
   });
 
   app.get("/api/admin/audit", async (c) => {
