@@ -254,6 +254,17 @@ describe("GET /api/places — 응답 캐시와 목록 원소", () => {
     await cache.delete(new Request(placesCacheKey("bongeunsa")));
   });
 
+  it("R12: 미리 만든 목록 조각(list_json)으로 만든 본문과, 조각이 없는 예전 행(열에서 만듦)의 본문은 글자까지 같다", async () => {
+    const s = setup();
+    await callApp(s.app, Q);
+    const fast = await (await callApp(s.app, Q)).text();
+    expect((JSON.parse(fast) as PlacesResponse).places).toHaveLength(3);
+    const filled = await env.DB.prepare("SELECT count(*) AS c FROM places WHERE list_json IS NOT NULL").first<{ c: number }>();
+    expect(filled?.c).toBe(3);
+    await env.DB.prepare("UPDATE places SET list_json = NULL").run();
+    expect(await (await callApp(s.app, Q)).text()).toBe(fast);
+  });
+
   it("R12: 응답·목록 원소·detail에는 정해진 키만 싣는다 (목록 크기 회귀 방지)", async () => {
     const s = setup();
     await callApp(s.app, Q);
@@ -299,6 +310,8 @@ describe("GET /api/places — 저장값 방어 (QA 보강)", () => {
     const s = setup();
     await callApp(s.app, Q);
     await callApp(s.app, Q);
+    // 열에서 목록을 만드는 길(list_json이 없는 예전 행)을 시험한다
+    await env.DB.prepare("UPDATE places SET list_json = NULL").run();
     await env.DB.prepare("UPDATE places SET menus_json = '{', hours_json = 'x', strengths_json = '[', tags_json = 'null}' WHERE id = '1001'").run();
     await env.DB.prepare(`UPDATE places SET menus_json = '{}', hours_json = '[1]', strengths_json = '"맛"', tags_json = '7' WHERE id = '1002'`).run();
     const res = await callApp(s.app, Q);
@@ -320,6 +333,7 @@ describe("GET /api/places — 저장값 방어 (QA 보강)", () => {
     const s = setup();
     await callApp(s.app, Q);
     await callApp(s.app, Q);
+    await env.DB.prepare("UPDATE places SET list_json = NULL").run();
     await env.DB.prepare("UPDATE places SET menus_json = '{', tags_json = '7' WHERE id = '1001'").run();
     // 앞 테스트가 같은 행을 이미 경고했다 (isolate마다 한 번만 남긴다)
     resetCorruptWarnings();

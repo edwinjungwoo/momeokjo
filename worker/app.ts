@@ -11,6 +11,7 @@ import { eventStats, insertEvents } from "./events";
 import type { FetchFn } from "./fetchFn";
 import { warmOnce } from "./maintenance";
 import { getPlace, getPlaces, type ServiceDeps } from "./placesService";
+import { placesBody, type PlacesMeta } from "./present";
 
 /**
  * R12: 공개 목록 API는 거점 id와 50m 단위 반경만 받는다 (좌표는 서버가 shared/hubs.ts에서 찾는다).
@@ -58,14 +59,14 @@ export const PLACES_PENDING_CACHE_MS = 10_000;
  * - 다 찬 응답, 또는 상세 가져오기가 멈춘 동안(R10 쿨다운·R44 frozen — pending을 줄일 수 없다)은 60초.
  * - pending만 남았으면 10초 (그 사이 폴링은 보충을 다시 시작하지 않고 같은 응답을 받는다).
  */
-export function placesCacheTtl(res: PlacesResponse): number | null {
+export function placesCacheTtl(res: PlacesResponse | PlacesMeta): number | null {
   if (res.stale) return null;
   if (res.incompleteTiles > 0) return PLACES_PENDING_CACHE_MS;
   if (res.pending === 0 || res.detailsPaused || res.detailsFrozenSince !== null) return PLACES_CACHE_MS;
   return PLACES_PENDING_CACHE_MS;
 }
 /** 응답 형식이 바뀌면 올린다 (예전 형식의 캐시를 쓰지 않게) */
-export const PLACES_CACHE_VERSION = "4";
+export const PLACES_CACHE_VERSION = "5";
 const EXPIRES_HEADER = "x-mmj-expires";
 /** R42: 거점마다 키 하나 (반경은 키에 넣지 않는다 — 본문은 언제나 1000m) */
 export const placesCacheKey = (hub: string) =>
@@ -150,8 +151,9 @@ export function createApp(deps: AppDeps) {
     }
     const res = await getPlaces(serviceDeps(c), { lat: hub.lat, lng: hub.lng }, MAX_RADIUS);
     if ("error" in res) return c.json(res, 502);
-    const body = JSON.stringify(res);
-    const ttl = placesCacheTtl(res);
+    const { items, ...meta } = res;
+    const body = placesBody(meta, items);
+    const ttl = placesCacheTtl(meta);
     if (deps.cache && ttl !== null) {
       const stored = new Response(body, {
         headers: {

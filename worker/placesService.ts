@@ -1,14 +1,14 @@
 import { boundingBox, haversine, tilesCoveringCircle } from "../shared/geo";
-import type { ApiPlace, LatLng, PlacesResponse } from "../shared/types";
+import type { ApiPlace, LatLng } from "../shared/types";
 import { Budget } from "./budget";
 import { BLOCK_SIGNALS, enrichDetails } from "./detailEnricher";
 import type { FetchFn } from "./fetchFn";
 import { hubTileKeys } from "./hubTiles";
 import { fetchPlaceDetail } from "./kakaoPlace";
-import { toApiPlace } from "./present";
+import { toApiPlace, withDistance, type PlacesMeta } from "./present";
 import {
   countUnfetchedIn, detailGate, detailRow, detailsAllowed, frozenSince, getMeta, isInTiles, getTiles, isDetailDue, isTileDue,
-  placeById, placesInBox, recordPlaceBlock, saveDetail, saveDetailFailure, tilePlaceStates,
+  listRowsInBox, placeById, recordPlaceBlock, saveDetail, saveDetailFailure, tilePlaceStates,
 } from "./repo";
 import { collectTiles } from "./tileCollector";
 
@@ -24,9 +24,12 @@ export type ServiceDeps = {
   sleep?: (ms: number) => Promise<void>;
 };
 
+/** R12 응답: 메타 필드 + 거리순 목록 원소 JSON 조각 (본문은 present.ts placesBody로 이어 붙인다) */
+export type PlacesPayload = PlacesMeta & { items: string[] };
+
 export async function getPlaces(
   deps: ServiceDeps, center: LatLng, radiusM: number,
-): Promise<PlacesResponse | { error: "upstream" }> {
+): Promise<PlacesPayload | { error: "upstream" }> {
   const keys = tilesCoveringCircle(center, radiusM);
   const states = await getTiles(deps.db, keys);
   const due = keys.filter((k) => isTileDue(states.get(k), deps.now));
@@ -55,9 +58,10 @@ export async function getPlaces(
   // 격자-장소 상태는 요청마다 한 번만 읽어서 목록 필터, pending, 보충 대상 고르기에 같이 쓴다
   const tileStates = await tilePlaceStates(deps.db, keys);
   const inTiles = new Set(tileStates.map((t) => t.id));
-  const rows = (await placesInBox(deps.db, boundingBox(center, radiusM), inTiles))
-    .filter((r) => r.place.group !== "dessert")
-    .map((row) => ({ row, d: haversine(center, row.place) }))
+  // 미리 만든 목록 원소 조각(list_json)을 쓴다 — 행마다 JSON 열 4개를 parse·stringify하지 않는다 (0005)
+  const rows = (await listRowsInBox(deps.db, boundingBox(center, radiusM), inTiles))
+    .filter((r) => r.group !== "dessert")
+    .map((row) => ({ row, d: haversine(center, row) }))
     .filter((x) => x.d <= radiusM)
     .sort((a, b) => a.d - b.d);
 
@@ -85,12 +89,12 @@ export async function getPlaces(
 
   // R44: 실린 가게 중 가장 최근에 상세를 가져온 시각 (실패 기록 시각은 빼고)
   let newest: number | null = null;
-  for (const x of rows) if (x.row.meta.status === "ok" && (newest === null || x.row.meta.fetchedAt > newest)) newest = x.row.meta.fetchedAt;
+  for (const x of rows) if (x.row.status === "ok" && (newest === null || x.row.fetchedAt > newest)) newest = x.row.fetchedAt;
 
   return {
     center,
     radius: radiusM,
-    places: rows.map((x) => toApiPlace(x.row, { distance: x.d })),
+    items: rows.map((x) => withDistance(x.row.json, x.d)),
     pending,
     incompleteTiles,
     stale,

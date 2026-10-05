@@ -9,7 +9,7 @@ import { enrichDetails } from "./detailEnricher";
 import { isRetentionWindow, pruneOldEvents } from "./events";
 import type { FetchFn } from "./fetchFn";
 import {
-  countNeedingDetail, detailGate, detailsAllowed, expiredDetailStates, markUnfetchedCleared, tilesChangedAt,
+  backfillListJson, countNeedingDetail, detailGate, detailsAllowed, expiredDetailStates, markUnfetchedCleared, tilesChangedAt,
   unfetchedClearedAt, unfetchedStates, type TilePlaceState,
 } from "./repo";
 import { collectTiles } from "./tileCollector";
@@ -70,6 +70,8 @@ export type CronResult = {
   tiles: { total: number; collected: number; incomplete: number };
   enriched: number;
   failed: number;
+  /** 0005 전 행에 채운 list_json 수 (다 채운 뒤에는 0) */
+  listJsonFilled?: number;
   /** R38: 오늘 D1 읽기가 소프트 한도를 넘어 수집·보충을 건너뛰었다 */
   skipped?: "read_budget";
 };
@@ -120,6 +122,11 @@ async function maintain(
     enriched: 0,
     failed: 0,
   };
+  // R12: 목록 원소 조각이 없는 예전 행을 실행마다 최대 200행 채운다 (외부 호출 없음, 다 채우면 meta 1행만 읽는다)
+  result.listJsonFilled = await backfillListJson(db).catch((e) => {
+    console.error("list_json backfill failed", e);
+    return 0;
+  });
   // R10 쿨다운·R44 강등 모드면 상세 후보를 읽지도 부르지도 않는다
   if (budget.left <= 0 || !detailsAllowed(await detailGate(db), opts.now)) return result;
 

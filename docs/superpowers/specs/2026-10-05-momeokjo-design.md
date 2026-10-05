@@ -131,6 +131,9 @@ CREATE TABLE places (
   fetched_at INTEGER NOT NULL
 );
 CREATE INDEX idx_places_lat_lng ON places(lat, lng);
+-- 0005: R12 목록 원소를 미리 직렬화한 JSON(거리·도보 분 없음). saveDetail이 같은 행에 같이 쓰고, NULL(예전 행)이면 열에서 만든다.
+-- Cron이 rowid 순으로 실행마다 200행씩 채우고(meta list_json_backfill = 마지막 rowid, 끝나면 "done") 다 채우면 meta 1행만 읽는다
+ALTER TABLE places ADD COLUMN list_json TEXT;
 
 -- 앱 전역 상태 (0003). place_blocked_until = 상세 API 쿨다운이 끝나는 시각(epoch ms, R10),
 -- tiles_changed_at / unfetched_cleared_at = Cron 미수집 확인 신호(R11)
@@ -215,7 +218,7 @@ CREATE INDEX idx_events_type_day ON events(type, day);
   - 검증: `hub`는 `shared/hubs.ts`의 거점 id, `radius`는 100~1000m의 50m 배수. 위반하거나(모르는 거점 포함) 임의 lat/lng를 보내면 400과 `{error: "invalid_params"}`를 반환한다. 좌표는 서버가 거점 목록에서 찾는다(남용과 비용 방지; 임의 좌표는 관리용 R31/R32만).
   - 화면은 반경과 상관없이 항상 `radius=1000`을 요청하고 반경은 브라우저에서 거른다(R42). 서버는 50m 단위 반경을 계속 검증하지만(호환), 어떤 반경이 와도 거점의 1000m 목록 하나만 계산·캐시해서 같은 본문(`radius: 1000`)을 준다 — 캐시 키가 거점당 하나라 반경을 바꾼 요청으로 캐시를 우회해 D1을 읽게 할 수 없다.
   - 캐시: Workers Cache API(`caches.default`)에 `https://cache.mmj/places?hub&v={응답 형식 버전}` 키(거점당 하나)로 저장하고, 다음 요청은 D1을 읽지 않고 캐시로 답한다. 시간은 `placesCacheTtl`: 공식 API 실패가 섞인 응답(`stale`)만 저장하지 않는다. `incompleteTiles > 0`(예산·요청 제한으로 격자를 다 못 모음)이면 10초. 그 밖에 `pending === 0`이거나 상세 가져오기가 멈췄으면(`detailsPaused` — R10 쿨다운·R44 frozen, 아무도 pending을 줄일 수 없다) 60초(`Cache-Control: public, max-age=60, s-maxage=60`), pending만 남았으면 10초 — 같은 거점을 폴링하는 여러 화면이 계산(과 요청 보충 시작) 하나를 나눠 쓴다. 요청 제한에 걸린 요청도 10초 캐시를 받으므로, IP 하나를 함께 쓰는 사무실이 분당 10회를 넘겨도 매번 D1을 읽지 않는다. 브라우저에 주는 응답은 항상 `no-store`다. 키는 거점 수(5개)뿐이다(예전에는 거점 × 반경 19단계 = 95개). 응답 형식 버전은 4(반경을 키에서 뺌, `detailsPaused` 추가).
-  - 처리: `tilesCoveringCircle`로 격자를 구하고, 만료/미수집 격자를 예산 안에서 동기적으로 수집한다(ID만 기록). 격자-장소 상태(`tile_places` + places 메타)는 요청마다 한 번만 읽어서 목록 필터, `pending`, 보충 대상 고르기에 같이 쓴다. 그다음 D1에서 덮는 격자에 기록된 가게 중 상세가 있고 거리 ≤ radius인 것을 조회한다. R13 단건 조회로만 저장된 가게는 목록에 넣지 않는다. 상세가 아직 없는 장소는 좌표를 모르므로 응답에 넣지 않고 `pending`으로만 센다. 상세를 한 번도 가져오지 않은 가게가 있으면(쿨다운 중이 아니면) `ctx.waitUntil`로 그 가게들만 R10 배치를 시작한다. 만료된 상세는 그대로 보여주고 갱신은 Cron(R11)에 맡긴다.
+  - 처리: `tilesCoveringCircle`로 격자를 구하고, 만료/미수집 격자를 예산 안에서 동기적으로 수집한다(ID만 기록). 격자-장소 상태(`tile_places` + places 메타)는 요청마다 한 번만 읽어서 목록 필터, `pending`, 보충 대상 고르기에 같이 쓴다. 그다음 D1에서 덮는 격자에 기록된 가게 중 상세가 있고 거리 ≤ radius인 것을 조회한다. R13 단건 조회로만 저장된 가게는 목록에 넣지 않는다. 목록 원소는 `places.list_json`(0005, 상세를 저장할 때 같이 만든 조각)에 거리·도보 분만 앞에 붙여 이어 붙인다 — 행마다 JSON 열 4개를 parse하고 다시 stringify하지 않는다(동대문 1000m 2,000곳: node 중앙값 8.8ms → 0.65ms, Workers는 ×3으로 어림잡아 ~26ms → ~2ms). `list_json`이 없는 예전 행만 열에서 만들고 본문은 글자까지 같다. 조각이 있는 행은 D1에서 무거운 열을 받지 않는다(`CASE WHEN list_json IS NULL`). 상세가 아직 없는 장소는 좌표를 모르므로 응답에 넣지 않고 `pending`으로만 센다. 상세를 한 번도 가져오지 않은 가게가 있으면(쿨다운 중이 아니면) `ctx.waitUntil`로 그 가게들만 R10 배치를 시작한다. 만료된 상세는 그대로 보여주고 갱신은 Cron(R11)에 맡긴다.
   - 응답:
     ```ts
     {

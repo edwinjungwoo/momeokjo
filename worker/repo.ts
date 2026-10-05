@@ -6,6 +6,7 @@ import {
 import { kstDay } from "../shared/kst";
 import { haversine, tileRect, tilesCoveringCircle } from "../shared/geo";
 import type { CategoryGroup, LatLng, Place, PlaceDetail, PlaceSummary, Rect, StoredDetail } from "../shared/types";
+import { listItemJson } from "./present";
 
 export type DetailMeta = { status: "ok" | "failed"; fetchedAt: number; reason: string | null } | null;
 export type PlaceRow = { place: Place; detail: StoredDetail; meta: NonNullable<DetailMeta> };
@@ -31,6 +32,8 @@ type DbRow = {
   rating: number | null; review_count: number | null; price: number | null;
   menus_json: string | null; hours_json: string | null; strengths_json: string | null; tags_json: string | null;
   bookable: number | null; fail_reason: string | null; fetched_at: number;
+  /** 0005: 목록 원소 조각 (예전 행은 NULL) */
+  list_json?: string | null;
 };
 
 const SELECT_VISIBLE = `SELECT * FROM places WHERE name IS NOT NULL AND lat IS NOT NULL AND lng IS NOT NULL`;
@@ -338,6 +341,81 @@ export async function placesInBox(db: D1Database, box: Rect, inTiles?: ReadonlyS
   return rows.map(toRow);
 }
 
+/** R12 목록용 행: 거리·필터·detailsNewestAt에 쓰는 값과 목록 원소 조각(json) */
+export type ListRow = { id: string; lat: number; lng: number; group: CategoryGroup; status: "ok" | "failed"; fetchedAt: number; json: string };
+
+/** list_json이 있으면 무거운 열(메뉴·영업시간·강점·태그 JSON 등)은 받지 않는다 — D1 결과 크기와 Worker CPU를 아낀다 */
+const heavy = (col: string) => `CASE WHEN list_json IS NULL THEN ${col} END AS ${col}`;
+const LIST_SELECT = `SELECT id, status, name, category_name, category_group, lat, lng, fetched_at, list_json,
+  ${["address", "phone", "photo_url", "rating", "review_count", "price", "menus_json", "hours_json", "strengths_json", "tags_json", "bookable", "fail_reason"].map(heavy).join(", ")}
+  FROM places WHERE name IS NOT NULL AND lat IS NOT NULL AND lng IS NOT NULL`;
+
+/**
+ * R12 목록: placesInBox와 같은 행을 고르되, 미리 만든 목록 원소 조각(list_json)을 그대로 쓴다.
+ * 조각이 없는 예전 행(0005 전)만 열에서 만든다 (toRow → listItemJson, 결과는 같다).
+ */
+export async function listRowsInBox(db: D1Database, box: Rect, inTiles: ReadonlySet<string>): Promise<ListRow[]> {
+  const r = await db
+    .prepare(`${LIST_SELECT} AND lat BETWEEN ? AND ? AND lng BETWEEN ? AND ?`)
+    .bind(box.minLat, box.maxLat, box.minLng, box.maxLng)
+    .all<DbRow>();
+  const out: ListRow[] = [];
+  for (const x of r.results) {
+    if (!inTiles.has(x.id)) continue;
+    out.push({
+      id: x.id,
+      lat: x.lat as number,
+      lng: x.lng as number,
+      group: (x.category_group ?? "etc") as CategoryGroup,
+      status: x.status === "ok" ? "ok" : "failed",
+      fetchedAt: x.fetched_at,
+      json: x.list_json ?? listItemJson(toRow(x)),
+    });
+  }
+  return out;
+}
+
+/** Cron이 한 번에 채우는 list_json 수 (쓰기 ≤ 200행/실행) */
+export const LIST_BACKFILL_LIMIT = 200;
+const LIST_BACKFILL_KEY = "list_json_backfill";
+const LIST_BACKFILL_DONE = "done";
+
+/**
+ * 0005 전에 저장된 행의 list_json을 rowid 순으로 LIST_BACKFILL_LIMIT행씩 채운다. 채운 수를 돌려준다.
+ * 커서(meta list_json_backfill = 마지막 rowid)로 이어 읽어서 실행마다 places를 처음부터 훑지 않고,
+ * 끝까지 읽으면 "done"을 남겨 그 뒤로는 meta 1행만 읽는다 (새 행은 saveDetail이 처음부터 채운다).
+ * 그 사이 상세가 다시 저장된 행은 건드리지 않는다 (fetched_at이 같고 아직 NULL일 때만 쓴다).
+ */
+export async function backfillListJson(db: D1Database): Promise<number> {
+  const cur = await db.prepare("SELECT value FROM meta WHERE key = ?").bind(LIST_BACKFILL_KEY).first<{ value: string }>();
+  if (cur?.value === LIST_BACKFILL_DONE) return 0;
+  const after = Number(cur?.value ?? 0) || 0;
+  const r = await db
+    .prepare("SELECT rowid AS rid, * FROM places WHERE rowid > ? ORDER BY rowid LIMIT ?")
+    .bind(after, LIST_BACKFILL_LIMIT)
+    .all<DbRow & { rid: number }>();
+  const fill = r.results
+    .filter((x) => !x.list_json && x.name !== null && x.lat !== null && x.lng !== null)
+    .map((x) => [x.id, x.fetched_at, listItemJson(toRow(x))] as const);
+  const stmts: D1PreparedStatement[] = [];
+  for (let i = 0; i < fill.length; i += 100) {
+    stmts.push(
+      db
+        .prepare(
+          `UPDATE places SET list_json = json_extract(u.value, '$[2]') FROM json_each(?) AS u
+           WHERE places.id = json_extract(u.value, '$[0]') AND places.fetched_at = json_extract(u.value, '$[1]')
+             AND places.list_json IS NULL`,
+        )
+        .bind(JSON.stringify(fill.slice(i, i + 100))),
+    );
+  }
+  const last = r.results[r.results.length - 1]?.rid;
+  const next = r.results.length < LIST_BACKFILL_LIMIT ? LIST_BACKFILL_DONE : String(last);
+  stmts.push(db.prepare(META_UPSERT).bind(LIST_BACKFILL_KEY, next));
+  await db.batch(stmts);
+  return fill.length;
+}
+
 export async function placesByIds(db: D1Database, ids: string[]): Promise<PlaceRow[]> {
   const out: PlaceRow[] = [];
   for (const chunk of chunked(ids)) {
@@ -372,13 +450,16 @@ export async function saveDetail(
   await db
     .prepare(
       `INSERT OR REPLACE INTO places (id, status, name, category_name, category_group, lat, lng, address, phone, photo_url,
-         rating, review_count, price, menus_json, hours_json, strengths_json, tags_json, bookable, fail_reason, fetched_at)
-       VALUES (?, 'ok', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?)`,
+         rating, review_count, price, menus_json, hours_json, strengths_json, tags_json, bookable, fail_reason, fetched_at,
+         list_json)
+       VALUES (?, 'ok', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?)`,
     )
     .bind(
       id, s.name, s.categoryName, categoryGroup(s.categoryName), s.lat, s.lng, s.address, s.phone, s.photoUrl,
       d.rating, d.reviewCount, d.price, JSON.stringify(d.menus), d.hours ? JSON.stringify(d.hours) : null,
       JSON.stringify(d.strengths), JSON.stringify(d.tags), d.bookable === null ? null : d.bookable ? 1 : 0, now,
+      // R12: 목록 원소 조각을 같은 행에 같이 쓴다 (쓰기 행 수는 그대로)
+      listItemJson(detailRow(id, s, d, now)),
     )
     .run();
 }
@@ -388,7 +469,7 @@ export function detailRow(id: string, s: PlaceSummary, d: PlaceDetail, now: numb
   return {
     place: {
       id, name: s.name, categoryName: s.categoryName, group: categoryGroup(s.categoryName), lat: s.lat, lng: s.lng,
-      address: s.address, phone: s.phone, photoUrl: s.photoUrl, url: placeUrl(id),
+      address: s.address, phone: s.phone, photoUrl: s.photoUrl ?? null, url: placeUrl(id),
     },
     detail: { ...d, fetchedAt: now },
     meta: { status: "ok", fetchedAt: now, reason: null },

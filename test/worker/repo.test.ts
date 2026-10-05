@@ -8,8 +8,9 @@ import {
   countNeedingDetail, countUnfetched, detailGate, detailJitterMs, expiredDetailStates, getMeta, recordPlaceBlock,
   tilesChangedAt, unfetchedStates, getTiles, idsNeedingDetail, isDetailDue, isTileDue, markTile,
   placeById, placesByIds, placesInBox, replaceTilePlaces, saveDetail, saveDetailFailure, tilePlaceStates,
-  EXPIRED_SCAN_LIMIT, EXPIRED_SCAN_SQL,
+  EXPIRED_SCAN_LIMIT, EXPIRED_SCAN_SQL, LIST_BACKFILL_LIMIT, backfillListJson,
 } from "../../worker/repo";
+import { listItemJson } from "../../worker/present";
 import { makeSummary, sampleDetail, seedPlace } from "../helpers/places";
 import { recordingDb } from "../helpers/recordDb";
 
@@ -176,6 +177,40 @@ describe("repo", () => {
       expect(isDetailDue(await getMeta(env.DB, id), due, id)).toBe(true);
     }
     expect(detailJitterMs("a")).not.toBe(detailJitterMs("b"));
+  });
+
+  it("R12: 상세를 저장하면 목록 원소 조각(list_json, 거리 없음)도 같은 행에 같이 쓴다", async () => {
+    await seedPlace(env.DB, "1001", ASEM.lat, ASEM.lng, { now: NOW });
+    const r = await env.DB.prepare("SELECT list_json FROM places WHERE id = '1001'").first<{ list_json: string }>();
+    expect(r?.list_json).toBe(listItemJson((await placeById(env.DB, "1001"))!));
+    // 실패 기록은 조각을 건드리지 않는다 (표시 정보가 그대로 남으므로)
+    await saveDetailFailure(env.DB, "1001", "http_500", NOW + 1);
+    const after = await env.DB.prepare("SELECT list_json FROM places WHERE id = '1001'").first<{ list_json: string }>();
+    expect(after?.list_json).toBe(r?.list_json);
+  });
+
+  it("R12/R38: list_json이 없는 예전 행은 Cron이 실행마다 200행씩 채우고, 다 채운 뒤에는 훑지 않는다", async () => {
+    expect(LIST_BACKFILL_LIMIT).toBe(200);
+    const ids = Array.from({ length: 250 }, (_, i) => `p${i}`);
+    for (const id of ids) await seedPlace(env.DB, id, ASEM.lat, ASEM.lng, { now: NOW });
+    await saveDetailFailure(env.DB, "nodetail", "http_500", NOW); // 표시 정보 없는 행은 건너뛴다
+    const want = new Map<string, string>();
+    for (const x of (await env.DB.prepare("SELECT id, list_json FROM places WHERE list_json IS NOT NULL").all<{ id: string; list_json: string }>()).results) {
+      want.set(x.id, x.list_json);
+    }
+    await env.DB.prepare("UPDATE places SET list_json = NULL").run();
+    const nulls = async () =>
+      (await env.DB.prepare("SELECT count(*) AS c FROM places WHERE list_json IS NULL AND name IS NOT NULL").first<{ c: number }>())!.c;
+    expect(await backfillListJson(env.DB)).toBe(200);
+    expect(await nulls()).toBe(50);
+    expect(await backfillListJson(env.DB)).toBe(50);
+    expect(await nulls()).toBe(0);
+    const got = (await env.DB.prepare("SELECT id, list_json FROM places WHERE name IS NOT NULL").all<{ id: string; list_json: string }>()).results;
+    for (const x of got) expect(x.list_json, x.id).toBe(want.get(x.id));
+    // 끝났으면 places를 다시 훑지 않는다 (meta 1행만)
+    const { db, log } = recordingDb(env.DB);
+    expect(await backfillListJson(db)).toBe(0);
+    expect(log.reduce((n, x) => n + x.read, 0)).toBeLessThanOrEqual(2);
   });
 
   it("R11: 격자 ID를 기록하면 tiles_changed_at이 그 시각으로 바뀐다 (Cron 미수집 확인 신호)", async () => {

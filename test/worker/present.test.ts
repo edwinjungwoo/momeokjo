@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { ASEM } from "../../shared/constants";
 import { haversine } from "../../shared/geo";
-import { LIST_MENUS, toApiPlace } from "../../worker/present";
+import { LIST_MENUS, listItemJson, placesBody, toApiPlace, withDistance } from "../../worker/present";
 import type { PlaceRow } from "../../worker/repo";
 import { makeSummary, sampleDetail } from "../helpers/places";
 
@@ -44,5 +44,23 @@ describe("present", () => {
     const raw = toApiPlace(r, { center: ASEM, full: true });
     expect([raw.lat, raw.lng]).toEqual([37.514534, 127.060508]);
     expect(p.distance).toBe(Math.round(haversine(ASEM, { lat: 37.51453387676185, lng: 127.06050804655143 })));
+  });
+  it("R12: 미리 만든 목록 원소 조각(list_json)에 거리를 붙이면 toApiPlace(거리 포함)와 같은 값이다", () => {
+    const r = row("음식점 > 한식 > 국밥", ["단체석"]);
+    const d = haversine(ASEM, r.place);
+    const json = listItemJson(r);
+    expect(JSON.parse(json)).not.toHaveProperty("distance");
+    expect(JSON.parse(withDistance(json, d))).toEqual(toApiPlace(r, { distance: d }));
+  });
+  it("R12: 목록 본문은 조각을 이어 붙여 만들고 JSON.parse하면 응답 모양 그대로다", () => {
+    const r = row("음식점 > 한식", []);
+    const meta = {
+      center: ASEM, radius: 1000, pending: 1, incompleteTiles: 0, stale: false, detailsPaused: false,
+      detailsFrozenSince: null, detailsNewestAt: 123,
+    };
+    const body = placesBody(meta, [withDistance(listItemJson(r), 111), withDistance(listItemJson(r), 222)]);
+    const parsed = JSON.parse(body);
+    expect(parsed).toEqual({ ...meta, places: [toApiPlace(r, { distance: 111 }), toApiPlace(r, { distance: 222 })] });
+    expect(JSON.parse(placesBody(meta, []))).toEqual({ ...meta, places: [] });
   });
 });

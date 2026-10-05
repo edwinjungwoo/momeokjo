@@ -7,7 +7,7 @@ import { createApp } from "../../worker/app";
 import { auditArea } from "../../worker/audit";
 import { hubOrder, runScheduled } from "../../worker/maintenance";
 import { DETAIL_JITTER_MS, DETAIL_OK_TTL_MS } from "../../shared/constants";
-import { getMeta, getTiles, markTile, replaceTilePlaces, saveDetailFailure } from "../../worker/repo";
+import { getMeta, getTiles, markTile, recordPlaceBlock, replaceTilePlaces, saveDetailFailure } from "../../worker/repo";
 import { callApp } from "../helpers/callApp";
 import { doc, fakeKakaoLocal, fakePlaceApi, routeFetch } from "../helpers/fakeKakao";
 import { placeJson, seedPlace } from "../helpers/places";
@@ -194,6 +194,18 @@ describe("admin", () => {
     await run(later);
     expect(place.calls).toHaveLength(4);
     expect((await getMeta(env.DB, "1001"))?.fetchedAt).toBe(later);
+  });
+
+  it("R12: Cron은 list_json이 없는 예전 행(0005 전)을 채운다 — 상세 가져오기가 멈춘(쿨다운) 동안에도", async () => {
+    for (const h of HUBS) for (const k of tilesCoveringCircle(h, PREWARM_RADIUS)) await markTile(env.DB, k, NOW, 0, false);
+    await seedPlace(env.DB, "1001", ASEM.lat, ASEM.lng, { now: NOW });
+    const want = (await env.DB.prepare("SELECT list_json FROM places WHERE id = '1001'").first<{ list_json: string }>())!.list_json;
+    await env.DB.prepare("UPDATE places SET list_json = NULL").run();
+    await recordPlaceBlock(env.DB, NOW);
+    const r = await runScheduled(env, { fetcher: setup().fetcher, now: NOW + 1, sleep: async () => {} });
+    expect(r.listJsonFilled).toBe(1);
+    const got = await env.DB.prepare("SELECT list_json FROM places WHERE id = '1001'").first<{ list_json: string }>();
+    expect(got?.list_json).toBe(want);
   });
 
   it("R11: Cron 결과에는 pending 수를 세지 않는다 (관리용 warm만 센다)", async () => {
