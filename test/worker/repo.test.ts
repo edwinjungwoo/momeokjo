@@ -1,11 +1,11 @@
 import { env } from "cloudflare:test";
 import { describe, expect, it } from "vitest";
 import {
-  ASEM, DETAIL_FAIL_TTL_MS, DETAIL_JITTER_MS, DETAIL_OK_TTL_MS, TILE_TTL_MS,
+  ASEM, DETAIL_FAIL_TTL_MS, DETAIL_JITTER_MS, DETAIL_OK_TTL_MS, PLACE_BLOCK_COOLDOWN_MS, TILE_TTL_MS,
 } from "../../shared/constants";
 import { boundingBox, tileKeyOf } from "../../shared/geo";
 import {
-  blockPlaceApi, countNeedingDetail, countUnfetched, detailJitterMs, expiredDetailStates, getMeta, placeBlockedUntil,
+  countNeedingDetail, countUnfetched, detailGate, detailJitterMs, expiredDetailStates, getMeta, recordPlaceBlock,
   tilesChangedAt, unfetchedStates, getTiles, idsNeedingDetail, isDetailDue, isTileDue, markTile,
   placeById, placesByIds, placesInBox, replaceTilePlaces, saveDetail, saveDetailFailure, tilePlaceStates,
 } from "../../worker/repo";
@@ -143,12 +143,12 @@ describe("repo", () => {
     }
   });
 
-  it("R10: 차단 쿨다운 시각을 meta 테이블에 기록하고 읽는다 (없으면 0)", async () => {
-    expect(await placeBlockedUntil(env.DB)).toBe(0);
-    await blockPlaceApi(env.DB, NOW + 5);
-    expect(await placeBlockedUntil(env.DB)).toBe(NOW + 5);
-    await blockPlaceApi(env.DB, NOW + 9);
-    expect(await placeBlockedUntil(env.DB)).toBe(NOW + 9);
+  it("R10: 차단을 기록하면 meta에 지금 + 30분 쿨다운이 남고, 다시 막히면 그때부터 30분으로 늘어난다 (없으면 0)", async () => {
+    expect((await detailGate(env.DB)).blockedUntil).toBe(0);
+    await recordPlaceBlock(env.DB, NOW);
+    expect((await detailGate(env.DB)).blockedUntil).toBe(NOW + PLACE_BLOCK_COOLDOWN_MS);
+    await recordPlaceBlock(env.DB, NOW + 9);
+    expect((await detailGate(env.DB)).blockedUntil).toBe(NOW + 9 + PLACE_BLOCK_COOLDOWN_MS);
   });
 
   it("R10: 상세가 필요한 ID를 격자 거리순(같으면 id순)으로, TTL을 지키며, limit만큼", async () => {

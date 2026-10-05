@@ -4,7 +4,7 @@ import { ASEM, DETAIL_JITTER_MS, DETAIL_OK_TTL_MS, PLACE_BLOCK_COOLDOWN_MS } fro
 import { tileKeyOf } from "../../shared/geo";
 import { Budget } from "../../worker/budget";
 import { enrichDetails } from "../../worker/detailEnricher";
-import { blockPlaceApi, getMeta, placeBlockedUntil, placeById, replaceTilePlaces } from "../../worker/repo";
+import { detailGate, getMeta, placeById, recordPlaceBlock, replaceTilePlaces } from "../../worker/repo";
 import { fakePlaceApi } from "../helpers/fakeKakao";
 import { placeJson, seedPlace } from "../helpers/places";
 
@@ -63,12 +63,12 @@ describe("enrichDetails", () => {
   it("R10: 403/429가 나오면 30분 동안 전체 상세 호출을 멈추는 쿨다운을 기록한다", async () => {
     await seedIds(["1"]);
     await run(fakePlaceApi({ "1": 429 }).fetcher);
-    expect(await placeBlockedUntil(env.DB)).toBe(NOW + PLACE_BLOCK_COOLDOWN_MS);
+    expect((await detailGate(env.DB)).blockedUntil).toBe(NOW + PLACE_BLOCK_COOLDOWN_MS);
   });
 
   it("R10: 쿨다운 중에는 외부 호출을 하지 않고, 지나면 다시 보충한다", async () => {
     await seedIds(["1"]);
-    await blockPlaceApi(env.DB, NOW + PLACE_BLOCK_COOLDOWN_MS);
+    await recordPlaceBlock(env.DB, NOW);
     const api = fakePlaceApi({ "1": json("a") });
     expect(await run(api.fetcher, { now: NOW + PLACE_BLOCK_COOLDOWN_MS - 1 })).toEqual({ enriched: 0, failed: 0 });
     expect(api.calls).toHaveLength(0);

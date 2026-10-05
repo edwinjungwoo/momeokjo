@@ -304,12 +304,6 @@ async function metaNumber(db: D1Database, key: string): Promise<number> {
 const setMetaNumber = (db: D1Database, key: string, v: number) =>
   db.prepare(META_UPSERT).bind(key, String(v)).run();
 
-/** 상세 API 쿨다운이 끝나는 시각 (epoch ms). 기록이 없으면 0 */
-export const placeBlockedUntil = (db: D1Database) => metaNumber(db, BLOCKED_KEY);
-export const blockPlaceApi = async (db: D1Database, until: number) => {
-  await setMetaNumber(db, BLOCKED_KEY, until);
-};
-
 /** 마지막으로 격자 ID가 바뀐 시각. Cron은 이 값이 마지막 미수집 확인 뒤일 때만 미수집 ID를 훑는다 */
 export const tilesChangedAt = (db: D1Database) => metaNumber(db, TILES_CHANGED_KEY);
 /** Cron이 모든 거점의 미수집 ID를 다 채웠다고 확인한 시각 */

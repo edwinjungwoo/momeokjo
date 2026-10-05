@@ -7,7 +7,7 @@ import { hubById } from "../../shared/hubs";
 import { tileKeyOf, tilesCoveringCircle, walkMinutes } from "../../shared/geo";
 import type { PlacesResponse } from "../../shared/types";
 import { createApp, placesCacheKey } from "../../worker/app";
-import { blockPlaceApi, getMeta, markTile, placeBlockedUntil, replaceTilePlaces } from "../../worker/repo";
+import { detailGate, getMeta, markTile, recordPlaceBlock, replaceTilePlaces } from "../../worker/repo";
 import { callApp } from "../helpers/callApp";
 import { doc, fakeKakaoLocal, fakePlaceApi, routeFetch } from "../helpers/fakeKakao";
 import { placeJson, seedPlace } from "../helpers/places";
@@ -190,7 +190,7 @@ describe("GET /api/places — 요청 시점 보충", () => {
   });
 
   it("R10/R12: 쿨다운 중이면 보충을 시작하지 않는다", async () => {
-    await blockPlaceApi(env.DB, NOW + 1);
+    await recordPlaceBlock(env.DB, NOW);
     const s = setup();
     await callApp(s.app, Q);
     expect(s.place.calls).toHaveLength(0);
@@ -199,7 +199,7 @@ describe("GET /api/places — 요청 시점 보충", () => {
 
 describe("GET /api/places/:id", () => {
   it("R10/R13: 쿨다운 중이면 외부 호출 없이 404이고 실패로 기록하지 않는다", async () => {
-    await blockPlaceApi(env.DB, NOW + 1);
+    await recordPlaceBlock(env.DB, NOW);
     const { app, place } = setup();
     expect((await callApp(app, "/api/places/1001")).status).toBe(404);
     expect(place.calls).toHaveLength(0);
@@ -210,7 +210,7 @@ describe("GET /api/places/:id", () => {
     const { app } = setup({ details: { "777": 429 } });
     await replaceTilePlaces(env.DB, tileKeyOf(HUB), ["777"], NOW, false);
     expect((await callApp(app, "/api/places/777")).status).toBe(404);
-    expect(await placeBlockedUntil(env.DB)).toBe(NOW + PLACE_BLOCK_COOLDOWN_MS);
+    expect((await detailGate(env.DB)).blockedUntil).toBe(NOW + PLACE_BLOCK_COOLDOWN_MS);
   });
 
   it("R13: 숫자가 아닌 id는 외부 호출 없이 404", async () => {
