@@ -1,6 +1,7 @@
 import { StrictMode, Suspense, lazy } from "react";
 import { createRoot } from "react-dom/client";
 import App from "./App";
+import { loadKakaoMaps } from "./kakaoLoader";
 import "./styles.css";
 
 // R36: /admin은 따로 불러온다 (메인 번들에 넣지 않는다). Worker의 SPA 대체 응답이 /admin에도 index.html을 준다
@@ -13,6 +14,10 @@ if (isAdmin) {
   robots.content = "noindex, nofollow";
   document.head.appendChild(robots);
 }
+
+// R45: 지도 SDK는 React가 그리기를 기다리지 않고 지금 불러오기 시작한다 (index.html이 미리 받아 둔다).
+// MapView는 같은 Promise를 이어 쓰고, 실패하면 거기서 다시 시도한다
+if (!isAdmin) loadKakaoMaps(import.meta.env.VITE_KAKAO_JS_KEY).catch(() => {});
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>

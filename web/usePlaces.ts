@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { MAX_RADIUS } from "../shared/constants";
 import type { PlacesResponse } from "../shared/types";
 import { fetchPlaces } from "./api";
@@ -14,10 +14,12 @@ type State = { data: PlacesResponse | null; loading: boolean; error: boolean; po
  * pending(R44 강등 모드면 제외) 또는 incompleteTiles가 남아 있으면 3초 간격으로 최대 10번 다시 불러온다.
  * 다시 불러오는 동안 이전 data를 유지한다 (loading=true로 흐리게만 표시).
  * R42: 반경과 상관없이 거점의 1000m 목록을 한 번 받는다 — 화면 반경은 filterPlaces가 거리로 거른다.
+ * R45: 디바운스는 거점을 바꿀 때만 한다. 처음 열 때와 "다시 시도"는 바로 부른다 (첫 목록이 250ms 늦지 않게).
  */
 export function usePlaces(hubId: string) {
   const [state, setState] = useState<State>({ data: null, loading: true, error: false, polling: false });
   const [reloadKey, setReloadKey] = useState(0);
+  const lastHub = useRef(hubId);
 
   useEffect(() => {
     const ctrl = new AbortController();
@@ -40,7 +42,9 @@ export function usePlaces(hubId: string) {
       }
     };
     setState((s) => ({ ...s, loading: true, error: false }));
-    const debounce = window.setTimeout(load, DEBOUNCE_MS);
+    const hubChanged = lastHub.current !== hubId;
+    lastHub.current = hubId;
+    const debounce = window.setTimeout(load, hubChanged ? DEBOUNCE_MS : 0);
     return () => {
       ctrl.abort();
       window.clearTimeout(debounce);

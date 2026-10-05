@@ -19,8 +19,15 @@
     <link rel="icon" type="image/png" href="/favicon-64.png" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <link rel="manifest" href="/manifest.webmanifest" />
+    <!-- R45: 첫 화면에 꼭 필요한 다른 호스트는 미리 연결한다 (글꼴 CSS·글꼴, 지도 SDK 로더, 지도 본체·이미지) -->
     <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin />
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css" />
+    <link rel="preconnect" href="https://dapi.kakao.com" />
+    <link rel="preconnect" href="https://t1.daumcdn.net" />
+    <link rel="dns-prefetch" href="https://img1.kakaocdn.net" />
+    <!-- 지도 SDK 로더(1.4KB)를 앱 JS와 나란히 받는다. 주소는 web/kakaoLoader.ts가 붙이는 script와 똑같아야 재사용된다 -->
+    <link rel="preload" as="script" href="https://dapi.kakao.com/v2/maps/sdk.js?appkey=%VITE_KAKAO_JS_KEY%&autoload=false" />
+    <!-- 글꼴 CSS는 첫 화면을 막지 않게 받는다 (글꼴이 오기 전에는 시스템 글꼴, font-display: swap). Lighthouse 모바일 FCP 1.95→1.5초 -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css" media="print" onload="this.media='all'" />
   </head>
   <body>
     <div id="root"></div>
