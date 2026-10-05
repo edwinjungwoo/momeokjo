@@ -83,6 +83,12 @@ const EXPIRES_HEADER = "x-mmj-expires";
 /** R42: 거점마다 키 하나 (반경은 키에 넣지 않는다 — 본문은 언제나 1000m) */
 export const placesCacheKey = (hub: string) =>
   `https://cache.mmj/places?hub=${encodeURIComponent(hub)}&v=${PLACES_CACHE_VERSION}`;
+/**
+ * R13: 거점 격자 밖 id(공유 링크 등)의 단건 응답은 D1에 저장하지 않으므로, 다시 열 때마다 비공식 상세 API를 부르지 않게
+ * id별로 엣지에 이만큼 둔다 (저장하는 거점 격자 안의 id는 두지 않는다 — D1 1행으로 충분하다)
+ */
+export const PLACE_TRANSIENT_CACHE_MS = 60_000;
+export const placeCacheKey = (id: string) => `https://cache.mmj/place?id=${encodeURIComponent(id)}&v=${PLACES_CACHE_VERSION}`;
 
 export type AppDeps = {
   fetcher: FetchFn;
@@ -183,9 +189,27 @@ export function createApp(deps: AppDeps) {
     c.header("Cache-Control", "no-store");
     const id = c.req.param("id");
     if (!PLACE_ID.test(id)) return c.json({ error: "not_found" }, 404);
-    const place = await getPlace(serviceDeps(c), id);
-    if (!place) return c.json({ error: "not_found" }, 404);
-    return c.json(place);
+    // R13: 거점 격자 밖 id는 저장하지 않는 대신 엣지에 잠깐 둔 응답을 쓴다 (PLACE_TRANSIENT_CACHE_MS)
+    const key = new Request(placeCacheKey(id));
+    const hit = await deps.cache?.match(key);
+    if (hit && Number(hit.headers.get(EXPIRES_HEADER)) > now()) {
+      return new Response(hit.body, { headers: { "content-type": "application/json", "cache-control": "no-store" } });
+    }
+    const r = await getPlace(serviceDeps(c), id);
+    if (!r) return c.json({ error: "not_found" }, 404);
+    const body = JSON.stringify(r.place);
+    if (!r.stored && deps.cache) {
+      const ttl = PLACE_TRANSIENT_CACHE_MS / 1000;
+      const stored = new Response(body, {
+        headers: {
+          "content-type": "application/json",
+          "cache-control": `public, max-age=${ttl}, s-maxage=${ttl}`,
+          [EXPIRES_HEADER]: String(now() + PLACE_TRANSIENT_CACHE_MS),
+        },
+      });
+      c.executionCtx.waitUntil(deps.cache.put(key, stored).catch((e) => console.error("cache put failed", e)));
+    }
+    return c.body(body, 200, { "content-type": "application/json" });
   });
 
   // R35: 익명 사용 이벤트. 화면을 막지 않게 항상 본문 없이 답한다

@@ -104,9 +104,12 @@ export async function getPlaces(
   };
 }
 
-export async function getPlace(deps: ServiceDeps, id: string): Promise<ApiPlace | null> {
+/** R13 단건: stored=false면 거점 격자 밖 id라 D1에 저장하지 않고 보여주기만 한 응답 (app.ts가 엣지에 잠깐 둔다) */
+export type PlaceResult = { place: ApiPlace; stored: boolean };
+
+export async function getPlace(deps: ServiceDeps, id: string): Promise<PlaceResult | null> {
   const row = await placeById(deps.db, id);
-  if (row) return toApiPlace(row, { full: true });
+  if (row) return { place: toApiPlace(row, { full: true }), stored: true };
   if (!isDetailDue(await getMeta(deps.db, id), deps.now, id)) return null;
   if (!detailsAllowed(await detailGate(deps.db), deps.now)) return null;
   if (!(await deps.rateLimit())) return null;
@@ -120,8 +123,10 @@ export async function getPlace(deps: ServiceDeps, id: string): Promise<ApiPlace 
     return null;
   }
   // R38: 거점 격자 밖 ID(공유 링크, 예전 고리 격자)는 보여주기만 하고 저장하지 않는다 — Cron이 갱신하지 않는 행이 쌓이지 않게
-  if (!(await isInTiles(deps.db, id, hubTileKeys()))) return toApiPlace(detailRow(id, r.summary, r.detail, deps.now), { full: true });
+  if (!(await isInTiles(deps.db, id, hubTileKeys()))) {
+    return { place: toApiPlace(detailRow(id, r.summary, r.detail, deps.now), { full: true }), stored: false };
+  }
   await saveDetail(deps.db, id, r.summary, r.detail, deps.now);
   const fresh = await placeById(deps.db, id);
-  return fresh ? toApiPlace(fresh, { full: true }) : null;
+  return fresh ? { place: toApiPlace(fresh, { full: true }), stored: true } : null;
 }

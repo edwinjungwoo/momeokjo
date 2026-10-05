@@ -6,7 +6,9 @@ import {
 import { hubById } from "../../shared/hubs";
 import { tileKeyOf, tilesCoveringCircle, walkMinutes } from "../../shared/geo";
 import type { PlacesResponse } from "../../shared/types";
-import { PLACES_CACHE_MS, PLACES_PENDING_CACHE_MS, createApp, placesCacheKey, placesCacheTtl } from "../../worker/app";
+import {
+  PLACES_CACHE_MS, PLACES_PENDING_CACHE_MS, PLACE_TRANSIENT_CACHE_MS, createApp, placeCacheKey, placesCacheKey, placesCacheTtl,
+} from "../../worker/app";
 import { detailGate, getMeta, markTile, recordPlaceBlock, replaceTilePlaces, resetCorruptWarnings } from "../../worker/repo";
 import { callApp } from "../helpers/callApp";
 import { doc, fakeKakaoLocal, fakePlaceApi, routeFetch } from "../helpers/fakeKakao";
@@ -468,6 +470,40 @@ describe("GET /api/places/:id", () => {
     await replaceTilePlaces(env.DB, tileKeyOf(HUB), ["1001"], NOW, false);
     expect((await callApp(s.app, "/api/places/1001")).status).toBe(200);
     expect((await getMeta(env.DB, "1001"))?.status).toBe("ok");
+  });
+
+  it("R13/R38: 거점 격자 밖 id의 단건 응답은 id별로 60초 엣지 캐시해서, 다시 열어도 상세 API를 다시 부르지 않는다", async () => {
+    expect(PLACE_TRANSIENT_CACHE_MS).toBe(60_000);
+    const cache = caches.default;
+    for (const id of ["5555", "1001"]) await cache.delete(new Request(placeCacheKey(id)));
+    let now = NOW;
+    const s = setup();
+    const app = createApp({
+      fetcher: routeFetch(s.local.fetcher, s.place.fetcher), now: () => now, sleep: async () => {}, rateLimit: async () => true, cache,
+    });
+    const calls = () => s.place.calls.filter((c) => c.id === "5555").length;
+    const first = await callApp(app, "/api/places/5555");
+    expect(first.status).toBe(200);
+    expect(first.headers.get("cache-control")).toBe("no-store");
+    const body = await first.text();
+    const stored = await cache.match(new Request(placeCacheKey("5555")));
+    expect(stored?.headers.get("cache-control")).toBe("public, max-age=60, s-maxage=60");
+    now += PLACE_TRANSIENT_CACHE_MS - 1;
+    const again = await callApp(app, "/api/places/5555");
+    expect(again.status).toBe(200);
+    expect(again.headers.get("cache-control")).toBe("no-store");
+    expect(await again.text()).toBe(body);
+    expect(calls()).toBe(1);
+    expect(await getMeta(env.DB, "5555")).toBeNull(); // 여전히 저장하지 않는다
+    // 60초가 지나면 다시 가져온다
+    now += 1;
+    expect((await callApp(app, "/api/places/5555")).status).toBe(200);
+    expect(calls()).toBe(2);
+    // 거점 격자 안의 id는 D1에 저장하므로 엣지에 따로 두지 않는다
+    await replaceTilePlaces(env.DB, tileKeyOf(HUB), ["1001"], NOW, false);
+    expect((await callApp(app, "/api/places/1001")).status).toBe(200);
+    expect(await cache.match(new Request(placeCacheKey("1001")))).toBeUndefined();
+    for (const id of ["5555", "1001"]) await cache.delete(new Request(placeCacheKey(id)));
   });
 
   it("R13: 거점 격자 밖 id의 실패는 기록하지 않는다", async () => {
