@@ -494,14 +494,15 @@ export const ADMIN_BACKFILL_MAX = 300;
 /** 관리자 백필 후보: 격자 기록에서 출발해 PK로 가게를 찾는다 (CROSS JOIN으로 순서를 고정 — places 상태 인덱스를 훑지 않게) */
 export const ADMIN_BACKFILL_SQL = `SELECT p.* FROM tile_places tp CROSS JOIN places p ON p.id = tp.place_id
   WHERE tp.tile_key IN (SELECT value FROM json_each(?))
-    AND ${staleListJsonSql("p.list_json")} AND p.status = 'ok' AND p.name IS NOT NULL AND p.lat IS NOT NULL AND p.lng IS NOT NULL
+    AND ${staleListJsonSql("p.list_json")} AND p.name IS NOT NULL AND p.lat IS NOT NULL AND p.lng IS NOT NULL
   LIMIT ?`;
 
 /**
- * 배포 직후 관리자 백필: 주어진 격자(거점)에 기록된 가게 중 지금 판 list_json이 없는(NULL·예전 판·깨진 값) ok 행을
+ * 배포 직후 관리자 백필: 주어진 격자(거점)에 기록된 가게 중 지금 판 list_json이 없는(NULL·예전 판·깨진 값) 행을
  * limit개까지 채운다.
  * Cron 백필(backfillListJson)과 같은 직렬화·같은 UPDATE를 쓰고, 커서는 쓰지 않는다 (채운 행은 다음 조회에서 빠진다).
  * 격자 기록(tile_places)에서 출발해 그 거점 가게만 읽는다 (places 전체를 훑지 않는다 — ADMIN_BACKFILL_SQL).
+ * 후보는 Cron 백필과 같다 — status와 상관없이 표시 정보(이름·좌표)가 있는 행 (failed여도 목록에는 보인다).
  * limit + 1행을 읽어서 남은 것이 있는지(more) 알려 준다. filled는 실제로 바뀐 행 수다.
  */
 export async function backfillListJsonIn(

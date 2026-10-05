@@ -71,7 +71,7 @@ async function cloneIn(center: { lat: number; lng: number }, n: number): Promise
 }
 
 describe("admin backfill (list_json)", () => {
-  it("R12: 거점 격자 안의 list_json이 없는 ok 행만 Cron·saveDetail과 같은 조각(글자까지)으로 채운다", async () => {
+  it("R12: 거점 격자 안의 list_json이 없고 표시 정보가 있는 행(failed 포함)을 Cron·saveDetail과 같은 조각(글자까지)으로 채우고, 표시 정보가 없는 행은 채우지 않는다", async () => {
     await seedIn(DDP, ["a", "b", "keep", "fail"]);
     await saveDetailFailure(env.DB, "fail", "http_500", NOW - 500); // 표시 정보는 남았지만 status failed
     await saveDetailFailure(env.DB, "nodetail", "http_500", NOW - 500); // 표시 정보 없음
@@ -83,13 +83,13 @@ describe("admin backfill (list_json)", () => {
     const res = await backfill(makeApp());
     expect(res.status).toBe(200);
     const r = await res.json<Res>();
-    expect(r).toMatchObject({ filled: 2, remaining: 0 });
+    expect(r).toMatchObject({ filled: 3, remaining: 0 });
     expect(r.rowsRead).toBeGreaterThan(0);
     expect(r.rowsWritten).toBeGreaterThan(0);
     expect(await listJson("a")).toBe(want.get("a"));
     expect(await listJson("b")).toBe(want.get("b"));
     expect(await listJson("keep")).toBe(`${LIST_JSON_PREFIX}{"keep":1}`);
-    expect(await listJson("fail")).toBeNull();
+    expect(await listJson("fail")).toBe(want.get("fail")); // failed여도 이름이 있으면 목록에 보이므로 Cron처럼 채운다
     expect(await listJson("nodetail")).toBeNull();
     expect(await listJson("outside")).toBeNull();
   });
