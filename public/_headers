@@ -1,0 +1,20 @@
+# R45: Workers 정적 자산 응답 헤더 (Worker가 만든 /api/* 응답에는 적용되지 않는다).
+# 기본값은 Cache-Control: public, max-age=0, must-revalidate + ETag — index.html(SPA 대체 포함)은 그대로 매번 확인한다.
+
+# Vite가 내용 해시를 붙인 파일: 내용이 바뀌면 이름이 바뀌므로 1년 동안 다시 묻지 않는다
+/assets/*
+  Cache-Control: public, max-age=31536000, immutable
+
+# 이름이 고정된 이미지: 하루 캐시 (바꾸면 늦어도 하루 뒤 반영), 그 뒤 일주일은 쓰면서 뒤에서 확인
+/brand/*
+  Cache-Control: public, max-age=86400, stale-while-revalidate=604800
+/og.png
+  Cache-Control: public, max-age=86400, stale-while-revalidate=604800
+/favicon-64.png
+  Cache-Control: public, max-age=86400, stale-while-revalidate=604800
+/apple-touch-icon.png
+  Cache-Control: public, max-age=86400, stale-while-revalidate=604800
+/icon-*
+  Cache-Control: public, max-age=86400, stale-while-revalidate=604800
+/manifest.webmanifest
+  Cache-Control: public, max-age=86400
