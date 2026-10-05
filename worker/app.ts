@@ -5,7 +5,7 @@ import { MAX_EVENT_BODY_BYTES, parseEventBatch } from "../shared/events";
 import { HUBS, isHubId } from "../shared/hubs";
 import { auditArea } from "./audit";
 import { limitsFrom } from "./config";
-import { meteredDb, overReadBudget, readSoftCap, recordD1Usage, type D1Usage } from "./d1Usage";
+import { meteredDb, overReadBudget, overWriteBudget, readSoftCap, recordD1Usage, type D1Usage } from "./d1Usage";
 import { eventStats, insertEvents } from "./events";
 import type { FetchFn } from "./fetchFn";
 import { warmOnce } from "./maintenance";
@@ -150,10 +150,17 @@ export function createApp(deps: AppDeps) {
     const batch = parseEventBatch(json, now());
     if (!batch) return c.json({ error: "invalid_body" }, 400);
     c.header("x-mmj-dropped", String(batch.dropped));
-    // 익명 id별 요청 제한(RATE_LIMITER, 분당 10회 × 최대 20개)으로 남용을 막는다 — D1 조회 없이.
-    // 하루 개수를 세려면 요청마다 그날 이벤트를 훑어야 해서(읽기 예산) 쓰지 않는다
-    if (batch.events.length > 0 && (await rateLimit(c.env, `ev:${batch.anon}`))) {
+    if (batch.events.length === 0) return c.body(null, 204);
+    // 익명 id별 요청 제한(RATE_LIMITER, 분당 10회 × 최대 20개). 익명 id는 브라우저가 고르는 값이라
+    // 우회할 수 있으므로, 그와 상관없이 오늘(UTC) D1 쓰기가 D1_WRITE_SOFT_CAP을 넘으면 저장하지 않는다(meta 2행 조회).
+    // IP 기준 제한은 쓰지 않는다 — 사무실은 IP 하나를 함께 쓰고 RATE_LIMITER는 분당 10회라 너무 빡빡하다.
+    try {
+      if (!(await rateLimit(c.env, `ev:${batch.anon}`))) return c.body(null, 204);
+      if (await overWriteBudget(c.var.db, c.env, now())) return c.body(null, 204);
       await insertEvents(c.var.db, batch.anon, batch.session, batch.events);
+    } catch (e) {
+      // 통계는 화면을 막지 않는다 — 실패는 기록만 하고 204
+      console.error("event ingest failed", e);
     }
     return c.body(null, 204);
   });

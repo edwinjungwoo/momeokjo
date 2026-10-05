@@ -1,5 +1,5 @@
 import { EVENT_RETENTION_DAYS, type DayStats, type StatsResponse, type StoredEvent } from "../shared/events";
-import { DAY_MS, kstDay, kstDayHour } from "../shared/kst";
+import { DAY_MS, kstDay, kstDayHour, utcDay } from "../shared/kst";
 import { d1UsageOn, pruneD1Usage } from "./d1Usage";
 
 /** R35: 한 요청의 이벤트를 db.batch 한 번으로 넣는다 */
@@ -81,7 +81,8 @@ export async function eventStats(
       )
       .bind(...args())
       .first<{ drawSessions: number; shareSessions: number; kakaoSessions: number }>(),
-    d1UsageOn(db, to),
+    // D1 한도는 UTC 자정에 초기화된다 (R38)
+    d1UsageOn(db, utcDay(opts.now)),
   ]);
 
   const days: string[] = [];

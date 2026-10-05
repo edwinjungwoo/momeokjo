@@ -1,12 +1,15 @@
-import { kstDay } from "../shared/kst";
+import { utcDay } from "../shared/kst";
 
 /**
  * R38 D1 읽기 예산. 무료 플랜은 하루 읽기 5,000,000행이 넘으면 그날 D1이 멈춘다.
  * 요청·Cron 실행마다 D1 결과의 meta.rows_read/rows_written을 메모리에 모으고, 끝날 때 한 번만 meta에 더한다.
+ * 한도는 UTC 자정(KST 09:00)에 초기화되므로 날짜 키도 UTC 날짜다 ("wait until tomorrow (midnight UTC)").
  */
 export type D1Usage = { read: number; written: number };
 
 export const DEFAULT_READ_SOFT_CAP = 3_000_000;
+/** 하루 쓰기 100,000행 중 이벤트 수집(R35)이 넘지 않게 멈추는 선 */
+export const DEFAULT_WRITE_SOFT_CAP = 60_000;
 const readKey = (day: string) => `d1_read:${day}`;
 const writtenKey = (day: string) => `d1_written:${day}`;
 
@@ -65,10 +68,10 @@ export function meteredDb(db: D1Database, usage: D1Usage): D1Database {
 const ADD_UPSERT = `INSERT INTO meta (key, value) VALUES (?, ?), (?, ?)
   ON CONFLICT(key) DO UPDATE SET value = CAST(meta.value AS INTEGER) + CAST(excluded.value AS INTEGER)`;
 
-/** 오늘(KST) 사용량에 더한다 — UPSERT 한 문장. 이 기록 자체(몇 행)는 세지 않는다 */
+/** 오늘(UTC) 사용량에 더한다 — UPSERT 한 문장. 이 기록 자체(몇 행)는 세지 않는다 */
 export async function recordD1Usage(db: D1Database, usage: D1Usage, now: number): Promise<void> {
   if (usage.read <= 0 && usage.written <= 0) return;
-  const day = kstDay(now);
+  const day = utcDay(now);
   await db
     .prepare(ADD_UPSERT)
     .bind(readKey(day), String(Math.round(usage.read)), writtenKey(day), String(Math.round(usage.written)))
@@ -87,14 +90,22 @@ export async function d1UsageOn(db: D1Database, day: string): Promise<D1Usage> {
   return { read: get(readKey(day)), written: get(writtenKey(day)) };
 }
 
-export function readSoftCap(env: Env): number {
-  const v = Number((env as { D1_READ_SOFT_CAP?: string }).D1_READ_SOFT_CAP);
-  return Number.isFinite(v) && v > 0 ? v : DEFAULT_READ_SOFT_CAP;
+function positiveVar(env: Env, name: string, fallback: number): number {
+  const v = Number((env as unknown as Record<string, string | undefined>)[name]);
+  return Number.isFinite(v) && v > 0 ? v : fallback;
 }
+
+export const readSoftCap = (env: Env) => positiveVar(env, "D1_READ_SOFT_CAP", DEFAULT_READ_SOFT_CAP);
+export const writeSoftCap = (env: Env) => positiveVar(env, "D1_WRITE_SOFT_CAP", DEFAULT_WRITE_SOFT_CAP);
 
 /** 오늘 읽기가 소프트 한도 이상이면 true — 이날은 수집·보충(외부 호출과 큰 D1 스캔)을 멈추고 캐시된 데이터만 보여준다 */
 export async function overReadBudget(db: D1Database, env: Env, now: number): Promise<boolean> {
-  return (await d1UsageOn(db, kstDay(now))).read >= readSoftCap(env);
+  return (await d1UsageOn(db, utcDay(now))).read >= readSoftCap(env);
+}
+
+/** 오늘(UTC) 쓰기가 소프트 한도 이상이면 true — 이벤트 수집(R35)을 멈춘다 */
+export async function overWriteBudget(db: D1Database, env: Env, now: number): Promise<boolean> {
+  return (await d1UsageOn(db, utcDay(now))).written >= writeSoftCap(env);
 }
 
 /** 오래된 날짜의 사용량 키를 지운다 (meta가 날마다 2행씩 늘지 않게) */

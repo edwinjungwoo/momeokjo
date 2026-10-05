@@ -135,7 +135,7 @@ CREATE INDEX idx_places_lat_lng ON places(lat, lng);
 -- tiles_changed_at / unfetched_cleared_at = Cron 미수집 확인 신호(R11)
 CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
 CREATE INDEX idx_places_status_fetched_at ON places(status, fetched_at); -- R11 만료 후보
--- meta에는 R38 날짜별 D1 사용량도 둔다: d1_read:{KST yyyy-mm-dd}, d1_written:{...} (90일 뒤 R35 정리 때 지움)
+-- meta에는 R38 날짜별 D1 사용량도 둔다: d1_read:{UTC yyyy-mm-dd}, d1_written:{...} (90일 뒤 R35 정리 때 지움)
 
 -- R35 익명 사용 이벤트 (0004). IP·User-Agent·위치·자유 입력은 저장하지 않는다. 90일 보관
 CREATE TABLE events (
@@ -291,12 +291,12 @@ CREATE INDEX idx_events_type_day ON events(type, day);
   - 타입: `app_open`(세션마다 한 번), `draw`/`redraw`(결과가 떠 있을 때 다시 뽑기; `candidates`, `picks`), `share`(공유·복사 성공 뒤; `picks`), `open_kakao`(`rank`), `select_place`(목록·핀), `expand_card`(`rank`), `exclude_place`("여긴 빼줘"; `rank`), `undo_exclude`, `share_open`(받은 `t=` 링크를 엶; `picks`), `hub_change`, `filter_change`(1초 디바운스, 바뀐 뒤의 필터 스냅숏; 정렬만 바꾼 것은 제외), `empty_result`(필터를 바꾼 뒤 후보 0곳).
   - 브라우저(`web/analytics.ts`): 메모리 큐에 쌓아 10초마다, 10개가 차면, `visibilitychange → hidden`·`pagehide`에 `navigator.sendBeacon`(안 되면 `fetch(..., {keepalive: true})`)으로 보낸다. 요청당 최대 20개, 큐는 100개까지. 예외를 던지지 않고 실패는 버린다. 운영 빌드에서만 보내고 개발 서버는 `?track=1`일 때만. `/admin`은 세지 않는다.
   - `POST /api/events` 본문 `{anon, session, events}`(anon·session은 `^[0-9a-f-]{36}$`, 1~20개, 8KB 이하; 아니면 400). 이벤트는 하나씩 검증해 틀린 것만 버리고 `x-mmj-dropped` 헤더로 센다. 클라이언트 시각이 서버 시각 ±10분 밖이면 서버 시각을 쓰고, KST 날짜·시를 미리 계산해 `db.batch` 한 번으로 넣는다. 항상 204.
-  - 남용: 익명 id별 `RATE_LIMITER`(분당 10회 × 20개)만 쓰고 넘으면 조용히 버린다(204). 하루 개수 상한(익명 id당 300개)은 두지 않는다 — 세려면 요청마다 그날 이벤트를 훑어야 해서(하루 수천 행 × 요청 수) R38 읽기 예산에 맞지 않고, 익명 id는 브라우저가 만드는 값이라 어차피 우회된다. 사무실은 IP 하나를 함께 쓰므로 IP 기준 제한은 쓰지 않는다.
+  - 남용: 익명 id별 `RATE_LIMITER`(분당 10회 × 20개)를 넘으면 조용히 버린다(204). 익명 id는 브라우저가 고르는 값이라 우회되므로, 그와 상관없는 상한으로 오늘(UTC) D1 쓰기 추정치(`meta.d1_written:{UTC 날짜}`, R38)가 `D1_WRITE_SOFT_CAP`(기본 60,000, 하루 한도 100,000의 60%) 이상이면 저장하지 않고 204를 준다(meta 2행 조회). 하루 개수 상한(익명 id당 300개)은 두지 않는다 — 세려면 요청마다 그날 이벤트를 훑어야 해서 R38 읽기 예산에 맞지 않는다. 사무실은 IP 하나를 함께 쓰고 `RATE_LIMITER`는 분당 10회라 IP 기준 제한은 쓰지 않는다. 저장이 실패해도 `console.error`만 남기고 204다(500을 주지 않는다).
   - 보관: Cron이 KST 04:00~04:04 실행에서 `day < 오늘 − 90일`인 이벤트를 지운다(`ts` 대신 `day`로 지워 인덱스 범위만 읽음).
-- **R36 관리자 통계.** `GET /api/admin/stats?days=1..30&hub=all|{거점 id}`(R31과 같은 인증, 기본 7일·전체; 틀리면 400). KST 기준 오늘 포함 최근 N일의 일별 사용자(app_open의 익명 id 수)·세션(app_open 수)·뽑기·다시 뽑기·공유·카카오맵·공유 링크 열림(빈 날은 0), 시간대(0~23시)별 뽑기, 거점별 사용자·세션·뽑기·공유, 많이 뽑힌 가게 10곳(`picks` 기준, 이름은 places에서), 결과 카드 번호(1~3)별 펼침·카카오맵·빼줘, 뽑기한 세션 중 공유·카카오맵까지 간 세션 비율, 세션당 뽑기, 오늘 D1 읽기·쓰기 추정치와 소프트 한도(R38)를 준다. 집계는 `(type, day)` 인덱스로 타입을 좁힌 쿼리 5개 + 이름 1개.
-  - 화면 `/admin`(메인 화면에서 링크하지 않음, 따로 불러오는 청크; Worker의 SPA 대체 응답이 index.html을 준다): 토큰 입력(이 탭의 sessionStorage에만, 주소에는 넣지 않음, 401이면 지우고 "토큰이 맞지 않아요"), 기간 세그먼트(오늘/7일/30일), 거점 선택, 요약 카드(사용자, 세션, 뽑기, 공유율), 시간대별·일별 막대(차트 라이브러리 없이 CSS, 누르거나 가리키면 값; 일별은 "표로 보기"), 많이 뽑힌 가게·카드 번호별·거점별 표, 오늘 D1 읽기 막대. 앱과 같은 토큰을 쓴다.
+- **R36 관리자 통계.** `GET /api/admin/stats?days=1..30&hub=all|{거점 id}`(R31과 같은 인증, 기본 7일·전체; 틀리면 400). KST 기준 오늘 포함 최근 N일의 일별 사용자(app_open의 익명 id 수)·세션(app_open 수)·뽑기·다시 뽑기·공유·카카오맵·공유 링크 열림(빈 날은 0), 시간대(0~23시)별 뽑기, 거점별 사용자·세션·뽑기·공유, 많이 뽑힌 가게 10곳(`picks` 기준, 이름은 places에서), 결과 카드 번호(1~3)별 펼침·카카오맵·빼줘, 뽑기한 세션 중 공유·카카오맵까지 간 세션 비율, 세션당 뽑기, 오늘(UTC 기준) D1 읽기·쓰기 추정치와 소프트 한도(R38)를 준다. 집계는 `(type, day)` 인덱스로 타입을 좁힌 쿼리 5개 + 이름 1개.
+  - 화면 `/admin`(메인 화면에서 링크하지 않음, 따로 불러오는 청크; Worker의 SPA 대체 응답이 index.html을 준다): 토큰 입력(이 탭의 sessionStorage에만, 주소에는 넣지 않음, 401이면 지우고 "토큰이 맞지 않아요"), 기간 세그먼트(오늘/7일/30일), 거점 선택, 요약 카드(사용자, 세션, 뽑기, 공유율), 시간대별·일별 막대(차트 라이브러리 없이 CSS, 누르거나 가리키면 값; 일별은 "표로 보기"), 많이 뽑힌 가게·카드 번호별·거점별 표, 오늘 D1 읽기 막대. 앱과 같은 토큰을 쓴다. D1 막대 제목은 "오늘(UTC 기준, 09시 초기화)"이다. 이 화면에서는 `<meta name="robots" content="noindex, nofollow">`를 넣는다(Worker는 `/api/*`만 먼저 처리해서 헤더 대신 메타 태그).
   - Cloudflare Web Analytics는 코드가 아니라 대시보드에서 켠다(비콘 토큰이 필요하면 그때 `index.html`에 넣는다).
-- **R38 D1 읽기 예산 가드.** 무료 플랜은 하루 읽기 5,000,000행을 넘으면 그날 D1이 멈춘다(2026-10-05 밤, 대량 warm 반복으로 실제로 소진). API 요청과 Cron 실행마다 D1 결과의 `meta.rows_read`/`rows_written`을 메모리에 모으고(`worker/d1Usage.ts`의 계측 DB, `waitUntil`로 이어지는 보충까지 포함), 끝날 때 UPSERT 한 문장으로 `meta.d1_read:{KST 날짜}`·`d1_written:{...}`에 더한다(기록 자체의 몇 행은 세지 않는 추정치). 그날 읽기가 `D1_READ_SOFT_CAP`(기본 3,000,000) 이상이면 R31 warm은 429 `{error: "read_budget"}`, Cron(R11)은 수집·보충을 건너뛴다. 목록·단건 API는 그대로 동작한다.
+- **R38 D1 읽기 예산 가드.** 무료 플랜은 하루 읽기 5,000,000행을 넘으면 그날 D1이 멈춘다(2026-10-05 밤, 대량 warm 반복으로 실제로 소진). API 요청과 Cron 실행마다 D1 결과의 `meta.rows_read`/`rows_written`을 메모리에 모으고(`worker/d1Usage.ts`의 계측 DB, `waitUntil`로 이어지는 보충까지 포함), 끝날 때 UPSERT 한 문장으로 `meta.d1_read:{UTC 날짜}`·`d1_written:{...}`에 더한다(기록 자체의 몇 행은 세지 않는 추정치). D1 무료 한도는 UTC 자정(KST 09:00)에 초기화되므로("wait until tomorrow (midnight UTC)") 사용량 날짜와 가드는 UTC 날짜를 쓴다(이벤트의 `day`/`hour`와 보관 정리는 KST 그대로). 그날 읽기가 `D1_READ_SOFT_CAP`(기본 3,000,000) 이상이면 R31 warm은 429 `{error: "read_budget"}`, Cron(R11)은 수집·보충을 건너뛴다. 목록·단건 API는 그대로 동작한다.
 - **R32 감사 엔드포인트.** `GET /api/admin/audit?lat&lng&radius`(같은 인증)는 §7의 Q1~Q4 수치를 JSON으로 반환한다. `scripts/audit.mjs`는 이를 표로 출력하고, Q1 또는 Q2를 통과하지 못하면 종료 코드 1로 끝난다.
 
 - **R33 대표 사진.** 상세 응답의 `summary.main_photo_url`이 카카오 CDN(`*.kakaocdn.net`) 주소면(http/https만, 사용자 정보나 포트가 붙은 주소는 거부) https로 바꿔 `places.photo_url`에 기록한다(사진 파일은 저장하지 않음). 다른 호스트(네이버 블로그 등 외부 사이트에서 막히는 이미지)는 기록하지 않는다. 화면에서는 카카오 썸네일 서버(`img1.kakaocdn.net/cthumb/local/C{px}x{px}.q50/?fname=`)를 거쳐 결과 카드 상단과 목록 썸네일로 보여주고, 사진이 없거나 불러오지 못하면 사진 자리를 숨긴다.
@@ -370,7 +370,7 @@ Q1, Q2, Q5를 통과해야 UI 마일스톤으로 넘어간다.
 ## 9. 배포와 설정
 
 - Worker 이름 `momeokjo`, 정적 에셋은 `@cloudflare/vite-plugin`으로 빌드한다.
-- 바인딩: D1 `DB`, Rate Limiting `RATE_LIMITER`, 시크릿 `KAKAO_REST_KEY`·`ADMIN_TOKEN`, 변수 `SUBREQUEST_BUDGET`, `DETAIL_BATCH_SIZE`, `D1_READ_SOFT_CAP`(R38, 기본 3000000)
+- 바인딩: D1 `DB`, Rate Limiting `RATE_LIMITER`, 시크릿 `KAKAO_REST_KEY`·`ADMIN_TOKEN`, 변수 `SUBREQUEST_BUDGET`, `DETAIL_BATCH_SIZE`, `D1_READ_SOFT_CAP`(R38, 기본 3000000), `D1_WRITE_SOFT_CAP`(R35, 기본 60000)
 - `compatibility_date`는 `2026-08-01`(로컬 workerd가 지원하는 최신 날짜 이하)
 - 프론트엔드 환경 변수: `VITE_KAKAO_JS_KEY` (공개 키)
 - Custom Domain: `mmj.itmz.me`

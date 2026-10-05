@@ -8,3 +8,6 @@ export function kstDayHour(ts: number): { day: string; hour: number } {
 }
 
 export const kstDay = (ts: number) => kstDayHour(ts).day;
+
+/** epoch ms → UTC 날짜(yyyy-mm-dd). D1 무료 한도는 UTC 자정(KST 09:00)에 초기화된다 (R38) */
+export const utcDay = (ts: number) => new Date(ts).toISOString().slice(0, 10);

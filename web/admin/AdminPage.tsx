@@ -237,7 +237,7 @@ function Stats({ data }: { data: StatsResponse }) {
       </section>
 
       <section className="admin-sec">
-        <h2>오늘 D1 사용량 (추정)</h2>
+        <h2>오늘(UTC 기준, 09시 초기화) D1 사용량 (추정)</h2>
         <div className="meter" role="img" aria-label={`읽기 ${n(d1.read)}행, 소프트 한도 ${n(d1.readSoftCap)}행의 ${pct(readShare)}`}>
           <span className={`meter-fill${readShare >= 0.8 ? " is-high" : ""}`} style={{ width: `${readShare * 100}%` }} />
         </div>

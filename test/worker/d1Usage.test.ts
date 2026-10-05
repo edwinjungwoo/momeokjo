@@ -3,10 +3,10 @@ import { describe, expect, it } from "vitest";
 import { ASEM, PREWARM_RADIUS } from "../../shared/constants";
 import { tileKeyOf, tilesCoveringCircle } from "../../shared/geo";
 import { HUBS } from "../../shared/hubs";
-import { kstDay } from "../../shared/kst";
+import { kstDay, utcDay } from "../../shared/kst";
 import { createApp } from "../../worker/app";
 import {
-  d1UsageOn, meteredDb, readSoftCap, recordD1Usage, type D1Usage,
+  d1UsageOn, meteredDb, overReadBudget, readSoftCap, recordD1Usage, writeSoftCap, type D1Usage,
 } from "../../worker/d1Usage";
 import { runScheduled } from "../../worker/maintenance";
 import { markTile, replaceTilePlaces } from "../../worker/repo";
@@ -67,7 +67,31 @@ describe("D1 읽기 예산", () => {
     expect(usage.read).toBeGreaterThan(r1);
   });
 
-  it("R38: 실행이 끝날 때 오늘(KST) 읽기·쓰기 행 수를 한 번에 더해 기록한다", async () => {
+  it("R38: D1 한도는 UTC 자정(KST 09:00)에 초기화되므로 사용량 날짜는 UTC 기준이다", async () => {
+    expect(utcDay(NOW)).toBe(TODAY);
+    const before9 = Date.UTC(2027, 0, 15, 23, 59, 59, 999); // 2027-01-16 08:59 KST
+    const at9 = Date.UTC(2027, 0, 16, 0, 0, 0, 0); // 2027-01-16 09:00 KST
+    expect(utcDay(before9)).toBe("2027-01-15");
+    expect(utcDay(at9)).toBe("2027-01-16");
+    await recordD1Usage(env.DB, { read: 10, written: 1 }, before9);
+    await recordD1Usage(env.DB, { read: 5, written: 2 }, at9);
+    expect(await d1UsageOn(env.DB, "2027-01-15")).toEqual({ read: 10, written: 1 });
+    expect(await d1UsageOn(env.DB, "2027-01-16")).toEqual({ read: 5, written: 2 });
+  });
+
+  it("R38: 읽기 예산은 UTC 날짜로 본다 (KST 08시는 아직 전날 UTC)", async () => {
+    await setUsage("2027-01-15", 3_000_000);
+    expect(await overReadBudget(env.DB, env, Date.UTC(2027, 0, 15, 23, 0))).toBe(true);
+    expect(await overReadBudget(env.DB, env, Date.UTC(2027, 0, 16, 0, 0))).toBe(false);
+  });
+
+  it("R38: 쓰기 소프트 한도는 D1_WRITE_SOFT_CAP, 없거나 잘못되면 60,000", () => {
+    expect(writeSoftCap({ D1_WRITE_SOFT_CAP: "500" } as unknown as Env)).toBe(500);
+    expect(writeSoftCap({ D1_WRITE_SOFT_CAP: "-1" } as unknown as Env)).toBe(60_000);
+    expect(writeSoftCap({} as unknown as Env)).toBe(60_000);
+  });
+
+  it("R38: 실행이 끝날 때 오늘(UTC) 읽기·쓰기 행 수를 한 번에 더해 기록한다", async () => {
     await recordD1Usage(env.DB, { read: 120, written: 7 }, NOW);
     await recordD1Usage(env.DB, { read: 30, written: 0 }, NOW);
     expect(await d1UsageOn(env.DB, TODAY)).toEqual({ read: 150, written: 7 });

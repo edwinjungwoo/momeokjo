@@ -123,6 +123,45 @@ describe("POST /api/events", () => {
     expect(await rows()).toHaveLength(0);
   });
 
+  it("R35/R38: 오늘(UTC) D1 쓰기가 D1_WRITE_SOFT_CAP 이상이면 익명 id와 상관없이 저장하지 않고 204", async () => {
+    await env.DB.prepare("INSERT INTO meta (key, value) VALUES (?, ?)").bind("d1_written:2027-01-15", "60000").run();
+    const { app } = setup();
+    const res = await post(app, JSON.stringify({ anon: ANON, session: SESSION, events: [ev()] }));
+    expect(res.status).toBe(204);
+    expect(await rows()).toHaveLength(0);
+  });
+
+  it("R35/R38: 어제(UTC) 쓰기는 오늘 쓰기 상한에 들어가지 않는다", async () => {
+    await env.DB.prepare("INSERT INTO meta (key, value) VALUES (?, ?)").bind("d1_written:2027-01-14", "999999").run();
+    const { app } = setup();
+    await post(app, JSON.stringify({ anon: ANON, session: SESSION, events: [ev()] }));
+    expect(await rows()).toHaveLength(1);
+  });
+
+  it("R35: 저장이 실패해도 500이 아니라 204로 답한다", async () => {
+    const { app } = setup();
+    const DB = new Proxy(env.DB, {
+      get(t, k) {
+        if (k === "batch") return async () => { throw new Error("boom"); };
+        const v = Reflect.get(t, k);
+        return typeof v === "function" ? v.bind(t) : v;
+      },
+    });
+    const errors: unknown[] = [];
+    const orig = console.error;
+    console.error = (...a: unknown[]) => void errors.push(a);
+    try {
+      const ctx = createExecutionContext();
+      const body = JSON.stringify({ anon: ANON, session: SESSION, events: [ev()] });
+      const res = await app.fetch(new Request("http://localhost/api/events", { method: "POST", body }), { ...env, DB }, ctx);
+      await waitOnExecutionContext(ctx);
+      expect(res.status).toBe(204);
+      expect(errors.length).toBeGreaterThan(0);
+    } finally {
+      console.error = orig;
+    }
+  });
+
   it("R35: 유효한 이벤트가 하나도 없으면 D1에 쓰지 않는다", async () => {
     const { app } = setup();
     const res = await post(app, JSON.stringify({ anon: ANON, session: SESSION, events: [ev({ hub: "x" })] }));
@@ -154,8 +193,9 @@ describe("보관 기간", () => {
     await recordD1Usage(env.DB, { read: 7, written: 1 }, KST_0402);
     await pruneOldEvents(env.DB, KST_0402);
     expect((await rows()).map((r) => r.day)).toEqual(["2026-10-17", "2026-10-18"]);
-    expect(await d1UsageOn(env.DB, "2026-10-16")).toEqual({ read: 0, written: 0 });
-    expect(await d1UsageOn(env.DB, "2027-01-15")).toEqual({ read: 7, written: 1 });
+    // 사용량 키는 UTC 날짜다 (R38): KST 04:02는 아직 전날 UTC
+    expect(await d1UsageOn(env.DB, "2026-10-15")).toEqual({ read: 0, written: 0 });
+    expect(await d1UsageOn(env.DB, "2027-01-14")).toEqual({ read: 7, written: 1 });
   });
 
   it("R35: Cron은 정리 시간에만 오래된 이벤트를 지운다 (읽기 예산을 넘은 날에도)", async () => {
