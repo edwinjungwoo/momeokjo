@@ -784,6 +784,15 @@ input[type="range"] { width: 100%; height: 44px; margin: 0; accent-color: var(--
 @media (max-height: 500px) and (max-width: 899px) {
   .map-wrap { height: 34vh; height: 34dvh; min-height: 140px; }
 }
+/* 아주 낮은 화면(가로 모드 폰 375px, 페이지 확대 200%): 붙어 있는 공유 영역과 60% 상한 때문에 후보 카드가 보일 창이
+   20~70px뿐이라 카드를 끝까지 볼 수 없었다 (QA P5). 시트를 지도 위까지 키우고 공유 영역은 카드 뒤에서 함께 스크롤한다 */
+@media (max-height: 440px) and (max-width: 899px) {
+  .sheet {
+    max-height: calc(100vh - var(--bar-h) - var(--topbar-h) - 12px);
+    max-height: calc(100dvh - var(--bar-h) - var(--topbar-h) - 12px);
+  }
+  .sheet-foot { position: static; }
+}
 @media (hover: hover) {
   .row:hover:not([aria-current="true"]) { background: #fbf7f3; }
   .chip:hover:not([aria-pressed="true"]) { background: var(--fill-press); }
