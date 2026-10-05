@@ -23,6 +23,9 @@ type Props = {
   /** R41 완화로 들어온 곳 ("조건 밖" 표시) */
   outside?: ReadonlySet<string>;
   now: Date;
+  /** 아래 줄 보조 버튼 글자 ("다시 뽑기", 받은 후보면 "모먹죠?") */
+  drawLabel: string;
+  onDraw: () => void;
   onFocus: (id: string | null) => void;
   onClose: () => void;
   onShare: (places: ApiPlace[]) => void;
@@ -141,11 +144,11 @@ function TrioCard(props: {
 /**
  * R22′: 뽑기 결과 3곳. 셔플 중에는 이름이 바뀌는 자리만 보여주고, 멈추면 작은 카드 3장이 쌓인다.
  * 카드를 누르면 그 자리에서 펼쳐(아코디언) 메뉴·영업시간·카카오맵·"여긴 빼줘"를 보여준다.
- * 아래 행동: 공유(3곳 모두, 주 행동) · 다시 뽑기(보조. 모바일은 바로 아래 뽑기 바가 대신한다)
+ * 아래 한 줄: [다시 뽑기](보조) + [공유](3곳 모두, 주 행동). 시트가 떠 있는 동안 화면 아래 뽑기 바는 숨는다 (styles.css .has-trio)
  */
 export function TrioSheet(props: Props) {
-  const { slotName, places, received, focusId, detailLoading, ranks, outside, now } = props;
-  const { onFocus, onClose, onShare, onKakao } = props;
+  const { slotName, places, received, focusId, detailLoading, ranks, outside, now, drawLabel } = props;
+  const { onDraw, onFocus, onClose, onShare, onKakao } = props;
   const shuffling = slotName !== null;
   const swipe = useSwipeDown(onClose);
   const closeBtn = useRef<HTMLButtonElement>(null);
@@ -232,8 +235,11 @@ export function TrioSheet(props: Props) {
           />
         ))}
       </ol>
-      <div className="sheet-foot">
+      <div className="sheet-foot trio-foot">
         <div className="actions">
+          <button type="button" className="secondary" onClick={onDraw}>
+            {drawLabel}
+          </button>
           <button type="button" className="primary" onClick={() => onShare(places)}>
             공유
           </button>

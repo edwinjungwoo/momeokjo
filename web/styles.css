@@ -507,6 +507,15 @@ input[type="range"] { width: 100%; height: 44px; margin: 0; accent-color: var(--
 .actions .primary { background: var(--accent-strong); color: #fff; }
 .actions .primary:active { background: var(--accent-press); }
 .source { margin-top: 8px; font-size: 12px; color: var(--text-3); text-align: right; }
+/* R22′ 결과 3곳의 아래 한 줄: [다시 뽑기](보조, 40%) + [공유](주, 60%). 같은 높이, 사이 구분선 없음. 출처는 그 아래 작은 글씨.
+   결과가 떠 있는 동안은 화면 아래 뽑기 바를 숨긴다 (.has-trio) — 같은 행동이 두 곳에 있지 않게 */
+.has-trio .draw-bar { display: none; }
+.trio-foot { padding-top: 10px; }
+.trio-foot .actions { gap: 10px; }
+.trio-foot .actions > * { min-height: 48px; font-size: 16px; }
+.trio-foot .actions > .secondary { flex: 2; }
+.trio-foot .actions > .primary { flex: 3; }
+.trio-foot .source { margin-top: 4px; font-size: 11px; line-height: 16px; }
 
 /* ── 뽑기 결과 3곳 (R22′): 작은 카드 3장, 누르면 그 자리에서 펼친다 ── */
 .trio-head { display: flex; align-items: center; gap: 10px; padding-right: 40px; }
@@ -794,6 +803,15 @@ input[type="range"] { width: 100%; height: 44px; margin: 0; accent-color: var(--
   .menus li:nth-child(n + 6) { display: none !important; }
   .toast { bottom: 24px; }
 }
+/* 모바일: 결과 3곳 시트는 뽑기 바 자리까지 내려와 화면 맨 아래에 붙는다 (행동 줄이 바를 대신한다). 홈 인디케이터만큼 아래 여백 */
+@media (max-width: 899px) {
+  .sheet.trio {
+    bottom: 0;
+    --pb: calc(12px + env(safe-area-inset-bottom));
+    max-height: min(calc(60vh + var(--bar-h)), calc(100vh - var(--topbar-h) - env(safe-area-inset-top) - 48px));
+    max-height: min(calc(60dvh + var(--bar-h)), calc(100dvh - var(--topbar-h) - env(safe-area-inset-top) - 48px));
+  }
+}
 /* 가로 모드 폰: 지도가 화면을 다 먹지 않게 해서 패널이 140px 이상 보이게 한다 */
 @media (max-height: 500px) and (max-width: 899px) {
   .map-wrap { height: 34vh; height: 34dvh; min-height: 140px; }
@@ -805,7 +823,17 @@ input[type="range"] { width: 100%; height: 44px; margin: 0; accent-color: var(--
     max-height: calc(100vh - var(--bar-h) - var(--topbar-h) - env(safe-area-inset-top) - 12px);
     max-height: calc(100dvh - var(--bar-h) - var(--topbar-h) - env(safe-area-inset-top) - 12px);
   }
+  .sheet.trio {
+    max-height: calc(100vh - var(--topbar-h) - env(safe-area-inset-top) - 12px);
+    max-height: calc(100dvh - var(--topbar-h) - env(safe-area-inset-top) - 12px);
+  }
   .sheet-foot { position: static; }
+  /* 결과 3곳은 뽑기 바가 없어서 행동 줄을 붙여 둔다 (가로 모드 폰 375px에서도 카드 창이 예전과 비슷한 ~140px) */
+  .sheet.trio .sheet-foot { position: sticky; }
+}
+/* 더 낮은 화면(페이지 확대 200% 등)은 행동 줄도 카드 뒤에서 함께 스크롤한다 (붙여 두면 카드가 보일 창이 거의 없다) */
+@media (max-height: 320px) and (max-width: 899px) {
+  .sheet.trio .sheet-foot { position: static; }
 }
 @media (hover: hover) {
   .row:hover:not([aria-current="true"]) { background: #fbf7f3; }

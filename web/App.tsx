@@ -410,6 +410,8 @@ export default function App() {
 
   const status = statusOf(data, polling, error, now.getTime());
   const trioOpen = selected === null && (shuffle.display !== null || trioPlaces.length > 0);
+  /** 셔플이 끝나 결과 3곳 시트가 떠 있음 — 시트 아래 줄이 뽑기 바를 대신한다 */
+  const trioShown = selected === null && shuffle.display === null && trioPlaces.length > 0;
   const drawLabel = shuffle.running ? "고르는 중…" : trio?.source === "drawn" ? "다시 뽑기" : "모먹죠?";
 
   let list: ReactNode;
@@ -441,7 +443,7 @@ export default function App() {
   }
 
   return (
-    <div className={`app${trioOpen || cardPlace ? " has-sheet" : ""}`}>
+    <div className={`app${trioOpen || cardPlace ? " has-sheet" : ""}${trioShown ? " has-trio" : ""}`}>
       <header className="topbar">
         <h1 className="logo">
           <img src="/brand/logo.webp" alt="모먹죠" width={63} height={28} draggable={false} />
@@ -484,6 +486,8 @@ export default function App() {
               ranks={ranks}
               outside={trio?.outside}
               now={now}
+              drawLabel={drawLabel}
+              onDraw={() => onDraw()}
               onFocus={onFocus}
               onClose={closeTrio}
               onShare={onShare}
