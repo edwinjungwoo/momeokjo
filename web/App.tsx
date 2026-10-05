@@ -493,6 +493,7 @@ export default function App() {
               detailLoading={detailPending !== null && detailPending === focusId}
               ranks={ranks}
               outside={trio?.outside}
+              party={filters.party}
               now={now}
               drawLabel={drawLabel}
               onDraw={() => onDraw()}

@@ -1,6 +1,6 @@
 import { detailAgeDays, freshnessText } from "../shared/freshness";
 import { isOpenDuring, kstParts } from "../shared/hours";
-import type { Filters } from "../shared/recommend";
+import type { Filters, Party } from "../shared/recommend";
 import type { ApiPlace, PlacesResponse } from "../shared/types";
 
 export const won = (n: number) => `${n.toLocaleString("ko-KR")}원`;
@@ -76,3 +76,12 @@ export function todayHoursText(p: ApiPlace, now: Date): string | null {
   if (day.length === 0) return null;
   return `오늘 ${day.map(([a, b]) => `${hhmm(a)}~${hhmm(b)}`).join(", ")}`;
 }
+
+/** R49: 전화번호 → tel: 링크 (숫자와 +만 남긴다). 숫자가 없으면 null */
+export function telHref(phone: string | null | undefined): string | null {
+  const v = (phone ?? "").replace(/[^0-9+]/g, "");
+  return /\d/.test(v) ? `tel:${v}` : null;
+}
+
+/** R49: 4명+이면 펼친 결과 카드의 첫 행동을 "전화로 자리 확인"으로 (전화번호는 R13 단건에만 있다) */
+export const callFirst = (p: ApiPlace, party: Party): string | null => (party >= 4 ? telHref(p.phone) : null);

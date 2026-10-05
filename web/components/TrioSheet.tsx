@@ -2,8 +2,9 @@ import { useEffect, useRef, useState } from "react";
 import { lastLevel } from "../../shared/category";
 import { sourceLine } from "../../shared/freshness";
 import { photoThumbUrl } from "../../shared/photo";
+import type { Party } from "../../shared/recommend";
 import type { ApiPlace } from "../../shared/types";
-import { openState, priceText, todayHoursText, won } from "../format";
+import { callFirst, openState, priceText, todayHoursText, won } from "../format";
 import { ChevronDown, CloseIcon } from "./Icons";
 import { Mascot } from "./Mascot";
 import { RankPill } from "./RankPill";
@@ -23,6 +24,8 @@ type Props = {
   ranks: ReadonlyMap<string, number>;
   /** R41 완화로 들어온 곳 ("조건 밖" 표시) */
   outside?: ReadonlySet<string>;
+  /** R49: 4명+면 펼친 카드의 첫 행동이 "전화로 자리 확인" */
+  party: Party;
   now: Date;
   /** 아래 줄 보조 버튼 글자 ("다시 뽑기", 받은 후보면 "모먹죠?") */
   drawLabel: string;
@@ -54,12 +57,13 @@ function TrioCard(props: {
   detailLoading: boolean;
   topPercent: number | undefined;
   outside: boolean;
+  party: Party;
   now: Date;
   onToggle: () => void;
   onKakao: (p: ApiPlace) => void;
   onExclude: (p: ApiPlace) => void;
 }) {
-  const { place: p, rank, open, detailLoading, topPercent, outside, now, onToggle, onKakao, onExclude } = props;
+  const { place: p, rank, open, detailLoading, topPercent, outside, party, now, onToggle, onKakao, onExclude } = props;
   const li = useRef<HTMLLIElement>(null);
   const d = p.detail;
   const rating = d?.rating ?? null;
@@ -69,6 +73,7 @@ function TrioCard(props: {
   const hours = todayHoursText(p, now);
   const menus = d?.menus ?? [];
   const detailId = `trio-detail-${p.id}`;
+  const call = callFirst(p, party);
 
   // 펼치면 시트 안에서 그 카드가 보이게 한다
   useEffect(() => {
@@ -110,6 +115,12 @@ function TrioCard(props: {
       </button>
       {open && (
         <div className="trio-detail" id={detailId}>
+          {/* R49: 4명+는 자리부터 확인하게 전화를 첫 행동으로 (전화번호는 R13 단건에만 있다) */}
+          {call && (
+            <a className="trio-call" href={call}>
+              전화로 자리 확인
+            </a>
+          )}
           <p className="trio-line">
             <span className={state.closed ? "closed" : undefined}>{state.text}</span>
             {hours && <span>{hours}</span>}
@@ -240,6 +251,7 @@ export function TrioSheet(props: Props) {
             detailLoading={p.id === focusId && detailLoading}
             topPercent={ranks.get(p.id)}
             outside={outside?.has(p.id) ?? false}
+            party={props.party}
             now={now}
             onToggle={() => onFocus(p.id === focusId ? null : p.id)}
             onKakao={onKakao}
