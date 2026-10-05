@@ -4,10 +4,9 @@ import type { PlacesResponse } from "../shared/types";
 import { mergeCachedPlaces } from "../shared/placesCache";
 import { fetchPlaces } from "./api";
 import { readCachedPlaces, saveCachedPlaces } from "./placesCache";
+import { pollDelayMs, shouldPoll } from "./pollSchedule";
 
 const DEBOUNCE_MS = 250;
-const POLL_MS = 3000;
-const MAX_POLLS = 10;
 
 type State = {
   data: PlacesResponse | null;
@@ -22,7 +21,8 @@ type State = {
 
 /**
  * R29: 거점이 바뀌면 250ms 디바운스 후 불러오고,
- * pending(R44 강등 모드면 제외) 또는 incompleteTiles가 남아 있으면 3초 간격으로 최대 10번 다시 불러온다.
+ * pending(R10 쿨다운·R44 강등 모드로 상세 가져오기가 멈췄으면 제외) 또는 incompleteTiles가 남아 있으면
+ * 3초 → 6초 → 12초 간격으로 최대 6번 다시 불러온다 (web/pollSchedule.ts).
  * 다시 불러오는 동안 이전 data를 유지한다 (loading=true로 흐리게만 표시).
  * R42: 반경과 상관없이 거점의 1000m 목록을 한 번 받는다 — 화면 반경은 filterPlaces가 거리로 거른다.
  * R45: 디바운스는 거점을 바꿀 때만 한다. 처음 열 때와 "다시 시도"는 바로 부른다 (첫 목록이 250ms 늦지 않게).
@@ -46,13 +46,12 @@ export function usePlaces(hubId: string) {
         const { data, text } = await fetchPlaces(hubId, MAX_RADIUS, ctrl.signal);
         if (ctrl.signal.aborted) return;
         received = true;
-        // R44: 강등 모드면 pending이 줄지 않으므로 그것 때문에 다시 부르지 않는다
-        const waitDetails = data.pending > 0 && (data.detailsFrozenSince ?? null) === null;
-        const more = (waitDetails || data.incompleteTiles > 0) && polls < MAX_POLLS;
+        const delay = shouldPoll(data) ? pollDelayMs(polls) : null;
+        const more = delay !== null;
         setState({ data, loading: false, error: false, polling: more, hub: hubId, cache: null });
-        if (more) {
+        if (delay !== null) {
           polls += 1;
-          timer = window.setTimeout(load, POLL_MS);
+          timer = window.setTimeout(load, delay);
         } else {
           void saveCachedPlaces(hubId, text);
         }

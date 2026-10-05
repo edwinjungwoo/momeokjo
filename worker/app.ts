@@ -53,17 +53,19 @@ export const PLACES_PENDING_CACHE_MS = 10_000;
 
 /**
  * R12: 목록 응답을 엣지에 둘 시간(ms), 두지 않으면 null.
- * 다 찬 응답은 60초. R44 frozen이면 pending이 줄지 않으므로 남아 있어도 60초.
- * pending만 남았으면 10초 (그 사이 폴링은 보충을 다시 시작하지 않고 같은 응답을 받는다).
- * 격자를 아직 수집하는 중이거나 stale(요청 제한·외부 실패)이면 두지 않는다.
+ * - 공식 API 실패가 섞인 응답(stale)만 두지 않는다.
+ * - 격자를 아직 다 모으지 못했으면(예산·요청 제한) 10초 — 같은 거점을 폴링하는 화면들이 계산 하나를 나눠 쓴다.
+ * - 다 찬 응답, 또는 상세 가져오기가 멈춘 동안(R10 쿨다운·R44 frozen — pending을 줄일 수 없다)은 60초.
+ * - pending만 남았으면 10초 (그 사이 폴링은 보충을 다시 시작하지 않고 같은 응답을 받는다).
  */
 export function placesCacheTtl(res: PlacesResponse): number | null {
-  if (res.incompleteTiles > 0 || res.stale) return null;
-  if (res.pending === 0 || res.detailsFrozenSince !== null) return PLACES_CACHE_MS;
+  if (res.stale) return null;
+  if (res.incompleteTiles > 0) return PLACES_PENDING_CACHE_MS;
+  if (res.pending === 0 || res.detailsPaused || res.detailsFrozenSince !== null) return PLACES_CACHE_MS;
   return PLACES_PENDING_CACHE_MS;
 }
 /** 응답 형식이 바뀌면 올린다 (예전 형식의 캐시를 쓰지 않게) */
-export const PLACES_CACHE_VERSION = "3";
+export const PLACES_CACHE_VERSION = "4";
 const EXPIRES_HEADER = "x-mmj-expires";
 /** R42: 거점마다 키 하나 (반경은 키에 넣지 않는다 — 본문은 언제나 1000m) */
 export const placesCacheKey = (hub: string) =>

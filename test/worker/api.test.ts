@@ -115,12 +115,24 @@ describe("GET /api/places", () => {
     expect(body.places.map((p) => p.id)).toEqual(["2001"]);
   });
 
-  it("R15: 요청 제한에 걸리면 외부 호출 없이 캐시로만 응답하고 stale", async () => {
+  it("R15: 요청 제한에 걸리면 외부 호출 없이 캐시로만 응답한다 — 못 모은 격자는 incompleteTiles로 알리고 stale은 아니다(10초 캐시)", async () => {
     const { app, local, place } = setup({ allow: false });
     const body = (await (await callApp(app, Q)).json()) as PlacesResponse;
     expect(local.calls).toHaveLength(0);
     expect(place.calls).toHaveLength(0);
-    expect(body).toMatchObject({ stale: true, places: [], incompleteTiles: tilesCoveringCircle(HUB, 300).length });
+    expect(body).toMatchObject({ stale: false, places: [], incompleteTiles: tilesCoveringCircle(HUB, 300).length });
+    expect(placesCacheTtl(body)).toBe(PLACES_PENDING_CACHE_MS);
+  });
+
+  it("R15: 상세 보충만 요청 제한에 걸리면 보충을 건너뛸 뿐 stale이 아니고 pending은 그대로 (10초 캐시)", async () => {
+    const s = setup();
+    await callApp(s.app, Q); // 격자 수집 (보충은 waitUntil)
+    await env.DB.prepare("DELETE FROM places WHERE id = '1002'").run();
+    const limited = setup({ allow: false });
+    const body = (await (await callApp(limited.app, Q)).json()) as PlacesResponse;
+    expect(limited.place.calls).toHaveLength(0);
+    expect(body).toMatchObject({ stale: false, pending: 1, incompleteTiles: 0, detailsPaused: false });
+    expect(placesCacheTtl(body)).toBe(PLACES_PENDING_CACHE_MS);
   });
 
   it("R15: 격자와 상세가 모두 신선하면 요청 제한을 확인하지 않는다", async () => {
@@ -134,20 +146,48 @@ describe("GET /api/places", () => {
 });
 
 describe("GET /api/places — 응답 캐시와 목록 원소", () => {
-  it("R12: 캐시 시간 — 다 찬 응답(또는 R44 frozen) 60초, pending만 남은 응답 10초, 격자 수집 중이거나 stale이면 두지 않는다", () => {
+  it("R12: 캐시 시간 — 다 찬 응답·frozen·쿨다운(detailsPaused)이면 60초, pending이나 수집 중 격자가 남으면 10초, 외부 실패(stale)만 두지 않는다", () => {
     const base: PlacesResponse = {
-      center: HUB_CENTER, radius: 300, places: [], pending: 0, incompleteTiles: 0, stale: false,
+      center: HUB_CENTER, radius: 1000, places: [], pending: 0, incompleteTiles: 0, stale: false, detailsPaused: false,
       detailsFrozenSince: null, detailsNewestAt: null,
     };
     expect(PLACES_CACHE_MS).toBe(60_000);
     expect(PLACES_PENDING_CACHE_MS).toBe(10_000);
     expect(placesCacheTtl(base)).toBe(PLACES_CACHE_MS);
     expect(placesCacheTtl({ ...base, pending: 3 })).toBe(PLACES_PENDING_CACHE_MS);
-    expect(placesCacheTtl({ ...base, pending: 3, detailsFrozenSince: NOW })).toBe(PLACES_CACHE_MS);
-    expect(placesCacheTtl({ ...base, incompleteTiles: 1 })).toBeNull();
-    expect(placesCacheTtl({ ...base, pending: 3, incompleteTiles: 1 })).toBeNull();
+    // R44 frozen: pending이 줄 수 없다
+    expect(placesCacheTtl({ ...base, pending: 3, detailsPaused: true, detailsFrozenSince: NOW })).toBe(PLACES_CACHE_MS);
+    // R10 쿨다운: 30분 동안 아무도 pending을 줄일 수 없다
+    expect(placesCacheTtl({ ...base, pending: 3, detailsPaused: true })).toBe(PLACES_CACHE_MS);
+    // 격자를 아직 다 모으지 못했으면(요청 제한·예산) 짧게만
+    expect(placesCacheTtl({ ...base, incompleteTiles: 1 })).toBe(PLACES_PENDING_CACHE_MS);
+    expect(placesCacheTtl({ ...base, pending: 3, incompleteTiles: 1 })).toBe(PLACES_PENDING_CACHE_MS);
+    expect(placesCacheTtl({ ...base, pending: 3, incompleteTiles: 1, detailsPaused: true })).toBe(PLACES_PENDING_CACHE_MS);
+    // 공식 API 실패가 섞인 응답만 두지 않는다
     expect(placesCacheTtl({ ...base, stale: true })).toBeNull();
     expect(placesCacheTtl({ ...base, pending: 3, stale: true })).toBeNull();
+  });
+
+  it("R10/R12: 쿨다운 중이면 detailsPaused=true이고 pending이 남아도 60초 캐시한다", async () => {
+    await recordPlaceBlock(env.DB, NOW);
+    const cache = caches.default;
+    await cache.delete(new Request(placesCacheKey("bongeunsa")));
+    const s = setup();
+    const app = createApp({
+      fetcher: routeFetch(s.local.fetcher, s.place.fetcher), now: () => NOW, sleep: async () => {}, rateLimit: async () => true, cache,
+    });
+    const body = (await (await callApp(app, Q)).json()) as PlacesResponse;
+    expect(body).toMatchObject({ pending: 3, detailsPaused: true, stale: false });
+    const stored = await cache.match(new Request(placesCacheKey("bongeunsa")));
+    expect(stored?.headers.get("cache-control")).toBe("public, max-age=60, s-maxage=60");
+    await cache.delete(new Request(placesCacheKey("bongeunsa")));
+  });
+
+  it("R12: 평소에는 detailsPaused=false", async () => {
+    const s = setup();
+    await callApp(s.app, Q);
+    const body = (await (await callApp(s.app, Q)).json()) as PlacesResponse;
+    expect(body.detailsPaused).toBe(false);
   });
 
   it("R12: 다 채워진 응답은 Workers Cache API에 60초 캐시해서, 캐시 적중이면 D1을 읽지 않고 같은 본문을 준다", async () => {
@@ -219,7 +259,7 @@ describe("GET /api/places — 응답 캐시와 목록 원소", () => {
     await callApp(s.app, Q);
     const body = (await (await callApp(s.app, Q)).json()) as PlacesResponse;
     expect(Object.keys(body).sort()).toEqual(
-      ["center", "detailsFrozenSince", "detailsNewestAt", "incompleteTiles", "pending", "places", "radius", "stale"],
+      ["center", "detailsFrozenSince", "detailsNewestAt", "detailsPaused", "incompleteTiles", "pending", "places", "radius", "stale"],
     );
     expect(body.places.length).toBeGreaterThan(0);
     for (const p of body.places) {

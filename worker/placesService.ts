@@ -46,8 +46,8 @@ export async function getPlaces(
       failedTiles = r.failed.length;
       stale = failedTiles > 0;
     } else {
+      // R15: 요청 제한이면 수집을 건너뛸 뿐이다 (stale은 공식 API 실패만 — 이 응답은 10초 캐시된다)
       incompleteTiles = due.length;
-      stale = true;
     }
   }
 
@@ -67,8 +67,9 @@ export async function getPlaces(
   const pending = countUnfetchedIn(tileStates);
   // R10 쿨다운·R44 강등 모드 (meta 2행). frozen이면 응답에 시작 시각을 싣는다
   const gate = await detailGate(deps.db);
-  const needsDetail = pending > 0 && detailsAllowed(gate, deps.now);
-  if (needsDetail && budget.left > 0 && (await allow())) {
+  const detailsPaused = !detailsAllowed(gate, deps.now);
+  // 요청 제한에 걸리면 보충만 건너뛴다 (pending은 그대로, stale 아님)
+  if (pending > 0 && !detailsPaused && budget.left > 0 && (await allow())) {
     deps.waitUntil(
       enrichDetails(
         {
@@ -79,8 +80,6 @@ export async function getPlaces(
         radiusM,
       ).catch((e) => console.error("enrich failed", e)),
     );
-  } else if (needsDetail && allowed === false) {
-    stale = true;
   }
 
   // R44: 실린 가게 중 가장 최근에 상세를 가져온 시각 (실패 기록 시각은 빼고)
@@ -94,6 +93,7 @@ export async function getPlaces(
     pending,
     incompleteTiles,
     stale,
+    detailsPaused,
     detailsFrozenSince: frozenSince(gate, deps.now),
     detailsNewestAt: newest,
   };

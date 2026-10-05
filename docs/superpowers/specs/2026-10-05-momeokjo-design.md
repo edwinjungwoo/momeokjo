@@ -214,7 +214,7 @@ CREATE INDEX idx_events_type_day ON events(type, day);
 - **R12 `GET /api/places?hub&radius`.**
   - 검증: `hub`는 `shared/hubs.ts`의 거점 id, `radius`는 100~1000m의 50m 배수. 위반하거나(모르는 거점 포함) 임의 lat/lng를 보내면 400과 `{error: "invalid_params"}`를 반환한다. 좌표는 서버가 거점 목록에서 찾는다(남용과 비용 방지; 임의 좌표는 관리용 R31/R32만).
   - 화면은 반경과 상관없이 항상 `radius=1000`을 요청하고 반경은 브라우저에서 거른다(R42). 서버는 50m 단위 반경을 계속 검증하지만(호환), 어떤 반경이 와도 거점의 1000m 목록 하나만 계산·캐시해서 같은 본문(`radius: 1000`)을 준다 — 캐시 키가 거점당 하나라 반경을 바꾼 요청으로 캐시를 우회해 D1을 읽게 할 수 없다.
-  - 캐시: `(pending === 0 || detailsFrozenSince !== null) && incompleteTiles === 0 && !stale`인 응답은 Workers Cache API(`caches.default`)에 `https://cache.mmj/places?hub&v={응답 형식 버전}` 키(거점당 하나)로 60초(`Cache-Control: public, max-age=60, s-maxage=60`) 저장하고, 다음 요청은 D1을 읽지 않고 캐시로 답한다. `incompleteTiles === 0 && !stale`인데 pending만 남은(frozen 아님) 응답은 10초만 저장해서, 같은 거점을 폴링하는 여러 화면이 계산(과 요청 보충 시작) 하나를 나눠 쓴다(`placesCacheTtl`). 브라우저에 주는 응답은 항상 `no-store`다. 키는 거점 수(5개)뿐이다(예전에는 거점 × 반경 19단계 = 95개). 응답 형식 버전은 3(반경을 키에서 뺌).
+  - 캐시: Workers Cache API(`caches.default`)에 `https://cache.mmj/places?hub&v={응답 형식 버전}` 키(거점당 하나)로 저장하고, 다음 요청은 D1을 읽지 않고 캐시로 답한다. 시간은 `placesCacheTtl`: 공식 API 실패가 섞인 응답(`stale`)만 저장하지 않는다. `incompleteTiles > 0`(예산·요청 제한으로 격자를 다 못 모음)이면 10초. 그 밖에 `pending === 0`이거나 상세 가져오기가 멈췄으면(`detailsPaused` — R10 쿨다운·R44 frozen, 아무도 pending을 줄일 수 없다) 60초(`Cache-Control: public, max-age=60, s-maxage=60`), pending만 남았으면 10초 — 같은 거점을 폴링하는 여러 화면이 계산(과 요청 보충 시작) 하나를 나눠 쓴다. 요청 제한에 걸린 요청도 10초 캐시를 받으므로, IP 하나를 함께 쓰는 사무실이 분당 10회를 넘겨도 매번 D1을 읽지 않는다. 브라우저에 주는 응답은 항상 `no-store`다. 키는 거점 수(5개)뿐이다(예전에는 거점 × 반경 19단계 = 95개). 응답 형식 버전은 4(반경을 키에서 뺌, `detailsPaused` 추가).
   - 처리: `tilesCoveringCircle`로 격자를 구하고, 만료/미수집 격자를 예산 안에서 동기적으로 수집한다(ID만 기록). 격자-장소 상태(`tile_places` + places 메타)는 요청마다 한 번만 읽어서 목록 필터, `pending`, 보충 대상 고르기에 같이 쓴다. 그다음 D1에서 덮는 격자에 기록된 가게 중 상세가 있고 거리 ≤ radius인 것을 조회한다. R13 단건 조회로만 저장된 가게는 목록에 넣지 않는다. 상세가 아직 없는 장소는 좌표를 모르므로 응답에 넣지 않고 `pending`으로만 센다. 상세를 한 번도 가져오지 않은 가게가 있으면(쿨다운 중이 아니면) `ctx.waitUntil`로 그 가게들만 R10 배치를 시작한다. 만료된 상세는 그대로 보여주고 갱신은 Cron(R11)에 맡긴다.
   - 응답:
     ```ts
@@ -232,7 +232,8 @@ CREATE INDEX idx_events_type_day ON events(type, day);
       }>,
       pending: number,   // 덮는 격자에 ID는 기록됐지만 상세를 아직 한 번도 가져오지 않은 장소 수 (반경이 아니라 격자 기준)
       incompleteTiles: number, // 예산 부족으로 이번에 못 수집한 격자 수
-      stale: boolean,    // R14
+      stale: boolean,    // R14 공식 API 실패 (요청 제한으로 건너뛴 것은 아님)
+      detailsPaused: boolean, // R10 쿨다운·R44 frozen으로 상세 가져오기가 멈춤 (화면은 pending 때문에 폴링하지 않는다)
       detailsFrozenSince: number | null, // R44 강등 모드 시작 시각 (epoch ms)
       detailsNewestAt: number | null     // R44 응답에 실린 가게 중 가장 최근 상세 시각
     }
@@ -240,7 +241,7 @@ CREATE INDEX idx_events_type_day ON events(type, day);
   - `Cache-Control: no-store`
 - **R13 `GET /api/places/:id`.** 단일 가게 정보를 반환한다(형식은 R12의 원소와 같고, distance와 walkMinutes는 빠지며 address·phone과 메뉴 전부(최대 20개), 상세를 가져온 시각 `fetchedAt`(epoch ms, R48)을 준다 — 목록 원소에는 없다). 상세를 가져오지 못한 ID가 어느 격자에도 없으면 실패를 기록하지 않고 404만 준다(임의 숫자로 D1을 키울 수 없게). 화면은 카드를 열 때 이것을 한 번 불러 목록 원소의 상세와 바꾼다. id는 숫자 1~15자리만 허용하고 아니면 404다. 표시 정보가 없으면 R15 제한 안에서 동기적으로 한 번 상세를 가져온다(최근 6시간 안에 실패했거나 R10 쿨다운 중이면 시도하지 않음). 그래도 없으면 404다.
 - **R14 장애 대응.** 공식 API가 실패하고(쿼터 초과, 5xx, 타임아웃) 해당 격자에 만료된 캐시가 있으면 그 캐시로 응답하고 `stale: true`를 준다. 캐시도 없으면 502와 `{error: "upstream"}`을 반환한다.
-- **R15 남용 방지.** 외부 호출을 일으키는 요청(만료/미수집 격자가 있는 R12, 동기 보충이 필요한 R13)은 IP당 분당 10회로 제한한다(Workers Rate Limiting 바인딩). 초과하면 외부 호출 없이 캐시로만 응답하고 `stale: true`를 준다. 캐시로만 응답할 수 있는 요청은 제한하지 않는다.
+- **R15 남용 방지.** 외부 호출을 일으키는 요청(만료/미수집 격자가 있는 R12, 동기 보충이 필요한 R13)은 IP당 분당 10회로 제한한다(Workers Rate Limiting 바인딩). 초과하면 외부 호출 없이 캐시로만 응답한다 — 못 모은 격자는 `incompleteTiles`, 못 채운 상세는 `pending`으로 남고 `stale`은 주지 않는다(`stale`은 R14 실패만). 이 응답은 10초 캐시된다(R12). 캐시로만 응답할 수 있는 요청은 제한하지 않는다.
 
 ### 5.5 추천 로직 (브라우저, `shared/recommend`)
 
@@ -352,7 +353,7 @@ CREATE INDEX idx_events_type_day ON events(type, day);
   - 카드 정보 순서: 이름 → 도보 N분 · ⭐평점(리뷰 수) · 영업 상태("영업 중" / "곧 마감" / "지금 닫힘" / "영업 정보 없음"; 닫혔거나 30분 안에 닫으면 포인트 컬러) → 카테고리 · 대표 가격 · 강점 → 메뉴(모바일은 3개 + "메뉴 더보기", 데스크톱은 최대 5개) → 행동("공유"(이 한 곳, R23), "카카오맵" 링크) → 작게 "정보 출처: 카카오맵". 상세 정보가 없는 가게(R13)는 평점과 메뉴 대신 "평점과 메뉴 정보를 아직 불러오지 못했어요"를 보여준다.
 - **R29 로딩과 상태 표시.** 거점이 바뀌면 250ms 디바운스 후 요청하고(반경은 다시 요청하지 않는다, R42), 다시 불러오는 동안 이전 리스트를 흐리게 보여준다.
   - 첫 응답 전에는 리스트 자리에 스켈레톤 4줄과 "주변 식당을 찾고 있어요"를 보여준다.
-  - `pending > 0`(R44 frozen이면 제외) 또는 `incompleteTiles > 0`이면 3초 간격으로 최대 10번 다시 요청하고, 리스트 위 상태 줄에 "주변 가게를 더 찾는 중이에요"(incompleteTiles) 또는 "평점 정보 불러오는 중 (n곳)"(pending)을 표시한다. 10번이 끝났는데도 남아 있으면 "주변 가게를 다 찾지 못했어요" 또는 "n곳은 아직 정보를 못 불러왔어요"로 바꾼다. 다시 요청하는 중에 후보가 0개면 빈 상태 대신 스켈레톤을 유지한다.
+  - `pending > 0`(`detailsPaused` — R10 쿨다운·R44 frozen — 이면 제외) 또는 `incompleteTiles > 0`이면 3초 → 6초 → 12초(이후 12초) 간격으로 최대 6번(약 57초) 다시 요청하고(`web/pollSchedule.ts`), 리스트 위 상태 줄에 "주변 가게를 더 찾는 중이에요"(incompleteTiles) 또는 "평점 정보 불러오는 중 (n곳)"(pending)을 표시한다. 6번이 끝났는데도 남아 있으면 "주변 가게를 다 찾지 못했어요" 또는 "n곳은 아직 정보를 못 불러왔어요"로 바꾼다. 다시 요청하는 중에 후보가 0개면 빈 상태 대신 스켈레톤을 유지한다.
   - `stale`이면 "정보가 오래됐을 수 있어요"를 표시한다.
   - R44: frozen이거나 가장 최근 상세가 4일보다 오래됐으면 "평점·메뉴는 N일 전 기준이에요"(frozen이면 pending 안내보다 먼저).
   - 첫 요청이 실패하면 "가게 정보를 불러오지 못했어요"와 "다시 시도" 버튼을 보여준다. 이미 리스트가 있는데 다시 요청이 실패하면 리스트는 두고 상태 줄에 "최신 정보를 불러오지 못했어요"와 "다시 시도"를 보여준다.

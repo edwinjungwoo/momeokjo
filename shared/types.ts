@@ -76,7 +76,10 @@ export type PlacesResponse = {
   places: ApiPlace[];
   pending: number;
   incompleteTiles: number;
+  /** 공식 API(격자 수집)가 실패해서 예전 데이터일 수 있다. 요청 제한으로 건너뛴 것은 stale이 아니다 */
   stale: boolean;
+  /** R10 쿨다운·R44 frozen으로 상세 가져오기가 멈췄다 — pending이 줄지 않으니 화면은 그것 때문에 다시 부르지 않는다 */
+  detailsPaused: boolean;
   /** R44 강등 모드 시작 시각 (아니면 null) */
   detailsFrozenSince: number | null;
   /** R44 실린 가게 중 가장 최근 상세 시각 (없으면 null) */
