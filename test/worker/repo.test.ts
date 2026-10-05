@@ -148,6 +148,14 @@ describe("repo", () => {
     expect(plan).not.toMatch(/TEMP B-TREE/);
   });
 
+  it("R11: 만료 후보 조회는 같은 시각 행에도 before(상한)를 적용한다 — 커서 시각이 상한보다 늦으면 아무것도 읽지 않는다", async () => {
+    await seedPlace(env.DB, "late", ASEM.lat, ASEM.lng, { now: NOW + 100 });
+    const rows = async (from: number, before: number) =>
+      (await env.DB.prepare(EXPIRED_SCAN_SQL).bind("ok", from, 0, before, 300).all<{ id: string }>()).results.map((x) => x.id);
+    expect(await rows(NOW + 100, NOW + 100)).toEqual(["late"]);
+    expect(await rows(NOW + 100, NOW)).toEqual([]);
+  });
+
   /** 만료 후보를 한 번 고르고 읽은 행 수를 같이 돌려준다 */
   const scan = async (keys: string[], now = NOW) => {
     const { db, log } = recordingDb(env.DB);

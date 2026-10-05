@@ -254,7 +254,7 @@ const EXPIRED_COLS = `SELECT p.rowid AS rid, p.id AS id, p.status AS status, p.f
  * 바인드: ?1 status, ?2 from(포함), ?3 fromRowid(포함), ?4 before(포함), ?5 limit
  */
 export const EXPIRED_SCAN_SQL = `${EXPIRED_COLS}
-  WHERE p.status = ?1 AND p.fetched_at = ?2 AND p.rowid >= ?3
+  WHERE p.status = ?1 AND p.fetched_at = ?2 AND p.rowid >= ?3 AND p.fetched_at <= ?4
 UNION ALL
 ${EXPIRED_COLS}
   WHERE p.status = ?1 AND p.fetched_at > ?2 AND p.fetched_at <= ?4
