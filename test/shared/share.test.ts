@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { DEFAULT_FILTERS } from "../../shared/recommend";
-import { parseHubPath, parseShareParams, shareText, shareUrl } from "../../shared/share";
+import { isAdminPath, parseHubPath, parseShareParams, shareText, shareUrl } from "../../shared/share";
 import { HUBS } from "../../shared/hubs";
 import wranglerRaw from "../../wrangler.jsonc?raw";
 import { apiPlace } from "../helpers/apiPlace";
@@ -115,6 +115,14 @@ describe("R43 거점 짧은 링크", () => {
     expect(publicTop).toContain("brand");
     const reserved = new Set([...publicTop, "admin", "api", "assets", "index"]);
     for (const h of HUBS) expect(reserved.has(h.id), h.id).toBe(false);
+  });
+
+  it("R36: 관리 화면은 /admin과 /admin/(끝 슬래시) 둘 다, 그 밖의 경로는 아니다", () => {
+    expect(isAdminPath("/admin")).toBe(true);
+    expect(isAdminPath("/admin/")).toBe(true);
+    for (const p of ["/", "", "/admin/x", "/admin//", "/administrator", "/ADMIN", "//admin", "/pangyo"]) {
+      expect(isAdminPath(p), p).toBe(false);
+    }
   });
 
   it("R43: Worker는 /api/*만 먼저 처리하고 나머지는 정적 파일 → SPA 대체 응답(index.html)", () => {

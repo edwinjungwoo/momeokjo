@@ -19,6 +19,9 @@ export function parseHubPath(pathname: string): string | null {
   return m && isHubId(m[1]) ? m[1] : null;
 }
 
+/** R36: 관리 화면 경로 — /admin과 /admin/(끝 슬래시) */
+export const isAdminPath = (pathname: string): boolean => pathname === "/admin" || pathname === "/admin/";
+
 function line(p: ApiPlace, i: number): string {
   const rating = p.detail?.rating;
   return [
