@@ -1,5 +1,5 @@
 import { env } from "cloudflare:test";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   ASEM, DETAIL_FAIL_TTL_MS, DETAIL_JITTER_MS, DETAIL_OK_TTL_MS, PLACE_BLOCK_COOLDOWN_MS, TILE_TTL_MS,
 } from "../../shared/constants";
@@ -164,5 +164,30 @@ describe("repo", () => {
     expect(await countUnfetched(env.DB, [KA, KB])).toBe(2);
     // 요청 시점 보충은 한 번도 가져오지 않은 ID만 (만료 갱신은 Cron 몫)
     expect(await idsNeedingDetail(env.DB, ASEM, 1000, NOW, undefined, "unfetched")).toEqual(["a1", "b1"]);
+  });
+});
+
+describe("QA D-8: 깨진 JSON 열 경고", () => {
+  it("R12/D-8: 같은 행·열의 경고는 isolate마다 한 번만 남기고, 기억은 200개까지만 둔다", async () => {
+    const { CORRUPT_WARN_CAP, warnCorruptOnce } = await import("../../worker/repo");
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    try {
+      expect(CORRUPT_WARN_CAP).toBe(200);
+      warnCorruptOnce("dedupe-1", "menus_json");
+      warnCorruptOnce("dedupe-1", "menus_json");
+      warnCorruptOnce("dedupe-1", "tags_json");
+      expect(warn.mock.calls).toEqual([
+        ["corrupt json column", { id: "dedupe-1", col: "menus_json" }],
+        ["corrupt json column", { id: "dedupe-1", col: "tags_json" }],
+      ]);
+      // 서로 다른 키가 200개를 넘으면 기억을 비우고 다시 센다 (메모리가 끝없이 늘지 않게)
+      warnCorruptOnce("cap-0", "menus_json");
+      for (let i = 1; i <= 2 * CORRUPT_WARN_CAP; i++) warnCorruptOnce(`cap-${i}`, "menus_json");
+      warn.mockClear();
+      warnCorruptOnce("cap-0", "menus_json");
+      expect(warn).toHaveBeenCalledTimes(1);
+    } finally {
+      warn.mockRestore();
+    }
   });
 });

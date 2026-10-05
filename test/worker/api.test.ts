@@ -7,7 +7,7 @@ import { hubById } from "../../shared/hubs";
 import { tileKeyOf, tilesCoveringCircle, walkMinutes } from "../../shared/geo";
 import type { PlacesResponse } from "../../shared/types";
 import { PLACES_CACHE_MS, PLACES_PENDING_CACHE_MS, createApp, placesCacheKey, placesCacheTtl } from "../../worker/app";
-import { detailGate, getMeta, markTile, recordPlaceBlock, replaceTilePlaces } from "../../worker/repo";
+import { detailGate, getMeta, markTile, recordPlaceBlock, replaceTilePlaces, resetCorruptWarnings } from "../../worker/repo";
 import { callApp } from "../helpers/callApp";
 import { doc, fakeKakaoLocal, fakePlaceApi, routeFetch } from "../helpers/fakeKakao";
 import { placeJson, seedPlace } from "../helpers/places";
@@ -245,6 +245,8 @@ describe("GET /api/places — 저장값 방어 (QA 보강)", () => {
     await callApp(s.app, Q);
     await callApp(s.app, Q);
     await env.DB.prepare("UPDATE places SET menus_json = '{', tags_json = '7' WHERE id = '1001'").run();
+    // 앞 테스트가 같은 행을 이미 경고했다 (isolate마다 한 번만 남긴다)
+    resetCorruptWarnings();
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     try {
       expect((await callApp(s.app, Q)).status).toBe(200);

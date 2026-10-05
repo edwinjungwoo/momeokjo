@@ -50,8 +50,26 @@ function readJson<T>(id: string, col: string, raw: string | null, fallback: T, o
   } catch {
     /* 아래에서 남긴다 */
   }
-  console.warn("corrupt json column", { id, col });
+  warnCorruptOnce(id, col);
   return fallback;
+}
+
+/** 깨진 열 경고를 기억하는 개수 상한 (넘으면 비우고 다시 센다) */
+export const CORRUPT_WARN_CAP = 200;
+const corruptWarned = new Set<string>();
+
+/** 목록 요청마다 같은 깨진 행이 로그를 채우지 않게, 행 id·열 이름마다 isolate당 한 번만 남긴다 */
+export function warnCorruptOnce(id: string, col: string) {
+  const key = `${id}:${col}`;
+  if (corruptWarned.has(key)) return;
+  if (corruptWarned.size >= CORRUPT_WARN_CAP) corruptWarned.clear();
+  corruptWarned.add(key);
+  console.warn("corrupt json column", { id, col });
+}
+
+/** 테스트용: 이미 남긴 경고 기억을 비운다 */
+export function resetCorruptWarnings() {
+  corruptWarned.clear();
 }
 const isPlainObject = (v: unknown) => typeof v === "object" && v !== null && !Array.isArray(v);
 
