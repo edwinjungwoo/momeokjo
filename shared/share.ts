@@ -45,18 +45,26 @@ export function shareText(places: ApiPlace[], f: Filters, hubId: string, origin:
   ].join("\n");
 }
 
+/** 끝 숫자를 읽는 소리(영 일 이 삼 사 오 육 칠 팔 구)에 ㄹ 아닌 받침이 있는가 — 0·3·6 */
+const DIGIT_WITH_FINAL = new Set(["0", "3", "6"]);
+/** 끝 영문자를 읽는 소리(엠·엔)에 ㄹ 아닌 받침이 있는가 — 엘(L)은 ㄹ이라 "로" */
+const LATIN_WITH_FINAL = new Set(["m", "n"]);
+
 /**
- * R47: 이름 뒤 조사 "(으)로". 끝에서부터 첫 글자(한글·영문·숫자)를 보고, 한글이고 받침이 있으면(ㄹ 제외) "으로", 아니면 "로".
- * 괄호·공백 같은 기호는 건너뛴다 ("중앙해장(본점)" → 점 → "으로").
+ * R47: 이름 뒤 조사 "(으)로". 끝에서부터 첫 글자(한글·영문·숫자)를 보고, 그 글자(숫자·영문은 읽는 소리)에
+ * ㄹ이 아닌 받침이 있으면 "으로", 아니면 "로". 괄호·공백 같은 기호는 건너뛴다 ("중앙해장(본점)" → 점 → "으로").
+ * 숫자: 0 영·3 삼·6 육 → "으로", 나머지(1 일·7 칠·8 팔은 ㄹ) → "로". 영문: M·N → "으로", 나머지(L 엘 포함) → "로".
  */
 export function toParticle(name: string): "으로" | "로" {
   for (let i = name.length - 1; i >= 0; i--) {
+    const ch = name[i];
     const code = name.charCodeAt(i);
     if (code >= 0xac00 && code <= 0xd7a3) {
       const jong = (code - 0xac00) % 28;
       return jong !== 0 && jong !== 8 ? "으로" : "로";
     }
-    if (/[A-Za-z0-9]/.test(name[i])) return "로";
+    if (/[0-9]/.test(ch)) return DIGIT_WITH_FINAL.has(ch) ? "으로" : "로";
+    if (/[A-Za-z]/.test(ch)) return LATIN_WITH_FINAL.has(ch.toLowerCase()) ? "으로" : "로";
   }
   return "로";
 }

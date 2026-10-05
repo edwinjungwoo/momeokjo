@@ -156,4 +156,24 @@ describe("R47 \"여기로 가요\" 확정 공유", () => {
     expect(toParticle("BHC")).toBe("로");
     expect(toParticle("")).toBe("로");
   });
+
+  it("R47: 끝이 숫자면 읽는 소리의 받침으로 — 0 영·3 삼·6 육은 '으로', 1 일·7 칠·8 팔(ㄹ)과 2·4·5·9는 '로'", () => {
+    const want: Record<string, "으로" | "로"> = {
+      0: "으로", 1: "로", 2: "로", 3: "으로", 4: "로", 5: "로", 6: "으로", 7: "로", 8: "로", 9: "로",
+    };
+    for (const [d, particle] of Object.entries(want)) expect(toParticle(`포차${d}`), `포차${d}`).toBe(particle);
+    expect(toParticle("공방 1983")).toBe("으로");
+    expect(toParticle("스테이크 27")).toBe("로");
+    expect(toParticle("Bar 30 (2F)")).toBe("로");
+  });
+
+  it("R47: 끝이 영문이면 L은 '로', M·N은 '으로', 나머지는 '로' (대소문자 같음)", () => {
+    expect(toParticle("Hotel")).toBe("로");
+    expect(toParticle("CAPITAL")).toBe("로");
+    expect(toParticle("Gym")).toBe("으로");
+    expect(toParticle("SALON")).toBe("으로");
+    expect(toParticle("Pizza Barn")).toBe("으로");
+    expect(toParticle("Cafe")).toBe("로");
+    expect(toParticle("BHC")).toBe("로");
+  });
 });
