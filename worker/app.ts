@@ -194,10 +194,15 @@ export function createApp(deps: AppDeps) {
     return c.body(null, 204);
   });
 
+  // R36: 인증에 실패한 요청만 IP별 RATE_LIMITER(분당 10회)로 센다. 넘으면 401 대신 429.
+  // 맞는 토큰은 세지 않는다 — warm.mjs가 초당 1번 가까이 부르므로 모든 요청을 세면 수집이 멈춘다.
+  // IP는 제한 키로만 쓰고(메모리) 어디에도 저장하지 않는다
   app.use("/api/admin/*", async (c, next) => {
     const token = c.env.ADMIN_TOKEN;
-    if (!token || c.req.header("authorization") !== `Bearer ${token}`) return c.json({ error: "unauthorized" }, 401);
-    await next();
+    if (token && c.req.header("authorization") === `Bearer ${token}`) return next();
+    const ip = c.req.header("cf-connecting-ip") ?? "anonymous";
+    if (!(await rateLimit(c.env, `admin:${ip}`))) return c.json({ error: "rate_limited" }, 429);
+    return c.json({ error: "unauthorized" }, 401);
   });
 
   app.post("/api/admin/warm", async (c) => {

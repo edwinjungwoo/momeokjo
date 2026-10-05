@@ -58,6 +58,36 @@ describe("admin", () => {
     }
   });
 
+  it("R36: 인증에 실패하면 RATE_LIMITER(admin:<IP>)를 세고, 넘으면 401 대신 429. 맞는 토큰은 제한을 쓰지 않는다", async () => {
+    const keys: string[] = [];
+    let allow = true;
+    const app = createApp({
+      fetcher: setup().fetcher, now: () => NOW, sleep: async () => {},
+      rateLimit: async (_env, key) => {
+        keys.push(key);
+        return allow;
+      },
+    });
+    const ip = { "cf-connecting-ip": "203.0.113.9" };
+    expect((await callApp(app, "/api/admin/stats", { headers: { ...ip, Authorization: "Bearer nope" } })).status).toBe(401);
+    expect((await callApp(app, "/api/admin/stats", { headers: ip })).status).toBe(401);
+    expect(keys).toEqual(["admin:203.0.113.9", "admin:203.0.113.9"]);
+    // 맞는 토큰(warm.mjs는 초당 1번 가까이 부른다)은 분당 10회 제한에 걸리지 않게 세지 않는다
+    expect((await callApp(app, "/api/admin/stats", { headers: { ...ip, ...AUTH } })).status).toBe(200);
+    expect(keys).toHaveLength(2);
+    allow = false;
+    const over = await callApp(app, "/api/admin/stats", { headers: { ...ip, Authorization: "Bearer nope" } });
+    expect(over.status).toBe(429);
+    expect(await over.json()).toEqual({ error: "rate_limited" });
+    expect((await callApp(app, `/api/admin/warm?${AREA}`, { method: "POST", headers: ip })).status).toBe(429);
+    // IP는 제한 키로만 쓰고 어디에도 저장하지 않는다
+    const dump = JSON.stringify([
+      (await env.DB.prepare("SELECT * FROM events").all()).results,
+      (await env.DB.prepare("SELECT * FROM meta").all()).results,
+    ]);
+    expect(dump).not.toContain("203.0.113.9");
+  });
+
   it("R31: warm은 격자 수집과 상세 보충을 한 번 수행하고, 반복하면 0으로 수렴한다", async () => {
     const { app } = setup();
     const warm = async () => (await callApp(app, `/api/admin/warm?${AREA}`, { method: "POST", headers: AUTH })).json<any>();

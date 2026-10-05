@@ -276,6 +276,8 @@ export default function AdminPage() {
       .then(async (res) => {
         if (ctrl.signal.aborted) return;
         if (res.status === 401) return logout("토큰이 맞지 않아요");
+        // 429는 틀린 토큰을 너무 자주 보냈을 때만 온다 (맞는 토큰은 세지 않는다)
+        if (res.status === 429) return logout("틀린 토큰을 너무 자주 넣었어요. 1분 뒤에 다시 해 주세요");
         if (!res.ok) throw new Error(String(res.status));
         const data: StatsResponse = await res.json();
         if (!ctrl.signal.aborted) setLoad({ state: "ok", data });
