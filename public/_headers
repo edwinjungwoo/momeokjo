@@ -18,3 +18,7 @@
   Cache-Control: public, max-age=86400, stale-while-revalidate=604800
 /manifest.webmanifest
   Cache-Control: public, max-age=86400
+
+# R36: 관리자 화면(SPA 대체 응답)은 검색에 싣지 않는다 (화면의 robots 메타와 같은 뜻, robots.txt에서도 막는다)
+/admin
+  X-Robots-Tag: noindex
