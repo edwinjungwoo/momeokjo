@@ -33,6 +33,8 @@ type Props = {
   onFocus: (id: string | null) => void;
   onClose: () => void;
   onShare: (places: ApiPlace[]) => void;
+  /** R47: 펼친 카드의 "여기로 가요" (한 곳 확정 공유) */
+  onConfirm: (p: ApiPlace) => void;
   onKakao: (p: ApiPlace) => void;
   onExclude: (p: ApiPlace) => void;
 };
@@ -60,10 +62,11 @@ function TrioCard(props: {
   party: Party;
   now: Date;
   onToggle: () => void;
+  onConfirm: (p: ApiPlace) => void;
   onKakao: (p: ApiPlace) => void;
   onExclude: (p: ApiPlace) => void;
 }) {
-  const { place: p, rank, open, detailLoading, topPercent, outside, party, now, onToggle, onKakao, onExclude } = props;
+  const { place: p, rank, open, detailLoading, topPercent, outside, party, now, onToggle, onConfirm, onKakao, onExclude } = props;
   const li = useRef<HTMLLIElement>(null);
   const d = p.detail;
   const rating = d?.rating ?? null;
@@ -143,6 +146,9 @@ function TrioCard(props: {
             <a href={p.url} target="_blank" rel="noreferrer" onClick={() => onKakao(p)}>
               카카오맵에서 보기
             </a>
+            <button type="button" className="trio-go" onClick={() => onConfirm(p)}>
+              여기로 가요
+            </button>
             <button type="button" className="trio-hide" onClick={() => onExclude(p)}>
               여긴 빼줘
             </button>
@@ -157,12 +163,12 @@ function TrioCard(props: {
 
 /**
  * R22′: 뽑기 결과 3곳. 셔플 중에는 이름이 바뀌는 자리만 보여주고, 멈추면 작은 카드 3장이 쌓인다.
- * 카드를 누르면 그 자리에서 펼쳐(아코디언) 메뉴·영업시간·카카오맵·"여긴 빼줘"를 보여준다.
+ * 카드를 누르면 그 자리에서 펼쳐(아코디언) 메뉴·영업시간·카카오맵·"여기로 가요"(R47)·"여긴 빼줘"를 보여준다.
  * 아래 한 줄: [다시 뽑기](보조) + [공유](3곳 모두, 주 행동). 시트가 떠 있는 동안 화면 아래 뽑기 바는 숨는다 (styles.css .has-trio)
  */
 export function TrioSheet(props: Props) {
   const { slotName, places, received, focusId, detailLoading, ranks, outside, now, drawLabel } = props;
-  const { onDraw, onFocus, onClose, onShare, onKakao } = props;
+  const { onDraw, onFocus, onClose, onShare, onConfirm, onKakao } = props;
   const shuffling = slotName !== null;
   const swipe = useSwipeDown(onClose);
   const closeBtn = useRef<HTMLButtonElement>(null);
@@ -254,6 +260,7 @@ export function TrioSheet(props: Props) {
             party={props.party}
             now={now}
             onToggle={() => onFocus(p.id === focusId ? null : p.id)}
+            onConfirm={onConfirm}
             onKakao={onKakao}
             onExclude={onExclude}
           />

@@ -9,7 +9,7 @@ export const EVENT_TYPES = [
   "app_open", // 세션마다 한 번
   "draw", // 첫 뽑기 (결과가 없을 때). R39 자동 뽑기는 props.auto = true
   "redraw", // 결과가 떠 있는 상태에서 다시 뽑기
-  "share", // 공유·복사 성공 (picks = 공유한 곳)
+  "share", // 공유·복사 성공 (picks = 공유한 곳). R47 "여기로 가요"는 props.confirm = true
   "open_kakao", // 카카오맵 열기 (rank = 결과 3곳 중 몇 번째인지)
   "select_place", // 목록·지도 핀에서 한 곳을 엶
   "hub_change",

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { DEFAULT_FILTERS } from "../../shared/recommend";
-import { isAdminPath, parseHubPath, parseShareParams, shareText, shareUrl } from "../../shared/share";
+import { isAdminPath, parseHubPath, parseShareParams, shareConfirmText, shareText, shareUrl, toParticle } from "../../shared/share";
 import { HUBS } from "../../shared/hubs";
 import wranglerRaw from "../../wrangler.jsonc?raw";
 import { apiPlace } from "../helpers/apiPlace";
@@ -128,5 +128,32 @@ describe("R43 거점 짧은 링크", () => {
   it("R43: Worker는 /api/*만 먼저 처리하고 나머지는 정적 파일 → SPA 대체 응답(index.html)", () => {
     const cfg = JSON.parse(wranglerRaw.replace(/^\s*\/\/.*$/gm, ""));
     expect(cfg.assets).toEqual({ not_found_handling: "single-page-application", run_worker_first: ["/api/*"] });
+  });
+});
+
+describe("R47 \"여기로 가요\" 확정 공유", () => {
+  it("R47: 한 곳 확정 문구 — 👉 이름(으)로 가요! 도보 N분, 카카오맵 링크, 그 한 곳의 t 링크", () => {
+    expect(shareConfirmText(A, "bongeunsa", 700, ORIGIN)).toBe(
+      ["👉 중앙해장으로 가요! 도보 4분", "http://place.map.kakao.com/27531028", "https://mmj.itmz.me/bongeunsa?t=27531028&r=700"].join("\n"),
+    );
+    expect(shareConfirmText(C, "ddp", 500, ORIGIN).split("\n")).toEqual([
+      "👉 스시하루로 가요! 도보 9분",
+      "http://place.map.kakao.com/960962816",
+      "https://mmj.itmz.me/ddp?t=960962816&r=500",
+    ]);
+  });
+
+  it("R47: 도보 시간을 모르면 도보 부분을 생략한다", () => {
+    const p = apiPlace("1", { name: "스시하루", walkMinutes: undefined });
+    expect(shareConfirmText(p, "bongeunsa", 500, ORIGIN).split("\n")[0]).toBe("👉 스시하루로 가요!");
+  });
+
+  it("R47: 조사 — 받침이 있으면(ㄹ 제외) '으로', 없거나 ㄹ이거나 한글이 아니면 '로'. 끝의 괄호·공백은 건너뛴다", () => {
+    expect(toParticle("중앙해장")).toBe("으로");
+    expect(toParticle("스시하루")).toBe("로");
+    expect(toParticle("카페 서울")).toBe("로");
+    expect(toParticle("중앙해장(본점)")).toBe("으로");
+    expect(toParticle("BHC")).toBe("로");
+    expect(toParticle("")).toBe("로");
   });
 });

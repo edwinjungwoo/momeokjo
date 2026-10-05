@@ -8,7 +8,7 @@ import {
   TRIO_SIZE, drawTrio, filterPlaces, relaxNotice, relaxToFill, relaxedBy, sortPlaces, type Filters,
 } from "../shared/recommend";
 import { urlAfterHubChange } from "../shared/settings";
-import { shareText } from "../shared/share";
+import { shareConfirmText, shareText } from "../shared/share";
 import { createTapGate } from "../shared/tapGate";
 import type { ApiDetail, ApiPlace, LatLng } from "../shared/types";
 import { filterProps, setTrackingHub, startTracking, track, trackFilters } from "./analytics";
@@ -366,17 +366,23 @@ export default function App() {
     setSelected(p);
   };
 
-  // R23′: 폰은 시스템 공유 시트, 아니면 클립보드 복사. 공유한 곳은 R37 신호로 남긴다
-  const onShare = async (ps: ApiPlace[]) => {
-    const outcome = await shareOrCopy(shareText(ps, filters, hub.id, window.location.origin));
+  // R23′: 폰은 시스템 공유 시트, 아니면 클립보드 복사. 공유한 곳은 R37 신호로 남긴다.
+  // shareOrCopy는 클릭 핸들러 안에서 await 없이 바로 불러야 한다 (navigator.share는 사용자 동작이 필요)
+  const shareOut = async (text: string, ps: ApiPlace[], confirm: boolean) => {
+    const outcome = await shareOrCopy(text);
     if (outcome === "shared" || outcome === "copied") {
       record("shared", ps);
-      track("share", { props: { picks: ps.slice(0, TRIO_SIZE).map((p) => p.id) } });
+      const picks = ps.slice(0, TRIO_SIZE).map((p) => p.id);
+      track("share", confirm ? { placeId: ps[0].id, props: { picks, confirm: true } } : { props: { picks } });
     }
     if (outcome === "shared") toast.show("공유했어요", "love");
     else if (outcome === "copied") toast.show("복사했어요", "love");
     else if (outcome === "failed") toast.show("복사하지 못했어요");
   };
+  const onShare = (ps: ApiPlace[]) => shareOut(shareText(ps, filters, hub.id, window.location.origin), ps, false);
+  /** R47: 펼친 카드의 "여기로 가요" — 그 한 곳을 확정해서 보낸다 (R37에는 그 한 곳만 shared) */
+  const onConfirm = (p: ApiPlace) =>
+    shareOut(shareConfirmText(p, hub.id, filters.radius, window.location.origin), [p], true);
   /** 결과 3곳 중 몇 번째 카드인지 (아니면 없음) */
   const rankOf = (id: string) => {
     const i = picks.indexOf(id);
@@ -500,6 +506,7 @@ export default function App() {
               onFocus={onFocus}
               onClose={closeTrio}
               onShare={onShare}
+              onConfirm={onConfirm}
               onKakao={onKakao}
               onExclude={onExclude}
             />

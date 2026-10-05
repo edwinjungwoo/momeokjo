@@ -45,6 +45,28 @@ export function shareText(places: ApiPlace[], f: Filters, hubId: string, origin:
   ].join("\n");
 }
 
+/**
+ * R47: 이름 뒤 조사 "(으)로". 끝에서부터 첫 글자(한글·영문·숫자)를 보고, 한글이고 받침이 있으면(ㄹ 제외) "으로", 아니면 "로".
+ * 괄호·공백 같은 기호는 건너뛴다 ("중앙해장(본점)" → 점 → "으로").
+ */
+export function toParticle(name: string): "으로" | "로" {
+  for (let i = name.length - 1; i >= 0; i--) {
+    const code = name.charCodeAt(i);
+    if (code >= 0xac00 && code <= 0xd7a3) {
+      const jong = (code - 0xac00) % 28;
+      return jong !== 0 && jong !== 8 ? "으로" : "로";
+    }
+    if (/[A-Za-z0-9]/.test(name[i])) return "로";
+  }
+  return "로";
+}
+
+/** R47: 펼친 결과 카드의 "여기로 가요" — 한 곳을 확정해서 보내는 문구 (카카오맵 링크 + 그 한 곳의 공유 링크) */
+export function shareConfirmText(p: ApiPlace, hubId: string, radius: number, origin: string): string {
+  const walk = p.walkMinutes !== undefined ? ` 도보 ${p.walkMinutes}분` : "";
+  return [`👉 ${p.name}${toParticle(p.name)} 가요!${walk}`, p.url, shareUrl(origin, [p.id], hubId, radius)].join("\n");
+}
+
 export type ShareParams = { placeIds: string[]; hubId: string | null; radius: number | null };
 
 /**
