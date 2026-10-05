@@ -195,6 +195,15 @@ export function TrioSheet(props: Props) {
           </div>
           <Mascot pose="search" height={60} className="mascot-bob" eager />
         </div>
+        {/* 셔플 동안 화면 아래 뽑기 바는 숨기고(.has-trio) 그 상태를 결과 시트와 같은 자리의 행동 줄에 보인다 — 셔플이 끝날 때 시트가 뛰지 않게 */}
+        <div className="sheet-foot trio-foot">
+          <div className="actions">
+            <button type="button" className="secondary" disabled aria-busy="true">
+              {drawLabel}
+            </button>
+          </div>
+          <p className="source">정보 출처: 카카오맵</p>
+        </div>
       </div>
     );
   }
