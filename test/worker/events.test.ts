@@ -347,6 +347,7 @@ describe("GET /api/admin/stats", () => {
     expect(r.daily[6]).toEqual({ day: "2027-01-15", users: 3, sessions: 3, draws: 2, redraws: 1, shares: 1, openKakao: 2, shareOpens: 1 });
     expect(r.totals).toEqual({
       users: 3, sessions: 4, draws: 3, redraws: 1, shares: 1, openKakao: 2, shareOpens: 1, expands: 2, excludes: 1, autoDraws: 0,
+      confirmShares: 0,
     });
     const hourly = Array(24).fill(0);
     hourly[12] = 3;
@@ -394,6 +395,27 @@ describe("GET /api/admin/stats", () => {
     expect(r.top.map((t) => t.placeId)).toEqual(["7", "8", "9"]);
     expect(r.conversion).toEqual({ drawSessions: 1, toShare: 0, toKakao: 1 });
     expect(r.drawsPerSession).toBe(0.5);
+  });
+
+  it("R36/R47: \"여기로 가요\" 확정 공유(props.confirm)는 공유 수에 그대로 들어가고 totals.confirmShares로 따로도 센다", async () => {
+    await seed([
+      { anon: A, session: s(6), ts: noonToday, hub: "bongeunsa", type: "app_open" },
+      { anon: A, session: s(6), ts: noonToday, hub: "bongeunsa", type: "draw", props: { picks: ["1", "2", "3"] } },
+      { anon: A, session: s(6), ts: noonToday, hub: "bongeunsa", type: "share", props: { picks: ["1", "2", "3"] } },
+      { anon: A, session: s(6), ts: noonToday, hub: "bongeunsa", type: "share", placeId: "2", props: { picks: ["2"], confirm: true } },
+      { anon: B, session: s(7), ts: onePm, hub: "ddp", type: "app_open" },
+      { anon: B, session: s(7), ts: onePm, hub: "ddp", type: "draw", props: { picks: ["4", "5", "6"] } },
+      { anon: B, session: s(7), ts: onePm, hub: "ddp", type: "share", placeId: "5", props: { picks: ["5"], confirm: true } },
+    ]);
+    const { app } = setup();
+    const r = await (await get(app, "?days=1")).json<StatsResponse>();
+    expect(r.totals).toMatchObject({ shares: 3, confirmShares: 2 });
+    expect(r.daily[0]).toMatchObject({ shares: 3 });
+    expect(r.hubs).toEqual([
+      { hub: "bongeunsa", users: 1, sessions: 1, draws: 1, shares: 2 },
+      { hub: "ddp", users: 1, sessions: 1, draws: 1, shares: 1 },
+    ]);
+    expect(r.conversion).toEqual({ drawSessions: 2, toShare: 1, toKakao: 0 });
   });
 
   it("R36: 거점을 고르면 그 거점 이벤트만, 오늘만 고르면 오늘만 센다", async () => {

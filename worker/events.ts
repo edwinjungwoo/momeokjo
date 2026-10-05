@@ -37,6 +37,8 @@ export async function pruneOldEvents(db: D1Database, now: number): Promise<void>
 const DRAWS = "('draw', 'redraw')";
 /** R39 자동 뽑기(props.auto = true)인가 */
 const IS_AUTO = "json_extract(props, '$.auto') = 1";
+/** R47 "여기로 가요" 확정 공유(props.confirm = true)인가 */
+const IS_CONFIRM = "json_extract(props, '$.confirm') = 1";
 /** 사용자가 직접 한 뽑기: 뽑기·시간대·거점·많이 뽑힌 가게·전환율·세션당 뽑기는 이것만 센다 */
 const manualDraw = (t = "") => `(${t}type IN ${DRAWS} AND coalesce(json_extract(${t}props, '$.auto'), 0) = 0)`;
 /** 일별·거점별 행동 수 집계에 쓰는 타입 (filter_change 같은 잦은 이벤트는 읽지 않는다) */
@@ -51,6 +53,7 @@ const ratio = (a: number, b: number) => (b > 0 ? a / b : null);
  * R36: 관리자 통계. 범위 [from, to]의 이벤트를 (type, day) 인덱스로 타입별로 좁혀 읽는다.
  * 쿼리 5개 + 이름 1개: app_open(사용자·세션), 행동 수, 시간대, 상위 가게(picks), 세션 전환.
  * R39 자동 뽑기는 사용자가 한 행동이 아니라서 뽑기 수·전환율 등에서 빼고 totals.autoDraws로만 센다.
+ * R47 확정 공유는 공유 수(일별·거점별·합계)에 그대로 넣고 totals.confirmShares로 따로도 센다.
  */
 export async function eventStats(
   db: D1Database, opts: { days: number; hub: string; now: number; readSoftCap: number },
@@ -69,7 +72,8 @@ export async function eventStats(
       .all<{ day: string; hub: string; anon: string; n: number }>(),
     db
       .prepare(
-        `SELECT day, hub, CASE WHEN type IN ${DRAWS} AND ${IS_AUTO} THEN 'auto_draw' ELSE type END AS kind,
+        `SELECT day, hub,
+                CASE WHEN type IN ${DRAWS} AND ${IS_AUTO} THEN 'auto_draw' WHEN type = 'share' AND ${IS_CONFIRM} THEN 'confirm_share' ELSE type END AS kind,
                 json_extract(props, '$.rank') AS rank, count(*) AS n FROM events
          WHERE type IN ${ACTION_TYPES} AND ${range} GROUP BY day, hub, kind, rank`,
       )
@@ -130,6 +134,7 @@ export async function eventStats(
   let expands = 0;
   let excludes = 0;
   let autoDraws = 0;
+  let confirmShares = 0;
   for (const a of actions.results) {
     const d = daily.get(a.day);
     if (!d) continue;
@@ -145,6 +150,11 @@ export async function eventStats(
       case "redraw":
         d.redraws += a.n;
         hubOf(a.hub).draws += a.n;
+        break;
+      case "confirm_share":
+        confirmShares += a.n;
+        d.shares += a.n;
+        hubOf(a.hub).shares += a.n;
         break;
       case "share":
         d.shares += a.n;
@@ -181,6 +191,7 @@ export async function eventStats(
     expands,
     excludes,
     autoDraws,
+    confirmShares,
   };
 
   const hourly = Array.from({ length: 24 }, () => 0);

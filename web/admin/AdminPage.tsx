@@ -110,7 +110,7 @@ function Stats({ data }: { data: StatsResponse }) {
         <Card label="공유율" value={pct(data.conversion.toShare)} sub={`카카오맵 ${pct(data.conversion.toKakao)}`} />
       </section>
       <p className="admin-note">
-        공유율·카카오맵은 직접 뽑기한 세션 {n(data.conversion.drawSessions)}개 중 그 행동까지 간 비율이에요(자동 뽑기는 뽑기 수·비율에서 빼요). 공유 {n(t.shares)}번 · 받은
+        공유율·카카오맵은 직접 뽑기한 세션 {n(data.conversion.drawSessions)}개 중 그 행동까지 간 비율이에요(자동 뽑기는 뽑기 수·비율에서 빼요). 공유 {n(t.shares)}번(확정 {n(t.confirmShares)}) · 받은
         링크 열림 {n(t.shareOpens)}번.
       </p>
 

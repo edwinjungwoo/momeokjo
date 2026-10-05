@@ -93,8 +93,11 @@ export type StatsResponse = {
   range: { from: string; to: string; days: number; hub: string };
   /** 오래된 날부터, 빈 날도 0으로 채운다 */
   daily: DayStats[];
-  /** draws·redraws는 사용자가 직접 한 뽑기만. autoDraws = R39 자동 뽑기 (뽑기 수·전환율·시간대·거점·상위 가게에는 넣지 않는다) */
-  totals: Omit<DayStats, "day"> & { expands: number; excludes: number; autoDraws: number };
+  /**
+   * draws·redraws는 사용자가 직접 한 뽑기만. autoDraws = R39 자동 뽑기 (뽑기 수·전환율·시간대·거점·상위 가게에는 넣지 않는다).
+   * confirmShares = R47 "여기로 가요" 확정 공유 (shares에도 들어 있다)
+   */
+  totals: Omit<DayStats, "day"> & { expands: number; excludes: number; autoDraws: number; confirmShares: number };
   /** KST 시(0–23)별 직접 한 뽑기(draw + redraw, 자동 뽑기 제외) */
   hourly: number[];
   hubs: { hub: string; users: number; sessions: number; draws: number; shares: number }[];
