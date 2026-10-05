@@ -216,6 +216,17 @@ describe("GET /api/places — 응답 캐시와 목록 원소", () => {
     const one = await (await callApp(s.app, "/api/places/1001")).json<any>();
     expect(one).toHaveProperty("address");
   });
+
+  it("R48: 단건에만 상세를 가져온 시각 fetchedAt(epoch ms)을 싣는다 (목록 원소에는 없다)", async () => {
+    const s = setup();
+    await callApp(s.app, Q);
+    const body = (await (await callApp(s.app, Q)).json()) as PlacesResponse;
+    expect(body.places.length).toBeGreaterThan(0);
+    for (const p of body.places) expect(p).not.toHaveProperty("fetchedAt");
+    const one = await (await callApp(s.app, "/api/places/1001")).json<any>();
+    expect(one.fetchedAt).toBe(NOW);
+    expect(one.detail).not.toHaveProperty("fetchedAt");
+  });
 });
 
 describe("GET /api/places — 저장값 방어 (QA 보강)", () => {

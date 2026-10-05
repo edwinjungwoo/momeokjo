@@ -10,7 +10,7 @@ export const LIST_MENUS = 3;
 const coord = (v: number) => Math.round(v * 1e6) / 1e6;
 
 /**
- * R12 목록 원소(거리, 메뉴 3개, 주소·전화 없음) / R13 단건(full: 메뉴 전부, 주소·전화 포함).
+ * R12 목록 원소(거리, 메뉴 3개, 주소·전화 없음) / R13 단건(full: 메뉴 전부, 주소·전화, R48 상세 시각 포함).
  * distance를 이미 계산했으면 넘겨서 다시 계산하지 않는다.
  */
 export function toApiPlace(
@@ -28,7 +28,7 @@ export function toApiPlace(
     lat: coord(p.lat),
     lng: coord(p.lng),
     ...(distance === undefined ? {} : { distance, walkMinutes: walkMinutes(distance) }),
-    ...(opts.full ? { address: p.address, phone: p.phone } : {}),
+    ...(opts.full ? { address: p.address, phone: p.phone, fetchedAt: d.fetchedAt } : {}),
     url: p.url,
     photoUrl: p.photoUrl,
     detail: {

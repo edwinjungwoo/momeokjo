@@ -63,6 +63,8 @@ export type ApiPlace = {
   /** 단건(R13)에만 있다. 목록은 화면이 쓰지 않아서 싣지 않는다 */
   address?: string | null;
   phone?: string | null;
+  /** R48: 상세를 가져온 시각 (epoch ms). 단건(R13)에만 있다 — 목록 크기는 그대로 */
+  fetchedAt?: number;
   url: string;
   photoUrl: string | null;
   detail: ApiDetail | null;

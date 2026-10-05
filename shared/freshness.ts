@@ -15,3 +15,12 @@ export function detailAgeDays(frozenSince: number | null, newestAt: number | nul
 }
 
 export const freshnessText = (days: number) => `평점·메뉴는 ${days}일 전 기준이에요`;
+
+/** R48: 상세를 가져온 시각 → "오늘 확인"(24시간 안, 미래 시각 포함) / "N일 전 확인" */
+export function checkedText(fetchedAt: number, now: number): string {
+  const days = Math.floor((now - fetchedAt) / DAY);
+  return days < 1 ? "오늘 확인" : `${days}일 전 확인`;
+}
+
+/** R48: 펼친 결과 카드의 출처 줄 (단건 응답의 fetchedAt이 있을 때만 보여준다) */
+export const sourceLine = (fetchedAt: number, now: number) => `정보 출처: 카카오맵 · ${checkedText(fetchedAt, now)}`;

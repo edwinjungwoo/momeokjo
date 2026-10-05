@@ -32,6 +32,10 @@ describe("present", () => {
     expect(p.detail).toMatchObject({ soloFriendly: false, groupFriendly: false });
     expect(p.distance).toBeUndefined();
   });
+  it("R48: 단건(full)에만 상세를 가져온 시각 fetchedAt을 싣는다", () => {
+    expect(toApiPlace(row("음식점 > 한식", []), { full: true }).fetchedAt).toBe(123);
+    expect(toApiPlace(row("음식점 > 한식", []), { center: ASEM })).not.toHaveProperty("fetchedAt");
+  });
   it("R45: 좌표는 소수 6자리(약 0.1m)로 줄여 싣는다 — 거리는 줄이기 전 좌표로 계산 (목록 gzip 약 10% 감소)", () => {
     const r = row("음식점 > 한식", []);
     r.place = { ...r.place, lat: 37.51453387676185, lng: 127.06050804655143 };

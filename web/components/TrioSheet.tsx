@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { lastLevel } from "../../shared/category";
+import { sourceLine } from "../../shared/freshness";
 import { photoThumbUrl } from "../../shared/photo";
 import type { ApiPlace } from "../../shared/types";
 import { openState, priceText, todayHoursText, won } from "../format";
@@ -135,6 +136,8 @@ function TrioCard(props: {
               여긴 빼줘
             </button>
           </div>
+          {/* R48: 단건 응답을 받으면 그 정보를 언제 확인했는지 */}
+          {p.fetchedAt !== undefined && <p className="trio-source">{sourceLine(p.fetchedAt, now.getTime())}</p>}
         </div>
       )}
     </li>

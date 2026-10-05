@@ -55,6 +55,10 @@ function useNow() {
  */
 type Trio = { ids: string[]; source: "drawn" | "received"; fallback: Record<string, ApiPlace>; outside?: ReadonlySet<string> };
 
+/** R13 단건에서만 오는 것: 전체 상세(메뉴 전부), 전화(R49), 상세를 가져온 시각(R48) */
+type Full = Pick<ApiPlace, "phone" | "fetchedAt"> & { detail: ApiDetail };
+const fullOf = (p: ApiPlace): Full | null => (p.detail ? { detail: p.detail, phone: p.phone, fetchedAt: p.fetchedAt } : null);
+
 const byId = (ps: ApiPlace[]) => Object.fromEntries(ps.map((p) => [p.id, p]));
 
 export default function App() {
@@ -108,7 +112,7 @@ export default function App() {
   const ranks = useMemo(() => topPercents(data?.places ?? [], filters.radius), [data, filters.radius]);
 
   // R13: 목록 응답에는 메뉴가 3개뿐이라 카드를 열면 단건 조회로 전체 상세를 한 번 받아 합친다
-  const [fullDetails, setFullDetails] = useState<Record<string, ApiDetail>>({});
+  const [fullDetails, setFullDetails] = useState<Record<string, Full>>({});
   const [detailPending, setDetailPending] = useState<string | null>(null);
   const detailId = selected?.id ?? focusId;
   const haveFull = detailId === null || detailId in fullDetails;
@@ -120,8 +124,8 @@ export default function App() {
     fetchPlace(detailId, ctrl.signal)
       .then((p) => {
         setDetailPending(null);
-        const detail = p.detail;
-        if (detail) setFullDetails((m) => ({ ...m, [p.id]: detail }));
+        const full = fullOf(p);
+        if (full) setFullDetails((m) => ({ ...m, [p.id]: full }));
       })
       .catch(() => {
         if (!ctrl.signal.aborted) setDetailPending(null);
@@ -135,7 +139,7 @@ export default function App() {
     (p: ApiPlace) => {
       const base = latest.get(p.id) ?? p;
       const full = fullDetails[p.id];
-      return withWalk(full ? { ...base, detail: full } : base, center);
+      return withWalk(full ? { ...base, ...full } : base, center);
     },
     [latest, fullDetails, center],
   );
@@ -184,7 +188,10 @@ export default function App() {
       }
       setFullDetails((m) => {
         const next = { ...m };
-        for (const p of found) if (p.detail) next[p.id] = p.detail;
+        for (const p of found) {
+          const full = fullOf(p);
+          if (full) next[p.id] = full;
+        }
         return next;
       });
       record("received", found);
