@@ -81,6 +81,7 @@
 - 파라미터: `category_group_code=FD6`, `rect=minLng,minLat,maxLng,maxLat`, `page=1..3`, `size=15`, `sort=accuracy`
 - 헤더: `Authorization: KakaoAK {KAKAO_REST_KEY}`
 - 한 번의 검색으로 최대 45개(15 × 3페이지)까지만 받을 수 있다. 응답의 `meta.total_count`로 실제 개수를 확인한다.
+- **저장 금지 정책 (2026-10-05 확인):** 카카오맵 API FAQ(2022-10-18)는 "로컬 API 등을 호출하여 응답받은 결과 데이터를 별도로 저장하여 사용하는 것은 허용하지 않습니다"라고 한다. 2026-08-24 답변에 따르면 임시 저장도 불허다. 2026-08-26 답변에 따르면 "장소ID만 기록하고 나머지 표시 정보는 실시간 호출하는 방향은 운영 정책상 허용 가능"하다 (https://devtalk.kakao.com/t/faq-api/125610, https://devtalk.kakao.com/t/api-20/151271). 그래서 **로컬 API 응답에서는 장소 ID만 저장한다.** 이름, 좌표, 카테고리는 요청을 처리하는 동안 메모리에서만 쓴다(간식 제외 판단).
 
 ### 3.2 카카오맵 장소 상세 (비공식)
 
@@ -94,49 +95,42 @@
   - 영업시간: `open_hours.week_from_today.week_periods[].days[]`. 각 day는 `day_of_the_week_desc`("월(10/5)")와 함께 `on_days.start_end_time_desc`("11:30 ~ 22:00", 자정을 넘기면 "16:00 ~ 02:00"), `on_days.break_times_desc`(["14:30 ~ 18:00 브레이크타임"]) 또는 `off_days_desc`("휴무일")를 가진다.
   - 예약/태그: `place_add_info.ai_mate.store_facility_icons[].text`와 `place_add_info.store_facility_icons[].text`(예: "예약가능"), `place_add_info.full_detail_infos[].items[].contents[].label`(예: "혼밥", "단체석", "회식장소", "점심특선")
   - 메뉴 가격은 -1이나 0일 수 있다(가격 미표기).
-  - 카테고리 보조: `summary.category.{name2, name3}`
+  - **장소 요약 (표시 정보의 출처):** `summary.name`, `summary.category.{name1,name2,name3}`, `summary.point.{lat,lon}`, `summary.address.road`(없으면 `disp`), `summary.phone_numbers[0].tel`
 - 형식이 바뀌거나 막힐 수 있으므로 **모든 필드는 optional로 파싱**하고, 하나가 실패해도 나머지는 살린다.
 - **차단 시 대안:** Worker IP에서 호출이 막히면, 로컬 Node 스크립트로 수집해서 `wrangler d1 execute --remote`로 D1에 적재한다. 이 경우 Cron 상세 수집은 끈다.
 
 ## 4. 데이터 모델 (D1)
 
 ```sql
-CREATE TABLE places (
-  id TEXT PRIMARY KEY,            -- 카카오 장소 id
-  name TEXT NOT NULL,
-  category_name TEXT NOT NULL,    -- 원문: "음식점 > 한식 > 해장국"
-  category_group TEXT NOT NULL,   -- R5 매핑 결과
-  lat REAL NOT NULL,
-  lng REAL NOT NULL,
-  address TEXT,                   -- 도로명 우선, 없으면 지번
-  phone TEXT,
-  place_url TEXT NOT NULL,
-  collected_at INTEGER NOT NULL   -- epoch ms
-);
-CREATE INDEX idx_places_lat_lng ON places(lat, lng);
-
-CREATE TABLE place_details (
-  id TEXT PRIMARY KEY REFERENCES places(id),
-  status TEXT NOT NULL,           -- 'ok' | 'failed'
-  rating REAL,                    -- 0~5
-  review_count INTEGER,
-  price INTEGER,                  -- R7 대표 가격 (원)
-  menus_json TEXT,                -- [{name, price}] 최대 20개
-  hours_json TEXT,                -- R8 정규화 결과
-  strengths_json TEXT,            -- ["맛","친절"] 상위 2개
-  tags_json TEXT,                 -- ["혼밥","단체석",...] 최대 30개
-  bookable INTEGER,               -- 1 | 0 | NULL(판정 불가)
-  fail_reason TEXT,
-  fetched_at INTEGER NOT NULL
-);
-
 CREATE TABLE tiles (
   key TEXT PRIMARY KEY,           -- R1 격자 키
   collected_at INTEGER NOT NULL,
   place_count INTEGER NOT NULL,
   saturated INTEGER NOT NULL DEFAULT 0  -- 최대 깊이에서도 45 초과면 1
 );
+
+-- 로컬 API 응답에서는 격자별 장소 ID만 기록한다 (§3.1 저장 금지 정책)
+CREATE TABLE tile_places (
+  tile_key TEXT NOT NULL,
+  place_id TEXT NOT NULL,
+  PRIMARY KEY (tile_key, place_id)
+);
+CREATE INDEX idx_tile_places_place ON tile_places(place_id);
+
+-- 장소 상세(§3.2) 응답에서 얻은 정보. 상세를 한 번도 성공하지 못한 장소는 name 등이 NULL이다
+CREATE TABLE places (
+  id TEXT PRIMARY KEY,
+  status TEXT NOT NULL,            -- 마지막 시도 결과 'ok' | 'failed'
+  name TEXT, category_name TEXT, category_group TEXT, lat REAL, lng REAL, address TEXT, phone TEXT,
+  rating REAL, review_count INTEGER, price INTEGER,
+  menus_json TEXT, hours_json TEXT, strengths_json TEXT, tags_json TEXT, bookable INTEGER,
+  fail_reason TEXT,
+  fetched_at INTEGER NOT NULL
+);
+CREATE INDEX idx_places_lat_lng ON places(lat, lng);
 ```
+
+카카오맵 링크는 `https://place.map.kakao.com/{id}`로 만든다.
 
 ## 5. 기능 요구사항
 
@@ -144,9 +138,9 @@ CREATE TABLE tiles (
 
 - **R1 고정 격자.** 위도 간격 `0.00225°`(약 250m), 경도 간격 `0.0028°`(위도 37.5° 기준 약 250m)로 지도를 나눈다. 격자 키는 `"{floor(lat/0.00225)}:{floor(lng/0.0028)}"`이다. `tilesCoveringCircle(center, radius)`는 원과 겹치는 모든 격자 키를 반환한다.
   - 예: 반경 0이면 중심이 속한 격자 1개, 반경이 격자 경계를 넘으면 인접 격자 포함
-- **R2 쿼드트리 분할.** 격자(또는 하위 사각형)를 rect 검색했을 때 `meta.total_count > 45`이면 4등분해서 각각 다시 검색한다. 최대 깊이는 4다(약 15m). 최대 깊이에서도 45를 넘으면 받은 45개를 저장하고 `tiles.saturated = 1`로 기록한다. 한 격자 안에서 id가 중복되면 한 번만 저장한다.
+- **R2 쿼드트리 분할.** 격자(또는 하위 사각형)를 rect 검색했을 때 `meta.total_count > 45`이면 4등분해서 각각 다시 검색한다. 최대 깊이는 4다(약 15m). 최대 깊이에서도 45를 넘으면 받은 45개의 ID를 기록하고 `tiles.saturated = 1`로 표시한다. 기록하는 것은 **장소 ID뿐**이고, 카테고리가 `dessert`인 장소는 기록하지 않는다(판단은 메모리에서만). 한 격자 안에서 id가 중복되면 한 번만 기록한다.
 - **R3 격자 TTL.** `tiles.collected_at`이 7일 이내인 격자는 다시 수집하지 않는다.
-- **R4 upsert.** 같은 id의 가게는 최신 값으로 덮어쓴다. 격자를 다시 수집했을 때 사라진 가게는 지우지 않는다(폐업 판단은 범위 밖).
+- **R4 격자 ID 갱신.** 격자를 다시 수집하면 그 격자의 ID 목록을 새 결과로 통째로 바꾼다. `places`의 상세 행은 지우지 않는다(폐업 판단은 범위 밖).
 - **R5 카테고리 그룹.** `category_name`을 `>`로 나눈 두 번째 단계로 매핑한다.
 
   | 그룹 키 | 표시 | 카카오 2단계 |
@@ -161,11 +155,11 @@ CREATE TABLE tiles (
   | `dessert` | (항상 제외) | 간식 |
   | `etc` | 기타 | 위에 없는 모든 값 (뷔페, 샐러드, 치킨, 퓨전요리 등) |
 
-  `dessert`는 API 응답에서 제외한다. 감사 리포트(Q4)는 `etc`로 떨어진 2단계 값 목록을 출력하고, 필요하면 이 표를 고친다.
+  `dessert`는 수집 단계에서 기록하지 않고, 상세 카테고리가 `dessert`로 나온 장소도 API 응답에서 제외한다. 감사 리포트(Q4)는 `etc`로 떨어진 2단계 값 목록을 출력하고, 필요하면 이 표를 고친다.
 
 ### 5.2 수집: 상세 정보 (비공식 API)
 
-- **R6 상세 파싱.** §3.2의 응답을 zod 스키마(모든 필드 optional)로 검증하고 `PlaceDetail`로 변환한다.
+- **R6 상세 파싱.** §3.2의 응답을 섹션별 zod 스키마로 검증해 `PlaceSummary`(이름, 카테고리 원문, 좌표, 주소, 전화)와 `PlaceDetail`로 변환한다. 요약에서 이름이나 좌표가 없으면 표시할 수 없으므로 `schema` 실패로 본다. 나머지 섹션은 optional이다.
   - `rating`: `average_score`. 리뷰가 0개면 null
   - `strengths`: `strength_counts`를 count 내림차순으로 정렬해 상위 2개 id를 `strength_description`의 이름으로 바꾼 것
   - `bookable`: `place_add_info`가 없으면 null이다. 있으면 두 `store_facility_icons` 목록 중 하나라도 text가 "예약가능"이면 true, 아니면 false다.
@@ -175,8 +169,8 @@ CREATE TABLE tiles (
 - **R7 대표 가격.** 메뉴 가격 중 `5,000 ≤ price ≤ 30,000`인 값들의 중앙값을 100원 단위로 반올림한다. 해당 값이 없으면 null이다. 값이 짝수 개면 가운데 두 값의 평균을 쓴다.
   - 예: [14000, 16000, 16000, 67000] → [14000, 16000, 16000] → 16000
 - **R8 영업시간 정규화.** §3.2의 day 목록을 `Hours = { [요일 0(일)-6(토)]: Array<[openMin, closeMin]> | "closed" }`로 정규화한다. 분 단위이고, 자정을 넘기면 close가 1440보다 크다(예: "16:00 ~ 02:00" → [960, 1560]). 브레이크타임은 구간에서 빼서 나눈다(예: "11:30 ~ 22:00" + "14:30 ~ 18:00" → [[690, 870], [1080, 1320]]). `off_days_desc`가 있으면 "closed"다. 요일은 `day_of_the_week_desc`의 첫 글자(일월화수목금토)로 정한다. 하나라도 파싱할 수 없으면 전체를 null로 한다.
-- **R9 상세 TTL과 재시도.** `status='ok'`이면 3일, `status='failed'`이면 6시간이 지나기 전에는 다시 가져오지 않는다. 호출마다 네트워크 오류나 5xx가 나면 지수 백오프(250ms, 1000ms)로 최대 2번 재시도한다. 4xx는 재시도하지 않는다.
-- **R10 배치 처리.** 한 번의 실행(요청 또는 Cron)에서 외부 호출 예산은 `SUBREQUEST_BUDGET`(기본 40, 무료 플랜 한도 50)이다. 격자 수집이 예산을 먼저 쓰고, 상세 보충은 남은 예산 안에서 기준점에서 가까운 순으로 동시성 3으로 처리한다. 대상은 상세 정보가 없거나 만료된 가게다. 한 번에 보충하는 가게 수는 `DETAIL_BATCH_SIZE`(기본 10)다. 응답이 커서 무료 플랜 CPU 한도(10ms)를 지키기 위해 작게 잡았다.
+- **R9 상세 TTL과 재시도.** `status='ok'`이면 3일, `status='failed'`이면 6시간이 지나기 전에는 다시 가져오지 않는다. 갱신에 실패해도 이전에 성공한 표시 정보는 지우지 않는다(상태만 failed로 바꾼다). 호출마다 네트워크 오류나 5xx가 나면 지수 백오프(250ms, 1000ms)로 최대 2번 재시도한다. 4xx는 재시도하지 않는다.
+- **R10 배치 처리.** 한 번의 실행(요청 또는 Cron)에서 외부 호출 예산은 `SUBREQUEST_BUDGET`(기본 40, 무료 플랜 한도 50)이다. 격자 수집이 예산을 먼저 쓰고, 상세 보충은 남은 예산 안에서 기준점에서 가까운 순으로 동시성 3으로 처리한다. 대상은 기준점을 덮는 격자에 기록된 ID 중 상세가 없거나 만료된 것이고, 격자 중심이 기준점에 가까운 순서(같으면 id 오름차순)로 고른다. 배치 중에 403이나 429가 나오면 차단 신호로 보고 그 배치의 나머지 호출을 멈춘다. 한 번에 보충하는 가게 수는 `DETAIL_BATCH_SIZE`(기본 10)다. 응답이 커서 무료 플랜 CPU 한도(10ms)를 지키기 위해 작게 잡았다.
 
 ### 5.3 사전 수집 (Cron)
 
@@ -186,7 +180,7 @@ CREATE TABLE tiles (
 
 - **R12 `GET /api/places?lat&lng&radius`.**
   - 검증: lat ∈ [33, 39], lng ∈ [124, 132], radius ∈ [100, 2000]. 위반하면 400과 `{error}`를 반환한다.
-  - 처리: `tilesCoveringCircle`로 격자를 구하고, 만료/미수집 격자를 예산 안에서 동기적으로 수집한다. 그다음 D1에서 거리 ≤ radius인 가게를 상세 정보와 함께 조회한다. 상세 정보가 없거나 만료된 가게는 `ctx.waitUntil`로 R10 배치를 시작한다.
+  - 처리: `tilesCoveringCircle`로 격자를 구하고, 만료/미수집 격자를 예산 안에서 동기적으로 수집한다(ID만 기록). 그다음 D1에서 상세가 있는 가게 중 거리 ≤ radius인 것을 조회한다. 상세가 아직 없는 장소는 좌표를 모르므로 응답에 넣지 않고 `pending`으로만 센다. 상세 정보가 없거나 만료된 가게는 `ctx.waitUntil`로 R10 배치를 시작한다.
   - 응답:
     ```ts
     {
@@ -198,13 +192,13 @@ CREATE TABLE tiles (
         address, phone, url,
         detail: null | { rating, reviewCount, price, menus /* 상위 5개 */, hours, strengths, bookable, fetchedAt }
       }>,
-      pending: number,   // 상세 정보가 아직 없는 가게 수
+      pending: number,   // 덮는 격자에 ID는 기록됐지만 상세를 아직 한 번도 가져오지 않은 장소 수 (반경이 아니라 격자 기준)
       incompleteTiles: number, // 예산 부족으로 이번에 못 수집한 격자 수
       stale: boolean     // R14
     }
     ```
   - `Cache-Control: no-store`
-- **R13 `GET /api/places/:id`.** 단일 가게 정보를 상세 정보와 함께 반환한다(형식은 R12의 원소와 같고, distance와 walkMinutes는 빠진다). D1에 가게가 없으면 404를 반환한다. 상세 정보가 없으면 동기적으로 한 번 보충을 시도한다.
+- **R13 `GET /api/places/:id`.** 단일 가게 정보를 반환한다(형식은 R12의 원소와 같고, distance와 walkMinutes는 빠진다). id는 숫자만 허용하고 아니면 404다. 표시 정보가 없으면 R15 제한 안에서 동기적으로 한 번 상세를 가져온다(최근 6시간 안에 실패했으면 시도하지 않음). 그래도 없으면 404다.
 - **R14 장애 대응.** 공식 API가 실패하고(쿼터 초과, 5xx, 타임아웃) 해당 격자에 만료된 캐시가 있으면 그 캐시로 응답하고 `stale: true`를 준다. 캐시도 없으면 502와 `{error: "upstream"}`을 반환한다.
 - **R15 남용 방지.** 외부 호출을 일으키는 요청(만료/미수집 격자가 있는 R12, 동기 보충이 필요한 R13)은 IP당 분당 10회로 제한한다(Workers Rate Limiting 바인딩). 초과하면 외부 호출 없이 캐시로만 응답하고 `stale: true`를 준다. 캐시로만 응답할 수 있는 요청은 제한하지 않는다.
 
@@ -251,7 +245,7 @@ CREATE TABLE tiles (
 ### 5.6 UI
 
 - **R27 레이아웃.** 데스크톱(≥ 900px): 왼쪽 패널(필터, 뽑기 버튼, 리스트) + 오른쪽 지도. 모바일: 위쪽 지도(화면 높이의 45%) + 아래쪽 패널(스크롤). 상단 바에는 로고와 기준점 칩이 있다.
-- **R28 지도.** 카카오맵 JS SDK를 쓴다. 기준점 마커, 반경 원(점선), 후보 가게 마커(필터를 통과한 곳만)를 보여준다. 마커나 리스트 항목을 누르면 결과 카드와 같은 형식의 상세 카드를 연다. 상세 카드에는 이름, 카테고리, 평점(리뷰 수), 대표 가격, 도보 시간, 영업 상태, 강점, 메뉴 상위 5개, 카카오맵 링크, 공유 버튼이 있다.
+- **R28 지도.** 상세 카드 하단에 "정보 출처: 카카오맵"을 표시한다. 카카오맵 JS SDK를 쓴다. 기준점 마커, 반경 원(점선), 후보 가게 마커(필터를 통과한 곳만)를 보여준다. 마커나 리스트 항목을 누르면 결과 카드와 같은 형식의 상세 카드를 연다. 상세 카드에는 이름, 카테고리, 평점(리뷰 수), 대표 가격, 도보 시간, 영업 상태, 강점, 메뉴 상위 5개, 카카오맵 링크, 공유 버튼이 있다.
 - **R29 로딩과 상태 표시.** `pending > 0`이면 리스트 상단에 "평점 정보 불러오는 중 (n곳)"을 표시하고, 3초 간격으로 최대 10번 다시 요청한다. `stale`이면 "정보가 오래됐을 수 있어요"를 표시한다. API가 실패하면 "가게 정보를 불러오지 못했어요"와 "다시 시도" 버튼을 보여준다.
 - **R30 시각 스타일.** 라이트 모드만 지원한다. 흰 배경, 포인트 컬러는 코랄 1색(`#FF6B3D` 계열; 버튼, 선택 상태, 강조 마커), 나머지는 회색 계열이다. 폰트는 Pretendard(CDN). 뽑기 버튼은 화면에서 가장 큰 단일 강조 요소다.
 
@@ -273,7 +267,7 @@ CREATE TABLE tiles (
 `npm run audit`(D1 원격 또는 로컬 대상)은 ASEM 반경 1500m 데이터에 대한 리포트를 출력한다.
 
 - **Q1 누락 없음.** `saturated = 1`인 격자가 0개.
-- **Q2 상세 커버리지.** `place_details.status = 'ok'`인 가게가 95% 이상. 실패한 가게는 목록과 `fail_reason`을 출력한다.
+- **Q2 상세 커버리지.** 덮는 격자에 기록된 장소 ID 중 표시 정보를 가진 장소가 95% 이상. 실패한 장소는 목록과 `fail_reason`을 출력한다. Q3, Q4도 같은 ID 집합을 기준으로 한다.
 - **Q3 필드 결측률.** ok인 가게 중 rating, price, hours가 각각 null인 비율을 출력한다. 기준치는 없고, 하나라도 50%를 넘으면 파서 버그를 의심해서 픽스처와 대조한다.
 - **Q4 분포와 이상치.** 그룹별 가게 수, `etc`로 떨어진 카테고리 2단계 값 목록, 좌표가 유효 범위(lat 33~39, lng 124~132) 밖인 가게 수, 이름과 좌표(소수 5자리)가 같은 중복 의심 묶음 수를 출력한다.
 - **Q5 표본 검증.** 직접 고른 근처 가게 10곳을 카카오맵 화면과 대조해 평점(소수 첫째 자리), 메뉴 가격, 영업시간이 일치하는지 확인한다(수동, 결과를 `docs/audit/`에 기록).
