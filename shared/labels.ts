@@ -127,6 +127,8 @@ const CELL = 64;
 /**
  * R28: 가까이 본 지도에서 서로 덮지 않게 남길 칩 id (나머지는 점으로 그린다).
  * 순서: 선택한 핀 → 평점 높은 순 → 리뷰 많은 순 → id. 앞에 놓인 칩이나 장애물(뽑힌 핀의 배지·이름표)과 겹치면 뺀다.
+ * 단, 선택한 핀(pinned)의 칩은 장애물을 보지 않고 늘 남긴다 — 번호 배지나 이름표 위에 걸쳐도 그대로 둔다
+ * (사용자가 고른 핀이라 점으로 바꾸지 않는다. CSS도 .pin--selected는 .pin--nochip이어도 칩을 보인다).
  * 격자 칸에 놓인 상자만 비교해서 정렬(n log n) + 칸 조회로 끝난다
  */
 export function keptChips(chips: ChipBox[], obstacles: LabelBox[]): Set<string> {
@@ -157,6 +159,7 @@ export function keptChips(chips: ChipBox[], obstacles: LabelBox[]): Set<string> 
   );
   const kept = new Set<string>();
   for (const c of sorted) {
+    // 선택한 핀은 배지·이름표·앞의 칩과 겹쳐도 남긴다 (위 설명)
     if (!c.pinned && hits(c)) continue;
     put(c);
     kept.add(c.id);
