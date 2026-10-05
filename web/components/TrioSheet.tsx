@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { lastLevel } from "../../shared/category";
 import { sourceLine } from "../../shared/freshness";
 import { photoThumbUrl } from "../../shared/photo";
+import type { Reason } from "../../shared/reasons";
 import type { Party } from "../../shared/recommend";
 import type { ApiPlace } from "../../shared/types";
 import { callFirst, openState, priceText, todayHoursText, won } from "../format";
@@ -24,6 +25,8 @@ type Props = {
   ranks: ReadonlyMap<string, number>;
   /** R41 완화로 들어온 곳 ("조건 밖" 표시) */
   outside?: ReadonlySet<string>;
+  /** R46: places와 같은 순서의 "왜" 한 단어 (없으면 null) */
+  reasons: (Reason | null)[];
   /** R49: 4명+면 펼친 카드의 첫 행동이 "전화로 자리 확인" */
   party: Party;
   now: Date;
@@ -59,6 +62,7 @@ function TrioCard(props: {
   detailLoading: boolean;
   topPercent: number | undefined;
   outside: boolean;
+  reason: Reason | null;
   party: Party;
   now: Date;
   onToggle: () => void;
@@ -66,7 +70,7 @@ function TrioCard(props: {
   onKakao: (p: ApiPlace) => void;
   onExclude: (p: ApiPlace) => void;
 }) {
-  const { place: p, rank, open, detailLoading, topPercent, outside, party, now, onToggle, onConfirm, onKakao, onExclude } = props;
+  const { place: p, rank, open, detailLoading, topPercent, outside, reason, party, now, onToggle, onConfirm, onKakao, onExclude } = props;
   const li = useRef<HTMLLIElement>(null);
   const d = p.detail;
   const rating = d?.rating ?? null;
@@ -107,9 +111,13 @@ function TrioCard(props: {
             {state.closed && <span className="closed">{state.text}</span>}
             <RankPill top={topPercent} />
           </span>
-          {(sub || outside) && (
+          {/* R46: "왜" 한 단어는 사실 줄이 아니라 이 줄 맨 앞 — 사실 줄은 이미 꽉 차서(375px에서 241px) 넣으면 R34 알약이 잘린다.
+              이 줄은 끝이 말줄임이라 이유는 늘 보인다 */}
+          {(sub || outside || reason) && (
             <span className="trio-sub">
               {outside && <span className="trio-outside">조건 밖</span>}
+              {reason && <span className="trio-why">{reason}</span>}
+              {reason && sub ? " · " : null}
               {sub}
             </span>
           )}
@@ -257,6 +265,7 @@ export function TrioSheet(props: Props) {
             detailLoading={p.id === focusId && detailLoading}
             topPercent={ranks.get(p.id)}
             outside={outside?.has(p.id) ?? false}
+            reason={props.reasons[i] ?? null}
             party={props.party}
             now={now}
             onToggle={() => onFocus(p.id === focusId ? null : p.id)}

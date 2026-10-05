@@ -4,6 +4,7 @@ import { haversine, walkMinutes } from "../shared/geo";
 import { hubById } from "../shared/hubs";
 import { kstDay } from "../shared/kst";
 import { topPercents } from "../shared/rank";
+import { trioReasons } from "../shared/reasons";
 import {
   TRIO_SIZE, drawTrio, filterPlaces, relaxNotice, relaxToFill, relaxedBy, sortPlaces, type Filters,
 } from "../shared/recommend";
@@ -51,9 +52,11 @@ function useNow() {
 
 /**
  * R22′: 지금 보여주는 후보 3곳. 객체는 목록에 없을 때(공유받은 곳 등)를 위한 대비값이고, 화면은 최신 목록 객체를 우선한다.
- * outside: R41 완화로 들어온 곳
+ * outside: R41 완화로 들어온 곳. at: 결과를 띄운 시각 (R46 "처음 보는 곳"은 이 전의 신호만 본다)
  */
-type Trio = { ids: string[]; source: "drawn" | "received"; fallback: Record<string, ApiPlace>; outside?: ReadonlySet<string> };
+type Trio = {
+  ids: string[]; source: "drawn" | "received"; fallback: Record<string, ApiPlace>; outside?: ReadonlySet<string>; at: number;
+};
 
 /** R13 단건에서만 오는 것: 전체 상세(메뉴 전부), 전화(R49), 상세를 가져온 시각(R48) */
 type Full = Pick<ApiPlace, "phone" | "fetchedAt"> & { detail: ApiDetail };
@@ -162,6 +165,12 @@ export default function App() {
     return extra.length > 0 ? [...candidates, ...extra] : candidates;
   }, [candidates, trioPlaces, cardPlace]);
   const picks = useMemo(() => trioPlaces.map((p) => p.id), [trioPlaces]);
+  // R46: 보여주는 곳들 안에서 참인 "왜" 한 단어 (카드당 하나)
+  const { signals } = personal;
+  const reasons = useMemo(
+    () => (trio ? trioReasons(trioPlaces, trio.at, { signals }) : []),
+    [trio, trioPlaces, signals],
+  );
 
   // 뽑기·공유 뒤에 뜨는 마스코트는 첫 응답이 오면 미리 받아둔다
   const hasData = data !== null;
@@ -194,12 +203,14 @@ export default function App() {
         }
         return next;
       });
+      // R46: 결과 시각은 received 신호를 남기기 전 — 이번에 받은 곳을 "본 곳"으로 치지 않게
+      const at = Date.now();
       record("received", found);
       if (ids.length === 1) {
         setReceivedSingle(found[0].id);
         setSelected(found[0]);
       } else {
-        setTrio({ ids: found.map((p) => p.id), source: "received", fallback: byId(found) });
+        setTrio({ ids: found.map((p) => p.id), source: "received", fallback: byId(found), at });
       }
       const missing = ids.length - found.length;
       if (missing > 0) showToast(`${missing}곳은 찾지 못했어요`);
@@ -297,7 +308,7 @@ export default function App() {
       [...candidates, ...extra].map((c) => c.name),
       () => {
         for (const p of r.places) drawnIds.current.add(p.id);
-        setTrio({ ids: r.places.map((p) => p.id), source: "drawn", fallback: byId(r.places), outside });
+        setTrio({ ids: r.places.map((p) => p.id), source: "drawn", fallback: byId(r.places), outside, at: Date.now() });
         if (!auto) record("shown", r.places);
         track(kind, {
           props: {
@@ -499,6 +510,7 @@ export default function App() {
               detailLoading={detailPending !== null && detailPending === focusId}
               ranks={ranks}
               outside={trio?.outside}
+              reasons={reasons}
               party={filters.party}
               now={now}
               drawLabel={drawLabel}

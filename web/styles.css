@@ -573,6 +573,8 @@ input[type="range"] { width: 100%; height: 44px; margin: 0; accent-color: var(--
 .trio-facts > .rank-pill::before { content: none; }
 .trio-facts > b { font-weight: 600; color: var(--text); }
 .trio-rating { font-weight: 700; color: var(--accent-ink); font-variant-numeric: tabular-nums; }
+/* R46: "왜" 한 단어 — 배지가 아니라 조용한 글자 */
+.trio-why { font-size: 13px; font-weight: 600; color: var(--text-2); }
 .trio-rating .star { margin-right: 2px; color: var(--accent); font-size: 0.9em; font-weight: 400; }
 .trio-sub { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; color: var(--text-3); }
 /* R41: 완화로 들어온 곳 — 옅은 채움의 작은 표시 */
