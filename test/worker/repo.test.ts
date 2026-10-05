@@ -10,6 +10,7 @@ import {
   placeById, placesByIds, placesInBox, replaceTilePlaces, saveDetail, saveDetailFailure, tilePlaceStates,
 } from "../../worker/repo";
 import { makeSummary, sampleDetail, seedPlace } from "../helpers/places";
+import { recordingDb } from "../helpers/recordDb";
 
 const NOW = 1_800_000_000_000;
 const KA = tileKeyOf(ASEM);
@@ -24,6 +25,29 @@ describe("repo", () => {
     await replaceTilePlaces(env.DB, KA, ["3"], NOW + 1, true);
     expect((await tilePlaceStates(env.DB, [KA])).map((t) => t.id)).toEqual(["3"]);
     expect((await getTiles(env.DB, [KA])).get(KA)).toEqual({ collectedAt: NOW + 1, saturated: true });
+  });
+
+  it("R4: 바뀌지 않은 격자를 다시 기록하면 tile_places에 쓰지 않고 격자 상태(수집 시각)만 갱신한다", async () => {
+    await replaceTilePlaces(env.DB, KA, ["1", "2", "3"], NOW, false);
+    const changedAt = await tilesChangedAt(env.DB);
+    const { db, log } = recordingDb(env.DB);
+    await replaceTilePlaces(db, KA, ["3", "2", "1", "1"], NOW + 1, false);
+    expect(log.filter((x) => /(INSERT|DELETE)[^;]*tile_places/i.test(x.sql))).toEqual([]);
+    expect(log.filter((x) => /tile_places/.test(x.sql)).reduce((n, x) => n + x.written, 0)).toBe(0);
+    expect((await getTiles(env.DB, [KA])).get(KA)).toEqual({ collectedAt: NOW + 1, saturated: false });
+    // ID가 바뀌지 않았으니 미수집 확인(Cron)을 다시 깨우지 않는다
+    expect(await tilesChangedAt(env.DB)).toBe(changedAt);
+  });
+
+  it("R4: 하나 추가·하나 제거면 tile_places 문장은 2개(제거 DELETE 1 + 추가 INSERT OR IGNORE 1)", async () => {
+    await replaceTilePlaces(env.DB, KA, ["1", "2", "3"], NOW, false);
+    const { db, log } = recordingDb(env.DB);
+    await replaceTilePlaces(db, KA, ["1", "2", "4"], NOW + 1, false);
+    const writes = log.filter((x) => /(INSERT|DELETE)[^;]*tile_places/i.test(x.sql));
+    expect(writes).toHaveLength(2);
+    expect(writes.map((x) => x.sql.trim().split(/\s+/)[0]).sort()).toEqual(["DELETE", "INSERT"]);
+    expect((await tilePlaceStates(env.DB, [KA])).map((t) => t.id).sort()).toEqual(["1", "2", "4"]);
+    expect(await tilesChangedAt(env.DB)).toBe(NOW + 1);
   });
 
   it("R2: 격자 기록은 places 테이블에 아무것도 쓰지 않는다 (로컬 API 응답 저장 금지)", async () => {

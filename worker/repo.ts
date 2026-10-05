@@ -110,18 +110,38 @@ export async function markTile(db: D1Database, key: string, now: number, placeCo
   await db.prepare(TILE_UPSERT).bind(key, now, placeCount, saturated ? 1 : 0).run();
 }
 
-/** 로컬 API 결과 중 장소 ID만 기록한다 (카카오 정책: 로컬 API 응답 저장 금지, ID 기록은 허용) */
+/**
+ * 로컬 API 결과 중 장소 ID만 기록한다 (카카오 정책: 로컬 API 응답 저장 금지, ID 기록은 허용).
+ * D1 쓰기를 아끼려고 지금 기록된 ID를 읽어서 바뀐 것만 쓴다: 빠진 ID만 DELETE, 새 ID만 INSERT OR IGNORE (각각 한 문장).
+ * 격자 상태(수집 시각)는 언제나 갱신하고, ID가 바뀌었을 때만 tiles_changed_at을 올린다 (Cron의 미수집 확인을 깨우는 값).
+ */
 export async function replaceTilePlaces(
   db: D1Database, key: string, ids: string[], now: number, saturated: boolean,
 ): Promise<void> {
   const unique = [...new Set(ids)];
-  const insert = db.prepare("INSERT INTO tile_places (tile_key, place_id) VALUES (?, ?)");
-  await db.batch([
-    db.prepare("DELETE FROM tile_places WHERE tile_key = ?").bind(key),
-    ...unique.map((id) => insert.bind(key, id)),
-    db.prepare(TILE_UPSERT).bind(key, now, unique.length, saturated ? 1 : 0),
-    db.prepare(META_UPSERT).bind(TILES_CHANGED_KEY, String(now)),
-  ]);
+  const cur = await db.prepare("SELECT place_id FROM tile_places WHERE tile_key = ?").bind(key).all<{ place_id: string }>();
+  const current = new Set(cur.results.map((r) => r.place_id));
+  const next = new Set(unique);
+  const added = unique.filter((id) => !current.has(id));
+  const removed = [...current].filter((id) => !next.has(id));
+  const stmts: D1PreparedStatement[] = [];
+  if (removed.length > 0) {
+    stmts.push(
+      db
+        .prepare("DELETE FROM tile_places WHERE tile_key = ? AND place_id IN (SELECT value FROM json_each(?))")
+        .bind(key, JSON.stringify(removed)),
+    );
+  }
+  if (added.length > 0) {
+    stmts.push(
+      db
+        .prepare("INSERT OR IGNORE INTO tile_places (tile_key, place_id) SELECT ?, value FROM json_each(?)")
+        .bind(key, JSON.stringify(added)),
+    );
+  }
+  stmts.push(db.prepare(TILE_UPSERT).bind(key, now, unique.length, saturated ? 1 : 0));
+  if (stmts.length > 1) stmts.push(db.prepare(META_UPSERT).bind(TILES_CHANGED_KEY, String(now)));
+  await db.batch(stmts);
 }
 
 export async function getTiles(db: D1Database, keys: string[]): Promise<Map<string, TileState>> {
