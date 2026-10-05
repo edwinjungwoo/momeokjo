@@ -5,6 +5,7 @@ import { topPercents } from "../shared/rank";
 import { TRIO_SIZE, drawTrio, filterPlaces, sortPlaces, type Filters } from "../shared/recommend";
 import { shareText } from "../shared/share";
 import type { ApiDetail, ApiPlace, LatLng } from "../shared/types";
+import { filterProps, setTrackingHub, startTracking, track, trackFilters } from "./analytics";
 import { fetchPlace } from "./api";
 import { EmptyState, ErrorState } from "./components/EmptyState";
 import { FilterPanel } from "./components/FilterPanel";
@@ -65,6 +66,15 @@ export default function App() {
   const shuffle = useSlotShuffle();
   const toast = useToast();
   const tip = useFirstTip();
+
+  // R35: 세션 시작(app_open)과 이벤트에 붙일 거점. 공유 링크의 거점이 적용된 뒤의 값이다
+  const openTracked = useRef(false);
+  useEffect(() => {
+    setTrackingHub(hub.id);
+    if (openTracked.current) return;
+    openTracked.current = true;
+    startTracking(hub.id, { radius: filters.radius, party: filters.party });
+  }, [hub.id, filters.radius, filters.party]);
 
   // R37: "여긴 빼줘"한 곳은 후보(목록·지도·뽑기)에 나오지 않는다
   const candidates = useMemo(
@@ -140,6 +150,7 @@ export default function App() {
     const ids = share.placeIds;
     if (shareStarted.current || ids.length === 0) return;
     shareStarted.current = true;
+    track("share_open", { props: { picks: ids.slice(0, TRIO_SIZE) } });
     const ctrl = new AbortController();
     shareCtrl.current = ctrl;
     void Promise.allSettled(ids.map((id) => fetchPlace(id, ctrl.signal))).then((results) => {
@@ -174,14 +185,25 @@ export default function App() {
     setTrio(null);
     setFocusId(null);
   };
+  /** R35: 필터를 바꾼 뒤 후보가 0곳이 되면 empty_result를 한 번 남긴다 */
+  const filterChanged = useRef(false);
   const setFilters = (f: Filters) => {
     if (f.radius !== filters.radius) clearTrio();
     update((s) => ({ ...s, filters: f }));
+    // 정렬만 바꾼 것은 필터 변경으로 치지 않는다
+    if (JSON.stringify(filterProps(f)) !== JSON.stringify(filterProps(filters))) {
+      filterChanged.current = true;
+      trackFilters(f);
+    }
   };
   const setHub = (hubId: string) => {
     clearTrio();
     update((s) => ({ ...s, hubId }));
     setSelected(null);
+    if (hubId !== hub.id) {
+      setTrackingHub(hubId);
+      track("hub_change");
+    }
   };
   const closeTrio = () => {
     if (shuffle.running) return;
@@ -200,6 +222,8 @@ export default function App() {
       toast.show("가게 정보를 불러오는 중이에요");
       return;
     }
+    const kind = trio?.source === "drawn" ? "redraw" : "draw";
+    const pool = candidates.length;
     const r = drawTrio(candidates, filters.party, drawnIds.current, Math.random, {
       multiplier: personal.multiplier(Date.now()),
     });
@@ -226,6 +250,9 @@ export default function App() {
         for (const p of r.places) drawnIds.current.add(p.id);
         setTrio({ ids: r.places.map((p) => p.id), source: "drawn", fallback: byId(r.places) });
         record("shown", r.places);
+        track(kind, {
+          props: { candidates: pool, picks: r.places.map((p) => p.id), radius: filters.radius, party: filters.party },
+        });
         navigator.vibrate?.(15);
       },
     );
@@ -234,6 +261,7 @@ export default function App() {
   // 셔플 중에는 목록·핀 선택을 받지 않는다 (M2). 결과 3곳 중 하나면 그 카드를 펼친다
   const onSelect = (p: ApiPlace) => {
     if (shuffle.running) return;
+    track("select_place", { placeId: p.id });
     if (picks.includes(p.id)) {
       setSelected(null);
       setFocusId(p.id);
@@ -245,22 +273,53 @@ export default function App() {
   // R23′: 폰은 시스템 공유 시트, 아니면 클립보드 복사. 공유한 곳은 R37 신호로 남긴다
   const onShare = async (ps: ApiPlace[]) => {
     const outcome = await shareOrCopy(shareText(ps, filters, hub.id, window.location.origin));
-    if (outcome === "shared" || outcome === "copied") record("shared", ps);
+    if (outcome === "shared" || outcome === "copied") {
+      record("shared", ps);
+      track("share", { props: { picks: ps.slice(0, TRIO_SIZE).map((p) => p.id) } });
+    }
     if (outcome === "shared") toast.show("공유했어요", "love");
     else if (outcome === "copied") toast.show("복사했어요", "love");
     else if (outcome === "failed") toast.show("복사하지 못했어요");
   };
-  const onKakao = (p: ApiPlace) => record("kakao_open", [p]);
+  /** 결과 3곳 중 몇 번째 카드인지 (아니면 없음) */
+  const rankOf = (id: string) => {
+    const i = picks.indexOf(id);
+    return i >= 0 ? { rank: i + 1 } : undefined;
+  };
+  const onKakao = (p: ApiPlace) => {
+    record("kakao_open", [p]);
+    track("open_kakao", { placeId: p.id, props: rankOf(p.id) });
+  };
+  const onFocus = (id: string | null) => {
+    if (id !== null) track("expand_card", { placeId: id, props: rankOf(id) });
+    setFocusId(id);
+  };
   // R37: "여긴 빼줘" → 되돌리기 5초
   const onExclude = (p: ApiPlace) => {
+    track("exclude_place", { placeId: p.id, props: rankOf(p.id) });
     personal.exclude(p.id);
     setFocusId(null);
     // 받은 후보는 친구가 고른 곳이라 카드는 그대로 두고, 다음 뽑기부터만 뺀다
     toast.show(trio?.source === "received" ? "다음 뽑기부터 빼둘게요" : "다음부터 빼고 골라요", undefined, {
       ms: 8000,
-      action: { label: "되돌리기", onClick: () => personal.include(p.id) },
+      action: {
+        label: "되돌리기",
+        onClick: () => {
+          personal.include(p.id);
+          track("undo_exclude", { placeId: p.id });
+        },
+      },
     });
   };
+
+  // R35: 필터를 바꾼 뒤(다시 불러오기가 끝난 상태에서) 후보가 0곳이면 한 번 남긴다
+  const settled = data !== null && !loading && !polling;
+  const empty = candidates.length === 0;
+  useEffect(() => {
+    if (!settled || !filterChanged.current) return;
+    filterChanged.current = false;
+    if (empty) track("empty_result", { props: { ...filterProps(filters), candidates: 0 } });
+  }, [settled, empty, filters]);
 
   const status = statusOf(data, polling, error);
   const trioOpen = selected === null && (shuffle.display !== null || trioPlaces.length > 0);
@@ -335,7 +394,7 @@ export default function App() {
               detailLoading={detailPending !== null && detailPending === focusId}
               ranks={ranks}
               now={now}
-              onFocus={setFocusId}
+              onFocus={onFocus}
               onClose={closeTrio}
               onShare={onShare}
               onKakao={onKakao}
