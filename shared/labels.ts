@@ -44,3 +44,71 @@ export function hiddenLabels(boxes: LabelBox[], gap = 2, badges: LabelBox[] = []
   }
   return hidden;
 }
+
+/** 이름표가 지도 컨테이너 가장자리에서 떨어질 최소 여백(px) */
+export const LABEL_EDGE = 8;
+
+/**
+ * 이름표 상자가 컨테이너(0..width) 좌우 여백 안에 들어오도록 가로로 밀 양(px). 안쪽이면 0.
+ * 컨테이너보다 넓으면 왼쪽 여백에 맞춘다 (잘리지 않게 — 글자는 CSS 말줄임이 줄인다)
+ */
+export function clampLabelX(box: LabelBox, width: number, margin = LABEL_EDGE): number {
+  const min = margin;
+  const max = width - margin - box.w;
+  if (max < min || box.x < min) return min - box.x;
+  if (box.x > max) return max - box.x;
+  return 0;
+}
+
+export type PickLayout = {
+  /** 앞 번호의 이름표·배지와 겹쳐 숨길 이름표 (펼친 후보는 CSS가 늘 보인다) */
+  hidden: Set<string>;
+  /** 이름표마다 가로로 민 양(px) — CSS 변수 --label-dx */
+  shift: Map<string, number>;
+  /** 쌓는 순서(위 → 아래). 보이는 이름표가 다른 번호의 배지를 덮으면 그 배지의 핀을 이름표 위로 올린다 */
+  order: string[];
+};
+
+/**
+ * R22′: 뽑힌 핀들의 이름표 배치. labels·badges는 같은 id, 순위 순서(앞이 높은 순위).
+ * 1) 화면 밖으로 나가는 이름표를 안쪽으로 민다 2) 민 자리로 hiddenLabels 3) 보이는 이름표(펼친 후보가 있으면 그것만)가
+ * 덮는 배지의 핀을 그 이름표의 핀보다 위에 쌓는다. 나머지 순서는 펼친 후보 먼저, 그다음 번호 순.
+ * 핀 하나(오버레이)에 배지와 이름표가 함께 있어서 배지만 따로 올릴 수 없기 때문에 핀 순서로 푼다
+ */
+export function layoutPicks(
+  labels: LabelBox[],
+  badges: LabelBox[],
+  opts: { width: number; gap?: number; focusId?: string | null },
+): PickLayout {
+  const shift = new Map<string, number>();
+  const moved = labels.map((b) => {
+    const dx = clampLabelX(b, opts.width);
+    shift.set(b.id, dx);
+    return dx === 0 ? b : { ...b, x: b.x + dx };
+  });
+  const hidden = hiddenLabels(moved, opts.gap ?? 2, badges);
+  const focus = opts.focusId && labels.some((b) => b.id === opts.focusId) ? opts.focusId : null;
+  const shown = moved.filter((b) => (focus ? b.id === focus : !hidden.has(b.id)));
+  // above.get(k) = k보다 위에 있어야 하는 핀들 (k의 이름표가 그 배지를 덮는다)
+  const above = new Map<string, Set<string>>();
+  for (const l of shown) {
+    for (const g of badges) {
+      if (g.id !== l.id && near(l, g, 0)) {
+        if (!above.has(l.id)) above.set(l.id, new Set());
+        above.get(l.id)!.add(g.id);
+      }
+    }
+  }
+  const ids = labels.map((b) => b.id);
+  const prefer = focus ? [focus, ...ids.filter((id) => id !== focus)] : ids;
+  const order: string[] = [];
+  const placed = new Set<string>();
+  while (order.length < prefer.length) {
+    const ready = (id: string) => [...(above.get(id) ?? [])].every((j) => placed.has(j) || !prefer.includes(j));
+    // 순환은 생기지 않지만(덮을 수 있는 이름표는 뒤 번호 배지만, 또는 펼친 후보 하나) 생기면 선호 순서로 끊는다
+    const next = prefer.find((id) => !placed.has(id) && ready(id)) ?? prefer.find((id) => !placed.has(id))!;
+    order.push(next);
+    placed.add(next);
+  }
+  return { hidden, shift, order };
+}

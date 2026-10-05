@@ -710,7 +710,8 @@ input[type="range"] { width: 100%; height: 44px; margin: 0; accent-color: var(--
   position: absolute;
   bottom: calc(100% + 2px);
   left: 50%;
-  transform: translateX(-50%);
+  /* --label-dx: 화면 가장자리를 넘는 이름표를 안쪽으로 민 양 (MapView, shared/labels.ts clampLabelX) */
+  transform: translateX(calc(-50% + var(--label-dx, 0px)));
   /* 의사 요소는 * { box-sizing }에 걸리지 않는다 — 여백 포함 180px (shared/labels.ts PICK_LABEL.maxWidth) */
   box-sizing: border-box;
   max-width: 180px;

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { hiddenLabels, pickBadgeBox, pickLabelBox } from "../../shared/labels";
+import { layoutPicks, pickBadgeBox, pickLabelBox } from "../../shared/labels";
 import type { ApiPlace, CategoryGroup, LatLng } from "../../shared/types";
 import { loadKakaoMaps } from "../kakaoLoader";
 
@@ -66,6 +66,9 @@ export function MapView({ center, radius, places, selectedId, picks, focusId, on
   const handlers = useRef({ onSelect });
   /** 뽑힌 후보 id (순서 = 번호). 지도 이벤트(확대·이동 끝)에서 이름표 겹침을 다시 계산할 때 읽는다 */
   const picksRef = useRef<string[]>(picks);
+  const focusRef = useRef<string | null>(focusId);
+  /** 이름표를 가로로 민(--label-dx) 핀 id */
+  const shifted = useRef(new Set<string>());
   const layoutLabels = useRef(() => {});
   const [ready, setReady] = useState(false);
   const [failed, setFailed] = useState(false);
@@ -170,7 +173,10 @@ export function MapView({ center, radius, places, selectedId, picks, focusId, on
     fitCircle();
   }, [ready, center.lat, center.lng, radius]);
 
-  // R22′: 뽑힌 3곳의 이름표가 앞 번호의 이름표·배지와 겹치면 그 이름표를 숨긴다 (번호 배지는 남는다). 핀 좌표를 화면 px로 바꿔 상자를 비교한다
+  // R22′: 뽑힌 3곳의 이름표 배치 (shared/labels.ts layoutPicks). 핀 좌표를 화면 px로 바꿔 상자를 비교한다
+  // - 화면 가장자리를 넘는 이름표는 --label-dx로 안쪽으로 민다
+  // - 앞 번호의 이름표·배지와 겹치는 이름표는 숨긴다 (번호 배지는 남는다)
+  // - 보이는 이름표가 뒤 번호의 배지를 덮으면 그 핀을 위로 올린다 (배지는 늘 보인다)
   layoutLabels.current = () => {
     const m = map.current;
     const node = el.current;
@@ -187,13 +193,27 @@ export function MapView({ center, radius, places, selectedId, picks, focusId, on
       boxes.push(pickLabelBox(id, { x: pt.x, y: pt.y }, labelTextWidth(name, font)));
       badges.push(pickBadgeBox(id, { x: pt.x, y: pt.y }));
     }
-    // 앞 번호의 이름표나 번호 배지를 덮는 이름표를 숨긴다
-    const hide = hiddenLabels(boxes, 2, badges);
+    const { hidden: hide, shift, order } = layoutPicks(boxes, badges, { width: node.clientWidth, focusId: focusRef.current });
     for (const [id, ov] of overlays.current) {
       const pin = ov.getContent() as HTMLElement;
       const want = hide.has(id);
       if (pin.classList.contains("pin--nolabel") !== want) pin.classList.toggle("pin--nolabel", want);
     }
+    // 가로로 민 양: 이번에 민 핀은 값을 쓰고, 전에 밀었던 핀은 지운다
+    for (const id of shifted.current) {
+      if (shift.get(id)) continue;
+      (overlays.current.get(id)?.getContent() as HTMLElement | undefined)?.style.removeProperty("--label-dx");
+      shifted.current.delete(id);
+    }
+    for (const [id, dx] of shift) {
+      if (!dx) continue;
+      const pin = overlays.current.get(id)?.getContent() as HTMLElement | undefined;
+      const v = `${Math.round(dx)}px`;
+      if (pin && pin.style.getPropertyValue("--label-dx") !== v) pin.style.setProperty("--label-dx", v);
+      shifted.current.add(id);
+    }
+    // 쌓는 순서: 위부터 10, 9, 8 (펼친 후보가 맨 위면 12)
+    order.forEach((id, i) => overlays.current.get(id)?.setZIndex(i === 0 && id === focusRef.current ? 12 : 10 - i));
   };
 
   // 후보 핀: 바뀐 것만 붙이고 뗀다
@@ -261,6 +281,7 @@ export function MapView({ center, radius, places, selectedId, picks, focusId, on
       ov.setZIndex(focus || selected ? 12 : rank > 0 ? 11 - rank : top ? 2 : 1);
     }
     picksRef.current = picks;
+    focusRef.current = focusId;
     layoutLabels.current();
   }, [ready, places, selectedId, picks, focusId]);
 
