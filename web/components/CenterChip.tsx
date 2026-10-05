@@ -19,6 +19,16 @@ export function CenterChip({ center, onCenter, onPickStart, onToast }: Props) {
   const [locating, setLocating] = useState(false);
   const [source, setSource] = useState<"me" | "other">("other");
   const root = useRef<HTMLDivElement>(null);
+  // 지도에서 찍기를 시작한 시점의 기준점. 기준점이 이 값에서 바뀌어야 "선택한 위치"로 본다 (취소하면 그대로)
+  const pickFrom = useRef<LatLng | null>(null);
+
+  useEffect(() => {
+    const from = pickFrom.current;
+    if (from && (from.lat !== center.lat || from.lng !== center.lng)) {
+      pickFrom.current = null;
+      setSource("other");
+    }
+  }, [center]);
 
   // 메뉴 바깥을 누르거나 Esc를 누르면 닫는다
   useEffect(() => {
@@ -84,7 +94,7 @@ export function CenterChip({ center, onCenter, onPickStart, onToast }: Props) {
             type="button"
             role="menuitem"
             onClick={choose(() => {
-              setSource("other");
+              pickFrom.current = center;
               onPickStart();
             })}
           >

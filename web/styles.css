@@ -295,28 +295,35 @@ input[type="range"] { width: 100%; height: 44px; margin: 0; accent-color: var(--
   position: relative;
   display: grid;
   place-items: center;
-  width: 32px;
-  height: 32px;
+  width: 44px;
+  height: 44px;
   padding: 0;
   border: 0;
-  background: none;
+  background: transparent;
   -webkit-tap-highlight-color: transparent;
 }
+/* 터치 영역은 44px, 보이는 점은 작게. 겹쳐도 얼룩지지 않게 그림자는 두지 않는다 */
 .pin::before {
   content: "";
-  width: 14px;
-  height: 14px;
-  border: 2px solid #fff;
+  width: 10px;
+  height: 10px;
+  border: 1.5px solid #fff;
   border-radius: 50%;
   background: var(--accent);
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
   transition: width 0.15s, height 0.15s;
 }
-.pin--selected::before { width: 24px; height: 24px; border-width: 3px; background: var(--accent-strong); animation: pin-pulse 0.7s ease-out 1; }
+.pin--selected::before {
+  width: 22px;
+  height: 22px;
+  border-width: 3px;
+  background: var(--accent-strong);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
+  animation: pin-pulse 0.7s ease-out 1;
+}
 .pin--selected::after {
   content: attr(data-name);
   position: absolute;
-  bottom: calc(100% - 2px);
+  bottom: calc(100% - 8px);
   left: 50%;
   transform: translateX(-50%);
   max-width: 180px;
@@ -392,6 +399,10 @@ input[type="range"] { width: 100%; height: 44px; margin: 0; accent-color: var(--
   .sheet-handle, .menus-more { display: none; }
   .menus:not(.is-open) li:nth-child(n + 4) { display: flex; }
   .sheet .redraw { display: inline-flex; }
+}
+/* 가로 모드 폰: 지도가 화면을 다 먹지 않게 해서 패널이 140px 이상 보이게 한다 */
+@media (max-height: 500px) and (max-width: 899px) {
+  .map-wrap { height: 34dvh; min-height: 140px; }
 }
 @media (hover: hover) {
   .row:hover { background: var(--bg-2); }

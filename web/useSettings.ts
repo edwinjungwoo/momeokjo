@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { applyShareParams, parseSettings, type Settings } from "../shared/settings";
 import { parseShareParams } from "../shared/share";
 
@@ -36,10 +36,10 @@ export function useSettings() {
     }
   }, [settings]);
 
-  const update = (fn: (s: Settings) => Settings) => {
+  const update = useCallback((fn: (s: Settings) => Settings) => {
     touched.current = true;
     setSettings(fn);
-  };
+  }, []);
 
   return { settings, share: init.share, update };
 }

@@ -59,8 +59,7 @@ export function MapView({ center, radius, places, selectedId, pickMode, onPick, 
         if (cancelled || !node || map.current) return;
         const pos = new kakao.maps.LatLng(center.lat, center.lng);
         const m = new kakao.maps.Map(node, { center: pos, level: 5 });
-        map.current = m;
-        circle.current = new kakao.maps.Circle({
+        const c = new kakao.maps.Circle({
           map: m,
           center: pos,
           radius,
@@ -73,24 +72,42 @@ export function MapView({ center, radius, places, selectedId, pickMode, onPick, 
         });
         const dot = document.createElement("div");
         dot.className = "center-pin";
-        centerPin.current = new kakao.maps.CustomOverlay({ map: m, position: pos, content: dot, zIndex: 3 });
+        const pin = new kakao.maps.CustomOverlay({ map: m, position: pos, content: dot, zIndex: 3 });
         kakao.maps.event.addListener(m, "click", (e: any) => {
           if (Date.now() - lastPinTap.current < PIN_TAP_GUARD_MS) return;
           if (handlers.current.pickMode) handlers.current.onPick({ lat: e.latLng.getLat(), lng: e.latLng.getLng() });
         });
-        ro = new ResizeObserver(() => {
+        let lastWidth = node.clientWidth;
+        const observer = new ResizeObserver(() => {
           if (!hasSize(node)) return;
           const keep = m.getCenter();
+          const widthChanged = node.clientWidth !== lastWidth;
+          lastWidth = node.clientWidth;
           m.relayout();
-          if (needsFit.current) fitCircle();
+          // 너비가 바뀌면(회전, 창 크기) 원을 다시 맞춘다. 높이만 바뀌면(모바일 주소창) 중심을 유지한다.
+          if (needsFit.current || widthChanged) fitCircle();
           else m.setCenter(keep);
         });
-        ro.observe(node);
+        ro = observer;
+        observer.observe(node);
+        // 설정이 모두 끝난 뒤에만 ref에 넣는다 (실패하면 죽은 지도가 남지 않게)
+        map.current = m;
+        circle.current = c;
+        centerPin.current = pin;
         fitCircle();
         setReady(true);
       })
-      .catch(() => {
-        if (!cancelled) setFailed(true);
+      .catch((e) => {
+        console.error("kakao map load failed", e);
+        ro?.disconnect();
+        ro = undefined;
+        if (cancelled) return;
+        // 일부만 만들어진 지도가 남아 다시 시도를 막지 않게 비운다
+        map.current = null;
+        circle.current = null;
+        centerPin.current = null;
+        el.current?.replaceChildren();
+        setFailed(true);
       });
     return () => {
       cancelled = true;
