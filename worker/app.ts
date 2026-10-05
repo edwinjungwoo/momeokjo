@@ -1,8 +1,10 @@
 import { Hono, type Context } from "hono";
 import { z } from "zod";
 import { MAX_RADIUS, MIN_RADIUS } from "../shared/constants";
+import { auditArea } from "./audit";
 import { limitsFrom } from "./config";
 import type { FetchFn } from "./fetchFn";
+import { warmOnce } from "./maintenance";
 import { getPlace, getPlaces, type ServiceDeps } from "./placesService";
 
 export const AreaQuery = z.object({
@@ -57,6 +59,29 @@ export function createApp(deps: AppDeps) {
     const place = await getPlace(serviceDeps(c), id);
     if (!place) return c.json({ error: "not_found" }, 404);
     return c.json(place);
+  });
+
+  app.use("/api/admin/*", async (c, next) => {
+    const token = c.env.ADMIN_TOKEN;
+    if (!token || c.req.header("authorization") !== `Bearer ${token}`) return c.json({ error: "unauthorized" }, 401);
+    await next();
+  });
+
+  app.post("/api/admin/warm", async (c) => {
+    const q = AreaQuery.safeParse(c.req.query());
+    if (!q.success) return c.json({ error: "invalid_params" }, 400);
+    const r = await warmOnce(
+      { db: c.env.DB, fetcher: deps.fetcher, restKey: c.env.KAKAO_REST_KEY, ...limitsFrom(c.env), now: now(), sleep: deps.sleep },
+      { lat: q.data.lat, lng: q.data.lng },
+      q.data.radius,
+    );
+    return c.json(r);
+  });
+
+  app.get("/api/admin/audit", async (c) => {
+    const q = AreaQuery.safeParse(c.req.query());
+    if (!q.success) return c.json({ error: "invalid_params" }, 400);
+    return c.json(await auditArea(c.env.DB, { lat: q.data.lat, lng: q.data.lng }, q.data.radius));
   });
 
   app.notFound((c) => c.json({ error: "not_found" }, 404));
