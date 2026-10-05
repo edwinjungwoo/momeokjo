@@ -46,7 +46,11 @@ export type Place = {
   url: string;
 };
 
-export type ApiDetail = PlaceDetail & { fetchedAt: number };
+/** D1에 저장된 상세 (서버 안에서만 쓴다) */
+export type StoredDetail = PlaceDetail & { fetchedAt: number };
+
+/** API 응답의 상세. 태그 대신 R19 판단 결과만 준다. 목록은 메뉴 3개, 단건은 전부 */
+export type ApiDetail = Omit<PlaceDetail, "tags"> & { soloFriendly: boolean; groupFriendly: boolean };
 
 export type ApiPlace = {
   id: string;

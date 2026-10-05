@@ -77,7 +77,8 @@ describe("GET /api/places", () => {
     expect(body.places[1].group).toBe("chinese");
     expect(body.places[0].url).toBe("https://place.map.kakao.com/1001");
     expect(body.places[0].detail?.rating).toBe(4.1);
-    expect(body.places[0].detail?.menus.length).toBeLessThanOrEqual(5);
+    expect(body.places[0].detail?.menus).toHaveLength(3);
+    expect(body.places[0].detail).not.toHaveProperty("tags");
     expect(body.pending).toBe(0);
     expect(body.places[0].photoUrl).toBe("https://t1.kakaocdn.net/fiy_reboot/place/B6D1BA174D394DEDB42B4411705FFDE7");
   });
@@ -178,6 +179,7 @@ describe("GET /api/places/:id", () => {
     expect(res.status).toBe(200);
     const p = await res.json<any>();
     expect(p).toMatchObject({ id: "1001", name: "가게1001", detail: { rating: 4.1 } });
+    expect(p.detail.menus).toHaveLength(6);
     expect(p.distance).toBeUndefined();
   });
 

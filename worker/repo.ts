@@ -1,10 +1,10 @@
 import { categoryGroup } from "../shared/category";
 import { DETAIL_FAIL_TTL_MS, DETAIL_JITTER_MS, DETAIL_OK_TTL_MS, TILE_TTL_MS } from "../shared/constants";
 import { haversine, tileRect, tilesCoveringCircle } from "../shared/geo";
-import type { ApiDetail, CategoryGroup, LatLng, Place, PlaceDetail, PlaceSummary, Rect } from "../shared/types";
+import type { CategoryGroup, LatLng, Place, PlaceDetail, PlaceSummary, Rect, StoredDetail } from "../shared/types";
 
 export type DetailMeta = { status: "ok" | "failed"; fetchedAt: number; reason: string | null } | null;
-export type PlaceRow = { place: Place; detail: ApiDetail; meta: NonNullable<DetailMeta> };
+export type PlaceRow = { place: Place; detail: StoredDetail; meta: NonNullable<DetailMeta> };
 export type TileState = { collectedAt: number; saturated: boolean };
 export type TilePlaceState = { id: string; tileKey: string; meta: DetailMeta };
 

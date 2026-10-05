@@ -83,7 +83,7 @@ export async function getPlaces(
   return {
     center,
     radius: radiusM,
-    places: rows.map((r) => toApiPlace(r, center)),
+    places: rows.map((r) => toApiPlace(r, { center })),
     pending,
     incompleteTiles,
     stale,
@@ -92,7 +92,7 @@ export async function getPlaces(
 
 export async function getPlace(deps: ServiceDeps, id: string): Promise<ApiPlace | null> {
   const row = await placeById(deps.db, id);
-  if (row) return toApiPlace(row);
+  if (row) return toApiPlace(row, { full: true });
   if (!isDetailDue(await getMeta(deps.db, id), deps.now, id)) return null;
   if (deps.now < (await placeBlockedUntil(deps.db))) return null;
   if (!(await deps.rateLimit())) return null;
@@ -104,5 +104,5 @@ export async function getPlace(deps: ServiceDeps, id: string): Promise<ApiPlace 
   }
   await saveDetail(deps.db, id, r.summary, r.detail, deps.now);
   const fresh = await placeById(deps.db, id);
-  return fresh ? toApiPlace(fresh) : null;
+  return fresh ? toApiPlace(fresh, { full: true }) : null;
 }

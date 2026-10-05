@@ -34,12 +34,9 @@ export const DEFAULT_FILTERS: Filters = {
 export const withLunch = (f: Filters, lunch: LunchMinutes): Filters => ({ ...f, lunch, radius: LUNCH_RADIUS[lunch] });
 export const withRadius = (f: Filters, radius: number): Filters => ({ ...f, radius, lunch: null });
 
-const SOLO_KEYWORDS = ["국밥", "해장국", "라멘", "라면", "분식", "덮밥", "돈까스", "우동", "국수", "김밥", "패스트푸드"];
-const GROUP_TAGS = ["단체석", "회식장소", "모임맛집"];
-
-export const isSoloFriendly = (p: ApiPlace) =>
-  SOLO_KEYWORDS.some((k) => p.category.includes(k)) || (p.detail?.tags.includes("혼밥") ?? false);
-export const isGroupFriendly = (p: ApiPlace) => p.detail?.tags.some((t) => GROUP_TAGS.includes(t)) ?? false;
+/** R19 판단은 서버가 shared/friendly 규칙으로 미리 계산해서 준다 */
+export const isSoloFriendly = (p: ApiPlace) => p.detail?.soloFriendly ?? false;
+export const isGroupFriendly = (p: ApiPlace) => p.detail?.groupFriendly ?? false;
 
 export function filterPlaces(places: ApiPlace[], f: Filters, now: Date): ApiPlace[] {
   return places.filter((p) => {

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { haversine, walkMinutes } from "../shared/geo";
 import { draw, filterPlaces, sortPlaces, type Filters } from "../shared/recommend";
 import { shareText } from "../shared/share";
-import type { ApiPlace, LatLng } from "../shared/types";
+import type { ApiDetail, ApiPlace, LatLng } from "../shared/types";
 import { fetchPlace } from "./api";
 import { CenterChip } from "./components/CenterChip";
 import { EmptyState, ErrorState } from "./components/EmptyState";
@@ -60,6 +60,25 @@ export default function App() {
     [candidates, selected],
   );
 
+  // R13: 목록 응답에는 메뉴가 3개뿐이라 카드를 열면 단건 조회로 전체 상세를 한 번 받아 합친다
+  const [fullDetails, setFullDetails] = useState<Record<string, ApiDetail>>({});
+  const requestedFull = useRef(new Set<string>());
+  const selectedId = selected?.id ?? null;
+  useEffect(() => {
+    if (!selectedId || requestedFull.current.has(selectedId)) return;
+    requestedFull.current.add(selectedId);
+    fetchPlace(selectedId)
+      .then((p) => {
+        const detail = p.detail;
+        if (detail) setFullDetails((m) => ({ ...m, [p.id]: detail }));
+      })
+      .catch(() => requestedFull.current.delete(selectedId));
+  }, [selectedId]);
+  const cardPlace = useMemo(() => {
+    const full = selected ? fullDetails[selected.id] : undefined;
+    return selected && full ? { ...selected, detail: full } : selected;
+  }, [selected, fullDetails]);
+
   // 폴링으로 상세가 채워지면 열린 카드도 최신 객체로 바꾼다
   useEffect(() => {
     if (!data) return;
@@ -84,8 +103,13 @@ export default function App() {
       setSelected(found);
       return;
     }
+    requestedFull.current.add(id);
     fetchPlace(id)
-      .then((p) => setSelected(withWalk(p, center)))
+      .then((p) => {
+        const detail = p.detail;
+        if (detail) setFullDetails((m) => ({ ...m, [p.id]: detail }));
+        setSelected(withWalk(p, center));
+      })
       .catch(() => showToast("공유된 가게를 찾지 못했어요"));
   }, [data, share.placeId, center, showToast]);
 
@@ -203,7 +227,7 @@ export default function App() {
           {sheetOpen && (
             <PlaceCard
               key={shuffle.display !== null ? "slot" : (selected?.id ?? "none")}
-              place={selected}
+              place={cardPlace}
               slotName={shuffle.display}
               drawn={drawn}
               now={now}

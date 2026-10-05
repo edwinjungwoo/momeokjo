@@ -193,7 +193,10 @@ CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
         distance,        // m, 정수
         walkMinutes,     // R26
         address, phone, url,
-        detail: null | { rating, reviewCount, price, menus /* 상위 5개 */, hours, strengths, bookable, fetchedAt }
+        detail: null | {
+          rating, reviewCount, price, menus /* 목록은 상위 3개 */, hours, strengths, bookable,
+          soloFriendly, groupFriendly  // R19 판단 결과 (태그 원문은 보내지 않는다, 규칙은 shared/friendly)
+        }
       }>,
       pending: number,   // 덮는 격자에 ID는 기록됐지만 상세를 아직 한 번도 가져오지 않은 장소 수 (반경이 아니라 격자 기준)
       incompleteTiles: number, // 예산 부족으로 이번에 못 수집한 격자 수
@@ -201,7 +204,7 @@ CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
     }
     ```
   - `Cache-Control: no-store`
-- **R13 `GET /api/places/:id`.** 단일 가게 정보를 반환한다(형식은 R12의 원소와 같고, distance와 walkMinutes는 빠진다). id는 숫자 1~15자리만 허용하고 아니면 404다. 표시 정보가 없으면 R15 제한 안에서 동기적으로 한 번 상세를 가져온다(최근 6시간 안에 실패했거나 R10 쿨다운 중이면 시도하지 않음). 그래도 없으면 404다.
+- **R13 `GET /api/places/:id`.** 단일 가게 정보를 반환한다(형식은 R12의 원소와 같고, distance와 walkMinutes는 빠지며 메뉴는 전부(최대 20개) 준다). 화면은 카드를 열 때 이것을 한 번 불러 목록 원소의 상세와 바꾼다. id는 숫자 1~15자리만 허용하고 아니면 404다. 표시 정보가 없으면 R15 제한 안에서 동기적으로 한 번 상세를 가져온다(최근 6시간 안에 실패했거나 R10 쿨다운 중이면 시도하지 않음). 그래도 없으면 404다.
 - **R14 장애 대응.** 공식 API가 실패하고(쿼터 초과, 5xx, 타임아웃) 해당 격자에 만료된 캐시가 있으면 그 캐시로 응답하고 `stale: true`를 준다. 캐시도 없으면 502와 `{error: "upstream"}`을 반환한다.
 - **R15 남용 방지.** 외부 호출을 일으키는 요청(만료/미수집 격자가 있는 R12, 동기 보충이 필요한 R13)은 IP당 분당 10회로 제한한다(Workers Rate Limiting 바인딩). 초과하면 외부 호출 없이 캐시로만 응답하고 `stale: true`를 준다. 캐시로만 응답할 수 있는 요청은 제한하지 않는다.
 
@@ -215,6 +218,7 @@ CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
   - 최소 평점: 무관 / 3.5+ / 4.0+. "무관"이 아니면 rating이 null인 곳은 제외한다.
   - 반경: 거리 ≤ radius
 - **R19 인원 휴리스틱.** 인원 선택지는 1 / 2 / 3 / 4+이고 기본값은 2다.
+  - 아래 두 판단은 서버가 `shared/friendly` 규칙으로 계산해 `soloFriendly`/`groupFriendly`로 내려준다.
   - 1명: 혼밥 친화(`category_name`에 국밥, 해장국, 라멘, 라면, 분식, 덮밥, 돈까스, 우동, 국수, 김밥, 패스트푸드 중 하나라도 포함하거나, tags에 "혼밥"이 있음)면 가중치 ×1.5
   - 4명 이상: `snack` 그룹 제외. tags에 "단체석", "회식장소", "모임맛집" 중 하나라도 있으면 ×1.3, `bookable === true`면 추가로 ×1.3
   - 2~3명: 보정 없음

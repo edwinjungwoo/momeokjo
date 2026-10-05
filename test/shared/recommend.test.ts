@@ -98,18 +98,18 @@ describe("R19/R21 가중치", () => {
     expect(weightOf(apiPlace("a", {}, { rating: null }), 2)).toBe(0.5);
     expect(weightOf(apiPlace("a", {}, null), 2)).toBe(0.5);
   });
-  it("R19: 1명이면 혼밥 친화(카테고리 키워드 또는 '혼밥' 태그) ×1.5", () => {
+  it("R19: 1명이면 혼밥 친화(서버가 계산한 soloFriendly) ×1.5", () => {
     const base = weightOf(apiPlace("a"), 1);
-    expect(weightOf(apiPlace("a", { category: "음식점 > 한식 > 국밥" }), 1)).toBeCloseTo(base * 1.5, 6);
-    expect(weightOf(apiPlace("a", {}, { tags: ["혼밥"] }), 1)).toBeCloseTo(base * 1.5, 6);
-    expect(weightOf(apiPlace("a", { category: "음식점 > 한식 > 국밥" }), 2)).toBeCloseTo(base, 6);
+    expect(weightOf(apiPlace("a", {}, { soloFriendly: true }), 1)).toBeCloseTo(base * 1.5, 6);
+    expect(weightOf(apiPlace("a", {}, { soloFriendly: true }), 2)).toBeCloseTo(base, 6);
+    expect(weightOf(apiPlace("a", {}, null), 1)).toBe(0.5);
   });
-  it("R19: 4명 이상이면 단체석/회식장소/모임맛집 ×1.3, 예약 가능 추가 ×1.3", () => {
+  it("R19: 4명 이상이면 단체 친화(groupFriendly) ×1.3, 예약 가능 추가 ×1.3", () => {
     const base = weightOf(apiPlace("a"), 4);
-    expect(weightOf(apiPlace("a", {}, { tags: ["회식장소"] }), 4)).toBeCloseTo(base * 1.3, 6);
+    expect(weightOf(apiPlace("a", {}, { groupFriendly: true }), 4)).toBeCloseTo(base * 1.3, 6);
     expect(weightOf(apiPlace("a", {}, { bookable: true }), 4)).toBeCloseTo(base * 1.3, 6);
-    expect(weightOf(apiPlace("a", {}, { tags: ["단체석"], bookable: true }), 4)).toBeCloseTo(base * 1.69, 6);
-    expect(weightOf(apiPlace("a", {}, { tags: ["단체석"], bookable: true }), 3)).toBeCloseTo(base, 6);
+    expect(weightOf(apiPlace("a", {}, { groupFriendly: true, bookable: true }), 4)).toBeCloseTo(base * 1.69, 6);
+    expect(weightOf(apiPlace("a", {}, { groupFriendly: true, bookable: true }), 3)).toBeCloseTo(base, 6);
   });
 });
 
