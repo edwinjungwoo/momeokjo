@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { AUTO_DRAW_ENOUGH, AUTO_DRAW_POLL_WAIT_MS, shouldAutoDraw, type AutoDrawInput } from "../../shared/autoDraw";
+import { AUTO_DRAW_ENOUGH, AUTO_DRAW_POLL_WAIT_MS, pollingElapsed, shouldAutoDraw, type AutoDrawInput } from "../../shared/autoDraw";
 
 const OK: AutoDrawInput = {
   returning: true, shareLink: false, drawnThisSession: false, interacted: false,
@@ -60,5 +60,13 @@ describe("R39 열자마자 3곳", () => {
     expect(shouldAutoDraw({ ...early, interacted: true })).toBe(false);
     expect(shouldAutoDraw({ ...early, offDay: "2027-01-15" })).toBe(false);
     expect(shouldAutoDraw({ ...early, hasData: false })).toBe(false);
+  });
+
+  it("R39: 5초 타이머가 울렸으면(waited) 시계 차이로 4,998ms로 재지더라도 폴링 대기를 다 채운 것으로 본다", () => {
+    const start = 1_000_000;
+    expect(pollingElapsed(true, start, start + 4998)).toBe(AUTO_DRAW_POLL_WAIT_MS);
+    expect(shouldAutoDraw({ ...OK, settled: false, polling: true, strict: 3, pollingMs: pollingElapsed(true, start, start + 4998) })).toBe(true);
+    expect(pollingElapsed(false, start, start + 1200)).toBe(1200);
+    expect(pollingElapsed(false, null, start)).toBe(0);
   });
 });

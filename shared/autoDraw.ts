@@ -39,3 +39,12 @@ export function shouldAutoDraw(x: AutoDrawInput): boolean {
     x.pool > 0
   );
 }
+
+/**
+ * 폴링을 시작한 뒤 지난 시간. 5초 타이머가 이미 울렸으면(waited) 시계로 재지 않고 대기를 다 채운 것으로 본다 —
+ * 타이머가 Date.now() 차이보다 몇 ms 일찍 울리면 4,99x ms로 재져서 그 뒤로 다시 판단할 기회가 없었다
+ */
+export function pollingElapsed(waited: boolean, start: number | null, now: number): number {
+  if (waited) return AUTO_DRAW_POLL_WAIT_MS;
+  return start === null ? 0 : now - start;
+}

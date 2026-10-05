@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { AUTO_DRAW_POLL_WAIT_MS, shouldAutoDraw } from "../shared/autoDraw";
+import { AUTO_DRAW_POLL_WAIT_MS, pollingElapsed, shouldAutoDraw } from "../shared/autoDraw";
 import { haversine, walkMinutes } from "../shared/geo";
 import { hubById } from "../shared/hubs";
 import { kstDay } from "../shared/kst";
@@ -336,7 +336,7 @@ export default function App() {
       pool: autoPool,
       polling: freshPolling,
       strict: candidates.length,
-      pollingMs: pollStart.current === null ? 0 : Date.now() - pollStart.current,
+      pollingMs: pollingElapsed(pollWaited, pollStart.current, Date.now()),
     });
     if (!go) return;
     autoDone.current = true;
