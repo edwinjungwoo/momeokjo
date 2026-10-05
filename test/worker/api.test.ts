@@ -6,7 +6,7 @@ import {
 import { hubById } from "../../shared/hubs";
 import { tileKeyOf, tilesCoveringCircle, walkMinutes } from "../../shared/geo";
 import type { PlacesResponse } from "../../shared/types";
-import { createApp, placesCacheKey } from "../../worker/app";
+import { PLACES_CACHE_MS, PLACES_PENDING_CACHE_MS, createApp, placesCacheKey, placesCacheTtl } from "../../worker/app";
 import { detailGate, getMeta, markTile, recordPlaceBlock, replaceTilePlaces } from "../../worker/repo";
 import { callApp } from "../helpers/callApp";
 import { doc, fakeKakaoLocal, fakePlaceApi, routeFetch } from "../helpers/fakeKakao";
@@ -131,6 +131,22 @@ describe("GET /api/places", () => {
 });
 
 describe("GET /api/places — 응답 캐시와 목록 원소", () => {
+  it("R12: 캐시 시간 — 다 찬 응답(또는 R44 frozen) 60초, pending만 남은 응답 10초, 격자 수집 중이거나 stale이면 두지 않는다", () => {
+    const base: PlacesResponse = {
+      center: HUB_CENTER, radius: 300, places: [], pending: 0, incompleteTiles: 0, stale: false,
+      detailsFrozenSince: null, detailsNewestAt: null,
+    };
+    expect(PLACES_CACHE_MS).toBe(60_000);
+    expect(PLACES_PENDING_CACHE_MS).toBe(10_000);
+    expect(placesCacheTtl(base)).toBe(PLACES_CACHE_MS);
+    expect(placesCacheTtl({ ...base, pending: 3 })).toBe(PLACES_PENDING_CACHE_MS);
+    expect(placesCacheTtl({ ...base, pending: 3, detailsFrozenSince: NOW })).toBe(PLACES_CACHE_MS);
+    expect(placesCacheTtl({ ...base, incompleteTiles: 1 })).toBeNull();
+    expect(placesCacheTtl({ ...base, pending: 3, incompleteTiles: 1 })).toBeNull();
+    expect(placesCacheTtl({ ...base, stale: true })).toBeNull();
+    expect(placesCacheTtl({ ...base, pending: 3, stale: true })).toBeNull();
+  });
+
   it("R12: 다 채워진 응답은 Workers Cache API에 60초 캐시해서, 캐시 적중이면 D1을 읽지 않고 같은 본문을 준다", async () => {
     const cache = caches.default;
     await cache.delete(new Request(placesCacheKey("bongeunsa", 300)));
@@ -140,9 +156,18 @@ describe("GET /api/places — 응답 캐시와 목록 원소", () => {
     const app = createApp({
       fetcher: routeFetch(local.fetcher, place.fetcher), now: () => now, sleep: async () => {}, rateLimit: async () => true, cache,
     });
-    const first = await callApp(app, Q); // pending 2 → 캐시하지 않음
+    const first = await callApp(app, Q); // pending이 남음 → 10초만 캐시 (R12 폴링 공유)
+    const firstBody = await first.text();
+    expect((JSON.parse(firstBody) as PlacesResponse).pending).toBeGreaterThan(0);
     expect(first.headers.get("cache-control")).toBe("no-store");
-    expect(await cache.match(new Request(placesCacheKey("bongeunsa", 300)))).toBeUndefined();
+    const short = await cache.match(new Request(placesCacheKey("bongeunsa", 300)));
+    expect(short?.headers.get("cache-control")).toBe("public, max-age=10, s-maxage=10");
+    // 10초 안의 폴링은 같은 pending 응답을 나눠 쓴다 (보충을 다시 시작하지 않는다)
+    const callsAfterFirst = local.calls.length + place.calls.length;
+    now += 5_000;
+    expect(await (await callApp(app, Q)).text()).toBe(firstBody);
+    expect(local.calls.length + place.calls.length).toBe(callsAfterFirst);
+    now += 5_000;
     const second = await callApp(app, Q);
     const secondBody = await second.text();
     expect(second.headers.get("cache-control")).toBe("no-store");

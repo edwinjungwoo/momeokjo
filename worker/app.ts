@@ -3,6 +3,7 @@ import { z } from "zod";
 import { MAX_RADIUS, MIN_RADIUS, isValidRadius } from "../shared/constants";
 import { MAX_EVENT_BODY_BYTES, parseEventBatch } from "../shared/events";
 import { HUBS, isHubId } from "../shared/hubs";
+import type { PlacesResponse } from "../shared/types";
 import { auditArea } from "./audit";
 import { limitsFrom } from "./config";
 import { meteredDb, overReadBudget, overWriteBudget, readSoftCap, recordD1Usage, type D1Usage } from "./d1Usage";
@@ -39,6 +40,20 @@ export type ResponseCache = {
   put(req: Request, res: Response): Promise<void>;
 };
 export const PLACES_CACHE_MS = 60_000;
+/** 상세 보충(pending)이 남은 응답은 짧게만 둔다 — 같은 거점을 폴링하는 여러 화면이 계산 하나를 나눠 쓰게 */
+export const PLACES_PENDING_CACHE_MS = 10_000;
+
+/**
+ * R12: 목록 응답을 엣지에 둘 시간(ms), 두지 않으면 null.
+ * 다 찬 응답은 60초. R44 frozen이면 pending이 줄지 않으므로 남아 있어도 60초.
+ * pending만 남았으면 10초 (그 사이 폴링은 보충을 다시 시작하지 않고 같은 응답을 받는다).
+ * 격자를 아직 수집하는 중이거나 stale(요청 제한·외부 실패)이면 두지 않는다.
+ */
+export function placesCacheTtl(res: PlacesResponse): number | null {
+  if (res.incompleteTiles > 0 || res.stale) return null;
+  if (res.pending === 0 || res.detailsFrozenSince !== null) return PLACES_CACHE_MS;
+  return PLACES_PENDING_CACHE_MS;
+}
 /** 응답 형식이 바뀌면 올린다 (예전 형식의 캐시를 쓰지 않게) */
 export const PLACES_CACHE_VERSION = "2";
 const EXPIRES_HEADER = "x-mmj-expires";
@@ -111,7 +126,7 @@ export function createApp(deps: AppDeps) {
     const q = PlacesQuery.safeParse(c.req.query());
     if (!q.success) return c.json({ error: "invalid_params" }, 400);
     const hub = HUBS.find((h) => h.id === q.data.hub)!;
-    // 거점이 몇 개뿐이라 같은 (거점, 반경) 요청이 반복된다. 다 채워진 응답은 잠깐 캐시해서 D1 읽기와 CPU를 아낀다.
+    // 거점이 몇 개뿐이라 같은 (거점, 반경) 요청이 반복된다. 응답을 잠깐 캐시해서 D1 읽기와 CPU를 아낀다 (placesCacheTtl).
     const key = new Request(placesCacheKey(hub.id, q.data.radius));
     const hit = await deps.cache?.match(key);
     if (hit && Number(hit.headers.get(EXPIRES_HEADER)) > now()) {
@@ -120,14 +135,13 @@ export function createApp(deps: AppDeps) {
     const res = await getPlaces(serviceDeps(c), { lat: hub.lat, lng: hub.lng }, q.data.radius);
     if ("error" in res) return c.json(res, 502);
     const body = JSON.stringify(res);
-    // R44: frozen이면 pending이 줄지 않으므로 남아 있어도 캐시한다
-    const settled = res.pending === 0 || res.detailsFrozenSince !== null;
-    if (deps.cache && settled && res.incompleteTiles === 0 && !res.stale) {
+    const ttl = placesCacheTtl(res);
+    if (deps.cache && ttl !== null) {
       const stored = new Response(body, {
         headers: {
           "content-type": "application/json",
-          "cache-control": `public, max-age=${PLACES_CACHE_MS / 1000}, s-maxage=${PLACES_CACHE_MS / 1000}`,
-          [EXPIRES_HEADER]: String(now() + PLACES_CACHE_MS),
+          "cache-control": `public, max-age=${ttl / 1000}, s-maxage=${ttl / 1000}`,
+          [EXPIRES_HEADER]: String(now() + ttl),
         },
       });
       c.executionCtx.waitUntil(deps.cache.put(key, stored).catch((e) => console.error("cache put failed", e)));

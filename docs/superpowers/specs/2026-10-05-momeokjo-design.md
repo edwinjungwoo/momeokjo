@@ -213,7 +213,7 @@ CREATE INDEX idx_events_type_day ON events(type, day);
 - **R12 `GET /api/places?hub&radius`.**
   - 검증: `hub`는 `shared/hubs.ts`의 거점 id, `radius`는 100~1000m의 50m 배수. 위반하거나(모르는 거점 포함) 임의 lat/lng를 보내면 400과 `{error: "invalid_params"}`를 반환한다. 좌표는 서버가 거점 목록에서 찾는다(남용과 비용 방지; 임의 좌표는 관리용 R31/R32만).
   - 화면은 반경과 상관없이 항상 `radius=1000`을 요청하고 반경은 브라우저에서 거른다(R42). 서버는 50m 단위 반경을 계속 받는다(호환).
-  - 캐시: `(pending === 0 || detailsFrozenSince !== null) && incompleteTiles === 0 && !stale`인 응답은 Workers Cache API(`caches.default`)에 `https://cache.mmj/places?hub&radius&v={응답 형식 버전}` 키로 60초(`Cache-Control: public, max-age=60, s-maxage=60`) 저장하고, 다음 요청은 D1을 읽지 않고 캐시로 답한다. 브라우저에 주는 응답은 항상 `no-store`다. 거점과 50m 단위 반경뿐이라 키가 적고, 화면은 1000m만 요청해서(R42) 실제로 쓰는 키는 거점 수(5개)뿐이다. 응답 형식 버전은 2(R44 필드 추가).
+  - 캐시: `(pending === 0 || detailsFrozenSince !== null) && incompleteTiles === 0 && !stale`인 응답은 Workers Cache API(`caches.default`)에 `https://cache.mmj/places?hub&radius&v={응답 형식 버전}` 키로 60초(`Cache-Control: public, max-age=60, s-maxage=60`) 저장하고, 다음 요청은 D1을 읽지 않고 캐시로 답한다. `incompleteTiles === 0 && !stale`인데 pending만 남은(frozen 아님) 응답은 10초만 저장해서, 같은 거점을 폴링하는 여러 화면이 계산(과 요청 보충 시작) 하나를 나눠 쓴다(`placesCacheTtl`). 브라우저에 주는 응답은 항상 `no-store`다. 거점과 50m 단위 반경뿐이라 키가 적고, 화면은 1000m만 요청해서(R42) 실제로 쓰는 키는 거점 수(5개)뿐이다. 응답 형식 버전은 2(R44 필드 추가).
   - 처리: `tilesCoveringCircle`로 격자를 구하고, 만료/미수집 격자를 예산 안에서 동기적으로 수집한다(ID만 기록). 격자-장소 상태(`tile_places` + places 메타)는 요청마다 한 번만 읽어서 목록 필터, `pending`, 보충 대상 고르기에 같이 쓴다. 그다음 D1에서 덮는 격자에 기록된 가게 중 상세가 있고 거리 ≤ radius인 것을 조회한다. R13 단건 조회로만 저장된 가게는 목록에 넣지 않는다. 상세가 아직 없는 장소는 좌표를 모르므로 응답에 넣지 않고 `pending`으로만 센다. 상세를 한 번도 가져오지 않은 가게가 있으면(쿨다운 중이 아니면) `ctx.waitUntil`로 그 가게들만 R10 배치를 시작한다. 만료된 상세는 그대로 보여주고 갱신은 Cron(R11)에 맡긴다.
   - 응답:
     ```ts
