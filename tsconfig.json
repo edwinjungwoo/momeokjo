@@ -1,5 +1,5 @@
 {
   "extends": "./tsconfig.base.json",
   "compilerOptions": { "lib": ["ES2022", "DOM", "DOM.Iterable"], "jsx": "react-jsx", "types": ["vite/client"] },
-  "include": ["web", "shared"]
+  "include": ["web", "shared", "test/web"]
 }

@@ -1,5 +1,7 @@
 {
   "extends": "./tsconfig.base.json",
   "compilerOptions": { "lib": ["ES2022"], "types": ["@cloudflare/vitest-pool-workers/types"] },
-  "include": ["worker-configuration.d.ts", "worker", "shared", "test"]
+  "include": ["worker-configuration.d.ts", "worker", "shared", "test"],
+  // 화면 모듈(DOM)을 부르는 테스트는 tsconfig.json이 본다
+  "exclude": ["test/web"]
 }
