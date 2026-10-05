@@ -58,14 +58,23 @@ export function kstParts(at: Date): { dow: number; minute: number } {
   return { dow: t.getUTCDay(), minute: t.getUTCHours() * 60 + t.getUTCMinutes() };
 }
 
-const covers = (segs: Interval[] | "closed" | undefined, start: number, end: number) =>
-  Array.isArray(segs) && segs.some(([a, b]) => a <= start && end <= b);
+const shifted = (segs: Interval[] | "closed" | undefined, by: number): Interval[] =>
+  Array.isArray(segs) ? segs.map(([a, b]): Interval => [a + by, b + by]) : [];
 
 export function isOpenDuring(hours: Hours | null, at: Date, durationMin = 30): boolean | null {
   if (!hours) return null;
   const { dow, minute } = kstParts(at);
-  const today = hours[dow];
-  const prev = hours[(dow + 6) % 7];
-  if (today === undefined && prev === undefined) return null;
-  return covers(today, minute, minute + durationMin) || covers(prev, minute + DAY_MIN, minute + DAY_MIN + durationMin);
+  if (hours[dow] === undefined) return null;
+  const timeline = [
+    ...shifted(hours[(dow + 6) % 7], -DAY_MIN),
+    ...shifted(hours[dow], 0),
+    ...shifted(hours[(dow + 1) % 7], DAY_MIN),
+  ].sort((x, y) => x[0] - y[0]);
+  const merged: Interval[] = [];
+  for (const [a, b] of timeline) {
+    const last = merged[merged.length - 1];
+    if (last && a <= last[1]) last[1] = Math.max(last[1], b);
+    else merged.push([a, b]);
+  }
+  return merged.some(([a, b]) => a <= minute && minute + durationMin <= b);
 }
