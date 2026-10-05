@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { shouldAutoDraw } from "../shared/autoDraw";
+import { AUTO_DRAW_POLL_WAIT_MS, shouldAutoDraw } from "../shared/autoDraw";
 import { haversine, walkMinutes } from "../shared/geo";
 import { hubById } from "../shared/hubs";
 import { kstDay } from "../shared/kst";
@@ -298,10 +298,25 @@ export default function App() {
   };
 
   // R39: 재방문자는 목록이 다 오면 한 번 자동으로 뽑는다 (사용자가 아직 아무것도 누르지 않았을 때만).
-  // pending 폴링 중인 일부 목록으로는 뽑지 않고, 폴링이 끝난 뒤(또는 처음부터 다 찬 응답) 한 번만 뽑는다.
+  // pending 폴링 중인 일부 목록으로는 보통 뽑지 않고, 폴링이 끝난 뒤(또는 처음부터 다 찬 응답) 한 번만 뽑는다.
   // R45: 24시간 안의 기기 저장본이면(폴링이 끝난 응답을 저장한 것) 그걸로 바로 뽑고, 그보다 오래됐으면 새 목록을 기다린다
+  // pending이 끝내 줄지 않는 거점에서 30초를 기다리지 않게, 조건 맞는 후보가 30곳 이상이거나 폴링이 5초를 넘으면 그때 뽑는다
   const autoPool = candidates.length + relax.extra.length;
   const listSettled = hasData && !loading && !polling && fromCache !== "stale";
+  const freshPolling = hasData && polling && fromCache !== "stale";
+  const pollStart = useRef<number | null>(null);
+  const [pollWaited, setPollWaited] = useState(false);
+  useEffect(() => {
+    if (!freshPolling) {
+      pollStart.current = null;
+      setPollWaited(false);
+      return;
+    }
+    pollStart.current = Date.now();
+    // 폴링 응답이 같은 목록이면 다시 그려지지 않으므로 5초 뒤 한 번 다시 판단하게 한다
+    const t = window.setTimeout(() => setPollWaited(true), AUTO_DRAW_POLL_WAIT_MS);
+    return () => window.clearTimeout(t);
+  }, [freshPolling]);
   const autoDone = useRef(false);
   useEffect(() => {
     if (autoDone.current || interacted.current) return;
@@ -315,13 +330,16 @@ export default function App() {
       hasData,
       settled: listSettled,
       pool: autoPool,
+      polling: freshPolling,
+      strict: candidates.length,
+      pollingMs: pollStart.current === null ? 0 : Date.now() - pollStart.current,
     });
     if (!go) return;
     autoDone.current = true;
     markAutoDrawn();
     onDraw({ auto: true });
     // onDraw는 매 렌더 새로 만들어지지만, 목록이 처음 준비됐을 때 한 번만 부르면 된다
-  }, [hasData, listSettled, autoPool, returning, share.placeIds]);
+  }, [hasData, listSettled, autoPool, returning, share.placeIds, freshPolling, pollWaited, candidates.length]);
 
   // 셔플 중에는 목록·핀 선택을 받지 않는다 (M2). 결과 3곳 중 하나면 그 카드를 펼친다
   const onSelect = (p: ApiPlace) => {
