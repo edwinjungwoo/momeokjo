@@ -12,6 +12,10 @@ const HOUR = 3600_000;
 export const TILE_TTL_MS = 7 * 24 * HOUR;
 export const DETAIL_OK_TTL_MS = 3 * 24 * HOUR;
 export const DETAIL_FAIL_TTL_MS = 6 * HOUR;
+/** ok TTL에 id별로 더하는 0~24시간 지터 (한꺼번에 수집한 가게들이 같은 시각에 만료되지 않게) */
+export const DETAIL_JITTER_MS = 24 * HOUR;
+/** 상세 API가 403/429를 주면 이 시간 동안 모든 상세 호출을 멈춘다 */
+export const PLACE_BLOCK_COOLDOWN_MS = 30 * 60_000;
 
 export const MAX_QUAD_DEPTH = 4;
 export const KAKAO_PAGE_SIZE = 15;

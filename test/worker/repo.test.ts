@@ -1,9 +1,11 @@
 import { env } from "cloudflare:test";
 import { describe, expect, it } from "vitest";
-import { ASEM, DETAIL_FAIL_TTL_MS, DETAIL_OK_TTL_MS, TILE_TTL_MS } from "../../shared/constants";
+import {
+  ASEM, DETAIL_FAIL_TTL_MS, DETAIL_JITTER_MS, DETAIL_OK_TTL_MS, TILE_TTL_MS,
+} from "../../shared/constants";
 import { boundingBox, tileKeyOf } from "../../shared/geo";
 import {
-  countNeedingDetail, countUnfetched, getMeta, getTiles, idsNeedingDetail, isDetailDue, isTileDue, markTile,
+  blockPlaceApi, countNeedingDetail, countUnfetched, detailJitterMs, getMeta, placeBlockedUntil, getTiles, idsNeedingDetail, isDetailDue, isTileDue, markTile,
   placeById, placesByIds, placesInBox, replaceTilePlaces, saveDetail, saveDetailFailure, tilePlaceStates,
 } from "../../worker/repo";
 import { makeSummary, sampleDetail, seedPlace } from "../helpers/places";
@@ -48,6 +50,7 @@ describe("repo", () => {
     const detail = sampleDetail({ bookable: true, hours: { 1: [[660, 900], [1020, 1320]], 0: "closed" } });
     const summary = { ...makeSummary(ASEM.lat, ASEM.lng, { group: "chinese", name: "반점" }), photoUrl: "https://t1.kakaocdn.net/p" };
     await saveDetail(env.DB, "1001", summary, detail, NOW);
+    await replaceTilePlaces(env.DB, KA, ["1001"], NOW, false);
     const row = (await placeById(env.DB, "1001"))!;
     expect(row.place).toEqual({
       id: "1001", name: "반점", categoryName: "음식점 > 중식", group: "chinese",
@@ -59,6 +62,14 @@ describe("repo", () => {
     expect(row.meta).toEqual({ status: "ok", fetchedAt: NOW, reason: null });
     expect(await placesInBox(env.DB, boundingBox(ASEM, 100))).toHaveLength(1);
     expect(await placesByIds(env.DB, ["1001", "9999"])).toHaveLength(1);
+  });
+
+  it("R12: 목록 조회(placesInBox)는 격자에 기록된 가게만 돌려주고, 단건 조회는 격자와 무관하다", async () => {
+    await seedPlace(env.DB, "intile", ASEM.lat, ASEM.lng, { now: NOW });
+    await seedPlace(env.DB, "orphan", ASEM.lat, ASEM.lng, { now: NOW });
+    await replaceTilePlaces(env.DB, KA, ["intile"], NOW, false);
+    expect((await placesInBox(env.DB, boundingBox(ASEM, 100))).map((r) => r.place.id)).toEqual(["intile"]);
+    expect((await placeById(env.DB, "orphan"))?.place.id).toBe("orphan");
   });
 
   it("R9: 처음부터 실패한 장소는 표시 정보가 없다", async () => {
@@ -76,26 +87,55 @@ describe("repo", () => {
     expect(row.meta).toEqual({ status: "failed", fetchedAt: NOW + 5, reason: "http_503" });
   });
 
-  it("R9: 상세 TTL — ok는 3일, failed는 6시간", () => {
+  it("R9: 상세 TTL — ok는 3일 + id별 지터, failed는 6시간", () => {
     const ok = { status: "ok" as const, fetchedAt: NOW, reason: null };
     const failed = { status: "failed" as const, fetchedAt: NOW, reason: "x" };
-    expect(isDetailDue(null, NOW)).toBe(true);
-    expect(isDetailDue(ok, NOW + DETAIL_OK_TTL_MS - 1)).toBe(false);
-    expect(isDetailDue(ok, NOW + DETAIL_OK_TTL_MS)).toBe(true);
-    expect(isDetailDue(failed, NOW + DETAIL_FAIL_TTL_MS - 1)).toBe(false);
-    expect(isDetailDue(failed, NOW + DETAIL_FAIL_TTL_MS)).toBe(true);
+    const okTtl = DETAIL_OK_TTL_MS + detailJitterMs("27531028");
+    expect(isDetailDue(null, NOW, "27531028")).toBe(true);
+    expect(isDetailDue(ok, NOW + okTtl - 1, "27531028")).toBe(false);
+    expect(isDetailDue(ok, NOW + okTtl, "27531028")).toBe(true);
+    expect(isDetailDue(failed, NOW + DETAIL_FAIL_TTL_MS - 1, "27531028")).toBe(false);
+    expect(isDetailDue(failed, NOW + DETAIL_FAIL_TTL_MS, "27531028")).toBe(true);
+  });
+
+  it("R9: 지터는 id로 정해지는 0~24시간 값이라 같은 날 저장한 가게들의 만료가 하루에 걸쳐 흩어진다", () => {
+    expect(detailJitterMs("27531028")).toBe(detailJitterMs("27531028"));
+    const js = Array.from({ length: 200 }, (_, i) => detailJitterMs(String(10_000_000 + i)));
+    for (const j of js) {
+      expect(Number.isInteger(j)).toBe(true);
+      expect(j).toBeGreaterThanOrEqual(0);
+      expect(j).toBeLessThan(DETAIL_JITTER_MS);
+    }
+    expect(new Set(js).size).toBeGreaterThan(190);
+    expect(Math.min(...js)).toBeLessThan(DETAIL_JITTER_MS * 0.1);
+    expect(Math.max(...js)).toBeGreaterThan(DETAIL_JITTER_MS * 0.9);
+    // 24시간을 4구간으로 나누면 구간마다 적어도 30개씩은 들어간다
+    for (let q = 0; q < 4; q++) {
+      const n = js.filter((j) => j >= (q * DETAIL_JITTER_MS) / 4 && j < ((q + 1) * DETAIL_JITTER_MS) / 4).length;
+      expect(n).toBeGreaterThanOrEqual(30);
+    }
+  });
+
+  it("R10: 차단 쿨다운 시각을 meta 테이블에 기록하고 읽는다 (없으면 0)", async () => {
+    expect(await placeBlockedUntil(env.DB)).toBe(0);
+    await blockPlaceApi(env.DB, NOW + 5);
+    expect(await placeBlockedUntil(env.DB)).toBe(NOW + 5);
+    await blockPlaceApi(env.DB, NOW + 9);
+    expect(await placeBlockedUntil(env.DB)).toBe(NOW + 9);
   });
 
   it("R10: 상세가 필요한 ID를 격자 거리순(같으면 id순)으로, TTL을 지키며, limit만큼", async () => {
     await replaceTilePlaces(env.DB, KA, ["a1", "fresh", "oldok", "recentfail"], NOW, false);
     await replaceTilePlaces(env.DB, KB, ["b1"], NOW, false);
     await seedPlace(env.DB, "fresh", ASEM.lat, ASEM.lng, { now: NOW - 1000 });
-    await seedPlace(env.DB, "oldok", ASEM.lat, ASEM.lng, { now: NOW - DETAIL_OK_TTL_MS - 1 });
+    await seedPlace(env.DB, "oldok", ASEM.lat, ASEM.lng, { now: NOW - DETAIL_OK_TTL_MS - DETAIL_JITTER_MS });
     await saveDetailFailure(env.DB, "recentfail", "http_500", NOW - 1000);
 
     expect(await idsNeedingDetail(env.DB, ASEM, 1000, NOW)).toEqual(["a1", "oldok", "b1"]);
     expect(await idsNeedingDetail(env.DB, ASEM, 1000, NOW, 2)).toEqual(["a1", "oldok"]);
     expect(await countNeedingDetail(env.DB, ASEM, 1000, NOW)).toBe(3);
     expect(await countUnfetched(env.DB, [KA, KB])).toBe(2);
+    // 요청 시점 보충은 한 번도 가져오지 않은 ID만 (만료 갱신은 Cron 몫)
+    expect(await idsNeedingDetail(env.DB, ASEM, 1000, NOW, undefined, "unfetched")).toEqual(["a1", "b1"]);
   });
 });

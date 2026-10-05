@@ -1,20 +1,25 @@
 import { env } from "cloudflare:test";
 import { describe, expect, it } from "vitest";
-import { ASEM } from "../../shared/constants";
+import { ASEM, DETAIL_JITTER_MS, DETAIL_OK_TTL_MS, PLACE_BLOCK_COOLDOWN_MS } from "../../shared/constants";
 import { tileKeyOf } from "../../shared/geo";
 import { Budget } from "../../worker/budget";
 import { enrichDetails } from "../../worker/detailEnricher";
-import { getMeta, placeById, replaceTilePlaces } from "../../worker/repo";
+import { blockPlaceApi, getMeta, placeBlockedUntil, placeById, replaceTilePlaces } from "../../worker/repo";
 import { fakePlaceApi } from "../helpers/fakeKakao";
-import { placeJson } from "../helpers/places";
+import { placeJson, seedPlace } from "../helpers/places";
 
 const NOW = 1_800_000_000_000;
 const sleep = async () => {};
 const seedIds = (ids: string[]) => replaceTilePlaces(env.DB, tileKeyOf(ASEM), ids, NOW, false);
 const json = (name: string) => placeJson({ name, lat: ASEM.lat, lng: ASEM.lng });
-const run = (fetcher: any, opts: { budget?: number; batchSize?: number } = {}) =>
+const run = (
+  fetcher: any, opts: { budget?: number; batchSize?: number; now?: number; scope?: "due" | "unfetched" } = {},
+) =>
   enrichDetails(
-    { db: env.DB, fetcher, budget: new Budget(opts.budget ?? 40), now: NOW, batchSize: opts.batchSize ?? 10, sleep },
+    {
+      db: env.DB, fetcher, budget: new Budget(opts.budget ?? 40), now: opts.now ?? NOW, batchSize: opts.batchSize ?? 10,
+      sleep, scope: opts.scope,
+    },
     ASEM,
     1000,
   );
@@ -53,6 +58,31 @@ describe("enrichDetails", () => {
     expect(api.calls).toHaveLength(3);
     expect(r).toEqual({ enriched: 0, failed: 3 });
     expect(await getMeta(env.DB, "4")).toBeNull();
+  });
+
+  it("R10: 403/429가 나오면 30분 동안 전체 상세 호출을 멈추는 쿨다운을 기록한다", async () => {
+    await seedIds(["1"]);
+    await run(fakePlaceApi({ "1": 429 }).fetcher);
+    expect(await placeBlockedUntil(env.DB)).toBe(NOW + PLACE_BLOCK_COOLDOWN_MS);
+  });
+
+  it("R10: 쿨다운 중에는 외부 호출을 하지 않고, 지나면 다시 보충한다", async () => {
+    await seedIds(["1"]);
+    await blockPlaceApi(env.DB, NOW + PLACE_BLOCK_COOLDOWN_MS);
+    const api = fakePlaceApi({ "1": json("a") });
+    expect(await run(api.fetcher, { now: NOW + PLACE_BLOCK_COOLDOWN_MS - 1 })).toEqual({ enriched: 0, failed: 0 });
+    expect(api.calls).toHaveLength(0);
+    expect(await run(api.fetcher, { now: NOW + PLACE_BLOCK_COOLDOWN_MS })).toEqual({ enriched: 1, failed: 0 });
+  });
+
+  it("R12: scope=unfetched면 한 번도 가져오지 않은 ID만 보충한다 (만료된 행 갱신은 Cron 몫)", async () => {
+    await seedIds(["old", "new"]);
+    await seedPlace(env.DB, "old", ASEM.lat, ASEM.lng, { now: NOW - DETAIL_OK_TTL_MS - DETAIL_JITTER_MS });
+    const api = fakePlaceApi({ old: json("old"), new: json("new") });
+    expect(await run(api.fetcher, { scope: "unfetched" })).toEqual({ enriched: 1, failed: 0 });
+    expect(api.calls.map((c) => c.id)).toEqual(["new"]);
+    expect(await run(api.fetcher)).toEqual({ enriched: 1, failed: 0 });
+    expect(api.calls.map((c) => c.id)).toEqual(["new", "old"]);
   });
 
   it("R10: 할 일이 없으면 외부 호출을 하지 않는다", async () => {

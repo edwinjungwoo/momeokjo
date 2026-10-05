@@ -13,6 +13,14 @@ describe("photo", () => {
     expect(kakaoPhotoUrl(null)).toBeNull();
     expect(kakaoPhotoUrl("not a url")).toBeNull();
   });
+  it("R33: http/https 외 프로토콜, 사용자 정보, 명시적 포트는 거부한다", () => {
+    expect(kakaoPhotoUrl("ftp://t1.kakaocdn.net/a")).toBeNull();
+    expect(kakaoPhotoUrl("javascript://t1.kakaocdn.net/%0aalert(1)")).toBeNull();
+    expect(kakaoPhotoUrl("https://user:pw@t1.kakaocdn.net/a")).toBeNull();
+    expect(kakaoPhotoUrl("https://user@t1.kakaocdn.net/a")).toBeNull();
+    expect(kakaoPhotoUrl("https://t1.kakaocdn.net:8443/a")).toBeNull();
+    expect(kakaoPhotoUrl("http://t1.kakaocdn.net:80/a")).toBeNull();
+  });
   it("R33: 썸네일은 카카오 썸네일 서버를 거친다", () => {
     expect(photoThumbUrl("https://t1.kakaocdn.net/a?original", 320)).toBe(
       "https://img1.kakaocdn.net/cthumb/local/C320x320.q50/?fname=https%3A%2F%2Ft1.kakaocdn.net%2Fa%3Foriginal",

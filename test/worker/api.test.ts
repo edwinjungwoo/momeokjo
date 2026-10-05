@@ -1,10 +1,12 @@
 import { env } from "cloudflare:test";
 import { describe, expect, it } from "vitest";
-import { ASEM, TILE_TTL_MS } from "../../shared/constants";
+import {
+  ASEM, DETAIL_JITTER_MS, DETAIL_OK_TTL_MS, PLACE_BLOCK_COOLDOWN_MS, TILE_TTL_MS,
+} from "../../shared/constants";
 import { tileKeyOf, tilesCoveringCircle, walkMinutes } from "../../shared/geo";
 import type { PlacesResponse } from "../../shared/types";
 import { createApp } from "../../worker/app";
-import { getMeta, markTile, replaceTilePlaces } from "../../worker/repo";
+import { blockPlaceApi, getMeta, markTile, placeBlockedUntil, replaceTilePlaces } from "../../worker/repo";
 import { callApp } from "../helpers/callApp";
 import { doc, fakeKakaoLocal, fakePlaceApi, routeFetch } from "../helpers/fakeKakao";
 import { placeJson, seedPlace } from "../helpers/places";
@@ -21,12 +23,14 @@ const DETAILS = {
   "1001": placeJson({ name: "가게1001", lat: at(0.0005), lng: ASEM.lng }),
   "1002": placeJson({ name: "가게1002", lat: at(0.001), lng: ASEM.lng, category: ["음식점", "중식", "중국요리"] }),
   "1004": placeJson({ name: "가게1004", lat: at(0.004), lng: ASEM.lng }),
+  // 어느 격자에도 기록되지 않은 가게 (공유 링크로만 들어온다)
+  "5555": placeJson({ name: "가게5555", lat: at(0.0002), lng: ASEM.lng }),
 };
 const Q = `/api/places?lat=${ASEM.lat}&lng=${ASEM.lng}&radius=300`;
 
-function setup(opts: { localStatus?: number; allow?: boolean } = {}) {
+function setup(opts: { localStatus?: number; allow?: boolean; details?: Record<string, unknown> } = {}) {
   const local = fakeKakaoLocal(DOCS, { status: opts.localStatus });
-  const place = fakePlaceApi({ ...DETAILS });
+  const place = fakePlaceApi({ ...DETAILS, ...opts.details });
   let limiterCalls = 0;
   const app = createApp({
     fetcher: routeFetch(local.fetcher, place.fetcher),
@@ -111,11 +115,62 @@ describe("GET /api/places", () => {
   });
 });
 
+describe("GET /api/places — 요청 시점 보충", () => {
+  it("R12: 만료된 상세는 요청에서 갱신하지 않고(Cron 몫) 그대로 보여준다", async () => {
+    const s = setup();
+    await callApp(s.app, Q);
+    await callApp(s.app, Q);
+    const old = NOW - DETAIL_OK_TTL_MS - DETAIL_JITTER_MS;
+    await env.DB.prepare("UPDATE places SET fetched_at = ?").bind(old).run();
+    const before = s.place.calls.length;
+    const body = (await (await callApp(s.app, Q)).json()) as PlacesResponse;
+    expect(s.place.calls.length).toBe(before);
+    expect(body.places.map((p) => p.id)).toEqual(["1001", "1002"]);
+    expect(body.pending).toBe(0);
+  });
+
+  it("R10/R12: 쿨다운 중이면 보충을 시작하지 않는다", async () => {
+    await blockPlaceApi(env.DB, NOW + 1);
+    const s = setup();
+    await callApp(s.app, Q);
+    expect(s.place.calls).toHaveLength(0);
+  });
+});
+
 describe("GET /api/places/:id", () => {
+  it("R10/R13: 쿨다운 중이면 외부 호출 없이 404이고 실패로 기록하지 않는다", async () => {
+    await blockPlaceApi(env.DB, NOW + 1);
+    const { app, place } = setup();
+    expect((await callApp(app, "/api/places/1001")).status).toBe(404);
+    expect(place.calls).toHaveLength(0);
+    expect(await getMeta(env.DB, "1001")).toBeNull();
+  });
+
+  it("R10/R13: 단건 조회에서 429가 나오면 쿨다운을 기록한다", async () => {
+    const { app } = setup({ details: { "777": 429 } });
+    expect((await callApp(app, "/api/places/777")).status).toBe(404);
+    expect(await placeBlockedUntil(env.DB)).toBe(NOW + PLACE_BLOCK_COOLDOWN_MS);
+  });
+
   it("R13: 숫자가 아닌 id는 외부 호출 없이 404", async () => {
     const { app, place } = setup();
     expect((await callApp(app, "/api/places/abc")).status).toBe(404);
     expect(place.calls).toHaveLength(0);
+  });
+
+  it("R13: 16자리 이상 id는 외부 호출 없이 404", async () => {
+    const { app, place } = setup();
+    expect((await callApp(app, "/api/places/1234567890123456")).status).toBe(404);
+    expect(place.calls).toHaveLength(0);
+  });
+
+  it("R12/R13: 격자에 없는 가게는 단건 조회로 저장돼도 /api/places 목록에 나오지 않는다", async () => {
+    const { app } = setup();
+    expect((await callApp(app, "/api/places/5555")).status).toBe(200);
+    await callApp(app, Q);
+    const body = (await (await callApp(app, Q)).json()) as PlacesResponse;
+    expect(body.places.map((p) => p.id)).toEqual(["1001", "1002"]);
+    expect((await callApp(app, "/api/places/5555")).status).toBe(200);
   });
 
   it("R13: 표시 정보가 없으면 상세를 한 번 가져와서 준다 (distance 없음)", async () => {

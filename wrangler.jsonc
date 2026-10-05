@@ -14,7 +14,7 @@
     }
   ],
   "ratelimits": [{ "name": "RATE_LIMITER", "namespace_id": "1001", "simple": { "limit": 10, "period": 60 } }],
-  "triggers": { "crons": ["*/10 * * * *"] },
+  "triggers": { "crons": ["*/5 * * * *"] },
   "vars": { "SUBREQUEST_BUDGET": "40", "DETAIL_BATCH_SIZE": "10" },
   "routes": [{ "pattern": "mmj.itmz.me", "custom_domain": true }]
 }

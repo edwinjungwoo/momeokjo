@@ -35,6 +35,8 @@ describe("share", () => {
       placeId: "27531028", center: { lat: 37.5, lng: 127.05 }, radius: 700,
     });
     expect(parseShareParams("?p=abc&lat=10&lng=127&r=5000")).toEqual({ placeId: null, center: null, radius: null });
+    expect(parseShareParams("?p=1234567890123456").placeId).toBeNull();
+    expect(parseShareParams("?p=123456789012345").placeId).toBe("123456789012345");
     expect(parseShareParams("")).toEqual({ placeId: null, center: null, radius: null });
   });
 });

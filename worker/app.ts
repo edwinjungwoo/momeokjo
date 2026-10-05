@@ -13,6 +13,9 @@ export const AreaQuery = z.object({
   radius: z.coerce.number().int().min(MIN_RADIUS).max(MAX_RADIUS),
 });
 
+/** 카카오 장소 ID: 숫자만, 최대 15자리 */
+export const PLACE_ID = /^\d{1,15}$/;
+
 export type AppDeps = {
   fetcher: FetchFn;
   now?: () => number;
@@ -55,7 +58,7 @@ export function createApp(deps: AppDeps) {
   app.get("/api/places/:id", async (c) => {
     c.header("Cache-Control", "no-store");
     const id = c.req.param("id");
-    if (!/^\d+$/.test(id)) return c.json({ error: "not_found" }, 404);
+    if (!PLACE_ID.test(id)) return c.json({ error: "not_found" }, 404);
     const place = await getPlace(serviceDeps(c), id);
     if (!place) return c.json({ error: "not_found" }, 404);
     return c.json(place);

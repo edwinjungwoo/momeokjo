@@ -11,7 +11,9 @@ export default {
   },
   async scheduled(_controller, env, ctx) {
     ctx.waitUntil(
-      runScheduled(env, { fetcher: realFetch, now: Date.now() }).then((r) => console.log("cron warm", JSON.stringify(r))),
+      runScheduled(env, { fetcher: realFetch, now: Date.now() })
+        .then((r) => console.log("cron warm", JSON.stringify(r)))
+        .catch((e) => console.error("cron warm failed", e)),
     );
   },
 } satisfies ExportedHandler<Env>;

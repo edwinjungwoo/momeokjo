@@ -36,7 +36,7 @@ export function parseShareParams(search: string): ShareParams {
   const r = Number(q.get("r"));
   const validCenter = q.has("lat") && q.has("lng") && lat >= 33 && lat <= 39 && lng >= 124 && lng <= 132;
   return {
-    placeId: p && /^\d+$/.test(p) ? p : null,
+    placeId: p && /^\d{1,15}$/.test(p) ? p : null,
     center: validCenter ? { lat, lng } : null,
     radius: q.has("r") && Number.isInteger(r) && r >= MIN_RADIUS && r <= MAX_RADIUS ? r : null,
   };

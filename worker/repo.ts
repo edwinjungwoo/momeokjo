@@ -1,5 +1,5 @@
 import { categoryGroup } from "../shared/category";
-import { DETAIL_FAIL_TTL_MS, DETAIL_OK_TTL_MS, TILE_TTL_MS } from "../shared/constants";
+import { DETAIL_FAIL_TTL_MS, DETAIL_JITTER_MS, DETAIL_OK_TTL_MS, TILE_TTL_MS } from "../shared/constants";
 import { haversine, tileRect, tilesCoveringCircle } from "../shared/geo";
 import type { ApiDetail, CategoryGroup, LatLng, Place, PlaceDetail, PlaceSummary, Rect } from "../shared/types";
 
@@ -94,10 +94,24 @@ export function isTileDue(state: TileState | undefined, now: number): boolean {
   return !state || now - state.collectedAt >= TILE_TTL_MS;
 }
 
-export function isDetailDue(meta: DetailMeta, now: number): boolean {
-  if (!meta) return true;
-  return now - meta.fetchedAt >= (meta.status === "ok" ? DETAIL_OK_TTL_MS : DETAIL_FAIL_TTL_MS);
+/** id로 정해지는 0 ≤ jitter < 24시간 (FNV-1a 32비트 + murmur3 마무리 섞기 — 연속된 id도 고르게 흩어진다) */
+export function detailJitterMs(id: string): number {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < id.length; i++) h = Math.imul(h ^ id.charCodeAt(i), 0x01000193);
+  h = Math.imul(h ^ (h >>> 16), 0x85ebca6b);
+  h = Math.imul(h ^ (h >>> 13), 0xc2b2ae35);
+  h = (h ^ (h >>> 16)) >>> 0;
+  return Math.floor((h / 0x1_0000_0000) * DETAIL_JITTER_MS);
 }
+
+export function isDetailDue(meta: DetailMeta, now: number, id: string): boolean {
+  if (!meta) return true;
+  const ttl = meta.status === "ok" ? DETAIL_OK_TTL_MS + detailJitterMs(id) : DETAIL_FAIL_TTL_MS;
+  return now - meta.fetchedAt >= ttl;
+}
+
+/** due: 상세가 없거나 만료된 ID (Cron, warm) / unfetched: 한 번도 가져오지 않은 ID만 (요청 시점 보충) */
+export type DetailScope = "due" | "unfetched";
 
 export async function tilePlaceStates(db: D1Database, keys: string[]): Promise<TilePlaceState[]> {
   const out: TilePlaceState[] = [];
@@ -117,11 +131,11 @@ export async function tilePlaceStates(db: D1Database, keys: string[]): Promise<T
 }
 
 export async function idsNeedingDetail(
-  db: D1Database, center: LatLng, radiusM: number, now: number, limit?: number,
+  db: D1Database, center: LatLng, radiusM: number, now: number, limit?: number, scope: DetailScope = "due",
 ): Promise<string[]> {
   const nearest = new Map<string, number>();
   for (const t of await tilePlaceStates(db, tilesCoveringCircle(center, radiusM))) {
-    if (!isDetailDue(t.meta, now)) continue;
+    if (scope === "unfetched" ? t.meta !== null : !isDetailDue(t.meta, now, t.id)) continue;
     const r = tileRect(t.tileKey);
     const d = haversine(center, { lat: (r.minLat + r.maxLat) / 2, lng: (r.minLng + r.maxLng) / 2 });
     const prev = nearest.get(t.id);
@@ -141,9 +155,13 @@ export async function countUnfetched(db: D1Database, keys: string[]): Promise<nu
   return new Set((await tilePlaceStates(db, keys)).filter((t) => t.meta === null).map((t) => t.id)).size;
 }
 
+/** 목록용: 격자에 기록된 가게만 (공유 링크 단건 조회로만 저장된 가게는 빠진다) */
 export async function placesInBox(db: D1Database, box: Rect): Promise<PlaceRow[]> {
   const r = await db
-    .prepare(`${SELECT_VISIBLE} AND lat BETWEEN ? AND ? AND lng BETWEEN ? AND ?`)
+    .prepare(
+      `${SELECT_VISIBLE} AND lat BETWEEN ? AND ? AND lng BETWEEN ? AND ?
+         AND EXISTS (SELECT 1 FROM tile_places tp WHERE tp.place_id = places.id)`,
+    )
     .bind(box.minLat, box.maxLat, box.minLng, box.maxLng)
     .all<DbRow>();
   return r.results.map(toRow);
@@ -195,5 +213,21 @@ export async function saveDetailFailure(db: D1Database, id: string, reason: stri
        ON CONFLICT(id) DO UPDATE SET status = 'failed', fail_reason = excluded.fail_reason, fetched_at = excluded.fetched_at`,
     )
     .bind(id, reason, now)
+    .run();
+}
+
+const BLOCKED_KEY = "place_blocked_until";
+
+/** 상세 API 쿨다운이 끝나는 시각 (epoch ms). 기록이 없으면 0 */
+export async function placeBlockedUntil(db: D1Database): Promise<number> {
+  const r = await db.prepare("SELECT value FROM meta WHERE key = ?").bind(BLOCKED_KEY).first<{ value: string }>();
+  const v = Number(r?.value ?? 0);
+  return Number.isFinite(v) ? v : 0;
+}
+
+export async function blockPlaceApi(db: D1Database, until: number): Promise<void> {
+  await db
+    .prepare("INSERT INTO meta (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value")
+    .bind(BLOCKED_KEY, String(until))
     .run();
 }
