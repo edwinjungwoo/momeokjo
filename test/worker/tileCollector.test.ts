@@ -1,0 +1,87 @@
+import { env } from "cloudflare:test";
+import { describe, expect, it } from "vitest";
+import { ASEM, TILE_TTL_MS } from "../../shared/constants";
+import { tileKeyOf, tileRect } from "../../shared/geo";
+import { Budget } from "../../worker/budget";
+import { getTiles, markTile, tilePlaceStates } from "../../worker/repo";
+import { collectTiles } from "../../worker/tileCollector";
+import { doc, fakeKakaoLocal, gridDocs } from "../helpers/fakeKakao";
+
+const NOW = 1_800_000_000_000;
+const KEY = tileKeyOf(ASEM);
+const RECT = tileRect(KEY);
+const deps = (fetcher: any, budget = 40) => ({ db: env.DB, fetcher, restKey: "k", budget: new Budget(budget), now: NOW });
+const idCount = async () => new Set((await tilePlaceStates(env.DB, [KEY])).map((t) => t.id)).size;
+
+describe("collectTiles", () => {
+  it("R2: 45개 이하면 페이지만 넘겨서 ID를 기록한다 (30개 → 호출 2번)", async () => {
+    const kakao = fakeKakaoLocal(gridDocs("a", 30, RECT));
+    const r = await collectTiles(deps(kakao.fetcher), [KEY]);
+    expect(r).toEqual({ collected: [KEY], incomplete: [], failed: [] });
+    expect(kakao.calls).toHaveLength(2);
+    expect(await idCount()).toBe(30);
+    expect((await getTiles(env.DB, [KEY])).get(KEY)).toEqual({ collectedAt: NOW, saturated: false });
+  });
+
+  it("R2: 로컬 API 응답 내용(이름, 좌표, 카테고리)은 저장하지 않는다", async () => {
+    const kakao = fakeKakaoLocal(gridDocs("p", 10, RECT));
+    await collectTiles(deps(kakao.fetcher), [KEY]);
+    const r = await env.DB.prepare("SELECT count(*) AS c FROM places").first<{ c: number }>();
+    expect(r?.c).toBe(0);
+  });
+
+  it("R2: 45개를 넘으면 4등분해서 빠짐없이 기록한다 (100개)", async () => {
+    const kakao = fakeKakaoLocal(gridDocs("b", 100, RECT));
+    expect((await collectTiles(deps(kakao.fetcher), [KEY])).collected).toEqual([KEY]);
+    expect(await idCount()).toBe(100);
+    expect((await getTiles(env.DB, [KEY])).get(KEY)?.saturated).toBe(false);
+  });
+
+  it("R2: 최대 깊이에서도 45개를 넘으면 45개만 기록하고 saturated로 표시한다", async () => {
+    const same = Array.from({ length: 50 }, (_, i) => doc(`s${i}`, ASEM.lat, ASEM.lng));
+    await collectTiles(deps(fakeKakaoLocal(same).fetcher, 100), [KEY]);
+    expect(await idCount()).toBe(45);
+    expect((await getTiles(env.DB, [KEY])).get(KEY)?.saturated).toBe(true);
+  });
+
+  it("R2/R5: 간식(디저트) 업종은 ID도 기록하지 않는다", async () => {
+    const docs = [
+      ...gridDocs("f", 7, RECT),
+      ...gridDocs("d", 3, RECT, "음식점 > 간식 > 제과,베이커리"),
+    ];
+    await collectTiles(deps(fakeKakaoLocal(docs).fetcher), [KEY]);
+    const ids = (await tilePlaceStates(env.DB, [KEY])).map((t) => t.id);
+    expect(ids).toHaveLength(7);
+    expect(ids.some((id) => id.startsWith("d"))).toBe(false);
+  });
+
+  it("R3: 7일 이내에 수집한 격자는 건너뛴다", async () => {
+    await markTile(env.DB, KEY, NOW - TILE_TTL_MS + 1000, 0, false);
+    const kakao = fakeKakaoLocal(gridDocs("c", 10, RECT));
+    expect(await collectTiles(deps(kakao.fetcher), [KEY])).toEqual({ collected: [], incomplete: [], failed: [] });
+    expect(kakao.calls).toHaveLength(0);
+  });
+
+  it("R3/R4: 7일이 지나면 다시 수집하고 ID 목록을 새 결과로 바꾼다", async () => {
+    await collectTiles(deps(fakeKakaoLocal(gridDocs("old", 30, RECT)).fetcher), [KEY]);
+    const later = { ...deps(fakeKakaoLocal(gridDocs("new", 20, RECT)).fetcher), now: NOW + TILE_TTL_MS };
+    expect((await collectTiles(later, [KEY])).collected).toEqual([KEY]);
+    const ids = (await tilePlaceStates(env.DB, [KEY])).map((t) => t.id);
+    expect(ids).toHaveLength(20);
+    expect(ids.every((id) => id.startsWith("new"))).toBe(true);
+  });
+
+  it("R10: 예산이 부족하면 격자를 incomplete로 남기고 기록하지 않는다", async () => {
+    const kakao = fakeKakaoLocal(gridDocs("d", 100, RECT));
+    const r = await collectTiles(deps(kakao.fetcher, 2), [KEY, "1:1"]);
+    expect(r).toEqual({ collected: [], incomplete: [KEY, "1:1"], failed: [] });
+    expect((await getTiles(env.DB, [KEY])).has(KEY)).toBe(false);
+    expect(kakao.calls.length).toBeLessThanOrEqual(2);
+  });
+
+  it("R14: 공식 API 오류가 난 격자는 failed, 기록하지 않는다", async () => {
+    const r = await collectTiles(deps(fakeKakaoLocal([], { status: 500 }).fetcher), [KEY]);
+    expect(r).toEqual({ collected: [], incomplete: [], failed: [KEY] });
+    expect((await getTiles(env.DB, [KEY])).has(KEY)).toBe(false);
+  });
+});
