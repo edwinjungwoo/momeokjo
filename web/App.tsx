@@ -7,7 +7,9 @@ import { fetchPlace } from "./api";
 import { CenterChip } from "./components/CenterChip";
 import { EmptyState, ErrorState } from "./components/EmptyState";
 import { FilterPanel } from "./components/FilterPanel";
+import { FirstTip, useFirstTip } from "./components/FirstTip";
 import { MapView, PickHint } from "./components/MapView";
+import { warmPoses } from "./components/Mascot";
 import { PlaceCard } from "./components/PlaceCard";
 import { PlaceList } from "./components/PlaceList";
 import { SkeletonList } from "./components/Skeleton";
@@ -46,6 +48,7 @@ export default function App() {
   const drawnIds = useRef(new Set<string>());
   const shuffle = useSlotShuffle();
   const toast = useToast();
+  const tip = useFirstTip();
 
   const candidates = useMemo(
     () => sortPlaces(filterPlaces(data?.places ?? [], filters, now), filters.sort),
@@ -62,6 +65,12 @@ export default function App() {
     if (!data) return;
     setSelected((cur) => (cur ? (data.places.find((p) => p.id === cur.id) ?? cur) : cur));
   }, [data]);
+
+  // 뽑기·공유 뒤에 뜨는 마스코트는 첫 응답이 오면 미리 받아둔다
+  const hasData = data !== null;
+  useEffect(() => {
+    if (hasData) warmPoses(["search", "thumbsup", "love"]);
+  }, [hasData]);
 
   // R23: 공유 링크로 들어오면 첫 응답 뒤 해당 가게 카드를 연다. 목록에 없으면 R13으로 가져온다.
   const shareHandled = useRef(false);
@@ -95,6 +104,7 @@ export default function App() {
   // R21/R22: 가중 뽑기 → 0.8초 셔플 → 카드 안착 + 지도 이동 + 짧은 진동
   const onDraw = () => {
     if (shuffle.running) return;
+    if (tip.open) tip.dismiss();
     if (!data) {
       toast.show("가게 정보를 불러오는 중이에요");
       return;
@@ -130,7 +140,8 @@ export default function App() {
   // R23: 폰은 시스템 공유 시트, 아니면 클립보드 복사
   const onShare = async (p: ApiPlace) => {
     const outcome = await shareOrCopy(shareText(p, filters, center, window.location.origin));
-    if (outcome === "copied") toast.show("복사했어요");
+    if (outcome === "shared") toast.show("공유했어요", "love");
+    else if (outcome === "copied") toast.show("복사했어요", "love");
     else if (outcome === "failed") toast.show("복사하지 못했어요");
   };
 
@@ -139,10 +150,17 @@ export default function App() {
   const drawLabel = shuffle.running ? "고르는 중…" : drawn && selected ? "🎲 다시 뽑기" : "🎲 모먹죠?";
 
   let list: ReactNode;
-  if (!data) list = error ? <ErrorState onRetry={reload} /> : <SkeletonList label="주변 식당을 찾고 있어요" />;
-  else if (candidates.length === 0 && polling) list = <SkeletonList label="주변 식당 정보를 모으는 중이에요" />;
-  else if (candidates.length === 0) list = <EmptyState filters={filters} onChange={setFilters} />;
-  else {
+  if (!data) {
+    list = error ? (
+      <ErrorState onRetry={reload} />
+    ) : (
+      <SkeletonList title="맛있는 맛집을 찾고 있어요!" desc="조금만 기다려주세요" />
+    );
+  } else if (candidates.length === 0 && polling) {
+    list = <SkeletonList title="주변 맛집 정보를 모으는 중이에요" desc="조금만 기다려주세요" />;
+  } else if (candidates.length === 0) {
+    list = <EmptyState filters={filters} onChange={setFilters} />;
+  } else {
     list = (
       <PlaceList
         places={candidates}
@@ -160,7 +178,7 @@ export default function App() {
     <div className="app">
       <header className="topbar">
         <h1 className="logo">
-          <img src="/brand/logo.png" alt="모먹죠" width={60} height={26} draggable={false} />
+          <img src="/brand/logo.png" alt="모먹죠" width={63} height={28} draggable={false} />
         </h1>
         <CenterChip center={center} onCenter={setCenter} onPickStart={() => setPickMode(true)} onToast={toast.show} />
       </header>
@@ -196,6 +214,7 @@ export default function App() {
           )}
         </section>
         <aside className="panel">
+          {tip.open && <FirstTip onClose={tip.dismiss} />}
           <FilterPanel filters={filters} onChange={setFilters} />
           {status && <StatusLine status={status} onRetry={error ? reload : undefined} />}
           {list}

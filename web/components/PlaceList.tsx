@@ -3,7 +3,7 @@ import { lastLevel } from "../../shared/category";
 import { photoThumbUrl } from "../../shared/photo";
 import type { SortKey } from "../../shared/recommend";
 import type { ApiPlace } from "../../shared/types";
-import { openState, priceText, ratingShort, walkText } from "../format";
+import { openState, priceText, walkText, type OpenState } from "../format";
 
 type Props = {
   places: ApiPlace[];
@@ -15,19 +15,37 @@ type Props = {
   onSelect: (p: ApiPlace) => void;
 };
 
-/** R33: 56px 썸네일. 로드에 실패하면 중립 박스로 바꿔서 줄 정렬을 유지한다 */
+/** R33: 64px 썸네일. 사진이 없거나 로드에 실패하면 크림색 자리 + 흐린 마스코트로 바꿔서 줄 정렬을 유지한다 */
 function Thumb({ url }: { url: string | null }) {
   const [failed, setFailed] = useState(false);
-  if (!url || failed) return <span className="row-thumb" aria-hidden="true" />;
+  if (!url || failed) return <span className="row-thumb is-empty" aria-hidden="true" />;
   return (
     <img
       className="row-thumb"
       src={photoThumbUrl(url, 320)}
       alt=""
+      width={64}
+      height={64}
       loading="lazy"
       decoding="async"
       onError={() => setFailed(true)}
     />
+  );
+}
+
+/** 영업 상태 알약. 정보가 없으면 줄을 비워 둔다 */
+function OpenPill({ open }: { open: OpenState }) {
+  if (open.kind === "unknown") return null;
+  return <span className={`pill${open.kind === "open" ? " is-open" : ""}`}>{open.text}</span>;
+}
+
+function Rating({ p }: { p: ApiPlace }) {
+  const r = p.detail?.rating ?? null;
+  if (r === null) return <span className="row-rating is-none">평점 정보 없음</span>;
+  return (
+    <span className="row-rating">
+      <span aria-hidden="true">⭐</span> <b>{r.toFixed(1)}</b> ({(p.detail?.reviewCount ?? 0).toLocaleString("ko-KR")})
+    </span>
   );
 }
 
@@ -41,7 +59,7 @@ export function PlaceList({
   onSort,
   onSelect,
 }: Props) {
-  // 사진 있는 가게가 하나라도 있으면 모든 행에 썸네일 칸을 둬서(없으면 중립 박스) 글자 줄을 맞춘다
+  // 사진 있는 가게가 하나라도 있으면 모든 행에 썸네일 칸을 둬서(없으면 크림색 자리) 글자 줄을 맞춘다
   const anyPhoto = places.some((p) => p.photoUrl);
   return (
     <section className="field" aria-label="후보 목록">
@@ -62,31 +80,19 @@ export function PlaceList({
       </div>
       <ul className={`list${dim ? " is-dim" : ""}`}>
         {places.map((p) => {
-          const open = openState(p, now);
-          const walk = walkText(p);
-          const meta = [lastLevel(p.category), ratingShort(p), priceText(p)]
-            .filter(Boolean)
-            .join(" · ");
+          const price = priceText(p);
+          const meta = [lastLevel(p.category), walkText(p), price && `1인 ${price}`].filter(Boolean).join(" · ");
           return (
             <li key={p.id}>
-              <button
-                type="button"
-                className="row"
-                aria-current={p.id === selectedId}
-                onClick={() => onSelect(p)}
-              >
+              <button type="button" className="row" aria-current={p.id === selectedId} onClick={() => onSelect(p)}>
                 {anyPhoto && <Thumb url={p.photoUrl} />}
                 <span className="row-text">
                   <span className="row-head">
                     <span className="row-name">{p.name}</span>
-                    {walk && <span className="row-walk">{walk}</span>}
+                    <OpenPill open={openState(p, now)} />
                   </span>
-                  <span className="row-meta">
-                    {meta && `${meta} · `}
-                    <span className={open.closed ? "closed" : undefined}>
-                      {open.text}
-                    </span>
-                  </span>
+                  <Rating p={p} />
+                  {meta && <span className="row-meta">{meta}</span>}
                 </span>
               </button>
             </li>

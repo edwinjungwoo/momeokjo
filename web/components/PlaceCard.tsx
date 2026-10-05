@@ -3,6 +3,7 @@ import { lastLevel } from "../../shared/category";
 import { photoWideUrl } from "../../shared/photo";
 import type { ApiPlace } from "../../shared/types";
 import { openState, priceText, ratingText, walkText, won } from "../format";
+import { Mascot } from "./Mascot";
 
 type Props = {
   place: ApiPlace | null;
@@ -36,21 +37,12 @@ export function PlaceCard({ place, slotName, drawn, now, onClose, onRedraw, onSh
         <div className="sheet-handle" aria-hidden="true" />
         <div className="card-head">
           <div className="card-head-text">
-            <p className="eyebrow">고르는 중…</p>
+            <p className="eyebrow">모먹죠가 고르는 중…</p>
             <h2 className="card-name" key={slotName}>
               {slotName}
             </h2>
           </div>
-          <img
-            className="mascot mascot-bob"
-            src="/brand/pose-pick.png"
-            alt=""
-            aria-hidden="true"
-            width={57}
-            height={56}
-            loading="lazy"
-            draggable={false}
-          />
+          <Mascot pose="search" height={60} className="mascot-bob" eager />
         </div>
       </div>
     );
@@ -83,7 +75,7 @@ export function PlaceCard({ place, slotName, drawn, now, onClose, onRedraw, onSh
       )}
       <div className="card-head">
         <div className="card-head-text">
-          {drawn && <p className="eyebrow">오늘은 여기 어때요?</p>}
+          {drawn && <p className="eyebrow">모먹죠가 찾았어요!</p>}
           <h2 className="card-name" id="sheet-title">
             {place.name}
           </h2>
@@ -93,18 +85,7 @@ export function PlaceCard({ place, slotName, drawn, now, onClose, onRedraw, onSh
             <span className={open.closed ? "closed" : undefined}>{open.text}</span>
           </p>
         </div>
-        {drawn && (
-          <img
-            className="mascot"
-            src="/brand/pose-here.png"
-            alt=""
-            aria-hidden="true"
-            width={45}
-            height={48}
-            loading="lazy"
-            draggable={false}
-          />
-        )}
+        {drawn && <Mascot pose="thumbsup" height={56} eager />}
       </div>
       {sub && <p className="sub">{sub}</p>}
       {!d && <p className="sub">평점과 메뉴 정보를 아직 불러오지 못했어요</p>}

@@ -11,12 +11,6 @@ export function ratingText(p: ApiPlace): string {
   return `⭐ ${r.toFixed(1)} (${(p.detail?.reviewCount ?? 0).toLocaleString("ko-KR")})`;
 }
 
-/** 리스트용: "⭐4.1" */
-export function ratingShort(p: ApiPlace): string | null {
-  const r = p.detail?.rating ?? null;
-  return r === null ? null : `⭐${r.toFixed(1)}`;
-}
-
 export function priceText(p: ApiPlace): string | null {
   const v = p.detail?.price ?? null;
   return v === null ? null : `${won(v)}대`;
@@ -24,15 +18,17 @@ export function priceText(p: ApiPlace): string | null {
 
 export const walkText = (p: ApiPlace) => (p.walkMinutes === undefined ? null : `도보 ${p.walkMinutes}분`);
 
-export type OpenState = { text: string; closed: boolean };
+export type OpenState = { text: string; closed: boolean; kind: "open" | "closing" | "closed" | "unknown" };
 
-/** 닫혔거나 30분 안에 닫히면(R17 기준으로 탈락) closed=true → 코랄 강조 */
+/** 닫혔거나 30분 안에 닫히면(R17 기준으로 탈락) closed=true → 강조 */
 export function openState(p: ApiPlace, now: Date): OpenState {
   const hours = p.detail?.hours ?? null;
   const openNow = isOpenDuring(hours, now, 0);
-  if (openNow === null) return { text: "영업 정보 없음", closed: false };
-  if (!openNow) return { text: "지금 닫힘", closed: true };
-  return isOpenDuring(hours, now, 30) ? { text: "영업 중", closed: false } : { text: "곧 마감", closed: true };
+  if (openNow === null) return { text: "영업 정보 없음", closed: false, kind: "unknown" };
+  if (!openNow) return { text: "지금 닫힘", closed: true, kind: "closed" };
+  return isOpenDuring(hours, now, 30)
+    ? { text: "영업 중", closed: false, kind: "open" }
+    : { text: "곧 마감", closed: true, kind: "closing" };
 }
 
 /** "상세 조건" 접힘 상태에 보여줄 현재 값 한 줄 */

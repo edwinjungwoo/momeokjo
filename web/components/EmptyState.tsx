@@ -1,5 +1,6 @@
 import { MAX_RADIUS } from "../../shared/constants";
 import { withRadius, type Filters } from "../../shared/recommend";
+import { Mascot } from "./Mascot";
 
 type Relax = { label: string; apply: (f: Filters) => Filters };
 
@@ -19,23 +20,16 @@ export function relaxOptions(f: Filters): Relax[] {
 export function EmptyState({ filters, onChange }: { filters: Filters; onChange: (f: Filters) => void }) {
   const options = relaxOptions(filters);
   return (
-    <div className="empty" id="empty" role="status">
-      <img
-        className="mascot"
-        src="/brand/pose-find.png"
-        alt=""
-        aria-hidden="true"
-        width={98}
-        height={96}
-        loading="lazy"
-        draggable={false}
-      />
-      <p className="empty-title">점심시간이 코앞인데 후보가 없네요</p>
-      <p className="empty-desc">{options.length > 0 ? "조건을 하나만 풀어볼까요?" : "기준점을 옮겨보세요"}</p>
+    <div className="state" id="empty" role="status">
+      <p className="bubble">앗… 조건에 맞는 맛집이 없어요</p>
+      <Mascot pose="sad" height={96} />
+      <p className="state-desc">
+        {options.length > 0 ? "다른 조건으로 다시 찾아볼까요?" : "기준점을 옮겨서 다시 찾아볼까요?"}
+      </p>
       {options.length > 0 && (
-        <div className="empty-actions">
+        <div className="state-actions">
           {options.map((o) => (
-            <button key={o.label} type="button" className="btn-ghost accent" onClick={() => onChange(o.apply(filters))}>
+            <button key={o.label} type="button" className="btn-outline" onClick={() => onChange(o.apply(filters))}>
               {o.label}
             </button>
           ))}
@@ -47,12 +41,13 @@ export function EmptyState({ filters, onChange }: { filters: Filters; onChange: 
 
 export function ErrorState({ onRetry }: { onRetry: () => void }) {
   return (
-    <div className="empty" role="alert">
-      <p className="empty-title">가게 정보를 불러오지 못했어요</p>
-      <p className="empty-desc">잠시 뒤에 다시 시도해 주세요</p>
-      <div className="empty-actions">
-        <button type="button" className="btn-ghost accent" onClick={onRetry}>
-          다시 시도
+    <div className="state" role="alert">
+      <Mascot pose="warning" height={96} />
+      <p className="state-title">앗! 일시적인 오류가 발생했어요.</p>
+      <p className="state-desc">잠시 후 다시 시도해주세요.</p>
+      <div className="state-actions">
+        <button type="button" className="btn-primary" onClick={onRetry}>
+          <span aria-hidden="true">↻</span> 다시 시도하기
         </button>
       </div>
     </div>

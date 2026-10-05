@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import type { ApiPlace, LatLng } from "../../shared/types";
 import { loadKakaoMaps } from "../kakaoLoader";
 
-const ACCENT = "#ff6b3d";
+const ACCENT = "#FF683D";
 /** 핀 탭 직후 지도 click이 새어 들어와도 기준점 찍기로 처리하지 않는 시간 */
 const PIN_TAP_GUARD_MS = 400;
 

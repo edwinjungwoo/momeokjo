@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { ASEM } from "../../shared/constants";
 import type { LatLng } from "../../shared/types";
+import { Mascot } from "./Mascot";
 
 const GEO_FAIL = "위치를 가져오지 못해서 ASEM 타워 기준으로 보여드려요";
 const inKorea = (c: LatLng) => c.lat >= 33 && c.lat <= 39 && c.lng >= 124 && c.lng <= 132;
@@ -86,7 +87,11 @@ export function CenterChip({ center, onCenter, onPickStart, onToast }: Props) {
         <span className="caret" aria-hidden="true">▾</span>
       </button>
       {open && (
-        <div className="menu" role="menu">
+        <div className="menu" role="menu" aria-label="어디서 찾을까요?">
+          <div className="menu-head" aria-hidden="true">
+            <Mascot pose="location" height={36} eager />
+            <span>어디서 찾을까요?</span>
+          </div>
           <button type="button" role="menuitem" onClick={choose(locate)}>
             내 위치
           </button>
