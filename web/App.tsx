@@ -1,12 +1,15 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { shouldAutoDraw } from "../shared/autoDraw";
 import { haversine, walkMinutes } from "../shared/geo";
 import { hubById } from "../shared/hubs";
+import { kstDay } from "../shared/kst";
 import { topPercents } from "../shared/rank";
 import { TRIO_SIZE, drawTrio, filterPlaces, relaxNotice, relaxToFill, sortPlaces, type Filters } from "../shared/recommend";
 import { shareText } from "../shared/share";
 import type { ApiDetail, ApiPlace, LatLng } from "../shared/types";
 import { filterProps, setTrackingHub, startTracking, track, trackFilters } from "./analytics";
 import { fetchPlace } from "./api";
+import { autoDrawOffDay, autoDrawnThisSession, markAutoDrawn, turnOffAutoDraw, useInteracted } from "./autoDraw";
 import { EmptyState, ErrorState } from "./components/EmptyState";
 import { FilterPanel } from "./components/FilterPanel";
 import { FirstTip, useFirstTip } from "./components/FirstTip";
@@ -69,6 +72,11 @@ export default function App() {
   const shuffle = useSlotShuffle();
   const toast = useToast();
   const tip = useFirstTip();
+  // R39: 재방문자 = 처음 열 때 첫 방문 안내가 닫혀 있었거나 개인화 신호가 있음
+  const [returning] = useState(() => !tip.open || personal.hasSignals);
+  const interacted = useInteracted();
+  /** 지금 떠 있는 결과가 자동 뽑기로 뜬 것인가 (닫으면 그날은 끈다) */
+  const autoTrio = useRef(false);
 
   // R35: 세션 시작(app_open)과 이벤트에 붙일 거점. 공유 링크의 거점이 적용된 뒤의 값이다
   const openTracked = useRef(false);
@@ -215,15 +223,20 @@ export default function App() {
   };
   const closeTrio = () => {
     if (shuffle.running) return;
+    if (autoTrio.current) {
+      autoTrio.current = false;
+      turnOffAutoDraw(kstDay(Date.now()));
+    }
     setTrio(null);
     setFocusId(null);
   };
   const closeCard = () => setSelected(null);
 
-  // R21′/R22′: 3곳 가중 뽑기 → 0.8초 셔플 → 카드 3장 + 지도 번호 + 짧은 진동
-  const onDraw = () => {
+  // R21′/R22′: 3곳 가중 뽑기 → 0.8초 셔플 → 카드 3장 + 지도 번호 + 짧은 진동.
+  // R39 자동 뽑기(auto)는 shown 신호를 남기지 않고 첫 방문 안내도 닫지 않는다
+  const onDraw = ({ auto = false }: { auto?: boolean } = {}) => {
     if (shuffle.running) return;
-    if (tip.open) tip.dismiss();
+    if (tip.open && !auto) tip.dismiss();
     // 아직 오는 중인 공유 링크 결과가 방금 뽑은 결과를 덮어쓰지 않게 한다
     shareCtrl.current?.abort();
     if (!data) {
@@ -258,19 +271,45 @@ export default function App() {
     setSelected(null);
     setTrio(null);
     setFocusId(null);
+    autoTrio.current = auto;
     shuffle.run(
-      candidates.map((c) => c.name),
+      [...candidates, ...extra].map((c) => c.name),
       () => {
         for (const p of r.places) drawnIds.current.add(p.id);
         setTrio({ ids: r.places.map((p) => p.id), source: "drawn", fallback: byId(r.places), outside });
-        record("shown", r.places);
+        if (!auto) record("shown", r.places);
         track(kind, {
-          props: { candidates: pool, picks: r.places.map((p) => p.id), radius: filters.radius, party: filters.party },
+          props: {
+            candidates: pool, picks: r.places.map((p) => p.id), radius: filters.radius, party: filters.party,
+            ...(auto ? { auto: true as const } : {}),
+          },
         });
         navigator.vibrate?.(15);
       },
     );
   };
+
+  // R39: 재방문자는 목록이 오면 한 번 자동으로 뽑는다 (사용자가 아직 아무것도 누르지 않았을 때만)
+  const autoPool = candidates.length + relax.extra.length;
+  const autoDone = useRef(false);
+  useEffect(() => {
+    if (autoDone.current || interacted.current) return;
+    const go = shouldAutoDraw({
+      returning,
+      shareLink: share.placeIds.length > 0,
+      drawnThisSession: autoDrawnThisSession(),
+      interacted: interacted.current,
+      offDay: autoDrawOffDay(),
+      today: kstDay(Date.now()),
+      hasData,
+      pool: autoPool,
+    });
+    if (!go) return;
+    autoDone.current = true;
+    markAutoDrawn();
+    onDraw({ auto: true });
+    // onDraw는 매 렌더 새로 만들어지지만, 목록이 처음 준비됐을 때 한 번만 부르면 된다
+  }, [hasData, autoPool, returning, share.placeIds]);
 
   // 셔플 중에는 목록·핀 선택을 받지 않는다 (M2). 결과 3곳 중 하나면 그 카드를 펼친다
   const onSelect = (p: ApiPlace) => {
@@ -428,7 +467,7 @@ export default function App() {
               className={`draw${trioOpen && !shuffle.running ? " is-secondary" : ""}`}
               aria-busy={shuffle.running}
               disabled={shuffle.running}
-              onClick={onDraw}
+              onClick={() => onDraw()}
             >
               {drawLabel}
             </button>

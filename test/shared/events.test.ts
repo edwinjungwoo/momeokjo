@@ -59,6 +59,12 @@ describe("events", () => {
     for (const b of bad) expect(EventSchema.safeParse(b).success, JSON.stringify(b)).toBe(false);
   });
 
+  it("R39: 자동 뽑기의 draw는 props.auto: true만 받는다", () => {
+    expect(EventSchema.safeParse(ev({ props: { auto: true, candidates: 10, picks: ["1"] } })).success).toBe(true);
+    expect(EventSchema.safeParse(ev({ props: { auto: false } })).success).toBe(false);
+    expect(EventSchema.safeParse(ev({ props: { auto: "yes" } })).success).toBe(false);
+  });
+
   it("R35: 저장 행은 서버 기준 시각, KST 날짜·시, 짧은 props JSON(없으면 null)", () => {
     const late = Date.UTC(2027, 0, 14, 15, 3);
     expect(toStored({ t: "share", ts: late, hub: "ddp", props: { picks: ["1", "2"] } }, late + 60_000)).toEqual({

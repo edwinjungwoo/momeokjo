@@ -11,7 +11,7 @@ import type { CategoryGroup } from "./types";
  */
 export const EVENT_TYPES = [
   "app_open", // 세션마다 한 번
-  "draw", // 첫 뽑기 (결과가 없을 때)
+  "draw", // 첫 뽑기 (결과가 없을 때). R39 자동 뽑기는 props.auto = true
   "redraw", // 결과가 떠 있는 상태에서 다시 뽑기
   "share", // 공유·복사 성공 (picks = 공유한 곳)
   "open_kakao", // 카카오맵 열기 (rank = 결과 3곳 중 몇 번째인지)
@@ -49,6 +49,8 @@ export const EventPropsSchema = z.strictObject({
   candidates: z.number().int().min(0).max(5000).optional(),
   picks: z.array(z.string().regex(PLACE_ID)).max(3).optional(),
   rank: z.number().int().min(1).max(3).optional(),
+  /** R39 열자마자 자동으로 뽑은 draw */
+  auto: z.literal(true).optional(),
 });
 export type EventProps = z.infer<typeof EventPropsSchema>;
 

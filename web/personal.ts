@@ -64,5 +64,7 @@ export function usePersonal() {
     [state],
   );
 
-  return { record, exclude, include, isExcluded, multiplier };
+  /** R39: 이 기기에 개인화 신호가 하나라도 있으면 재방문자 */
+  const hasSignals = state.signals.length > 0;
+  return { record, exclude, include, isExcluded, multiplier, hasSignals };
 }
