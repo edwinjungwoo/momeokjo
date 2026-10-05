@@ -5,8 +5,9 @@ import { loadKakaoMaps } from "../kakaoLoader";
 const ACCENT = "#FF683D";
 /** 핀 탭 직후 지도 click이 새어 들어와도 기준점 찍기로 처리하지 않는 시간 */
 const PIN_TAP_GUARD_MS = 400;
-/** 이 레벨 이하(더 확대)면 점 대신 카테고리·평점 칩을 보여준다 */
-const CHIP_MAX_LEVEL = 4;
+/** 줌 단계: 레벨 5 이상=far(전부 점), 4=mid(평점 높은 곳만 칩), 3 이하=near(전부 칩) */
+type Zoom = "far" | "mid" | "near";
+const zoomOf = (level: number): Zoom => (level >= 5 ? "far" : level === 4 ? "mid" : "near");
 const TOP_RATING = 4;
 
 const GLYPH: Record<CategoryGroup, string> = {
@@ -53,7 +54,7 @@ export function MapView({ center, radius, places, selectedId, pickMode, onPick, 
   const [failed, setFailed] = useState(false);
   const [attempt, setAttempt] = useState(0);
   // 확대 수준에 따라 핀 모양만 CSS로 바꾼다 (오버레이는 다시 만들지 않는다)
-  const [near, setNear] = useState(false);
+  const [zoom, setZoom] = useState<Zoom>("far");
 
   // SDK 이벤트 리스너는 한 번만 등록하므로 최신 콜백은 ref로 읽는다
   useEffect(() => {
@@ -96,7 +97,7 @@ export function MapView({ center, radius, places, selectedId, pickMode, onPick, 
         const dot = document.createElement("div");
         dot.className = "center-pin";
         const pin = new kakao.maps.CustomOverlay({ map: m, position: pos, content: dot, zIndex: 3 });
-        kakao.maps.event.addListener(m, "zoom_changed", () => setNear(m.getLevel() <= CHIP_MAX_LEVEL));
+        kakao.maps.event.addListener(m, "zoom_changed", () => setZoom(zoomOf(m.getLevel())));
         kakao.maps.event.addListener(m, "click", (e: any) => {
           if (Date.now() - lastPinTap.current < PIN_TAP_GUARD_MS) return;
           if (handlers.current.pickMode) handlers.current.onPick({ lat: e.latLng.getLat(), lng: e.latLng.getLng() });
@@ -119,7 +120,7 @@ export function MapView({ center, radius, places, selectedId, pickMode, onPick, 
         circle.current = c;
         centerPin.current = pin;
         fitCircle();
-        setNear(m.getLevel() <= CHIP_MAX_LEVEL);
+        setZoom(zoomOf(m.getLevel()));
         setReady(true);
       })
       .catch((e) => {
@@ -215,8 +216,8 @@ export function MapView({ center, radius, places, selectedId, pickMode, onPick, 
 
   return (
     <>
-      {/* 지도 컨테이너의 class는 SDK 몫이라 건드리지 않고, 핀 모양 전환 class는 감싸는 요소에 둔다 */}
-      <div className={`map-zoom${near ? " is-near" : ""}`}>
+      {/* 지도 컨테이너의 class는 SDK 몫이라 건드리지 않고, 핀 모양 전환 data-zoom은 감싸는 요소에 둔다 */}
+      <div className="map-zoom" data-zoom={zoom}>
         <div ref={el} className="map" />
       </div>
       {failed && (

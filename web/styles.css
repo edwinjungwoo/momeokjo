@@ -547,7 +547,7 @@ input[type="range"] { width: 100%; height: 44px; margin: 0; accent-color: var(--
   opacity: 0.78;
 }
 .pin--top::before { opacity: 1; }
-/* 가까이(레벨 4 이하): 카테고리 아이콘 + 평점 칩 */
+/* 가까이(레벨 4 이하, mid는 상위 평점만): 카테고리 아이콘 + 평점 칩 */
 .pin-chip {
   position: absolute;
   top: 50%;
@@ -565,9 +565,15 @@ input[type="range"] { width: 100%; height: 44px; margin: 0; accent-color: var(--
   white-space: nowrap;
   font-variant-numeric: tabular-nums;
 }
-.is-near .pin::before { display: none; }
-.is-near .pin-chip { display: block; }
-.is-near .pin--top .pin-chip { border-color: var(--accent); background: var(--accent-soft); }
+/* 줌 단계(data-zoom): far=전부 점 / mid=평점 높은 곳(.pin--top)·선택만 칩 / near=전부 칩 */
+[data-zoom="near"] .pin::before,
+[data-zoom="mid"] .pin--top::before,
+[data-zoom="mid"] .pin--selected::before { display: none; }
+[data-zoom="near"] .pin-chip,
+[data-zoom="mid"] .pin--top .pin-chip,
+[data-zoom="mid"] .pin--selected .pin-chip { display: block; }
+[data-zoom="near"] .pin--top .pin-chip,
+[data-zoom="mid"] .pin--top .pin-chip { border-color: var(--accent); background: var(--accent-soft); }
 /* 선택: 더 큰 마커 + 이름표, 맨 위 */
 .pin--selected::before {
   width: 18px;
@@ -578,7 +584,8 @@ input[type="range"] { width: 100%; height: 44px; margin: 0; accent-color: var(--
   box-shadow: 0 1px 4px rgba(60, 47, 37, 0.35);
   animation: pin-pulse 0.7s ease-out 1;
 }
-.is-near .pin--selected .pin-chip {
+[data-zoom="near"] .pin--selected .pin-chip,
+[data-zoom="mid"] .pin--selected .pin-chip {
   padding: 3px 9px;
   border-color: var(--accent-strong);
   background: var(--accent-strong);
