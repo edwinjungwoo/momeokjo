@@ -1,5 +1,5 @@
 import { env } from "cloudflare:test";
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 import { DETAIL_FREEZE_MS, DETAIL_OK_TTL_MS, DETAIL_JITTER_MS, PLACE_BLOCK_COOLDOWN_MS, PREWARM_RADIUS } from "../../shared/constants";
 import { tileKeyOf, tilesCoveringCircle } from "../../shared/geo";
 import { HUBS, hubById } from "../../shared/hubs";
@@ -9,13 +9,16 @@ import { runScheduled } from "../../worker/maintenance";
 import { detailGate, frozenSince, markTile, recordPlaceBlock, replaceTilePlaces } from "../../worker/repo";
 import { callApp } from "../helpers/callApp";
 import { doc, fakeKakaoLocal, fakePlaceApi, routeFetch } from "../helpers/fakeKakao";
-import { placeJson, seedPlace } from "../helpers/places";
+import { markOuterTilesFresh, placeJson, seedPlace } from "../helpers/places";
 
 const NOW = 1_800_000_000_000; // 2027-01-15 17:00 KST
 const H = 3600_000;
 const HUB = hubById("bongeunsa");
 const at = (dLat: number) => HUB.lat + dLat;
 const Q = "/api/places?hub=bongeunsa&radius=300";
+
+// 서버는 반경과 상관없이 1000m를 계산한다 — 300m 밖 격자는 방금 수집한 빈 격자로 둔다
+beforeEach(() => markOuterTilesFresh(env.DB, HUB, 300, NOW));
 
 /** 같은 KST 날(2027-01-15)에 쿨다운 3번 → frozen */
 async function freeze(t = NOW - 2 * H) {
@@ -83,14 +86,14 @@ describe("R44 상세 차단 시 강등 모드", () => {
     await freeze();
     const since = (await detailGate(env.DB)).frozen!.since;
     const cache = caches.default;
-    await cache.delete(new Request(placesCacheKey("bongeunsa", 300)));
+    await cache.delete(new Request(placesCacheKey("bongeunsa")));
     const { app, place } = setup({ cache });
     const body = (await (await callApp(app, Q)).json()) as PlacesResponse;
     expect(place.calls).toHaveLength(0);
     expect(body.pending).toBe(2);
     expect(body.detailsFrozenSince).toBe(since);
-    expect(await cache.match(new Request(placesCacheKey("bongeunsa", 300)))).toBeDefined();
-    await cache.delete(new Request(placesCacheKey("bongeunsa", 300)));
+    expect(await cache.match(new Request(placesCacheKey("bongeunsa")))).toBeDefined();
+    await cache.delete(new Request(placesCacheKey("bongeunsa")));
   });
 
   it("R44: 평소에는 detailsFrozenSince가 null이고 detailsNewestAt은 실린 가게 중 가장 최근 상세 시각", async () => {

@@ -1,4 +1,6 @@
-import type { CategoryGroup, PlaceDetail, PlaceSummary } from "../../shared/types";
+import { MAX_RADIUS } from "../../shared/constants";
+import { tilesCoveringCircle } from "../../shared/geo";
+import type { CategoryGroup, LatLng, PlaceDetail, PlaceSummary } from "../../shared/types";
 import { saveDetail } from "../../worker/repo";
 import jungang from "../fixtures/place-detail/27531028-jungang-haejang.json";
 
@@ -62,4 +64,14 @@ export function placeJson(opts: { name: string; lat: number; lng: number; catego
       category: { ...jungang.summary.category, name1, name2, name3: name3 ?? null },
     },
   };
+}
+
+/**
+ * Task 28: 목록 API는 반경과 상관없이 거점의 1000m를 계산한다. 작은 반경만 다루는 테스트는
+ * 그 밖의 격자를 미리 "방금 수집함(빈 격자)"으로 표시해서 외부 호출 예산이 바깥 격자에 쓰이지 않게 한다.
+ */
+export async function markOuterTilesFresh(db: D1Database, center: LatLng, innerRadius: number, now: number): Promise<void> {
+  const inner = new Set(tilesCoveringCircle(center, innerRadius));
+  const outer = tilesCoveringCircle(center, MAX_RADIUS).filter((k) => !inner.has(k));
+  await db.batch(outer.map((k) => db.prepare("INSERT OR REPLACE INTO tiles (key, collected_at, place_count, saturated) VALUES (?, ?, 0, 0)").bind(k, now)));
 }

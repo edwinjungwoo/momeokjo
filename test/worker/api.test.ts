@@ -1,5 +1,5 @@
 import { env } from "cloudflare:test";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   DETAIL_JITTER_MS, DETAIL_OK_TTL_MS, PLACE_BLOCK_COOLDOWN_MS, TILE_TTL_MS,
 } from "../../shared/constants";
@@ -10,7 +10,7 @@ import { PLACES_CACHE_MS, PLACES_PENDING_CACHE_MS, createApp, placesCacheKey, pl
 import { detailGate, getMeta, markTile, recordPlaceBlock, replaceTilePlaces, resetCorruptWarnings } from "../../worker/repo";
 import { callApp } from "../helpers/callApp";
 import { doc, fakeKakaoLocal, fakePlaceApi, routeFetch } from "../helpers/fakeKakao";
-import { placeJson, seedPlace } from "../helpers/places";
+import { markOuterTilesFresh, placeJson, seedPlace } from "../helpers/places";
 
 const NOW = 1_800_000_000_000;
 const HUB = hubById("bongeunsa");
@@ -30,6 +30,9 @@ const DETAILS = {
   "5555": placeJson({ name: "가게5555", lat: at(0.0002), lng: HUB.lng }),
 };
 const Q = "/api/places?hub=bongeunsa&radius=300";
+
+// 서버는 반경과 상관없이 1000m를 계산한다 — 300m 밖 격자는 방금 수집한 빈 격자로 둔다
+beforeEach(() => markOuterTilesFresh(env.DB, HUB_CENTER, 300, NOW));
 
 function setup(opts: { localStatus?: number; allow?: boolean; details?: Record<string, unknown> } = {}) {
   const local = fakeKakaoLocal(DOCS, { status: opts.localStatus });
@@ -75,8 +78,8 @@ describe("GET /api/places", () => {
     expect(res.status).toBe(200);
     expect(res.headers.get("cache-control")).toBe("no-store");
     const body = (await res.json()) as PlacesResponse;
-    // pending은 반경이 아니라 덮는 격자 기준: 1001, 1002와 반경 밖이지만 같은 격자 줄에 걸친 1004 (디저트 1003은 기록 안 함)
-    expect(body).toMatchObject({ center: HUB_CENTER, radius: 300, places: [], pending: 3, incompleteTiles: 0, stale: false });
+    // R42: radius=300을 보내도 서버는 1000m를 계산한다 — pending은 1001, 1002, 1004 (디저트 1003은 기록 안 함)
+    expect(body).toMatchObject({ center: HUB_CENTER, radius: 1000, places: [], pending: 3, incompleteTiles: 0, stale: false });
   });
 
   it("R12: 응답 후 waitUntil로 상세를 보충해서, 다음 요청에는 반경 안 가게가 거리순으로 나오고 공식 API는 다시 부르지 않는다", async () => {
@@ -85,7 +88,7 @@ describe("GET /api/places", () => {
     const localCalls = local.calls.length;
     const body = (await (await callApp(app, Q)).json()) as PlacesResponse;
     expect(local.calls.length).toBe(localCalls);
-    expect(body.places.map((p) => p.id)).toEqual(["1001", "1002"]);
+    expect(body.places.map((p) => p.id)).toEqual(["1001", "1002", "1004"]);
     expect(body.places[0].name).toBe("가게1001");
     expect(body.places[0].walkMinutes).toBe(walkMinutes(body.places[0].distance!));
     expect(body.places[1].group).toBe("chinese");
@@ -149,7 +152,7 @@ describe("GET /api/places — 응답 캐시와 목록 원소", () => {
 
   it("R12: 다 채워진 응답은 Workers Cache API에 60초 캐시해서, 캐시 적중이면 D1을 읽지 않고 같은 본문을 준다", async () => {
     const cache = caches.default;
-    await cache.delete(new Request(placesCacheKey("bongeunsa", 300)));
+    await cache.delete(new Request(placesCacheKey("bongeunsa")));
     let now = NOW;
     const local = fakeKakaoLocal(DOCS);
     const place = fakePlaceApi({ ...DETAILS });
@@ -160,7 +163,7 @@ describe("GET /api/places — 응답 캐시와 목록 원소", () => {
     const firstBody = await first.text();
     expect((JSON.parse(firstBody) as PlacesResponse).pending).toBeGreaterThan(0);
     expect(first.headers.get("cache-control")).toBe("no-store");
-    const short = await cache.match(new Request(placesCacheKey("bongeunsa", 300)));
+    const short = await cache.match(new Request(placesCacheKey("bongeunsa")));
     expect(short?.headers.get("cache-control")).toBe("public, max-age=10, s-maxage=10");
     // 10초 안의 폴링은 같은 pending 응답을 나눠 쓴다 (보충을 다시 시작하지 않는다)
     const callsAfterFirst = local.calls.length + place.calls.length;
@@ -171,7 +174,7 @@ describe("GET /api/places — 응답 캐시와 목록 원소", () => {
     const second = await callApp(app, Q);
     const secondBody = await second.text();
     expect(second.headers.get("cache-control")).toBe("no-store");
-    const stored = await cache.match(new Request(placesCacheKey("bongeunsa", 300)));
+    const stored = await cache.match(new Request(placesCacheKey("bongeunsa")));
     expect(stored?.headers.get("cache-control")).toBe("public, max-age=60, s-maxage=60");
     // D1을 비워도 캐시 적중이면 같은 본문 (D1을 읽지 않는다)
     await env.DB.prepare("DELETE FROM places").run();
@@ -186,7 +189,29 @@ describe("GET /api/places — 응답 캐시와 목록 원소", () => {
     now += 60_000;
     const fresh = (await (await callApp(app, Q)).json()) as PlacesResponse;
     expect(fresh.places).toEqual([]);
-    await cache.delete(new Request(placesCacheKey("bongeunsa", 300)));
+    await cache.delete(new Request(placesCacheKey("bongeunsa")));
+  });
+
+  it("R12/R42: 반경이 달라도 거점마다 캐시 키 하나 — radius=500과 1000은 같은 1000m 본문을 같은 캐시에서 받는다 (두 번째는 D1을 읽지 않는다)", async () => {
+    const cache = caches.default;
+    await cache.delete(new Request(placesCacheKey("bongeunsa")));
+    const s = setup();
+    const app = createApp({
+      fetcher: routeFetch(s.local.fetcher, s.place.fetcher), now: () => NOW, sleep: async () => {}, rateLimit: async () => true, cache,
+    });
+    await callApp(s.app, Q); // 격자·상세를 채운다 (캐시 없는 앱)
+    const first = await callApp(app, "/api/places?hub=bongeunsa&radius=1000");
+    const firstBody = await first.text();
+    const parsed = JSON.parse(firstBody) as PlacesResponse;
+    expect(parsed).toMatchObject({ radius: 1000, pending: 0, incompleteTiles: 0 });
+    expect(parsed.places.map((p) => p.id)).toEqual(["1001", "1002", "1004"]);
+    const usage = async () =>
+      Number((await env.DB.prepare("SELECT value FROM meta WHERE key LIKE 'd1_read:%'").first<{ value: string }>())?.value ?? 0);
+    const readBefore = await usage();
+    const second = await callApp(app, "/api/places?hub=bongeunsa&radius=500");
+    expect(await second.text()).toBe(firstBody);
+    expect(await usage()).toBe(readBefore);
+    await cache.delete(new Request(placesCacheKey("bongeunsa")));
   });
 
   it("R12: 응답·목록 원소·detail에는 정해진 키만 싣는다 (목록 크기 회귀 방지)", async () => {
@@ -239,8 +264,8 @@ describe("GET /api/places — 저장값 방어 (QA 보강)", () => {
     const res = await callApp(s.app, Q);
     expect(res.status).toBe(200);
     const body = (await res.json()) as PlacesResponse;
-    expect(body.places.map((p) => p.id)).toEqual(["1001", "1002"]);
-    for (const p of body.places) {
+    expect(body.places.map((p) => p.id)).toEqual(["1001", "1002", "1004"]);
+    for (const p of body.places.filter((x) => x.id !== "1004")) {
       expect(p.detail).toMatchObject({ menus: [], hours: null, strengths: [], rating: 4.1 });
     }
     const one = await callApp(s.app, "/api/places/1001");
@@ -282,7 +307,7 @@ describe("GET /api/places — 요청 시점 보충", () => {
     const before = s.place.calls.length;
     const body = (await (await callApp(s.app, Q)).json()) as PlacesResponse;
     expect(s.place.calls.length).toBe(before);
-    expect(body.places.map((p) => p.id)).toEqual(["1001", "1002"]);
+    expect(body.places.map((p) => p.id)).toEqual(["1001", "1002", "1004"]);
     expect(body.pending).toBe(0);
   });
 
@@ -336,7 +361,7 @@ describe("GET /api/places/:id", () => {
     expect((await callApp(app, "/api/places/5555")).status).toBe(200);
     await callApp(app, Q);
     const body = (await (await callApp(app, Q)).json()) as PlacesResponse;
-    expect(body.places.map((p) => p.id)).toEqual(["1001", "1002"]);
+    expect(body.places.map((p) => p.id)).toEqual(["1001", "1002", "1004"]);
     expect((await callApp(app, "/api/places/5555")).status).toBe(200);
   });
 

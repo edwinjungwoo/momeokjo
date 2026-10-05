@@ -12,7 +12,10 @@ import type { FetchFn } from "./fetchFn";
 import { warmOnce } from "./maintenance";
 import { getPlace, getPlaces, type ServiceDeps } from "./placesService";
 
-/** R12: 공개 목록 API는 거점 id와 50m 단위 반경만 받는다 (좌표는 서버가 shared/hubs.ts에서 찾는다) */
+/**
+ * R12: 공개 목록 API는 거점 id와 50m 단위 반경만 받는다 (좌표는 서버가 shared/hubs.ts에서 찾는다).
+ * R42: 반경은 검증만 하고, 서버는 언제나 거점의 1000m 목록을 계산·캐시한다 (화면이 거리로 거른다)
+ */
 export const PlacesQuery = z.object({
   hub: z.string().refine(isHubId),
   radius: z.coerce.number().refine(isValidRadius),
@@ -60,10 +63,11 @@ export function placesCacheTtl(res: PlacesResponse): number | null {
   return PLACES_PENDING_CACHE_MS;
 }
 /** 응답 형식이 바뀌면 올린다 (예전 형식의 캐시를 쓰지 않게) */
-export const PLACES_CACHE_VERSION = "2";
+export const PLACES_CACHE_VERSION = "3";
 const EXPIRES_HEADER = "x-mmj-expires";
-export const placesCacheKey = (hub: string, radius: number) =>
-  `https://cache.mmj/places?hub=${encodeURIComponent(hub)}&radius=${radius}&v=${PLACES_CACHE_VERSION}`;
+/** R42: 거점마다 키 하나 (반경은 키에 넣지 않는다 — 본문은 언제나 1000m) */
+export const placesCacheKey = (hub: string) =>
+  `https://cache.mmj/places?hub=${encodeURIComponent(hub)}&v=${PLACES_CACHE_VERSION}`;
 
 export type AppDeps = {
   fetcher: FetchFn;
@@ -135,13 +139,14 @@ export function createApp(deps: AppDeps) {
     const q = PlacesQuery.safeParse(c.req.query());
     if (!q.success) return c.json({ error: "invalid_params" }, 400);
     const hub = HUBS.find((h) => h.id === q.data.hub)!;
-    // 거점이 몇 개뿐이라 같은 (거점, 반경) 요청이 반복된다. 응답을 잠깐 캐시해서 D1 읽기와 CPU를 아낀다 (placesCacheTtl).
-    const key = new Request(placesCacheKey(hub.id, q.data.radius));
+    // 거점이 몇 개뿐이라 같은 요청이 반복된다. 응답을 잠깐 캐시해서 D1 읽기와 CPU를 아낀다 (placesCacheTtl).
+    // R42: 어떤 반경이 와도 1000m 하나만 계산·캐시한다 (거점당 키 하나)
+    const key = new Request(placesCacheKey(hub.id));
     const hit = await deps.cache?.match(key);
     if (hit && Number(hit.headers.get(EXPIRES_HEADER)) > now()) {
       return new Response(hit.body, { headers: { "content-type": "application/json", "cache-control": "no-store" } });
     }
-    const res = await getPlaces(serviceDeps(c), { lat: hub.lat, lng: hub.lng }, q.data.radius);
+    const res = await getPlaces(serviceDeps(c), { lat: hub.lat, lng: hub.lng }, MAX_RADIUS);
     if ("error" in res) return c.json(res, 502);
     const body = JSON.stringify(res);
     const ttl = placesCacheTtl(res);
