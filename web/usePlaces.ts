@@ -11,7 +11,7 @@ type State = { data: PlacesResponse | null; loading: boolean; error: boolean; po
 
 /**
  * R29: 거점이 바뀌면 250ms 디바운스 후 불러오고,
- * pending 또는 incompleteTiles가 남아 있으면 3초 간격으로 최대 10번 다시 불러온다.
+ * pending(R44 강등 모드면 제외) 또는 incompleteTiles가 남아 있으면 3초 간격으로 최대 10번 다시 불러온다.
  * 다시 불러오는 동안 이전 data를 유지한다 (loading=true로 흐리게만 표시).
  * R42: 반경과 상관없이 거점의 1000m 목록을 한 번 받는다 — 화면 반경은 filterPlaces가 거리로 거른다.
  */
@@ -27,7 +27,9 @@ export function usePlaces(hubId: string) {
       try {
         const data = await fetchPlaces(hubId, MAX_RADIUS, ctrl.signal);
         if (ctrl.signal.aborted) return;
-        const more = (data.pending > 0 || data.incompleteTiles > 0) && polls < MAX_POLLS;
+        // R44: 강등 모드면 pending이 줄지 않으므로 그것 때문에 다시 부르지 않는다
+        const waitDetails = data.pending > 0 && (data.detailsFrozenSince ?? null) === null;
+        const more = (waitDetails || data.incompleteTiles > 0) && polls < MAX_POLLS;
         setState({ data, loading: false, error: false, polling: more });
         if (more) {
           polls += 1;

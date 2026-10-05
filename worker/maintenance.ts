@@ -9,8 +9,8 @@ import { enrichDetails } from "./detailEnricher";
 import { isRetentionWindow, pruneOldEvents } from "./events";
 import type { FetchFn } from "./fetchFn";
 import {
-  countNeedingDetail, expiredDetailStates, markUnfetchedCleared, placeBlockedUntil, tilesChangedAt, unfetchedClearedAt,
-  unfetchedStates, type TilePlaceState,
+  countNeedingDetail, detailGate, detailsAllowed, expiredDetailStates, markUnfetchedCleared, tilesChangedAt,
+  unfetchedClearedAt, unfetchedStates, type TilePlaceState,
 } from "./repo";
 import { collectTiles } from "./tileCollector";
 
@@ -47,7 +47,8 @@ export async function warmOnce(
   let pending: WarmResult["pending"];
   if (opts.count) pending = await countNeedingDetail(deps.db, center, radiusM, deps.now);
   else {
-    const done = e.enriched + e.failed < deps.batchSize && budget.left > 0 && deps.now >= (await placeBlockedUntil(deps.db));
+    const done =
+      e.enriched + e.failed < deps.batchSize && budget.left > 0 && detailsAllowed(await detailGate(deps.db), deps.now);
     pending = done ? 0 : "more";
   }
   return { incompleteTiles: tiles.incomplete.length + tiles.failed.length, pending, enriched: e.enriched, failed: e.failed };
@@ -119,7 +120,8 @@ async function maintain(
     enriched: 0,
     failed: 0,
   };
-  if (budget.left <= 0 || opts.now < (await placeBlockedUntil(db))) return result;
+  // R10 쿨다운·R44 강등 모드면 상세 후보를 읽지도 부르지도 않는다
+  if (budget.left <= 0 || !detailsAllowed(await detailGate(db), opts.now)) return result;
 
   const candidates: TilePlaceState[] = await expiredDetailStates(db, keys, opts.now);
   // 격자가 바뀐 적이 없으면(마지막 확인 이후) 미수집 ID가 생길 수 없으니 훑지 않는다

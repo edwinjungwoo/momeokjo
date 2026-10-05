@@ -22,6 +22,9 @@ export const DETAIL_FAIL_TTL_MS = 6 * HOUR;
 export const DETAIL_JITTER_MS = 24 * HOUR;
 /** 상세 API가 403/429를 주면 이 시간 동안 모든 상세 호출을 멈춘다 */
 export const PLACE_BLOCK_COOLDOWN_MS = 30 * 60_000;
+/** R44: 같은 KST 날에 쿨다운이 이만큼 걸리면 상세 호출을 DETAIL_FREEZE_MS 동안 모두 멈춘다 (강등 모드) */
+export const DETAIL_FREEZE_AFTER_BLOCKS = 3;
+export const DETAIL_FREEZE_MS = 24 * HOUR;
 
 export const MAX_QUAD_DEPTH = 4;
 export const KAKAO_PAGE_SIZE = 15;

@@ -75,4 +75,8 @@ export type PlacesResponse = {
   pending: number;
   incompleteTiles: number;
   stale: boolean;
+  /** R44 강등 모드 시작 시각 (아니면 null) */
+  detailsFrozenSince: number | null;
+  /** R44 실린 가게 중 가장 최근 상세 시각 (없으면 null) */
+  detailsNewestAt: number | null;
 };

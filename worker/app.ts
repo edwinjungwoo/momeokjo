@@ -40,7 +40,7 @@ export type ResponseCache = {
 };
 export const PLACES_CACHE_MS = 60_000;
 /** 응답 형식이 바뀌면 올린다 (예전 형식의 캐시를 쓰지 않게) */
-export const PLACES_CACHE_VERSION = "1";
+export const PLACES_CACHE_VERSION = "2";
 const EXPIRES_HEADER = "x-mmj-expires";
 export const placesCacheKey = (hub: string, radius: number) =>
   `https://cache.mmj/places?hub=${encodeURIComponent(hub)}&radius=${radius}&v=${PLACES_CACHE_VERSION}`;
@@ -114,7 +114,9 @@ export function createApp(deps: AppDeps) {
     const res = await getPlaces(serviceDeps(c), { lat: hub.lat, lng: hub.lng }, q.data.radius);
     if ("error" in res) return c.json(res, 502);
     const body = JSON.stringify(res);
-    if (deps.cache && res.pending === 0 && res.incompleteTiles === 0 && !res.stale) {
+    // R44: frozen이면 pending이 줄지 않으므로 남아 있어도 캐시한다
+    const settled = res.pending === 0 || res.detailsFrozenSince !== null;
+    if (deps.cache && settled && res.incompleteTiles === 0 && !res.stale) {
       const stored = new Response(body, {
         headers: {
           "content-type": "application/json",

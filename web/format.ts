@@ -1,3 +1,4 @@
+import { detailAgeDays, freshnessText } from "../shared/freshness";
 import { isOpenDuring, kstParts } from "../shared/hours";
 import type { Filters } from "../shared/recommend";
 import type { ApiPlace, PlacesResponse } from "../shared/types";
@@ -38,9 +39,13 @@ export function detailSummary(f: Filters): string {
 
 export type Status = { text: string; tone: "info" | "warn"; busy: boolean };
 
-/** R29: 리스트 위 상태 한 줄. data가 없을 때는 스켈레톤/에러 화면이 대신한다 */
-export function statusOf(data: PlacesResponse | null, polling: boolean, error: boolean): Status | null {
+/** R29: 리스트 위 상태 한 줄. data가 없을 때는 스켈레톤/에러 화면이 대신한다. R44: 정보 기준 시점 */
+export function statusOf(data: PlacesResponse | null, polling: boolean, error: boolean, now = Date.now()): Status | null {
   if (!data) return null;
+  // 예전 응답(캐시)에는 R44 필드가 없을 수 있다
+  const frozen = data.detailsFrozenSince ?? null;
+  const age = detailAgeDays(frozen, data.detailsNewestAt ?? null, now);
+  const ageStatus: Status | null = age === null ? null : { text: freshnessText(age), tone: "info", busy: false };
   if (error) return { text: "최신 정보를 불러오지 못했어요", tone: "warn", busy: false };
   if (data.stale) return { text: "정보가 오래됐을 수 있어요", tone: "warn", busy: false };
   if (data.incompleteTiles > 0) {
@@ -48,12 +53,14 @@ export function statusOf(data: PlacesResponse | null, polling: boolean, error: b
       ? { text: "주변 가게를 더 찾는 중이에요", tone: "info", busy: true }
       : { text: "주변 가게를 다 찾지 못했어요", tone: "warn", busy: false };
   }
+  // frozen이면 pending은 줄지 않으므로 기준 시점을 먼저 알린다
+  if (frozen !== null && ageStatus) return ageStatus;
   if (data.pending > 0) {
     return polling
       ? { text: `평점 정보 불러오는 중 (${data.pending}곳)`, tone: "info", busy: true }
       : { text: `${data.pending}곳은 아직 정보를 못 불러왔어요`, tone: "info", busy: false };
   }
-  return null;
+  return ageStatus;
 }
 
 const hhmm = (m: number) => {

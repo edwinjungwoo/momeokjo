@@ -374,7 +374,7 @@ export default function App() {
     if (empty) track("empty_result", { props: { ...filterProps(filters), candidates: 0 } });
   }, [settled, empty, filters]);
 
-  const status = statusOf(data, polling, error);
+  const status = statusOf(data, polling, error, now.getTime());
   const trioOpen = selected === null && (shuffle.display !== null || trioPlaces.length > 0);
   const drawLabel = shuffle.running ? "고르는 중…" : trio?.source === "drawn" ? "다시 뽑기" : "모먹죠?";
 

@@ -1,12 +1,11 @@
-import { PLACE_BLOCK_COOLDOWN_MS } from "../shared/constants";
 import type { LatLng } from "../shared/types";
 import type { Budget } from "./budget";
 import type { FetchFn } from "./fetchFn";
 import { fetchPlaceDetail } from "./kakaoPlace";
 import { mapLimit } from "./pool";
 import {
-  blockPlaceApi, idsNeedingDetail, pickDetailIds, placeBlockedUntil, saveDetail, saveDetailFailure, type DetailScope,
-  type TilePlaceState,
+  detailGate, detailsAllowed, idsNeedingDetail, pickDetailIds, recordPlaceBlock, saveDetail, saveDetailFailure,
+  type DetailScope, type TilePlaceState,
 } from "./repo";
 
 const CONCURRENCY = 3;
@@ -33,7 +32,8 @@ export async function enrichDetails(
 ): Promise<EnrichResult> {
   const result: EnrichResult = { enriched: 0, failed: 0 };
   if (deps.budget.left <= 0) return result;
-  if (deps.now < (await placeBlockedUntil(deps.db))) return result;
+  // R10 쿨다운·R44 강등 모드면 후보도 고르지 않는다
+  if (!detailsAllowed(await detailGate(deps.db), deps.now)) return result;
   const scope = deps.scope ?? "due";
   const ids = deps.candidates
     ? pickDetailIds(deps.candidates, center, deps.now, deps.batchSize, scope)
@@ -51,7 +51,7 @@ export async function enrichDetails(
       if (BLOCK_SIGNALS.has(r.reason) && !blocked) {
         blocked = true;
         console.warn("place detail blocked", r.reason);
-        await blockPlaceApi(deps.db, deps.now + PLACE_BLOCK_COOLDOWN_MS);
+        await recordPlaceBlock(deps.db, deps.now);
       }
     }
   });

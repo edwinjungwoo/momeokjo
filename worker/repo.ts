@@ -1,5 +1,9 @@
 import { categoryGroup } from "../shared/category";
-import { DETAIL_FAIL_TTL_MS, DETAIL_JITTER_MS, DETAIL_OK_TTL_MS, TILE_TTL_MS } from "../shared/constants";
+import {
+  DETAIL_FAIL_TTL_MS, DETAIL_FREEZE_AFTER_BLOCKS, DETAIL_FREEZE_MS, DETAIL_JITTER_MS, DETAIL_OK_TTL_MS,
+  PLACE_BLOCK_COOLDOWN_MS, TILE_TTL_MS,
+} from "../shared/constants";
+import { kstDay } from "../shared/kst";
 import { haversine, tileRect, tilesCoveringCircle } from "../shared/geo";
 import type { CategoryGroup, LatLng, Place, PlaceDetail, PlaceSummary, Rect, StoredDetail } from "../shared/types";
 
@@ -13,6 +17,8 @@ const META_UPSERT = "INSERT INTO meta (key, value) VALUES (?, ?) ON CONFLICT(key
 const BLOCKED_KEY = "place_blocked_until";
 const TILES_CHANGED_KEY = "tiles_changed_at";
 const UNFETCHED_CLEARED_KEY = "unfetched_cleared_at";
+const DETAIL_MODE_KEY = "detail_mode";
+const BLOCK_COUNT_PREFIX = "block_count:";
 const chunked = <T>(items: T[]): T[][] =>
   Array.from({ length: Math.ceil(items.length / CHUNK) }, (_, i) => items.slice(i * CHUNK, (i + 1) * CHUNK));
 const marks = (n: number) => Array.from({ length: n }, () => "?").join(",");
@@ -311,3 +317,59 @@ export const unfetchedClearedAt = (db: D1Database) => metaNumber(db, UNFETCHED_C
 export const markUnfetchedCleared = async (db: D1Database, at: number) => {
   await setMetaNumber(db, UNFETCHED_CLEARED_KEY, at);
 };
+
+/** R44 강등 모드. frozen이면 until 전까지 상세 후보를 읽지도 부르지도 않는다 */
+export type DetailGate = { blockedUntil: number; frozen: { since: number; until: number } | null };
+
+function parseFrozen(raw: string | undefined): DetailGate["frozen"] {
+  if (!raw) return null;
+  try {
+    const o = JSON.parse(raw) as { mode?: unknown; since?: unknown; until?: unknown };
+    if (o.mode !== "frozen" || typeof o.since !== "number" || typeof o.until !== "number") return null;
+    return { since: o.since, until: o.until };
+  } catch {
+    return null;
+  }
+}
+
+/** R10 쿨다운과 R44 강등 모드를 한 번에 읽는다 (meta 2행) */
+export async function detailGate(db: D1Database): Promise<DetailGate> {
+  const r = await db
+    .prepare("SELECT key, value FROM meta WHERE key IN (?, ?)")
+    .bind(BLOCKED_KEY, DETAIL_MODE_KEY)
+    .all<{ key: string; value: string }>();
+  const get = (k: string) => r.results.find((x) => x.key === k)?.value;
+  const blocked = Number(get(BLOCKED_KEY) ?? 0);
+  return { blockedUntil: Number.isFinite(blocked) ? blocked : 0, frozen: parseFrozen(get(DETAIL_MODE_KEY)) };
+}
+
+/** 지금 frozen이면 시작 시각, 아니면 null (24시간 뒤 자동 해제) */
+export const frozenSince = (g: DetailGate, now: number): number | null =>
+  g.frozen && now < g.frozen.until ? g.frozen.since : null;
+
+/** 쿨다운도 frozen도 아니면 상세 API를 불러도 된다 */
+export const detailsAllowed = (g: DetailGate, now: number): boolean => now >= g.blockedUntil && frozenSince(g, now) === null;
+
+/**
+ * R10/R44: 상세 API가 403/429를 줬을 때. 30분 쿨다운을 기록하고 오늘(KST) 차단 횟수를 1 올린다.
+ * 같은 날 3번째부터는 24시간 frozen (이미 frozen이면 시작 시각은 두고 해제 시각만 늘린다).
+ * 지난 날의 차단 횟수는 이때 함께 지운다 (차단이 있는 날만 한 행).
+ */
+export async function recordPlaceBlock(db: D1Database, now: number): Promise<void> {
+  const key = `${BLOCK_COUNT_PREFIX}${kstDay(now)}`;
+  const [, , counted] = await db.batch<{ value: string }>([
+    db.prepare(META_UPSERT).bind(BLOCKED_KEY, String(now + PLACE_BLOCK_COOLDOWN_MS)),
+    db.prepare("DELETE FROM meta WHERE key LIKE ? AND key < ?").bind(`${BLOCK_COUNT_PREFIX}%`, key),
+    db
+      .prepare(
+        `INSERT INTO meta (key, value) VALUES (?, '1')
+         ON CONFLICT(key) DO UPDATE SET value = CAST(meta.value AS INTEGER) + 1 RETURNING value`,
+      )
+      .bind(key),
+  ]);
+  const count = Number(counted.results[0]?.value ?? 0);
+  if (count < DETAIL_FREEZE_AFTER_BLOCKS) return;
+  const prev = frozenSince(await detailGate(db), now);
+  const mode = { mode: "frozen", since: prev ?? now, until: now + DETAIL_FREEZE_MS };
+  await db.prepare(META_UPSERT).bind(DETAIL_MODE_KEY, JSON.stringify(mode)).run();
+}

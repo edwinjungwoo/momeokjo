@@ -1,4 +1,3 @@
-import { PLACE_BLOCK_COOLDOWN_MS } from "../shared/constants";
 import { boundingBox, haversine, tilesCoveringCircle } from "../shared/geo";
 import type { ApiPlace, LatLng, PlacesResponse } from "../shared/types";
 import { Budget } from "./budget";
@@ -7,8 +6,8 @@ import type { FetchFn } from "./fetchFn";
 import { fetchPlaceDetail } from "./kakaoPlace";
 import { toApiPlace } from "./present";
 import {
-  blockPlaceApi, countUnfetchedIn, getMeta, isInAnyTile, getTiles, isDetailDue, isTileDue, placeBlockedUntil, placeById,
-  placesInBox, saveDetail, saveDetailFailure, tilePlaceStates,
+  countUnfetchedIn, detailGate, detailsAllowed, frozenSince, getMeta, isInAnyTile, getTiles, isDetailDue, isTileDue,
+  placeById, placesInBox, recordPlaceBlock, saveDetail, saveDetailFailure, tilePlaceStates,
 } from "./repo";
 import { collectTiles } from "./tileCollector";
 
@@ -66,7 +65,9 @@ export async function getPlaces(
   // 보충(waitUntil)이 시작되기 전에 센다 — 응답과 보충이 섞이지 않게.
   // 요청 시점에는 한 번도 가져오지 않은 장소만 보충한다. 만료된 상세 갱신은 Cron(R11) 몫이다.
   const pending = countUnfetchedIn(tileStates);
-  const needsDetail = pending > 0 && deps.now >= (await placeBlockedUntil(deps.db));
+  // R10 쿨다운·R44 강등 모드 (meta 2행). frozen이면 응답에 시작 시각을 싣는다
+  const gate = await detailGate(deps.db);
+  const needsDetail = pending > 0 && detailsAllowed(gate, deps.now);
   if (needsDetail && budget.left > 0 && (await allow())) {
     deps.waitUntil(
       enrichDetails(
@@ -82,6 +83,10 @@ export async function getPlaces(
     stale = true;
   }
 
+  // R44: 실린 가게 중 가장 최근에 상세를 가져온 시각 (실패 기록 시각은 빼고)
+  let newest: number | null = null;
+  for (const x of rows) if (x.row.meta.status === "ok" && (newest === null || x.row.meta.fetchedAt > newest)) newest = x.row.meta.fetchedAt;
+
   return {
     center,
     radius: radiusM,
@@ -89,6 +94,8 @@ export async function getPlaces(
     pending,
     incompleteTiles,
     stale,
+    detailsFrozenSince: frozenSince(gate, deps.now),
+    detailsNewestAt: newest,
   };
 }
 
@@ -96,13 +103,13 @@ export async function getPlace(deps: ServiceDeps, id: string): Promise<ApiPlace 
   const row = await placeById(deps.db, id);
   if (row) return toApiPlace(row, { full: true });
   if (!isDetailDue(await getMeta(deps.db, id), deps.now, id)) return null;
-  if (deps.now < (await placeBlockedUntil(deps.db))) return null;
+  if (!detailsAllowed(await detailGate(deps.db), deps.now)) return null;
   if (!(await deps.rateLimit())) return null;
   const r = await fetchPlaceDetail(deps.fetcher, id, { budget: new Budget(3), sleep: deps.sleep });
   if (!r.ok) {
     // 격자에 없는 ID의 실패는 기록하지 않는다 — 아무 숫자로 D1을 키울 수 없게
     if (r.reason !== "budget" && (await isInAnyTile(deps.db, id))) await saveDetailFailure(deps.db, id, r.reason, deps.now);
-    if (BLOCK_SIGNALS.has(r.reason)) await blockPlaceApi(deps.db, deps.now + PLACE_BLOCK_COOLDOWN_MS);
+    if (BLOCK_SIGNALS.has(r.reason)) await recordPlaceBlock(deps.db, deps.now);
     return null;
   }
   await saveDetail(deps.db, id, r.summary, r.detail, deps.now);

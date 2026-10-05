@@ -334,3 +334,16 @@ describe("R41 부족하면 알아서 완화", () => {
     expect(r2.places).toHaveLength(3);
   });
 });
+
+describe("R44 강등 모드에서도 뽑기", () => {
+  it("R44: 모든 가게의 detail이 null이어도 3곳을 뽑고 다양성 보정이 그대로 작동한다", () => {
+    // 상세가 없으면 가중치는 모두 0.5. k1을 뽑은 뒤 k2 = 0.175, c1 = 0.5 → 합 0.675, 0.3 × 0.675 = 0.2025 → c1
+    const ps = [apiPlace("k1", {}, null), apiPlace("k2", {}, null), apiPlace("c1", { group: "chinese" }, null)];
+    let i = 0;
+    const xs = [0, 0.3, 0];
+    const r = drawTrio(ps, 2, new Set(), () => xs[i++ % xs.length])!;
+    expect(ids(r.places)).toEqual(["k1", "c1", "k2"]);
+    // 필터도 상세 없는 곳을 통과시킨다 (평점·예산 조건이 꺼져 있으면)
+    expect(filterPlaces(ps, f(), NOON_MON)).toHaveLength(3);
+  });
+});

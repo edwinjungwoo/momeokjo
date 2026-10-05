@@ -133,6 +133,7 @@ CREATE INDEX idx_places_lat_lng ON places(lat, lng);
 
 -- 앱 전역 상태 (0003). place_blocked_until = 상세 API 쿨다운이 끝나는 시각(epoch ms, R10),
 -- tiles_changed_at / unfetched_cleared_at = Cron 미수집 확인 신호(R11)
+-- detail_mode = R44 강등 모드 {"mode":"frozen","since","until"}, block_count:{KST 날짜} = 그날 쿨다운 횟수(차단이 있는 날만, 기록할 때 지난 날 키를 지움)
 CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
 CREATE INDEX idx_places_status_fetched_at ON places(status, fetched_at); -- R11 만료 후보
 -- meta에는 R38 날짜별 D1 사용량도 둔다: d1_read:{UTC yyyy-mm-dd}, d1_written:{...} (90일 뒤 R35 정리 때 지움)
