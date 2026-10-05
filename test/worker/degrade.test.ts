@@ -1,6 +1,6 @@
 import { env } from "cloudflare:test";
 import { describe, expect, it } from "vitest";
-import { DETAIL_FREEZE_MS, DETAIL_OK_TTL_MS, DETAIL_JITTER_MS, PREWARM_RADIUS } from "../../shared/constants";
+import { DETAIL_FREEZE_MS, DETAIL_OK_TTL_MS, DETAIL_JITTER_MS, PLACE_BLOCK_COOLDOWN_MS, PREWARM_RADIUS } from "../../shared/constants";
 import { tileKeyOf, tilesCoveringCircle } from "../../shared/geo";
 import { HUBS, hubById } from "../../shared/hubs";
 import type { PlacesResponse } from "../../shared/types";
@@ -50,6 +50,26 @@ describe("R44 상세 차단 시 강등 모드", () => {
     // 24시간 뒤 자동 해제
     expect(frozenSince(g, NOW + DETAIL_FREEZE_MS - 1)).toBe(NOW);
     expect(frozenSince(g, NOW + DETAIL_FREEZE_MS)).toBeNull();
+  });
+
+  it("R44: 쿨다운이 이미 걸려 있는 동안의 차단 보고는 횟수에 넣지 않는다 (겹친 실행이 한 사고를 여러 번 세지 않게)", async () => {
+    const count = async () =>
+      Number(
+        (await env.DB.prepare("SELECT value FROM meta WHERE key = 'block_count:2027-01-15'").first<{ value: string }>())
+          ?.value ?? 0,
+      );
+    await recordPlaceBlock(env.DB, NOW - 2 * H);
+    await recordPlaceBlock(env.DB, NOW - 2 * H);
+    expect(await count()).toBe(1);
+    // 쿨다운은 여전히 마지막 보고 기준으로 걸린다
+    expect((await detailGate(env.DB)).blockedUntil).toBe(NOW - 2 * H + PLACE_BLOCK_COOLDOWN_MS);
+    // 쿨다운 안의 보고 3번(요청 보충·Cron·R13이 겹침)으로는 frozen이 되지 않는다
+    await recordPlaceBlock(env.DB, NOW - 2 * H + 1);
+    expect(await count()).toBe(1);
+    expect((await detailGate(env.DB)).frozen).toBeNull();
+    // 쿨다운이 끝난 뒤 다시 막히면 센다
+    await recordPlaceBlock(env.DB, NOW - 2 * H + 1 + PLACE_BLOCK_COOLDOWN_MS);
+    expect(await count()).toBe(2);
   });
 
   it("R44: frozen 중에 또 막히면 시작 시각은 두고 해제 시각만 늘린다", async () => {

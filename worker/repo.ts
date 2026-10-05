@@ -354,18 +354,21 @@ export const detailsAllowed = (g: DetailGate, now: number): boolean => now >= g.
  * R10/R44: 상세 API가 403/429를 줬을 때. 30분 쿨다운을 기록하고 오늘(KST) 차단 횟수를 1 올린다.
  * 같은 날 3번째부터는 24시간 frozen (이미 frozen이면 시작 시각은 두고 해제 시각만 늘린다).
  * 지난 날의 차단 횟수는 이때 함께 지운다 (차단이 있는 날만 한 행).
+ * 쿨다운이 이미 걸려 있는 동안의 보고(요청 보충·Cron·R13이 겹친 같은 사고)는 쿨다운만 늘리고 횟수에는 넣지 않는다 —
+ * 그래서 횟수 UPSERT가 쿨다운 기록보다 먼저, 이전 쿨다운이 끝났을 때만 돈다.
  */
 export async function recordPlaceBlock(db: D1Database, now: number): Promise<void> {
   const key = `${BLOCK_COUNT_PREFIX}${kstDay(now)}`;
-  const [, , counted] = await db.batch<{ value: string }>([
-    db.prepare(META_UPSERT).bind(BLOCKED_KEY, String(now + PLACE_BLOCK_COOLDOWN_MS)),
-    db.prepare("DELETE FROM meta WHERE key LIKE ? AND key < ?").bind(`${BLOCK_COUNT_PREFIX}%`, key),
+  const [counted] = await db.batch<{ value: string }>([
     db
       .prepare(
-        `INSERT INTO meta (key, value) VALUES (?, '1')
+        `INSERT INTO meta (key, value) SELECT ?, '1'
+         WHERE COALESCE((SELECT CAST(value AS INTEGER) FROM meta WHERE key = ?), 0) <= ?
          ON CONFLICT(key) DO UPDATE SET value = CAST(meta.value AS INTEGER) + 1 RETURNING value`,
       )
-      .bind(key),
+      .bind(key, BLOCKED_KEY, now),
+    db.prepare("DELETE FROM meta WHERE key LIKE ? AND key < ?").bind(`${BLOCK_COUNT_PREFIX}%`, key),
+    db.prepare(META_UPSERT).bind(BLOCKED_KEY, String(now + PLACE_BLOCK_COOLDOWN_MS)),
   ]);
   const count = Number(counted.results[0]?.value ?? 0);
   if (count < DETAIL_FREEZE_AFTER_BLOCKS) return;
