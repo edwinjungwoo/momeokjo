@@ -45,10 +45,12 @@ describe("admin", () => {
 
   it("R11: 실행(5분)마다 시작 거점을 돌려서 모든 거점이 차례로 먼저 예산을 쓴다", () => {
     const FIVE_MIN = 5 * 60_000;
-    expect(hubOrder(HUBS, 0).map((h) => h.id)).toEqual(["bongeunsa", "ddp", "pangyo"]);
-    expect(hubOrder(HUBS, FIVE_MIN).map((h) => h.id)).toEqual(["ddp", "pangyo", "bongeunsa"]);
-    expect(hubOrder(HUBS, 2 * FIVE_MIN + 59_000).map((h) => h.id)).toEqual(["pangyo", "bongeunsa", "ddp"]);
-    expect(hubOrder(HUBS, 3 * FIVE_MIN).map((h) => h.id)).toEqual(["bongeunsa", "ddp", "pangyo"]);
+    const ids = HUBS.map((h) => h.id);
+    const rotated = (k: number) => [...ids.slice(k % ids.length), ...ids.slice(0, k % ids.length)];
+    expect(hubOrder(HUBS, 0).map((h) => h.id)).toEqual(rotated(0));
+    expect(hubOrder(HUBS, FIVE_MIN).map((h) => h.id)).toEqual(rotated(1));
+    expect(hubOrder(HUBS, 2 * FIVE_MIN + 59_000).map((h) => h.id)).toEqual(rotated(2));
+    expect(hubOrder(HUBS, ids.length * FIVE_MIN).map((h) => h.id)).toEqual(rotated(0));
   });
 
   it("R11: Cron은 모든 거점을 1000m로, 거점끼리 나눠 쓰는 한 예산(40회) 안에서 시작 거점부터 수집한다", async () => {

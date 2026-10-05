@@ -9,6 +9,8 @@ export const HUBS: Hub[] = [
   { id: "ddp", name: "동대문역사문화공원역", lat: 37.5651, lng: 127.00749 },
   // 신분당선·경강선 출구 사이
   { id: "pangyo", name: "판교역", lat: 37.394777, lng: 127.11159 },
+  { id: "naebang", name: "내방역", lat: 37.487659, lng: 126.9936 },
+  { id: "gwacheon", name: "정부과천청사역", lat: 37.426505, lng: 126.989868 },
 ];
 
 export const DEFAULT_HUB_ID = "bongeunsa";

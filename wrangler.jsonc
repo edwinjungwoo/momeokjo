@@ -10,7 +10,9 @@
       "binding": "DB",
       "database_name": "momeokjo",
       "database_id": "18eb38e3-a7a4-472f-ac40-0080fb7ff87e",
-      "migrations_dir": "migrations"
+      "migrations_dir": "migrations",
+      // 로컬 개발 서버도 운영 D1을 그대로 쓴다 (데이터 단일 원천). 테스트는 vitest.config.ts에서 remoteBindings: false로 격리.
+      "remote": true
     }
   ],
   "ratelimits": [{ "name": "RATE_LIMITER", "namespace_id": "1001", "simple": { "limit": 10, "period": 60 } }],
