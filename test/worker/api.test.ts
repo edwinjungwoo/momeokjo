@@ -265,6 +265,17 @@ describe("GET /api/places — 응답 캐시와 목록 원소", () => {
     expect(await (await callApp(s.app, Q)).text()).toBe(fast);
   });
 
+  it("R12/D-8: 예전 판(LIST_JSON_VERSION이 다름)이거나 비었거나 깨진 조각은 쓰지 않고 열에서 만든다 — 본문은 글자까지 같다", async () => {
+    const s = setup();
+    await callApp(s.app, Q);
+    const fast = await (await callApp(s.app, Q)).text();
+    const bogus = '{"id":"bogus","name":"옛 모양"}';
+    for (const stale of [bogus, `v0:${bogus}`, `v2:${bogus}`, "", "v1:", "v1:garbage", `v1:[${bogus}]`]) {
+      await env.DB.prepare("UPDATE places SET list_json = ?").bind(stale).run();
+      expect(await (await callApp(s.app, Q)).text(), JSON.stringify(stale)).toBe(fast);
+    }
+  });
+
   it("R12: 응답·목록 원소·detail에는 정해진 키만 싣는다 (목록 크기 회귀 방지)", async () => {
     const s = setup();
     await callApp(s.app, Q);

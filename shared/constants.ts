@@ -26,6 +26,13 @@ export const PLACE_BLOCK_COOLDOWN_MS = 30 * 60_000;
 export const DETAIL_FREEZE_AFTER_BLOCKS = 3;
 export const DETAIL_FREEZE_MS = 24 * HOUR;
 
+/**
+ * R12 places.list_json(목록 원소 조각)의 판. 조각은 `v{판}:` + JSON으로 저장하고, 목록은 지금 판 조각만 쓴다 (worker/present.ts).
+ * 주의: 목록 원소 출력(toApiPlace 목록 모양, LIST_MENUS, shared/friendly.ts 판단 등)이 바뀌면 이 값을 올린다 —
+ * 올리면 예전 조각은 목록에서 무시되고(열에서 만든다) Cron·관리자 백필이 새 판으로 다시 쓴다.
+ */
+export const LIST_JSON_VERSION = 1;
+
 export const MAX_QUAD_DEPTH = 4;
 export const KAKAO_PAGE_SIZE = 15;
 export const KAKAO_MAX_RESULTS = 45;

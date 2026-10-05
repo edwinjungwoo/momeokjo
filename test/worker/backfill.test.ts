@@ -5,6 +5,7 @@ import { tileKeyOf } from "../../shared/geo";
 import { HUBS } from "../../shared/hubs";
 import { utcDay } from "../../shared/kst";
 import { createApp } from "../../worker/app";
+import { LIST_JSON_PREFIX } from "../../worker/present";
 import { ADMIN_BACKFILL_DEFAULT, ADMIN_BACKFILL_MAX, ADMIN_BACKFILL_SQL, replaceTilePlaces, saveDetailFailure } from "../../worker/repo";
 import { callApp } from "../helpers/callApp";
 import { seedPlace } from "../helpers/places";
@@ -77,7 +78,7 @@ describe("admin backfill (list_json)", () => {
     await replaceTilePlaces(env.DB, tileKeyOf(DDP), ["a", "b", "keep", "fail", "nodetail"], NOW, false);
     await seedPlace(env.DB, "outside", ASEM.lat, ASEM.lng, { now: NOW - 1000 }); // 어느 거점 격자에도 없다
     const want = await clearAll();
-    await env.DB.prepare(`UPDATE places SET list_json = '{"keep":1}' WHERE id = 'keep'`).run();
+    await env.DB.prepare("UPDATE places SET list_json = ? WHERE id = 'keep'").bind(`${LIST_JSON_PREFIX}{"keep":1}`).run();
 
     const res = await backfill(makeApp());
     expect(res.status).toBe(200);
@@ -87,10 +88,27 @@ describe("admin backfill (list_json)", () => {
     expect(r.rowsWritten).toBeGreaterThan(0);
     expect(await listJson("a")).toBe(want.get("a"));
     expect(await listJson("b")).toBe(want.get("b"));
-    expect(await listJson("keep")).toBe('{"keep":1}');
+    expect(await listJson("keep")).toBe(`${LIST_JSON_PREFIX}{"keep":1}`);
     expect(await listJson("fail")).toBeNull();
     expect(await listJson("nodetail")).toBeNull();
     expect(await listJson("outside")).toBeNull();
+  });
+
+  it("R12: 판이 다르거나(LIST_JSON_VERSION) 깨진 조각도 Cron처럼 다시 쓰고, 지금 판 조각은 두며, 다시 부르면 0", async () => {
+    await seedIn(DDP, ["old", "v0", "v2", "corrupt", "keep", "null"]);
+    const want = await clearAll();
+    const item = want.get("old")!.slice(LIST_JSON_PREFIX.length);
+    const set = (id: string, v: string | null) => env.DB.prepare("UPDATE places SET list_json = ? WHERE id = ?").bind(v, id).run();
+    await set("old", item);
+    await set("v0", `v0:${item}`);
+    await set("v2", `v2:${item}`);
+    await set("corrupt", "v1:garbage");
+    await set("keep", `${LIST_JSON_PREFIX}{"keep":1}`);
+    const app = makeApp();
+    expect(await (await backfill(app, "?hub=ddp")).json<Res>()).toMatchObject({ filled: 5, remaining: 0 });
+    for (const id of ["old", "v0", "v2", "corrupt", "null"]) expect(await listJson(id), id).toBe(want.get(id));
+    expect(await listJson("keep")).toBe(`${LIST_JSON_PREFIX}{"keep":1}`);
+    expect(await (await backfill(app, "?hub=ddp")).json<Res>()).toMatchObject({ filled: 0, remaining: 0, rowsWritten: 0 });
   });
 
   it("R12: 두 번째 호출은 채울 것이 없어 0 (쓰기 0)", async () => {

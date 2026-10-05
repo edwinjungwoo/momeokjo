@@ -1,9 +1,14 @@
+import { LIST_JSON_VERSION } from "../shared/constants";
 import { groupFriendly, soloFriendly } from "../shared/friendly";
 import { haversine, walkMinutes } from "../shared/geo";
 import type { ApiPlace, LatLng, PlacesResponse } from "../shared/types";
 import type { PlaceRow } from "./repo";
 
-/** 목록 응답에 싣는 메뉴 수 (카드를 열면 단건 조회로 전부 받는다) */
+/**
+ * 목록 응답에 싣는 메뉴 수 (카드를 열면 단건 조회로 전부 받는다).
+ * 주의: 이 값이나 toApiPlace의 목록 모양(키·값·순서)을 바꾸면 LIST_JSON_VERSION(shared/constants.ts)을 올린다 —
+ * 저장된 places.list_json 조각이 예전 모양 그대로 목록에 나가지 않게.
+ */
 export const LIST_MENUS = 3;
 
 /** R45: 좌표는 소수 6자리(약 0.1m)면 충분하다. 카카오 원본의 17자리는 압축이 안 돼서 1000m 목록 gzip의 1할을 차지했다 */
@@ -50,6 +55,21 @@ export function toApiPlace(
  * 목록은 이 조각에 withDistance로 거리만 붙여서 JSON 열 4개를 다시 읽지(JSON.parse) 않는다.
  */
 export const listItemJson = (row: PlaceRow): string => JSON.stringify(toApiPlace(row));
+
+/** places.list_json에 저장하는 판 접두어. 주의: 목록 원소 출력이 바뀌면 LIST_JSON_VERSION을 올린다 */
+export const LIST_JSON_PREFIX = `v${LIST_JSON_VERSION}:`;
+/** 지금 판으로 쓸 수 있는 조각의 시작 (판 접두어 + '{') — SQL(substr)과 JS가 같은 값으로 판단한다 */
+export const LIST_JSON_HEAD = `${LIST_JSON_PREFIX}{`;
+/** 저장할 조각: 판 접두어 + 목록 원소 JSON (saveDetail, Cron·관리자 백필) */
+export const storedListJson = (row: PlaceRow): string => LIST_JSON_PREFIX + listItemJson(row);
+/**
+ * 저장된 조각이 지금 판이고 '{'로 시작하면 목록 원소 JSON, 아니면 null (예전 판·빈 값·깨진 값 → 열에서 다시 만든다, D-8)
+ */
+export function usableListJson(stored: string | null | undefined): string | null {
+  return stored?.startsWith(LIST_JSON_HEAD) ? stored.slice(LIST_JSON_PREFIX.length) : null;
+}
+/** SQL에서 같은 판단: 지금 판 조각이 있는 행인가 (col이 NULL이면 NULL — CASE에서 거짓으로 친다) */
+export const usableListJsonSql = (col: string) => `substr(${col}, 1, ${LIST_JSON_HEAD.length}) = '${LIST_JSON_HEAD}'`;
 
 /** 조각 앞에 거리·도보 분을 붙인다 (값은 toApiPlace(row, { distance })와 같다 — 키 순서만 다르다) */
 export function withDistance(itemJson: string, distanceM: number): string {

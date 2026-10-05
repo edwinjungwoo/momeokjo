@@ -4,7 +4,7 @@
 // 두 길을 잰다: list_json 있음(0005 뒤 저장된 행) / 없음(예전 행 — 열 4개 JSON.parse → toApiPlace → stringify).
 // 실행: node scripts/bench-places.mjs [곳 수=2000] [반복=60]
 // Task 28b: node scripts/bench-places.mjs backfill [반복=60] — 관리자 백필(backfillListJsonIn) 한 번이 행 수별로 쓰는 CPU
-//   (list_json이 없는 행 → toRow → listItemJson → UPDATE 묶음 JSON). D1 결과 JSON 해석(workerd가 하는 일)의 근사도 따로 잰다.
+//   (list_json이 없는 행 → toRow → storedListJson → UPDATE 묶음 JSON). D1 결과 JSON 해석(workerd가 하는 일)의 근사도 따로 잰다.
 import { build as esbuild } from "esbuild";
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
@@ -22,7 +22,7 @@ const out = await esbuild({
   stdin: {
     contents: `export { getPlaces } from "./worker/placesService";
       export { parseDetail } from "./worker/detailParser";
-      export { placesBody, listItemJson } from "./worker/present";
+      export { placesBody, storedListJson, usableListJsonSql } from "./worker/present";
       export { detailRow, backfillListJsonIn, ADMIN_BACKFILL_SQL, ADMIN_BACKFILL_DEFAULT, ADMIN_BACKFILL_MAX } from "./worker/repo";
       export { categoryGroup } from "./shared/category";
       export { tileKeyOf, boundingBox, haversine } from "./shared/geo";`,
@@ -67,7 +67,7 @@ for (let i = 0; inCircle < N; i++) {
     fetched_at: NOW - (i % 1000) * 60_000,
   });
   const r = rows[rows.length - 1];
-  r.list_json = mod.listItemJson(mod.detailRow(id, { ...s, name: r.name, lat, lng, photoUrl: r.photo_url }, { ...d, menus }, r.fetched_at));
+  r.list_json = mod.storedListJson(mod.detailRow(id, { ...s, name: r.name, lat, lng, photoUrl: r.photo_url }, { ...d, menus }, r.fetched_at));
 }
 const tileOf = new Map(rows.map((r) => [r.id, mod.tileKeyOf(r)]));
 const median = (xs) => [...xs].sort((a, b) => a - b)[Math.floor(xs.length / 2)];
@@ -114,7 +114,7 @@ if (BACKFILL) {
       await mod.backfillListJsonIn(backfillDb, keys, limit);
       total.push(performance.now() - t0);
     }
-    // 보낸 조각이 저장된 조각(saveDetail과 같은 detailRow → listItemJson)과 글자까지 같은지
+    // 보낸 조각이 저장된 조각(saveDetail과 같은 detailRow → storedListJson)과 글자까지 같은지
     const byId = new Map(rows.map((r) => [r.id, r.list_json]));
     const sentFills = sent.flatMap((st) => JSON.parse(st.args[0]));
     const sameJson = sentFills.length === limit && sentFills.every(([id, , json]) => json === byId.get(id));
@@ -146,7 +146,7 @@ const fakeDb = {
               .map((r) => ({ id: r.id, tile_key: tileOf.get(r.id), status: "ok", fetched_at: r.fetched_at, fail_reason: null })),
           };
         }
-        if (sql.includes("CASE WHEN list_json IS NULL")) return { results: rows.map((r) => (withJson ? { ...r } : { ...r, list_json: null })) };
+        if (sql.includes(`CASE WHEN ${mod.usableListJsonSql("list_json")} THEN list_json END`)) return { results: rows.map((r) => (withJson ? { ...r } : { ...r, list_json: null })) };
         if (sql.includes("FROM meta")) return { results: [] };
         throw new Error(`unexpected sql: ${sql}`);
       },

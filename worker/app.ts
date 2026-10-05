@@ -77,8 +77,8 @@ export function placesCacheTtl(res: PlacesResponse | PlacesMeta): number | null 
   if (res.pending === 0 || res.detailsPaused || res.detailsFrozenSince !== null) return PLACES_CACHE_MS;
   return PLACES_PENDING_CACHE_MS;
 }
-/** 응답 형식이 바뀌면 올린다 (예전 형식의 캐시를 쓰지 않게) */
-export const PLACES_CACHE_VERSION = "5";
+/** 응답 형식이 바뀌면 올린다 (예전 형식의 캐시를 쓰지 않게). 6: list_json 판(LIST_JSON_VERSION) 도입 */
+export const PLACES_CACHE_VERSION = "6";
 const EXPIRES_HEADER = "x-mmj-expires";
 /** R42: 거점마다 키 하나 (반경은 키에 넣지 않는다 — 본문은 언제나 1000m) */
 export const placesCacheKey = (hub: string) =>

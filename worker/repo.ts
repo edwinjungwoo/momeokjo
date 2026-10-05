@@ -1,12 +1,12 @@
 import { categoryGroup } from "../shared/category";
 import {
-  DETAIL_FAIL_TTL_MS, DETAIL_FREEZE_AFTER_BLOCKS, DETAIL_FREEZE_MS, DETAIL_JITTER_MS, DETAIL_OK_TTL_MS,
+  DETAIL_FAIL_TTL_MS, DETAIL_FREEZE_AFTER_BLOCKS, DETAIL_FREEZE_MS, DETAIL_JITTER_MS, DETAIL_OK_TTL_MS, LIST_JSON_VERSION,
   PLACE_BLOCK_COOLDOWN_MS, TILE_TTL_MS,
 } from "../shared/constants";
 import { kstDay } from "../shared/kst";
 import { haversine, tileRect, tilesCoveringCircle } from "../shared/geo";
 import type { CategoryGroup, LatLng, Place, PlaceDetail, PlaceSummary, Rect, StoredDetail } from "../shared/types";
-import { listItemJson } from "./present";
+import { listItemJson, storedListJson, usableListJson, usableListJsonSql } from "./present";
 
 export type DetailMeta = { status: "ok" | "failed"; fetchedAt: number; reason: string | null } | null;
 export type PlaceRow = { place: Place; detail: StoredDetail; meta: NonNullable<DetailMeta> };
@@ -32,7 +32,7 @@ type DbRow = {
   rating: number | null; review_count: number | null; price: number | null;
   menus_json: string | null; hours_json: string | null; strengths_json: string | null; tags_json: string | null;
   bookable: number | null; fail_reason: string | null; fetched_at: number;
-  /** 0005: 목록 원소 조각 (예전 행은 NULL) */
+  /** 0005: 목록 원소 조각 `v{LIST_JSON_VERSION}:{...}` (예전 행은 NULL이거나 예전 판) */
   list_json?: string | null;
 };
 
@@ -344,15 +344,20 @@ export async function placesInBox(db: D1Database, box: Rect, inTiles?: ReadonlyS
 /** R12 목록용 행: 거리·필터·detailsNewestAt에 쓰는 값과 목록 원소 조각(json) */
 export type ListRow = { id: string; lat: number; lng: number; group: CategoryGroup; status: "ok" | "failed"; fetchedAt: number; json: string };
 
-/** list_json이 있으면 무거운 열(메뉴·영업시간·강점·태그 JSON 등)은 받지 않는다 — D1 결과 크기와 Worker CPU를 아낀다 */
-const heavy = (col: string) => `CASE WHEN list_json IS NULL THEN ${col} END AS ${col}`;
-const LIST_SELECT = `SELECT id, status, name, category_name, category_group, lat, lng, fetched_at, list_json,
+/**
+ * 지금 판 조각(list_json)이 있으면 무거운 열(메뉴·영업시간·강점·태그 JSON 등)은 받지 않는다 — D1 결과 크기와 Worker CPU를 아낀다.
+ * 조각이 없거나 예전 판·깨진 값이면 조각 대신 열을 받는다 (판단은 usableListJson과 같은 접두어 비교)
+ */
+const USABLE = usableListJsonSql("list_json");
+const heavy = (col: string) => `CASE WHEN ${USABLE} THEN NULL ELSE ${col} END AS ${col}`;
+const LIST_SELECT = `SELECT id, status, name, category_name, category_group, lat, lng, fetched_at,
+  CASE WHEN ${USABLE} THEN list_json END AS list_json,
   ${["address", "phone", "photo_url", "rating", "review_count", "price", "menus_json", "hours_json", "strengths_json", "tags_json", "bookable", "fail_reason"].map(heavy).join(", ")}
   FROM places WHERE name IS NOT NULL AND lat IS NOT NULL AND lng IS NOT NULL`;
 
 /**
  * R12 목록: placesInBox와 같은 행을 고르되, 미리 만든 목록 원소 조각(list_json)을 그대로 쓴다.
- * 조각이 없는 예전 행(0005 전)만 열에서 만든다 (toRow → listItemJson, 결과는 같다).
+ * 지금 판 조각이 없는 행(0005 전, 예전 LIST_JSON_VERSION, 깨진 값)만 열에서 만든다 (toRow → listItemJson, 결과는 같다).
  */
 export async function listRowsInBox(db: D1Database, box: Rect, inTiles: ReadonlySet<string>): Promise<ListRow[]> {
   const r = await db
@@ -369,7 +374,7 @@ export async function listRowsInBox(db: D1Database, box: Rect, inTiles: Readonly
       group: (x.category_group ?? "etc") as CategoryGroup,
       status: x.status === "ok" ? "ok" : "failed",
       fetchedAt: x.fetched_at,
-      json: x.list_json ?? listItemJson(toRow(x)),
+      json: usableListJson(x.list_json) ?? listItemJson(toRow(x)),
     });
   }
   return out;
@@ -377,14 +382,16 @@ export async function listRowsInBox(db: D1Database, box: Rect, inTiles: Readonly
 
 /** Cron이 한 번에 채우는 list_json 수 (쓰기 ≤ 200행/실행) */
 export const LIST_BACKFILL_LIMIT = 200;
-const LIST_BACKFILL_KEY = "list_json_backfill";
+/** 판마다 커서가 따로다 — LIST_JSON_VERSION을 올리면 Cron이 places를 처음부터 다시 훑어 새 판으로 쓴다 */
+const LIST_BACKFILL_KEY = `list_json_backfill:v${LIST_JSON_VERSION}`;
 const LIST_BACKFILL_DONE = "done";
 
 /**
- * 0005 전에 저장된 행의 list_json을 rowid 순으로 LIST_BACKFILL_LIMIT행씩 채운다. 채운 수를 돌려준다.
- * 커서(meta list_json_backfill = 마지막 rowid)로 이어 읽어서 실행마다 places를 처음부터 훑지 않고,
- * 끝까지 읽으면 "done"을 남겨 그 뒤로는 meta 1행만 읽는다 (새 행은 saveDetail이 처음부터 채운다).
- * 그 사이 상세가 다시 저장된 행은 건드리지 않는다 (fetched_at이 같고 아직 NULL일 때만 쓴다).
+ * 지금 판 조각이 없는 행(0005 전 NULL, 예전 LIST_JSON_VERSION, 깨진 값)의 list_json을 rowid 순으로
+ * LIST_BACKFILL_LIMIT행씩 다시 쓴다. 쓴 수를 돌려준다.
+ * 커서(meta list_json_backfill:v{판} = 마지막 rowid)로 이어 읽어서 실행마다 places를 처음부터 훑지 않고,
+ * 끝까지 읽으면 "done"을 남겨 그 뒤로는 meta 1행만 읽는다 (새 행은 saveDetail이 처음부터 지금 판으로 쓴다).
+ * 그 사이 상세가 다시 저장된 행은 건드리지 않는다 (fetched_at이 같고 아직 지금 판이 아닐 때만 쓴다).
  */
 export async function backfillListJson(db: D1Database): Promise<number> {
   const cur = await db.prepare("SELECT value FROM meta WHERE key = ?").bind(LIST_BACKFILL_KEY).first<{ value: string }>();
@@ -405,13 +412,19 @@ export async function backfillListJson(db: D1Database): Promise<number> {
 
 type ListJsonFill = readonly [id: string, fetchedAt: number, json: string];
 
-/** 표시 정보가 있고 조각이 없는 행의 조각을 만든다 — Cron과 관리자 백필이 같은 직렬화(toRow → listItemJson)를 쓴다 */
+/**
+ * 표시 정보가 있고 지금 판 조각이 없는 행의 조각을 만든다 — Cron과 관리자 백필이 saveDetail과 같은 직렬화
+ * (toRow → storedListJson)를 쓴다
+ */
 const listJsonFill = (rows: DbRow[]): ListJsonFill[] =>
   rows
-    .filter((x) => !x.list_json && x.name !== null && x.lat !== null && x.lng !== null)
-    .map((x) => [x.id, x.fetched_at, listItemJson(toRow(x))] as const);
+    .filter((x) => usableListJson(x.list_json) === null && x.name !== null && x.lat !== null && x.lng !== null)
+    .map((x) => [x.id, x.fetched_at, storedListJson(toRow(x))] as const);
 
-/** 100행마다 UPDATE 한 문장. 그 사이 상세가 다시 저장된 행은 건드리지 않는다 (fetched_at이 같고 아직 NULL일 때만) */
+/** 지금 판 조각이 없는 행 (NULL·예전 판·깨진 값) — col이 NULL이면 substr 비교도 NULL이라 따로 본다 */
+const staleListJsonSql = (col: string) => `(${col} IS NULL OR NOT ${usableListJsonSql(col)})`;
+
+/** 100행마다 UPDATE 한 문장. 그 사이 상세가 다시 저장된 행은 건드리지 않는다 (fetched_at이 같고 아직 지금 판이 아닐 때만) */
 function listJsonUpdates(db: D1Database, fill: ListJsonFill[]): D1PreparedStatement[] {
   const stmts: D1PreparedStatement[] = [];
   for (let i = 0; i < fill.length; i += 100) {
@@ -420,7 +433,7 @@ function listJsonUpdates(db: D1Database, fill: ListJsonFill[]): D1PreparedStatem
         .prepare(
           `UPDATE places SET list_json = json_extract(u.value, '$[2]') FROM json_each(?) AS u
            WHERE places.id = json_extract(u.value, '$[0]') AND places.fetched_at = json_extract(u.value, '$[1]')
-             AND places.list_json IS NULL`,
+             AND ${staleListJsonSql("places.list_json")}`,
         )
         .bind(JSON.stringify(fill.slice(i, i + 100))),
     );
@@ -439,11 +452,12 @@ export const ADMIN_BACKFILL_MAX = 300;
 /** 관리자 백필 후보: 격자 기록에서 출발해 PK로 가게를 찾는다 (CROSS JOIN으로 순서를 고정 — places 상태 인덱스를 훑지 않게) */
 export const ADMIN_BACKFILL_SQL = `SELECT p.* FROM tile_places tp CROSS JOIN places p ON p.id = tp.place_id
   WHERE tp.tile_key IN (SELECT value FROM json_each(?))
-    AND p.list_json IS NULL AND p.status = 'ok' AND p.name IS NOT NULL AND p.lat IS NOT NULL AND p.lng IS NOT NULL
+    AND ${staleListJsonSql("p.list_json")} AND p.status = 'ok' AND p.name IS NOT NULL AND p.lat IS NOT NULL AND p.lng IS NOT NULL
   LIMIT ?`;
 
 /**
- * 배포 직후 관리자 백필: 주어진 격자(거점)에 기록된 가게 중 list_json이 없는 ok 행을 limit개까지 채운다.
+ * 배포 직후 관리자 백필: 주어진 격자(거점)에 기록된 가게 중 지금 판 list_json이 없는(NULL·예전 판·깨진 값) ok 행을
+ * limit개까지 채운다.
  * Cron 백필(backfillListJson)과 같은 직렬화·같은 UPDATE를 쓰고, 커서는 쓰지 않는다 (채운 행은 다음 조회에서 빠진다).
  * 격자 기록(tile_places)에서 출발해 그 거점 가게만 읽는다 (places 전체를 훑지 않는다 — ADMIN_BACKFILL_SQL).
  * limit + 1행을 읽어서 남은 것이 있는지(more) 알려 준다. filled는 실제로 바뀐 행 수다.
@@ -503,7 +517,7 @@ export async function saveDetail(
       d.rating, d.reviewCount, d.price, JSON.stringify(d.menus), d.hours ? JSON.stringify(d.hours) : null,
       JSON.stringify(d.strengths), JSON.stringify(d.tags), d.bookable === null ? null : d.bookable ? 1 : 0, now,
       // R12: 목록 원소 조각을 같은 행에 같이 쓴다 (쓰기 행 수는 그대로)
-      listItemJson(detailRow(id, s, d, now)),
+      storedListJson(detailRow(id, s, d, now)),
     )
     .run();
 }

@@ -10,7 +10,7 @@ import {
   placeById, placesByIds, placesInBox, replaceTilePlaces, saveDetail, saveDetailFailure, tilePlaceStates,
   EXPIRED_SCAN_LIMIT, EXPIRED_SCAN_SQL, LIST_BACKFILL_LIMIT, backfillListJson,
 } from "../../worker/repo";
-import { listItemJson } from "../../worker/present";
+import { LIST_JSON_PREFIX, storedListJson } from "../../worker/present";
 import { makeSummary, sampleDetail, seedPlace } from "../helpers/places";
 import { recordingDb } from "../helpers/recordDb";
 
@@ -26,6 +26,9 @@ async function seedMany(rows: [string, number][]) {
      SELECT json_extract(value, '$[0]'), 'ok', '가게', '음식점 > 한식', 'korean', ?, ?, json_extract(value, '$[1]') FROM json_each(?)`,
   ).bind(ASEM.lat, ASEM.lng, JSON.stringify(rows)).run();
 }
+
+const listJsonOf = async (id: string) =>
+  (await env.DB.prepare("SELECT list_json FROM places WHERE id = ?").bind(id).first<{ list_json: string | null }>())?.list_json ?? null;
 
 describe("repo", () => {
   it("R4: 격자의 ID 목록을 기록하고, 다시 기록하면 통째로 바뀐다 (중복은 하나로)", async () => {
@@ -182,7 +185,7 @@ describe("repo", () => {
   it("R12: 상세를 저장하면 목록 원소 조각(list_json, 거리 없음)도 같은 행에 같이 쓴다", async () => {
     await seedPlace(env.DB, "1001", ASEM.lat, ASEM.lng, { now: NOW });
     const r = await env.DB.prepare("SELECT list_json FROM places WHERE id = '1001'").first<{ list_json: string }>();
-    expect(r?.list_json).toBe(listItemJson((await placeById(env.DB, "1001"))!));
+    expect(r?.list_json).toBe(storedListJson((await placeById(env.DB, "1001"))!));
     // 실패 기록은 조각을 건드리지 않는다 (표시 정보가 그대로 남으므로)
     await saveDetailFailure(env.DB, "1001", "http_500", NOW + 1);
     const after = await env.DB.prepare("SELECT list_json FROM places WHERE id = '1001'").first<{ list_json: string }>();
@@ -211,6 +214,29 @@ describe("repo", () => {
     const { db, log } = recordingDb(env.DB);
     expect(await backfillListJson(db)).toBe(0);
     expect(log.reduce((n, x) => n + x.read, 0)).toBeLessThanOrEqual(2);
+  });
+
+  it("R12: Cron 백필은 판이 다르거나 깨진 조각도 다시 쓰고(NULL만이 아니다) 지금 판 조각은 두며, 판마다 처음부터 훑는다", async () => {
+    const ids = ["old", "v0", "v2", "empty", "corrupt", "keep", "null"];
+    for (const id of ids) await seedPlace(env.DB, id, ASEM.lat, ASEM.lng, { now: NOW });
+    const want = new Map(
+      (await env.DB.prepare("SELECT id, list_json FROM places").all<{ id: string; list_json: string }>()).results.map((x) => [x.id, x.list_json]),
+    );
+    const item = want.get("old")!.slice(LIST_JSON_PREFIX.length);
+    const set = (id: string, v: string | null) => env.DB.prepare("UPDATE places SET list_json = ? WHERE id = ?").bind(v, id).run();
+    await set("old", item); // 0005 직후 판 없는 조각
+    await set("v0", `v0:${item}`);
+    await set("v2", `v2:${item}`);
+    await set("empty", "");
+    await set("corrupt", "v1:garbage");
+    await set("keep", `${LIST_JSON_PREFIX}{"keep":1}`);
+    await set("null", null);
+    // 예전 판의 커서가 끝났어도(이전 판 "done") 이번 판은 처음부터 훑는다
+    await env.DB.prepare("INSERT INTO meta (key, value) VALUES ('list_json_backfill', 'done')").run();
+    expect(await backfillListJson(env.DB)).toBe(6);
+    for (const id of ids.filter((x) => x !== "keep")) expect(await listJsonOf(id), id).toBe(want.get(id));
+    expect(await listJsonOf("keep")).toBe(`${LIST_JSON_PREFIX}{"keep":1}`);
+    expect(await backfillListJson(env.DB)).toBe(0);
   });
 
   it("R11: 격자 ID를 기록하면 tiles_changed_at이 그 시각으로 바뀐다 (Cron 미수집 확인 신호)", async () => {

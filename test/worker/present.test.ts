@@ -1,7 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { ASEM } from "../../shared/constants";
 import { haversine } from "../../shared/geo";
-import { LIST_MENUS, listItemJson, placesBody, toApiPlace, withDistance } from "../../worker/present";
+import { LIST_JSON_VERSION } from "../../shared/constants";
+import {
+  LIST_JSON_PREFIX, LIST_MENUS, listItemJson, placesBody, storedListJson, toApiPlace, usableListJson, withDistance,
+} from "../../worker/present";
 import type { PlaceRow } from "../../worker/repo";
 import { makeSummary, sampleDetail } from "../helpers/places";
 
@@ -62,5 +65,18 @@ describe("present", () => {
     const parsed = JSON.parse(body);
     expect(parsed).toEqual({ ...meta, places: [toApiPlace(r, { distance: 111 }), toApiPlace(r, { distance: 222 })] });
     expect(JSON.parse(placesBody(meta, []))).toEqual({ ...meta, places: [] });
+  });
+
+  it("R12: list_json은 판(LIST_JSON_VERSION)을 앞에 붙여 저장하고, 지금 판이고 '{'로 시작하는 조각만 목록에 쓴다", () => {
+    expect(LIST_JSON_VERSION).toBe(1);
+    expect(LIST_JSON_PREFIX).toBe("v1:");
+    const r = row("음식점 > 한식", []);
+    const item = listItemJson(r);
+    expect(storedListJson(r)).toBe(`v1:${item}`);
+    expect(usableListJson(storedListJson(r))).toBe(item);
+    // 예전 판(접두어 없음·v0·다음 판), 비었거나 깨진 조각은 쓰지 않는다 (열에서 다시 만든다)
+    for (const bad of [null, undefined, "", item, `v0:${item}`, `v2:${item}`, "v1:", "v1:x", `v1:[${item}]`, `v1: ${item}`]) {
+      expect(usableListJson(bad), String(bad)).toBeNull();
+    }
   });
 });
