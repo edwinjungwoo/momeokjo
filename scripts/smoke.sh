@@ -5,7 +5,9 @@
 # 관리자: 토큰을 화면·기록에 남기지 않게 읽어서 넘긴다 →  read -rs ADMIN_TOKEN && export ADMIN_TOKEN && scripts/smoke.sh
 #         (토큰이 있으면 거점마다 감사 Q1·Q2를 더 본다. 토큰 값은 출력하지 않고, curl 인자에도 넣지 않는다)
 #
-# 요청 수: 기본 20번 (+ ADMIN_TOKEN이 있으면 거점 수만큼). IP당 분당 10회 제한과 카카오 쿼터를 지키려고
+# 요청 수: 기본 20번 (+ ADMIN_TOKEN이 있으면 거점 수만큼). 읽기 경로에는 IP 제한이 없지만, 목록 요청이 카카오 수집을
+#   새로 부르면 그 수집은 IP당 분당 10회 제한(RATE_LIMITER)과 카카오 쿼터를 쓴다. 관리자 인증 실패 2번은
+#   admin:<IP> 제한(분당 10회)을 쓴다. 그래서 요청을 아낀다
 #   - 목록은 거점마다 한 번만: 봉은사역은 화면과 같은 1000m(R42), 나머지는 500m
 #   - 정상 이벤트는 보내지 않는다 (운영 통계를 오염시키지 않게). 틀린 본문만 보낸다
 # 종료 코드: FAIL이 하나라도 있으면 1. WARN·INFO는 종료 코드에 영향 없음 (pending·stale·TTFB 등 운영 상태)
@@ -36,6 +38,8 @@ req() {
   read -r CODE TTFB SIZE <<<"$out"
 }
 hdr() { grep -i "^$2:" "$tmp/$1.h" 2>/dev/null | tail -1 | cut -d: -f2- | tr -d '\r' | sed 's/^ *//'; }
+# 본문을 grep으로 볼 때는 파일을 직접 준다: pipefail에서 `body x | grep -q`는 grep이 먼저 끝나
+# cat이 SIGPIPE를 받으면 맞는 본문도 실패로 읽힌다. body는 오류 메시지에 앞부분을 붙일 때만 쓴다
 body() { cat "$tmp/$1.body" 2>/dev/null; }
 expect_code() { # <이름> <기대 상태> <설명> <curl 인자...>
   local n=$1 want=$2 what=$3
@@ -62,10 +66,10 @@ echo "모먹죠 스모크 → $B"
 echo "== 정적 파일"
 req index "$B/"
 code=$CODE
-if [ "$code" = 200 ] && body index | grep -q "<title>모먹죠 - 점심 고?</title>"; then ok "/ 200, 제목 '모먹죠 - 점심 고?'"; else bad "/ → $code 또는 제목이 다름"; fi
-body index | grep -q "점심 ㄱ" && bad "/ 에 예전 문구 '점심 ㄱ'이 남아 있음"
+if [ "$code" = 200 ] && grep -q "<title>모먹죠 - 점심 고?</title>" "$tmp/index.body"; then ok "/ 200, 제목 '모먹죠 - 점심 고?'"; else bad "/ → $code 또는 제목이 다름"; fi
+grep -q "점심 ㄱ" "$tmp/index.body" && bad "/ 에 예전 문구 '점심 ㄱ'이 남아 있음"
 info "/ cache-control: $(hdr index cache-control)"
-asset=$(body index | grep -oE '/assets/[A-Za-z0-9._-]+\.js' | head -1)
+asset=$(grep -oE '/assets/[A-Za-z0-9._-]+\.js' "$tmp/index.body" | head -1)
 
 req og "$B/og.png"
 code=$CODE
@@ -74,13 +78,13 @@ if [ "$code" = 200 ] && [[ "$ctype" == image/png* ]]; then ok "/og.png 200 image
 
 req robots "$B/robots.txt"
 code=$CODE
-if [ "$code" = 200 ] && body robots | grep -q "^Disallow: /admin" && body robots | grep -q "^Disallow: /api/"; then
+if [ "$code" = 200 ] && grep -q "^Disallow: /admin" "$tmp/robots.body" && grep -q "^Disallow: /api/" "$tmp/robots.body"; then
   ok "/robots.txt 200, /admin·/api/ 막음"
 else bad "/robots.txt → $code 또는 Disallow 줄이 없음"; fi
 
 req pangyo "$B/pangyo"
 code=$CODE
-if [ "$code" = 200 ] && body pangyo | grep -q '<div id="root">'; then ok "/pangyo 200 (거점 짧은 링크 → SPA 대체 응답)"; else bad "/pangyo → $code"; fi
+if [ "$code" = 200 ] && grep -q '<div id="root">' "$tmp/pangyo.body"; then ok "/pangyo 200 (거점 짧은 링크 → SPA 대체 응답)"; else bad "/pangyo → $code"; fi
 
 req admin "$B/admin"
 code=$CODE
@@ -155,7 +159,8 @@ expect_code adm-wrong 401 "통계 틀린 토큰" -H "Authorization: Bearer smoke
 if [ -n "${ADMIN_TOKEN:-}" ]; then
   for h in "${hubs[@]}"; do
     read -r id lat lng <<<"$h"
-    # 토큰은 curl 설정(-K, 프로세스 치환)으로만 넘긴다 — 명령줄 인자·출력에 남지 않게
+    # 토큰은 curl 설정(-K, 프로세스 치환)으로만 넘긴다 — 명령줄 인자·출력에 남지 않게.
+    # bash -x(set -x)로 돌리지 않는다: 아래 printf 줄이 토큰을 그대로 찍는다
     req "audit-$id" -K <(printf 'header = "Authorization: Bearer %s"\n' "$ADMIN_TOKEN") \
       "$B/api/admin/audit?lat=$lat&lng=$lng&radius=1000"
     code=$CODE
