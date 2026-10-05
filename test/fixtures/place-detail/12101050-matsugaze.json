@@ -1,0 +1,2220 @@
+{
+ "menu": {
+  "menus": {
+   "photos": [
+    {
+     "confirm_id": "12101050",
+     "url": "https://postfiles.pstatic.net/MjAyNjA4MTJfMTg0/MDAxNzg2NTIwMTc2MDYz.hinu-36Nsek-LD6cIJf3Tloa-sVi7U_BCIZZrCPUPVsg.wQ2F8nNT1Xe-wb5oa-kQ6LLwaBVN5oid2QDH43uUIEog.JPEG/900_20260729_120735.jpg?type=w466",
+     "type": "BLOG",
+     "photo_id": 1718046634,
+     "review_id": 117191665,
+     "registered_at": "2026-09-20 23:40:42",
+     "updated_at": "2026-09-20 23:56:58",
+     "title": "[삼성역/봉은사역] 오크우드호텔 마쯔가제, 대접하기 좋은 일식당",
+     "blog_link_url": "http://blog.naver.com/lilac_note/224378806428",
+     "media_type": "PHOTO",
+     "ui_type": "POST"
+    },
+    {
+     "confirm_id": "12101050",
+     "url": "https://postfiles.pstatic.net/MjAyNTEyMDFfMzcg/MDAxNzY0NTQ1NDU3OTI2.DKNNlV7bsQOkFS4j4dS4ZckV8Yr5Ql2aN5mO5fZ5YbEg.RKfEZ7x4tVEIJGimcfKXqlNgQU4JRJbOc6hlK0fLuWQg.JPEG/IMG%EF%BC%BF2861.JPG?type=w386",
+     "type": "BLOG",
+     "photo_id": 1510440688,
+     "review_id": 99951499,
+     "registered_at": "2025-12-02 11:00:19",
+     "updated_at": "2025-12-02 11:14:00",
+     "title": "[삼성역 일식] 마쯔가제 저녁 스시정식&셰프의 도시락",
+     "blog_link_url": "http://blog.naver.com/wlslozlo/224094855222",
+     "media_type": "PHOTO",
+     "ui_type": "POST"
+    },
+    {
+     "confirm_id": "12101050",
+     "url": "https://postfiles.pstatic.net/MjAyNTA1MjdfMTQz/MDAxNzQ4MzQ1NDEyNzgy.zLNAI_LqCy-QmUTH8jKovPkbOyQ7xn1h_PFuXlVTBukg.K2go6SfyGm2wIeVcD9SEcVkQKRucGnADyg6UadZCQPQg.JPEG/IMG%EF%BC%BF1915.jpg?type=w773",
+     "type": "BLOG",
+     "photo_id": 1361001693,
+     "review_id": 84710903,
+     "registered_at": "2025-05-27 21:23:40",
+     "updated_at": "2025-05-27 21:30:10",
+     "title": "[마쯔가제] 삼성동 오크우드 호텔 내 일식당_오마카세, 메뉴판, 예약",
+     "blog_link_url": "http://blog.naver.com/meelee2001/223879904968",
+     "media_type": "PHOTO",
+     "ui_type": "POST"
+    },
+    {
+     "confirm_id": "12101050",
+     "url": "https://postfiles.pstatic.net/MjAyNTA1MjdfMTcg/MDAxNzQ4MzQ1NDEyMTQ4.yLSoBBI9h17EVy6UAkzXgzkGwMs-93eJZeePHEJsFHkg.7cbyOwKZaRjHbZp1wbmYLtm3VcDgTajonbBnTuxaCvYg.JPEG/IMG%EF%BC%BF1910.jpg?type=w773",
+     "type": "BLOG",
+     "photo_id": 1361001661,
+     "review_id": 84710903,
+     "registered_at": "2025-05-27 21:23:38",
+     "updated_at": "2025-05-27 21:30:10",
+     "title": "[마쯔가제] 삼성동 오크우드 호텔 내 일식당_오마카세, 메뉴판, 예약",
+     "blog_link_url": "http://blog.naver.com/meelee2001/223879904968",
+     "media_type": "PHOTO",
+     "ui_type": "POST"
+    },
+    {
+     "confirm_id": "12101050",
+     "url": "https://postfiles.pstatic.net/MjAyNTA1MjdfMjY5/MDAxNzQ4MzQ1NDEzMDA0.Sgems2VXXw8ghNG3NK8l6yb91CHbsjNtLZJOBr34ESEg.KZWbCCLKzgwGsfuGmq2v4iuo27Q6nltrHUYdC1rrscQg.JPEG/IMG%EF%BC%BF1914.jpg?type=w773",
+     "type": "BLOG",
+     "photo_id": 1361001691,
+     "review_id": 84710903,
+     "registered_at": "2025-05-27 21:23:40",
+     "updated_at": "2025-05-27 21:29:08",
+     "title": "[마쯔가제] 삼성동 오크우드 호텔 내 일식당_오마카세, 메뉴판, 예약",
+     "blog_link_url": "http://blog.naver.com/meelee2001/223879904968",
+     "media_type": "PHOTO",
+     "ui_type": "POST"
+    },
+    {
+     "confirm_id": "12101050",
+     "url": "https://postfiles.pstatic.net/MjAyNTA1MjdfMTEg/MDAxNzQ4MzQ1NDEyNTIw.-ZduWPLczm-wI_HXUbF_Yl3DoC0N_xzW6ZeVA5PK4X8g.aQd2mOQ_TWV5qHCuZh9tG2O0gGDZq23P4mRU65TMJuIg.JPEG/IMG%EF%BC%BF1912.jpg?type=w773",
+     "type": "BLOG",
+     "photo_id": 1361001698,
+     "review_id": 84710903,
+     "registered_at": "2025-05-27 21:23:40",
+     "updated_at": "2025-05-27 21:30:10",
+     "title": "[마쯔가제] 삼성동 오크우드 호텔 내 일식당_오마카세, 메뉴판, 예약",
+     "blog_link_url": "http://blog.naver.com/meelee2001/223879904968",
+     "media_type": "PHOTO",
+     "ui_type": "POST"
+    },
+    {
+     "confirm_id": "12101050",
+     "url": "https://postfiles.pstatic.net/MjAyNTA1MjdfMTc2/MDAxNzQ4MzQ1NDExOTU4.xgDf_xT3dXeh7dW0omlRisVZbTMqytPkB42muOHyKVcg.fdvdShKLnlBBfuEjORdlq_OyoPrK80-h7TtbfquVzzQg.JPEG/IMG%EF%BC%BF1908.jpg?type=w773",
+     "type": "BLOG",
+     "photo_id": 1361001647,
+     "review_id": 84710903,
+     "registered_at": "2025-05-27 21:23:38",
+     "updated_at": "2025-05-27 21:30:10",
+     "title": "[마쯔가제] 삼성동 오크우드 호텔 내 일식당_오마카세, 메뉴판, 예약",
+     "blog_link_url": "http://blog.naver.com/meelee2001/223879904968",
+     "media_type": "PHOTO",
+     "ui_type": "POST"
+    },
+    {
+     "confirm_id": "12101050",
+     "url": "https://postfiles.pstatic.net/MjAyNTA1MjdfMjg1/MDAxNzQ4MzQ1NDExMzY2.SnhcMNy4sRezr4UOpPvKMl4W52-7OABZRnwEkDvu_skg.Io8zP7jrUux6sCAFua-Z7LtKO7Q0OteHFDLuFNDDZaEg.JPEG/IMG%EF%BC%BF1906.jpg?type=w773",
+     "type": "BLOG",
+     "photo_id": 1361001639,
+     "review_id": 84710903,
+     "registered_at": "2025-05-27 21:23:38",
+     "updated_at": "2025-05-27 21:30:10",
+     "title": "[마쯔가제] 삼성동 오크우드 호텔 내 일식당_오마카세, 메뉴판, 예약",
+     "blog_link_url": "http://blog.naver.com/meelee2001/223879904968",
+     "media_type": "PHOTO",
+     "ui_type": "POST"
+    },
+    {
+     "confirm_id": "12101050",
+     "url": "https://postfiles.pstatic.net/MjAyNTA1MjdfNTIg/MDAxNzQ4MzQ1NDExNDY4.7pplYh1g_VlqvFvw3uGurZKB7pD4ckKO7lNO7eU7XEkg.OIxx5Bk0FPHoj1xfdGnqZHH72XDwdzx5p7lWIF-SHVsg.JPEG/IMG%EF%BC%BF1909.jpg?type=w773",
+     "type": "BLOG",
+     "photo_id": 1361001634,
+     "review_id": 84710903,
+     "registered_at": "2025-05-27 21:23:38",
+     "updated_at": "2025-05-27 21:29:08",
+     "title": "[마쯔가제] 삼성동 오크우드 호텔 내 일식당_오마카세, 메뉴판, 예약",
+     "blog_link_url": "http://blog.naver.com/meelee2001/223879904968",
+     "media_type": "PHOTO",
+     "ui_type": "POST"
+    },
+    {
+     "confirm_id": "12101050",
+     "url": "https://postfiles.pstatic.net/MjAyNTA1MjdfMTYz/MDAxNzQ4MzQ1NDEyNDg3.w4_9slnG3nIisg7V_0qcvF0yVaxNSY9aSXk_vYs-BtUg.CPvX4LPlsQG0q56ZUnLlXVrRw-CKwcYLLYW0Ah08CxAg.JPEG/IMG%EF%BC%BF1913.jpg?type=w773",
+     "type": "BLOG",
+     "photo_id": 1361001692,
+     "review_id": 84710903,
+     "registered_at": "2025-05-27 21:23:40",
+     "updated_at": "2025-05-27 21:30:10",
+     "title": "[마쯔가제] 삼성동 오크우드 호텔 내 일식당_오마카세, 메뉴판, 예약",
+     "blog_link_url": "http://blog.naver.com/meelee2001/223879904968",
+     "media_type": "PHOTO",
+     "ui_type": "POST"
+    },
+    {
+     "confirm_id": "12101050",
+     "url": "https://postfiles.pstatic.net/MjAyNTA1MjdfMjg0/MDAxNzQ4MzQ1NDExOTY1.ImYazUlUbvHvUKoG80iEu__9qgSPwlf5vB4bqjehv4wg.FJZ9Gj_AMK16yQu1q5YXfTxD_u34iIPmtSaVwsjrMx4g.JPEG/IMG%EF%BC%BF1911.jpg?type=w773",
+     "type": "BLOG",
+     "photo_id": 1361001655,
+     "review_id": 84710903,
+     "registered_at": "2025-05-27 21:23:38",
+     "updated_at": "2025-05-27 21:29:08",
+     "title": "[마쯔가제] 삼성동 오크우드 호텔 내 일식당_오마카세, 메뉴판, 예약",
+     "blog_link_url": "http://blog.naver.com/meelee2001/223879904968",
+     "media_type": "PHOTO",
+     "ui_type": "POST"
+    },
+    {
+     "confirm_id": "12101050",
+     "url": "https://postfiles.pstatic.net/MjAyNTA1MjdfMTAz/MDAxNzQ4MzQ1NDA4ODAz.LCjRXWG2ly2-0ZOjr7FiFQrkcccOi354UH2suDpAbUAg.yyvel5Sj75hHxB26Uy4_YgB886zy7f44ukknJc5V_9Ig.JPEG/IMG%EF%BC%BF1900.jpg?type=w773",
+     "type": "BLOG",
+     "photo_id": 1361001625,
+     "review_id": 84710903,
+     "registered_at": "2025-05-27 21:23:37",
+     "updated_at": "2025-05-27 21:30:10",
+     "title": "[마쯔가제] 삼성동 오크우드 호텔 내 일식당_오마카세, 메뉴판, 예약",
+     "blog_link_url": "http://blog.naver.com/meelee2001/223879904968",
+     "media_type": "PHOTO",
+     "ui_type": "POST"
+    },
+    {
+     "confirm_id": "12101050",
+     "url": "https://postfiles.pstatic.net/MjAyNTAzMTlfMjE1/MDAxNzQyMzYyODI1MDcy.MIXjB4TBn4V7Z9mi-uerIayY2Z9a_kUCBmC-uGNAVj0g.M4N3-Ru53pUA41lv1C0WSax8z-SYOcUO09gi5xIJsKkg.JPEG/SE-F7DC000D-AFE0-4F19-BBC2-BA40007C8234.jpg?type=w466",
+     "type": "BLOG",
+     "photo_id": 1321716111,
+     "review_id": 81729196,
+     "registered_at": "2025-04-19 00:29:16",
+     "updated_at": "2025-04-19 00:45:11",
+     "title": "삼성동 오크우드호텔 일식당 마쯔가제 가이세키 디너코스",
+     "blog_link_url": "http://blog.naver.com/miyeon9353/223802772368",
+     "media_type": "PHOTO",
+     "ui_type": "POST"
+    },
+    {
+     "confirm_id": "12101050",
+     "url": "https://postfiles.pstatic.net/MjAyNTAzMTlfMjg1/MDAxNzQyMzYyODIzODEw.E4Jzr8Q-xUAiMxVzSh5NCGrwIvbZ84D5kEeL4XanTCwg.PuAI2qb2fACjV4WqqqeyuVD3IKmCr5EXCfZu9vWsbEYg.JPEG/SE-8E1BF199-D01D-4A64-9BFC-76A28986BFC3.jpg?type=w466",
+     "type": "BLOG",
+     "photo_id": 1321716088,
+     "review_id": 81729196,
+     "registered_at": "2025-04-19 00:29:15",
+     "updated_at": "2025-04-19 00:45:11",
+     "title": "삼성동 오크우드호텔 일식당 마쯔가제 가이세키 디너코스",
+     "blog_link_url": "http://blog.naver.com/miyeon9353/223802772368",
+     "media_type": "PHOTO",
+     "ui_type": "POST"
+    }
+   ],
+   "items": [
+    {
+     "product_id": 536484,
+     "name": "장어정식",
+     "price": 85000,
+     "desc": "점심정식",
+     "is_recommend": false,
+     "is_ai_mate": false,
+     "mod_at": "2026-02-24 22:32:27"
+    },
+    {
+     "product_id": 536485,
+     "name": "사시미정식",
+     "price": 78000,
+     "desc": "점심정식",
+     "is_recommend": false,
+     "is_ai_mate": false,
+     "mod_at": "2026-02-24 23:44:12"
+    },
+    {
+     "product_id": 536486,
+     "name": "스시정식",
+     "price": 78000,
+     "desc": "점심정식",
+     "is_recommend": false,
+     "is_ai_mate": false,
+     "mod_at": "2026-02-24 17:41:45"
+    },
+    {
+     "product_id": 536487,
+     "name": "도미머리정식",
+     "price": 80000,
+     "desc": "점심정식",
+     "is_recommend": false,
+     "is_ai_mate": false,
+     "mod_at": "2026-02-24 23:16:03"
+    },
+    {
+     "product_id": 536488,
+     "name": "대구탕정식",
+     "price": 80000,
+     "desc": "점심정식",
+     "is_recommend": false,
+     "is_ai_mate": false,
+     "mod_at": "2026-02-24 23:34:38"
+    },
+    {
+     "product_id": 536489,
+     "name": "회덮밥정식",
+     "price": 70000,
+     "desc": "점심정식",
+     "is_recommend": false,
+     "is_ai_mate": false,
+     "mod_at": "2026-02-24 23:53:55"
+    },
+    {
+     "product_id": 536490,
+     "name": "카제코스",
+     "price": 80000,
+     "desc": "점심코스",
+     "is_recommend": false,
+     "is_ai_mate": false,
+     "mod_at": "2026-02-24 17:41:45"
+    },
+    {
+     "product_id": 536491,
+     "name": "마쯔코스",
+     "price": 100000,
+     "desc": "점심코스",
+     "is_recommend": false,
+     "is_ai_mate": false,
+     "mod_at": "2026-02-24 17:41:45"
+    },
+    {
+     "product_id": 536492,
+     "name": "런치코스",
+     "price": 130000,
+     "desc": "점심코스",
+     "is_recommend": false,
+     "is_ai_mate": false,
+     "mod_at": "2026-02-24 17:41:45"
+    },
+    {
+     "product_id": 536493,
+     "name": "모둠생선구이정식",
+     "price": 80000,
+     "desc": "계절정식",
+     "is_recommend": false,
+     "is_ai_mate": false,
+     "mod_at": "2026-02-24 23:05:33"
+    },
+    {
+     "product_id": 536494,
+     "name": "복어정식(매운탕,지리) 한상",
+     "price": 85000,
+     "desc": "계절정식",
+     "is_recommend": false,
+     "is_ai_mate": false,
+     "mod_at": "2026-02-24 17:41:45"
+    },
+    {
+     "product_id": 536495,
+     "name": "복어정식(매운탕,지리) 정식",
+     "price": 95000,
+     "desc": "계절정식",
+     "is_recommend": false,
+     "is_ai_mate": false,
+     "mod_at": "2026-02-24 17:41:45"
+    },
+    {
+     "product_id": 536496,
+     "name": "해물모둠나베정식",
+     "price": 85000,
+     "is_recommend": false,
+     "is_ai_mate": false,
+     "mod_at": "2026-02-24 17:41:45"
+    }
+   ],
+   "items_updated_at": "2026-02-24 23:53:55",
+   "menu_type": "FOOD"
+  },
+  "default_menu_icon_url": "https://t1.kakaocdn.net/localimg/place/2026/menu/icon_restaurant_solid.svg"
+ },
+ "ai_mate": {
+  "summary": {
+   "title": "프라이빗한 호텔 일식의 품격",
+   "contents": [
+    "프라이빗룸",
+    "콜키지 부과",
+    "유아의자 있음"
+   ]
+  },
+  "bottom_sheet": {
+   "title": "프라이빗한 호텔 일식의 품격",
+   "summary": "프라이빗한 일식 공간으로, 조용하고 고급스러운 분위기를 제공합니다. 다양한 룸과 홀 좌석이 마련되어 있어 비즈니스 미팅이나 가족 모임에 적합합니다. 제철 해산물을 활용한 덮밥과 스시, 코스 요리가 특징이며, 신선한 재료를 사용하여 정갈한 음식을 제공합니다.",
+   "sheets": [
+    {
+     "title": "어린이 옵션",
+     "keywords": [
+      "유아의자 있음"
+     ],
+     "ui_type": "KEYWORDS"
+    },
+    {
+     "title": "제공 서비스",
+     "list": [
+      {
+       "title": "좌석 옵션",
+       "keywords": [
+        "프라이빗룸",
+        "단체석"
+       ]
+      },
+      {
+       "title": "매장 특징",
+       "keywords": [
+        "콜키지 부과"
+       ]
+      }
+     ],
+     "ui_type": "LIST"
+    }
+   ],
+   "landing_url": "https://kanana.kakao.com/place/redirect?entry=kakaomap&cid=12101050"
+  },
+  "blog_summaries": [
+   {
+    "title": "분위기",
+    "keywords": [
+     "프라이빗한",
+     "고급스러운",
+     "차분한"
+    ]
+   },
+   {
+    "title": "방문 목적",
+    "keywords": [
+     "비즈니스 미팅",
+     "가족 단위 식사"
+    ]
+   },
+   {
+    "title": "맛",
+    "keywords": [
+     "신선한",
+     "담백한"
+    ]
+   },
+   {
+    "title": "동반인",
+    "keywords": [
+     "가족",
+     "비즈니스·직장 모임"
+    ]
+   }
+  ],
+  "price_level": {
+   "symbol": "₩₩₩₩₩"
+  },
+  "ai_questions": [
+   "룸 예약은 가능한가요?",
+   "비즈니스 미팅에 적합한가요?",
+   "매장 내부에 화장실이 있어?",
+   "1인석이 있나요?"
+  ],
+  "suggested_questions": [
+   {
+    "text": "룸 예약은 가능한가요?",
+    "landing_url": "https://kanana.kakao.com/place/redirect?entry=kakaomap&t_src=kakaomap&t_ch=pw_place&q=%EB%A3%B8+%EC%98%88%EC%95%BD%EC%9D%80+%EA%B0%80%EB%8A%A5%ED%95%9C%EA%B0%80%EC%9A%94%3F&cid=12101050"
+   },
+   {
+    "text": "비즈니스 미팅에 적합한가요?",
+    "landing_url": "https://kanana.kakao.com/place/redirect?entry=kakaomap&t_src=kakaomap&t_ch=pw_place&q=%EB%B9%84%EC%A6%88%EB%8B%88%EC%8A%A4+%EB%AF%B8%ED%8C%85%EC%97%90+%EC%A0%81%ED%95%A9%ED%95%9C%EA%B0%80%EC%9A%94%3F&cid=12101050"
+   },
+   {
+    "text": "매장 내부에 화장실이 있어?",
+    "landing_url": "https://kanana.kakao.com/place/redirect?entry=kakaomap&t_src=kakaomap&t_ch=pw_place&q=%EB%A7%A4%EC%9E%A5+%EB%82%B4%EB%B6%80%EC%97%90+%ED%99%94%EC%9E%A5%EC%8B%A4%EC%9D%B4+%EC%9E%88%EC%96%B4%3F&cid=12101050"
+   },
+   {
+    "text": "1인석이 있나요?",
+    "landing_url": "https://kanana.kakao.com/place/redirect?entry=kakaomap&t_src=kakaomap&t_ch=pw_place&q=1%EC%9D%B8%EC%84%9D%EC%9D%B4+%EC%9E%88%EB%82%98%EC%9A%94%3F&cid=12101050"
+   }
+  ]
+ },
+ "panel_card_tags": [
+  "TITLE",
+  "PHOTO",
+  "BIZ",
+  "NEWS",
+  "AI_MATE",
+  "SUMMARY",
+  "INFO",
+  "EVENT_KEYWORD",
+  "PRODUCT",
+  "AI_QUESTION",
+  "BOOKING",
+  "SPECIAL",
+  "RELATION",
+  "VISITOR",
+  "REVIEW",
+  "RANKING",
+  "BLOG"
+ ],
+ "panel_tab_tags": [
+  "PRODUCT",
+  "RELATION",
+  "PHOTO",
+  "REVIEW",
+  "BOOKING",
+  "SPECIAL",
+  "NEWS",
+  "BLOG",
+  "RANKING"
+ ],
+ "restrict": {
+  "fiy": {
+   "is_restrict": false
+  },
+  "blog": {
+   "is_restrict": false
+  },
+  "review_read": {
+   "is_restrict": false
+  },
+  "photo": {
+   "is_restrict": false
+  },
+  "fiy_add_info": {
+   "is_restrict": false
+  },
+  "ranking": {
+   "is_restrict": false
+  }
+ },
+ "summary": {
+  "meta": {
+   "updated_at": "2026-09-08 16:18:43"
+  },
+  "confirm_id": "12101050",
+  "name": "마쯔가제",
+  "status": "Y",
+  "category": {
+   "name": "일식집",
+   "id1": "9",
+   "id2": "84",
+   "id3": "897",
+   "name1": "음식점",
+   "name2": "일식",
+   "name3": "일식집"
+  },
+  "point": {
+   "lon": 127.05813658817132,
+   "lat": 37.51099486515899
+  },
+  "address": {
+   "disp": "서울 강남구 테헤란로87길 46 호텔오크우드 프리미어 3층 (삼성동)",
+   "jibun": "삼성동 159",
+   "road": "서울 강남구 테헤란로87길 46 호텔오크우드 프리미어 3층",
+   "base_zone_no": "06164",
+   "road_part": "테헤란로87길 46 호텔오크우드 프리미어 3층",
+   "jibun_part": "삼성동 159",
+   "address_detail_part": "호텔오크우드 프리미어 3층"
+  },
+  "road_view": {
+   "pano_id": "1212304887",
+   "pan": 64.0,
+   "tilt": -2.0,
+   "point": {
+    "lon": 127.05786052570518,
+    "lat": 37.51088688018867
+   },
+   "level": 0,
+   "url": "https://map.kakaocdn.net/map_roadview/2026/06/9152730/2_101253_9152730_20260623060928_cube/left_800.jpg"
+  },
+  "regions": [
+   {
+    "depth": 1,
+    "id": "I",
+    "name": "서울",
+    "simple_name": "서울"
+   },
+   {
+    "depth": 2,
+    "id": "I1000",
+    "name": "강남구",
+    "simple_name": "강남구"
+   },
+   {
+    "depth": 3,
+    "id": "I10000400",
+    "name": "삼성동",
+    "simple_name": "삼성동"
+   }
+  ],
+  "homepages": [
+   "http://www.matsugaze.co.kr",
+   "https://www.homehmc.com/ko/oakwood-seoul-coex/dining/japanese-restaurant-matsugaze/"
+  ],
+  "related_links": {
+   "primary_links": [
+    {
+     "url": "http://www.matsugaze.co.kr",
+     "display_text": "http://www.matsugaze.co.kr"
+    }
+   ],
+   "secondary_links": [
+    {
+     "url": "https://www.homehmc.com/ko/oakwood-seoul-coex/dining/japanese-restaurant-matsugaze/",
+     "display_text": "https://www.homehmc.com/ko/oakwood-seoul-coex/dining/japanese-restaurant-matsugaze/"
+    }
+   ]
+  },
+  "phone_numbers": [
+   {
+    "tel": "02-3466-7733"
+   }
+  ],
+  "payments": [
+   {
+    "img_url": "https://t1.kakaocdn.net/kakaomap_mobile/android/ico_zeropay.png",
+    "image_keyword": "제로페이",
+    "landing_url": "https://www.zeropay.or.kr"
+   }
+  ],
+  "main_photo_url": "http://t1.kakaocdn.net/local/kakaomapPhoto/review/745c8dd10377364d3df415f6aa98b9b79df9350b?original",
+  "display_info": {
+   "display_name1": "마쯔가제"
+  }
+ },
+ "my_store_notice": {
+  "status": "READY_TO_REGISTER",
+  "notice_count": 0,
+  "is_available_booking": false
+ },
+ "open_hours": {
+  "headline": {
+   "code": "BREAK_TIME",
+   "display_text": "브레이크타임",
+   "display_text_info": "18:00 오픈"
+  },
+  "week_from_today": {
+   "week_periods": [
+    {
+     "days": [
+      {
+       "day_of_the_week_desc": "월(10/5)",
+       "on_days": {
+        "start_end_time_desc": "11:30 ~ 22:00",
+        "break_times_desc": [
+         "14:30 ~ 18:00 브레이크타임"
+        ],
+        "last_order_times_desc": [
+         "21:00 라스트오더"
+        ]
+       },
+       "is_highlight": true
+      },
+      {
+       "day_of_the_week_desc": "화(10/6)",
+       "on_days": {
+        "start_end_time_desc": "11:30 ~ 22:00",
+        "break_times_desc": [
+         "14:30 ~ 18:00 브레이크타임"
+        ],
+        "last_order_times_desc": [
+         "21:00 라스트오더"
+        ]
+       },
+       "is_highlight": false
+      },
+      {
+       "day_of_the_week_desc": "수(10/7)",
+       "on_days": {
+        "start_end_time_desc": "11:30 ~ 22:00",
+        "break_times_desc": [
+         "14:30 ~ 18:00 브레이크타임"
+        ],
+        "last_order_times_desc": [
+         "21:00 라스트오더"
+        ]
+       },
+       "is_highlight": false
+      },
+      {
+       "day_of_the_week_desc": "목(10/8)",
+       "on_days": {
+        "start_end_time_desc": "11:30 ~ 22:00",
+        "break_times_desc": [
+         "14:30 ~ 18:00 브레이크타임"
+        ],
+        "last_order_times_desc": [
+         "21:00 라스트오더"
+        ]
+       },
+       "is_highlight": false
+      },
+      {
+       "day_of_the_week_desc": "금(10/9)",
+       "on_days": {
+        "start_end_time_desc": "11:30 ~ 22:00",
+        "break_times_desc": [
+         "14:30 ~ 18:00 브레이크타임"
+        ],
+        "last_order_times_desc": [
+         "21:00 라스트오더"
+        ]
+       },
+       "is_highlight": false
+      },
+      {
+       "day_of_the_week_desc": "토(10/10)",
+       "on_days": {
+        "start_end_time_desc": "11:30 ~ 22:00",
+        "break_times_desc": [
+         "14:30 ~ 18:00 브레이크타임"
+        ],
+        "last_order_times_desc": [
+         "21:00 라스트오더"
+        ]
+       },
+       "is_highlight": false
+      },
+      {
+       "day_of_the_week_desc": "일(10/11)",
+       "on_days": {
+        "start_end_time_desc": "11:30 ~ 22:00",
+        "break_times_desc": [
+         "14:30 ~ 18:00 브레이크타임"
+        ],
+        "last_order_times_desc": [
+         "21:00 라스트오더"
+        ]
+       },
+       "is_highlight": false
+      }
+     ]
+    }
+   ]
+  }
+ },
+ "photos": {
+  "counts": {
+   "total": 382,
+   "mystore": 0,
+   "vendor": 0,
+   "vod": 0,
+   "kakaomap_review": 7,
+   "food": 34,
+   "indoor": 35,
+   "outdoor": 1,
+   "menu": 14
+  },
+  "photos": [
+   {
+    "confirm_id": "12101050",
+    "url": "http://t1.kakaocdn.net/local/kakaomapPhoto/review/745c8dd10377364d3df415f6aa98b9b79df9350b?original",
+    "type": "KMAPREVIEW",
+    "photo_id": 8484348,
+    "review_id": 15257898,
+    "registered_at": "2026-04-13 23:26:26",
+    "updated_at": "2026-09-30 05:45:14",
+    "kakaomap_review_photo_meta": {
+     "owner": {
+      "map_user_id": "2716265112",
+      "nickname": "햄짱이",
+      "image_url": "http://t1.kakaocdn.net/local/kakaomapPhoto/profile/95d8571d5a70665b2b2de06d63d6b6239f5d3b35?original",
+      "timeline_level": {
+       "badge": "02",
+       "now_level": 21,
+       "show_other": true
+      },
+      "review_count": 14,
+      "follower_count": 2,
+      "profile_links": [],
+      "average_score": 3.8,
+      "profile_status": "S"
+     }
+    },
+    "title": "",
+    "media_type": "PHOTO",
+    "ui_type": "PROFILE",
+    "duration": 0
+   },
+   {
+    "confirm_id": "12101050",
+    "url": "http://t1.kakaocdn.net/local/kakaomapPhoto/review/ad507a98de29460476f4e4769ba17a75f270fe6d?original",
+    "type": "KMAPREVIEW",
+    "photo_id": 5888421,
+    "review_id": 12102051,
+    "registered_at": "2025-02-10 21:13:15",
+    "updated_at": "2026-09-29 16:40:03",
+    "kakaomap_review_photo_meta": {
+     "owner": {
+      "map_user_id": "1108807821",
+      "nickname": "쵸이",
+      "timeline_level": {
+       "badge": "02",
+       "now_level": 11,
+       "show_other": true
+      },
+      "review_count": 22,
+      "follower_count": 0,
+      "profile_links": [],
+      "average_score": 4.8,
+      "profile_status": "S"
+     }
+    },
+    "title": "",
+    "media_type": "PHOTO",
+    "ui_type": "PROFILE"
+   },
+   {
+    "confirm_id": "12101050",
+    "url": "https://postfiles.pstatic.net/MjAyNjA4MTJfMjA5/MDAxNzg2NTIwMTc2MTEx.JONB6BLgGle3PYWCa2sm5jBrBJmsAV08QqfP8kQkR1og.9y7zpDp5TfVx2Yfd68IrB08HA3zxrq0yNIxQ5MbLOLcg.JPEG/900_20260729_131342.jpg?type=w966",
+    "type": "BLOG",
+    "photo_id": 1718046646,
+    "review_id": 117191665,
+    "registered_at": "2026-09-20 23:40:42",
+    "updated_at": "2026-09-20 23:56:58",
+    "title": "[삼성역/봉은사역] 오크우드호텔 마쯔가제, 대접하기 좋은 일식당",
+    "blog_link_url": "http://blog.naver.com/lilac_note/224378806428",
+    "media_type": "PHOTO",
+    "ui_type": "POST"
+   },
+   {
+    "confirm_id": "12101050",
+    "url": "https://postfiles.pstatic.net/MjAyNjA4MTJfMTk1/MDAxNzg2NTIwMTc1MzYy.UYCkeifPURT5tDSJIj7wOVl70syNGZd_hAqADvo9Ysgg.XHscamVveDQN0MFmTt01dQqWns2IA6DKm6pre4BeDaog.JPEG/900_20260729_121335.jpg?type=w966",
+    "type": "BLOG",
+    "photo_id": 1718046654,
+    "review_id": 117191665,
+    "registered_at": "2026-09-20 23:40:43",
+    "updated_at": "2026-09-20 23:56:58",
+    "title": "[삼성역/봉은사역] 오크우드호텔 마쯔가제, 대접하기 좋은 일식당",
+    "blog_link_url": "http://blog.naver.com/lilac_note/224378806428",
+    "media_type": "PHOTO",
+    "ui_type": "POST"
+   },
+   {
+    "confirm_id": "12101050",
+    "url": "https://postfiles.pstatic.net/MjAyNjA4MTJfMTEz/MDAxNzg2NTIwMTc0NDYx.RhPzHKBtB6MqgKyBS0YUaDVr_gZKnSCpn4Cx7zpwbCMg.eoHN5JB1k5ObuuB5QhwQPCF0RbPhqlWIx8hWMEJ87mYg.JPEG/900_20260729_120706.jpg?type=w966",
+    "type": "BLOG",
+    "photo_id": 1718046636,
+    "review_id": 117191665,
+    "registered_at": "2026-09-20 23:40:42",
+    "updated_at": "2026-09-20 23:56:58",
+    "title": "[삼성역/봉은사역] 오크우드호텔 마쯔가제, 대접하기 좋은 일식당",
+    "blog_link_url": "http://blog.naver.com/lilac_note/224378806428",
+    "media_type": "PHOTO",
+    "ui_type": "POST"
+   },
+   {
+    "confirm_id": "12101050",
+    "url": "https://postfiles.pstatic.net/MjAyNjA4MTJfMjYy/MDAxNzg2NTIwMTc0Mzk2.vaq_17tlfRBo_efQPF1xorCS66noQ21Hy79mE8sqdJYg.zr5_R7T8q-L75C1qYRHrNq0U7RZANnTno-KOJFizmzsg.JPEG/900_20260729_120701.jpg?type=w966",
+    "type": "BLOG",
+    "photo_id": 1718046640,
+    "review_id": 117191665,
+    "registered_at": "2026-09-20 23:40:42",
+    "updated_at": "2026-09-20 23:56:58",
+    "title": "[삼성역/봉은사역] 오크우드호텔 마쯔가제, 대접하기 좋은 일식당",
+    "blog_link_url": "http://blog.naver.com/lilac_note/224378806428",
+    "media_type": "PHOTO",
+    "ui_type": "POST"
+   },
+   {
+    "confirm_id": "12101050",
+    "url": "https://postfiles.pstatic.net/MjAyNjA4MTBfMjEg/MDAxNzg2Mjk1MDM3Mjgx.SzwIAj13EUxjWXhQzoVw9Twv01PiHvPUAkoaHKUQGVcg.JIOcsxzOQBKZZ1906qiCPcJnM81GkO1LXY-dypGXZZYg.JPEG/naver-371d94b258385d26c2c9.jpg?type=w580",
+    "type": "BLOG",
+    "photo_id": 1703470382,
+    "review_id": 116023309,
+    "registered_at": "2026-08-29 11:17:22",
+    "updated_at": "2026-08-29 11:37:54",
+    "title": "삼성역 맛집 마쯔가제 평일런치 카이센동 39,000원",
+    "blog_link_url": "http://blog.naver.com/sodu1234/224393867032",
+    "media_type": "PHOTO",
+    "ui_type": "POST"
+   },
+   {
+    "confirm_id": "12101050",
+    "url": "https://postfiles.pstatic.net/MjAyNjA4MTBfMjY3/MDAxNzg2Mjk1MDQ0MDM4.vwMm56cXfU3EnQcioVIB30gcCmgzQHct6HGtef8NzVIg.0yAY9-6tvaTpYN4h-lwT6q2Iacn0OOr3W9w9hu_krtQg.JPEG/naver-ea3030a7f7cba8bbf91c.jpg?type=w275",
+    "type": "BLOG",
+    "photo_id": 1703470461,
+    "review_id": 116023309,
+    "registered_at": "2026-08-29 11:17:27",
+    "updated_at": "2026-08-29 11:37:54",
+    "title": "삼성역 맛집 마쯔가제 평일런치 카이센동 39,000원",
+    "blog_link_url": "http://blog.naver.com/sodu1234/224393867032",
+    "media_type": "PHOTO",
+    "ui_type": "POST"
+   },
+   {
+    "confirm_id": "12101050",
+    "url": "https://postfiles.pstatic.net/MjAyNjA4MTBfMTQ3/MDAxNzg2Mjk1MDMwNjEw.6yxOsnuwfMu39MjhQOk8H1nLpPLsXpMlC9hBRs7utzQg.r7GF6izPbCzjj_GDoFfJsC8gdPCP7dwG0G3tfKtnjIkg.JPEG/naver-e8e2d40c7ad9ec22f3da.jpg?type=w580",
+    "type": "BLOG",
+    "photo_id": 1703470451,
+    "review_id": 116023309,
+    "registered_at": "2026-08-29 11:17:27",
+    "updated_at": "2026-08-29 11:37:54",
+    "title": "삼성역 맛집 마쯔가제 평일런치 카이센동 39,000원",
+    "blog_link_url": "http://blog.naver.com/sodu1234/224393867032",
+    "media_type": "PHOTO",
+    "ui_type": "POST"
+   },
+   {
+    "confirm_id": "12101050",
+    "url": "https://postfiles.pstatic.net/MjAyNjA4MTBfMjI1/MDAxNzg2Mjk1MDQxMjYy.r2pPHW0cEJ1aO-LA91RF56RI5tsId659nZn2waeXlmsg.MdGfseIisKd7h3okSFH--HLTNzfvFM_bNd4nuOvwql4g.JPEG/naver-5f782f3d1bf2e2831893.jpg?type=w580",
+    "type": "BLOG",
+    "photo_id": 1703470453,
+    "review_id": 116023309,
+    "registered_at": "2026-08-29 11:17:27",
+    "updated_at": "2026-08-29 11:37:54",
+    "title": "삼성역 맛집 마쯔가제 평일런치 카이센동 39,000원",
+    "blog_link_url": "http://blog.naver.com/sodu1234/224393867032",
+    "media_type": "PHOTO",
+    "ui_type": "POST"
+   },
+   {
+    "confirm_id": "12101050",
+    "url": "https://postfiles.pstatic.net/MjAyNjA4MTBfMTIw/MDAxNzg2Mjk1MDMxOTc4.rLnwLHf2pe9gRDCGs8EGKcIrDyKUs06evoW02UsFLOgg.pPDTUkBAc48ZeuT6ld5NOxgQ7Y1q6VknZnPtH44nYwkg.JPEG/naver-04a3447757296613f6ff.jpg?type=w580",
+    "type": "BLOG",
+    "photo_id": 1703470449,
+    "review_id": 116023309,
+    "registered_at": "2026-08-29 11:17:27",
+    "updated_at": "2026-08-29 11:37:54",
+    "title": "삼성역 맛집 마쯔가제 평일런치 카이센동 39,000원",
+    "blog_link_url": "http://blog.naver.com/sodu1234/224393867032",
+    "media_type": "PHOTO",
+    "ui_type": "POST"
+   },
+   {
+    "confirm_id": "12101050",
+    "url": "https://postfiles.pstatic.net/MjAyNjA4MTBfNjkg/MDAxNzg2Mjk1MDQzNDg4.bHrGUptP0XTM1KllYO7HmocSJMpaT1CUFUvQBcj11zMg.a8Yq1K_rQTFTkqUsaGIAaxX4wasV9PS0kSOWq0L9Ywgg.JPEG/naver-35b0c88ae32662f2822e.jpg?type=w275",
+    "type": "BLOG",
+    "photo_id": 1703470421,
+    "review_id": 116023309,
+    "registered_at": "2026-08-29 11:17:25",
+    "updated_at": "2026-08-29 11:37:54",
+    "title": "삼성역 맛집 마쯔가제 평일런치 카이센동 39,000원",
+    "blog_link_url": "http://blog.naver.com/sodu1234/224393867032",
+    "media_type": "PHOTO",
+    "ui_type": "POST"
+   },
+   {
+    "confirm_id": "12101050",
+    "url": "https://postfiles.pstatic.net/MjAyNjA4MTBfMjg2/MDAxNzg2Mjk1MDQyMzE5.UTy1vtgrqNaTa55CNASoryWJHdTZcsSw5LPXyUjLjuog.mG5aN_dR0-UnX9cjfE8wuxHesvG5qJLQxOe3SPF3zGMg.JPEG/naver-c0e4b496dc3000e8554d.jpg?type=w580",
+    "type": "BLOG",
+    "photo_id": 1703470411,
+    "review_id": 116023309,
+    "registered_at": "2026-08-29 11:17:24",
+    "updated_at": "2026-08-29 11:37:54",
+    "title": "삼성역 맛집 마쯔가제 평일런치 카이센동 39,000원",
+    "blog_link_url": "http://blog.naver.com/sodu1234/224393867032",
+    "media_type": "PHOTO",
+    "ui_type": "POST"
+   },
+   {
+    "confirm_id": "12101050",
+    "url": "https://postfiles.pstatic.net/MjAyNjA3MjRfMTY0/MDAxNzg0ODUzMTU2ODMw.mAN2BmfMQPa0oMaSOWJxZtOx04QJXVAISnyVFveZqXUg.R1B_OAD2bScGRDZzbB8dOXKSHV9JSH1Gd8BAg1A7lQ4g.JPEG/IMG%EF%BC%BF9218.JPG?type=w966",
+    "type": "BLOG",
+    "photo_id": 1682026848,
+    "review_id": 114319396,
+    "registered_at": "2026-07-25 06:18:52",
+    "updated_at": "2026-07-25 06:36:12",
+    "title": "코엑스 오크우드 일식집 마쯔가제 런치정식 내돈내산후기",
+    "blog_link_url": "http://blog.naver.com/ybnver/224356290980",
+    "media_type": "PHOTO",
+    "ui_type": "POST"
+   },
+   {
+    "confirm_id": "12101050",
+    "url": "https://postfiles.pstatic.net/MjAyNjA3MjRfMTU4/MDAxNzg0ODUzMTgxMTEx.AZOd42pAU9J3Kd8E23sbvUSVrT7Jy3r6cBUmVAyU6NAg.60WoFn4jnLA2TiZhjvz5ZPB8pQP9B-Acx04mHVh0IwEg.JPEG/IMG%EF%BC%BF9223.JPG?type=w966",
+    "type": "BLOG",
+    "photo_id": 1682026654,
+    "review_id": 114319396,
+    "registered_at": "2026-07-25 06:18:38",
+    "updated_at": "2026-07-25 06:36:12",
+    "title": "코엑스 오크우드 일식집 마쯔가제 런치정식 내돈내산후기",
+    "blog_link_url": "http://blog.naver.com/ybnver/224356290980",
+    "media_type": "PHOTO",
+    "ui_type": "POST"
+   },
+   {
+    "confirm_id": "12101050",
+    "url": "https://postfiles.pstatic.net/MjAyNjA3MjRfMjMx/MDAxNzg0ODUzMTgxNDY4.yTqkgjGFD7Sk2OeoYsu2OLBWyRgTzuLnpDGjBniWY_8g.H7aYRZBuZzCpVH7RX6_n4hD5HLzvWifbfAVuNRF9_pgg.JPEG/IMG%EF%BC%BF9222.JPG?type=w966",
+    "type": "BLOG",
+    "photo_id": 1682026690,
+    "review_id": 114319396,
+    "registered_at": "2026-07-25 06:18:41",
+    "updated_at": "2026-07-25 06:36:12",
+    "title": "코엑스 오크우드 일식집 마쯔가제 런치정식 내돈내산후기",
+    "blog_link_url": "http://blog.naver.com/ybnver/224356290980",
+    "media_type": "PHOTO",
+    "ui_type": "POST"
+   },
+   {
+    "confirm_id": "12101050",
+    "url": "https://postfiles.pstatic.net/MjAyNjA3MjRfNzMg/MDAxNzg0ODUzMTcxNjY0.SSp5cVCgI8dBqb9YJK5nzwTy2ZsJRYhPAk2Ifq4JyQgg.rKMgJtMqHAtKzB-0KAXqZFFbVc5Ytx3CNkWBxuqMFlQg.JPEG/output%EF%BC%BF1726977114.jpg?type=w966",
+    "type": "BLOG",
+    "photo_id": 1682026676,
+    "review_id": 114319396,
+    "registered_at": "2026-07-25 06:18:40",
+    "updated_at": "2026-07-25 06:36:12",
+    "title": "코엑스 오크우드 일식집 마쯔가제 런치정식 내돈내산후기",
+    "blog_link_url": "http://blog.naver.com/ybnver/224356290980",
+    "media_type": "PHOTO",
+    "ui_type": "POST"
+   },
+   {
+    "confirm_id": "12101050",
+    "url": "https://postfiles.pstatic.net/MjAyNjAzMjdfMjU1/MDAxNzc0NTkwNzI3MDcx.cQ5xJGMlGjskB_jvwTPyy97ZzGvmwCzZIROZpwV3Qnsg.Y_YB3gKpz4ERYIY3QbDlvoksJzIJWegIrugkUTD1Zr0g.JPEG/900%EF%BC%BFScreenshot%EF%BC%BF20260327%EF%BC%BF144754%EF%BC%BFCatchTable.jpg?type=w773",
+    "type": "BLOG",
+    "photo_id": 1594879862,
+    "review_id": 107088976,
+    "registered_at": "2026-03-28 04:12:59",
+    "updated_at": "2026-03-28 04:21:11",
+    "title": "삼성동 일식당 마쯔가제 룸접대 런치코스 8만원 카제코스 후기",
+    "blog_link_url": "http://blog.naver.com/dream6347/224231478289",
+    "media_type": "PHOTO",
+    "ui_type": "POST"
+   },
+   {
+    "confirm_id": "12101050",
+    "url": "https://postfiles.pstatic.net/MjAyNjAzMjdfMTM4/MDAxNzc0NTkwNzI3OTE2.1RV_EDSbvDffE01aTqWHekDzP-lyAjhtCg1R7NbGIHAg.pTDcL73fX3c2DSZf3ohbOAyjUCFpj8tQX7fNqO3gnHAg.JPEG/900%EF%BC%BF20260327%EF%BC%BF120435.jpg?type=w773",
+    "type": "BLOG",
+    "photo_id": 1594879805,
+    "review_id": 107088976,
+    "registered_at": "2026-03-28 04:12:53",
+    "updated_at": "2026-03-28 04:21:11",
+    "title": "삼성동 일식당 마쯔가제 룸접대 런치코스 8만원 카제코스 후기",
+    "blog_link_url": "http://blog.naver.com/dream6347/224231478289",
+    "media_type": "PHOTO",
+    "ui_type": "POST"
+   },
+   {
+    "confirm_id": "12101050",
+    "url": "https://postfiles.pstatic.net/MjAyNjAxMjFfMjMx/MDAxNzY5MDAzNDQ0Njky.PzYgEObtJjMLuYSlwmGlnhZI4_4QiyrLvT1JBIgq07gg.Z4dE-uvbRUN1gKHyIDiQ2_3nlMC9m80naiQP56e7JGcg.JPEG/IMG%EF%BC%BF3923.jpg?type=w466",
+    "type": "BLOG",
+    "photo_id": 1549604070,
+    "review_id": 103214133,
+    "registered_at": "2026-01-24 19:00:03",
+    "updated_at": "2026-01-24 19:10:18",
+    "title": "삼성동 오크우드 코엑스 일식 레스토랑｜마쯔가제 히츠마부시",
+    "blog_link_url": "http://blog.naver.com/uminzx/224155937691",
+    "media_type": "PHOTO",
+    "ui_type": "POST"
+   },
+   {
+    "confirm_id": "12101050",
+    "url": "https://postfiles.pstatic.net/MjAyNjAxMjJfMjA4/MDAxNzY5MDQ4Nzk2OTkw.5WGzmzU-Z5g0hEGU19UdDJphbg-JW1wYlMeRRV2D2N0g.k29UJDMFbgZbDVu1NGz2EPnLMDDK7uPBD2jLaNkROTcg.JPEG/SE-C044835A-0AE7-476D-B661-89055DA6C620.jpg?type=w466",
+    "type": "BLOG",
+    "photo_id": 1549603943,
+    "review_id": 103214133,
+    "registered_at": "2026-01-24 18:59:53",
+    "updated_at": "2026-01-24 19:10:18",
+    "title": "삼성동 오크우드 코엑스 일식 레스토랑｜마쯔가제 히츠마부시",
+    "blog_link_url": "http://blog.naver.com/uminzx/224155937691",
+    "media_type": "PHOTO",
+    "ui_type": "POST"
+   },
+   {
+    "confirm_id": "12101050",
+    "url": "https://postfiles.pstatic.net/MjAyNjAxMjJfMTQz/MDAxNzY5MDQ5MjcyNDI1.HT--5-QsrghTUZr4CehYWd-SMS2JUJzAPszAdsNq42Ig.eCAAB_akji7Hy1q2crVDbk--w92OLUh93MOhJbtiMGUg.JPEG/SE-CB75692E-3B95-43EA-A564-AF49A865A236.jpg?type=w966",
+    "type": "BLOG",
+    "photo_id": 1549604057,
+    "review_id": 103214133,
+    "registered_at": "2026-01-24 19:00:02",
+    "updated_at": "2026-01-24 19:10:18",
+    "title": "삼성동 오크우드 코엑스 일식 레스토랑｜마쯔가제 히츠마부시",
+    "blog_link_url": "http://blog.naver.com/uminzx/224155937691",
+    "media_type": "PHOTO",
+    "ui_type": "POST"
+   },
+   {
+    "confirm_id": "12101050",
+    "url": "https://postfiles.pstatic.net/MjAyNjAxMjFfMjA4/MDAxNzY5MDAzNDI2NzE3.-eAvPosc0F5jDlLiTpwloCLf7AmhXh6wmqdkvGCvedcg.10aPWUsEna0DcT0Cv0CMlq6t3T0RuGwK169CgbBEU-Eg.JPEG/IMG%EF%BC%BF3920.jpg?type=w466",
+    "type": "BLOG",
+    "photo_id": 1549603967,
+    "review_id": 103214133,
+    "registered_at": "2026-01-24 18:59:54",
+    "updated_at": "2026-01-24 19:10:18",
+    "title": "삼성동 오크우드 코엑스 일식 레스토랑｜마쯔가제 히츠마부시",
+    "blog_link_url": "http://blog.naver.com/uminzx/224155937691",
+    "media_type": "PHOTO",
+    "ui_type": "POST"
+   },
+   {
+    "confirm_id": "12101050",
+    "url": "https://postfiles.pstatic.net/MjAyNjAxMjJfMjM3/MDAxNzY5MDQ4Nzk4NDQ0.VP34FEMZsvlmGx6kat-_gU3ZY1ArlaUKPFzH9GFQQAUg.8lYpTHMKcXeC_FPZveUkwBJzWm19YSE_mkm30fwFeSYg.JPEG/SE-0558FA7B-B000-46B3-9F73-D054E6EBCDB3.jpg?type=w966",
+    "type": "BLOG",
+    "photo_id": 1549604144,
+    "review_id": 103214133,
+    "registered_at": "2026-01-24 19:00:09",
+    "updated_at": "2026-01-24 19:10:18",
+    "title": "삼성동 오크우드 코엑스 일식 레스토랑｜마쯔가제 히츠마부시",
+    "blog_link_url": "http://blog.naver.com/uminzx/224155937691",
+    "media_type": "PHOTO",
+    "ui_type": "POST"
+   },
+   {
+    "confirm_id": "12101050",
+    "url": "https://postfiles.pstatic.net/MjAyNjAxMjFfMTY2/MDAxNzY5MDAzNDI2OTY3.9wkjZjDyltmEw1my8XjWF9MD7wUw1fobMCIP1TZhwT0g.QYY2hSyGn4UC9jf1dYB7EOJo129_C2sIkcXDSi9Tu5kg.JPEG/IMG%EF%BC%BF3926.jpg?type=w466",
+    "type": "BLOG",
+    "photo_id": 1549604055,
+    "review_id": 103214133,
+    "registered_at": "2026-01-24 19:00:02",
+    "updated_at": "2026-01-24 19:10:18",
+    "title": "삼성동 오크우드 코엑스 일식 레스토랑｜마쯔가제 히츠마부시",
+    "blog_link_url": "http://blog.naver.com/uminzx/224155937691",
+    "media_type": "PHOTO",
+    "ui_type": "POST"
+   },
+   {
+    "confirm_id": "12101050",
+    "url": "https://postfiles.pstatic.net/MjAyNjAxMjFfMTUw/MDAxNzY5MDAzNDQ1MDc1.ajLCYPVKFpaoycG9njw428DLDR3ptrEtBFy8Crt8SW4g.T6cED0y_blEBVn5sVYfGDRkRF-ky1B4-VTL1eQWFca8g.JPEG/IMG%EF%BC%BF3925.jpg?type=w466",
+    "type": "BLOG",
+    "photo_id": 1549604051,
+    "review_id": 103214133,
+    "registered_at": "2026-01-24 19:00:01",
+    "updated_at": "2026-01-24 19:10:18",
+    "title": "삼성동 오크우드 코엑스 일식 레스토랑｜마쯔가제 히츠마부시",
+    "blog_link_url": "http://blog.naver.com/uminzx/224155937691",
+    "media_type": "PHOTO",
+    "ui_type": "POST"
+   },
+   {
+    "confirm_id": "12101050",
+    "url": "https://postfiles.pstatic.net/MjAyNTEyMDFfMjU1/MDAxNzY0NTQ1NDQ5NTA5.g05LqNmCRZCEe-XIV2zggwut6vlJvPzjeY66Gk89xLsg.dW0YVFQeffCEt_u_0PK8LnnERZpfv-ZZqiwNtcjBjdgg.JPEG/IMG%EF%BC%BF2836.JPG?type=w773",
+    "type": "BLOG",
+    "photo_id": 1510440731,
+    "review_id": 99951499,
+    "registered_at": "2025-12-02 11:00:22",
+    "updated_at": "2025-12-02 11:14:00",
+    "title": "[삼성역 일식] 마쯔가제 저녁 스시정식&셰프의 도시락",
+    "blog_link_url": "http://blog.naver.com/wlslozlo/224094855222",
+    "media_type": "PHOTO",
+    "ui_type": "POST"
+   },
+   {
+    "confirm_id": "12101050",
+    "url": "https://postfiles.pstatic.net/MjAyNTEyMDFfNyAg/MDAxNzY0NTQ1NDk3NjY0.yUL37x0UHjKC_V72zLF-nXH0bAm1_qFZwDKRd63pO_og.V5aJofRLp3PC4ZuQkmIrZ1C3F1Vp2PsCN0gjMn1pEGQg.JPEG/IMG%EF%BC%BF2871.JPG?type=w773",
+    "type": "BLOG",
+    "photo_id": 1510440664,
+    "review_id": 99951499,
+    "registered_at": "2025-12-02 11:00:17",
+    "updated_at": "2025-12-02 11:14:00",
+    "title": "[삼성역 일식] 마쯔가제 저녁 스시정식&셰프의 도시락",
+    "blog_link_url": "http://blog.naver.com/wlslozlo/224094855222",
+    "media_type": "PHOTO",
+    "ui_type": "POST"
+   },
+   {
+    "confirm_id": "12101050",
+    "url": "https://postfiles.pstatic.net/MjAyNTEyMDFfMjkw/MDAxNzY0NTQ1NDUzMDI0.qply2fHRU4sjqjCUuFphdEmJgiVy3ecHGNc1uNPeqpcg.fmFwpZX9eLfupGbZ-jEkXP5ljiKZCZvYeaaudDqGOnAg.JPEG/IMG%EF%BC%BF2852.JPG?type=w773",
+    "type": "BLOG",
+    "photo_id": 1510440782,
+    "review_id": 99951499,
+    "registered_at": "2025-12-02 11:00:27",
+    "updated_at": "2025-12-02 11:14:00",
+    "title": "[삼성역 일식] 마쯔가제 저녁 스시정식&셰프의 도시락",
+    "blog_link_url": "http://blog.naver.com/wlslozlo/224094855222",
+    "media_type": "PHOTO",
+    "ui_type": "POST"
+   },
+   {
+    "confirm_id": "12101050",
+    "url": "https://postfiles.pstatic.net/MjAyNTEyMDFfNjUg/MDAxNzY0NTQ1NDU0NjI3.4qekBXzJ50fm_b4j7Z4EWkjJtVKCnKraU0AjTRjR49Eg.VT4E3uTwG2zapK96mxBvyYMN9jP0NG6ORhgv3Nl1n28g.JPEG/IMG%EF%BC%BF2854.JPG?type=w773",
+    "type": "BLOG",
+    "photo_id": 1510440712,
+    "review_id": 99951499,
+    "registered_at": "2025-12-02 11:00:20",
+    "updated_at": "2025-12-02 11:14:00",
+    "title": "[삼성역 일식] 마쯔가제 저녁 스시정식&셰프의 도시락",
+    "blog_link_url": "http://blog.naver.com/wlslozlo/224094855222",
+    "media_type": "PHOTO",
+    "ui_type": "POST"
+   }
+  ]
+ },
+ "blog_review": {
+  "review_count": 21,
+  "reviews": [
+   {
+    "confirm_id": "12101050",
+    "review_id": "116023309",
+    "title": "삼성역 맛집 마쯔가제 평일런치 카이센동 39,000원",
+    "contents": "삼성역 맛집을 찾는 분들 중에 일식당이지만 분위기와 동선까지 함께 보고 고르고 싶다면 마쯔가제를 한 번 체크해볼 만해요. 서울 강남구 삼성동에 있고, 호텔오크우드프리미어 3층에 자리한 일식당이라 모임 목적이 뚜렷할 때 특히 잘 맞아요. 코엑스나 삼성동 쪽에서 식사 장소를 정할 때는 “어디로 가야 하는지”부터 막히는 경우가 있잖아요. 마쯔가제는 삼성역에서 비",
+    "registered_at": "2026-08-29 09:00:00",
+    "author": "인생 is Naver",
+    "origin_url": "https://blog.naver.com/sodu1234/224393867032",
+    "photo_count": 8,
+    "photos": [
+     {
+      "url": "https://postfiles.pstatic.net/MjAyNjA4MTBfMjg2/MDAxNzg2Mjk1MDQyMzE5.UTy1vtgrqNaTa55CNASoryWJHdTZcsSw5LPXyUjLjuog.mG5aN_dR0-UnX9cjfE8wuxHesvG5qJLQxOe3SPF3zGMg.JPEG/naver-c0e4b496dc3000e8554d.jpg?type=w580",
+      "photo_id": 1703470411
+     },
+     {
+      "url": "https://postfiles.pstatic.net/MjAyNjA4MTBfNjkg/MDAxNzg2Mjk1MDQzNDg4.bHrGUptP0XTM1KllYO7HmocSJMpaT1CUFUvQBcj11zMg.a8Yq1K_rQTFTkqUsaGIAaxX4wasV9PS0kSOWq0L9Ywgg.JPEG/naver-35b0c88ae32662f2822e.jpg?type=w275",
+      "photo_id": 1703470421
+     },
+     {
+      "url": "https://postfiles.pstatic.net/MjAyNjA4MTBfMTIw/MDAxNzg2Mjk1MDMxOTc4.rLnwLHf2pe9gRDCGs8EGKcIrDyKUs06evoW02UsFLOgg.pPDTUkBAc48ZeuT6ld5NOxgQ7Y1q6VknZnPtH44nYwkg.JPEG/naver-04a3447757296613f6ff.jpg?type=w580",
+      "photo_id": 1703470449
+     },
+     {
+      "url": "https://postfiles.pstatic.net/MjAyNjA4MTBfODIg/MDAxNzg2Mjk1MDQ1ODg1.hcP8LQJquGKLRtmzWNzC8Vj3k2leV_Rv7tS8kCmyjWIg.4Sa4VjXwnxauiGLUNTgrDc1TofjdB73mqMDqpudasK8g.JPEG/naver-e87d23c77c8a3746a579.jpg?type=w580",
+      "photo_id": 1703470397
+     },
+     {
+      "url": "https://postfiles.pstatic.net/MjAyNjA4MTBfMjI1/MDAxNzg2Mjk1MDQxMjYy.r2pPHW0cEJ1aO-LA91RF56RI5tsId659nZn2waeXlmsg.MdGfseIisKd7h3okSFH--HLTNzfvFM_bNd4nuOvwql4g.JPEG/naver-5f782f3d1bf2e2831893.jpg?type=w580",
+      "photo_id": 1703470453
+     },
+     {
+      "url": "https://postfiles.pstatic.net/MjAyNjA4MTBfMTQ3/MDAxNzg2Mjk1MDMwNjEw.6yxOsnuwfMu39MjhQOk8H1nLpPLsXpMlC9hBRs7utzQg.r7GF6izPbCzjj_GDoFfJsC8gdPCP7dwG0G3tfKtnjIkg.JPEG/naver-e8e2d40c7ad9ec22f3da.jpg?type=w580",
+      "photo_id": 1703470451
+     },
+     {
+      "url": "https://postfiles.pstatic.net/MjAyNjA4MTBfMjY3/MDAxNzg2Mjk1MDQ0MDM4.vwMm56cXfU3EnQcioVIB30gcCmgzQHct6HGtef8NzVIg.0yAY9-6tvaTpYN4h-lwT6q2Iacn0OOr3W9w9hu_krtQg.JPEG/naver-ea3030a7f7cba8bbf91c.jpg?type=w275",
+      "photo_id": 1703470461
+     },
+     {
+      "url": "https://postfiles.pstatic.net/MjAyNjA4MTBfMjEg/MDAxNzg2Mjk1MDM3Mjgx.SzwIAj13EUxjWXhQzoVw9Twv01PiHvPUAkoaHKUQGVcg.JIOcsxzOQBKZZ1906qiCPcJnM81GkO1LXY-dypGXZZYg.JPEG/naver-371d94b258385d26c2c9.jpg?type=w580",
+      "photo_id": 1703470382
+     }
+    ]
+   },
+   {
+    "confirm_id": "12101050",
+    "review_id": "117191665",
+    "title": "[삼성역/봉은사역] 오크우드호텔 마쯔가제, 대접하기 좋은 일식당",
+    "contents": "안녕하세요 호이땅입니당! 변호사님이 점심 사주신다해서 오크우드호텔 3층에 있는 마쯔가제에 다녀왔습니다~~ 매년 가격이 오르고있던데,, 그래도 고급, 깔끔, 맛있는 곳!! 전 갈때마다 장어덮밥을 시켜먹어용 귀한 분 대접하기에 좋고, 상견례, 가족모임, 회사 회식 등 두루두루 추천하는 곳 (실제로 변호사님들도 예약 많이하심) 가볼까용~~~ -강남구 테헤란로87",
+    "registered_at": "2026-08-14 19:29:00",
+    "author": "해리샐리",
+    "origin_url": "https://blog.naver.com/lilac_note/224378806428",
+    "photo_count": 12,
+    "photos": [
+     {
+      "url": "https://postfiles.pstatic.net/MjAyNjA4MTJfMTAx/MDAxNzg2NTIwMTc0NDAy.w_e_bJYly5mnw4sNxsDITbkUGYL6ojc9ljyrwLgHyu4g.Qqp7xk0gBmlYsZCX0Xy9Iq5Pi52QFk-srEBvNdaXPE4g.JPEG/900_20260729_122817.jpg?type=w966",
+      "photo_id": 1718046643
+     },
+     {
+      "url": "https://postfiles.pstatic.net/MjAyNjA4MTJfOTIg/MDAxNzg2NTIwMTc2MzA0.rsgW0E8nJPs3KUm7_CkQ1r0KeAGUyvYxk15v1f1yKbUg.nTRc9eAzM-QNFXSkrN_lWZmYqoOBFv4wyVtaNei5JMUg.JPEG/900_20260729_122819.jpg?type=w966",
+      "photo_id": 1718046637
+     },
+     {
+      "url": "https://postfiles.pstatic.net/MjAyNjA4MTJfMTUy/MDAxNzg2NTIwMTc1MzEy.xNGsDgLjI-LZy2MAQ_z3WnS2Dljx9RmMenhpVxSzKDgg.SyXnK50E9zJfnveqQ79RqGF4obSIptactSK6q4f3bdUg.JPEG/900_20260729_120742.jpg?type=w466",
+      "photo_id": 1718046635
+     },
+     {
+      "url": "https://postfiles.pstatic.net/MjAyNjA4MTRfMTg2/MDAxNzg2NzAyNjUwMDUx.pEmKJwWPi4Cr0cplM4H5PT0FZLAlrS1lL6InDNAkwPQg.o-kAOgRztK2EDgWPAzHLjGzBi7lDZf7TAhEfnpSFANwg.JPEG/SE-7f5d8104-9620-11f1-84a5-25227935c11e.jpg?type=w966",
+      "photo_id": 1718046656
+     },
+     {
+      "url": "https://postfiles.pstatic.net/MjAyNjA4MTJfMTk5/MDAxNzg2NTIwMTc3MDY0.aLyClCPmP0NyoLYXx4z7Ebya9gPhdTZ0SjrwleC2i60g.upaaIGlFZ78uFhDQrxsatFxujg3fFN_OW_PmtBTgV90g.JPEG/900_20260729_120758.jpg?type=w466",
+      "photo_id": 1718046647
+     },
+     {
+      "url": "https://postfiles.pstatic.net/MjAyNjA4MTRfNzMg/MDAxNzg2NzAyNzk1MTQ2.AcleOdmAXSDcYaT9Ob4DGgfyFZf7MicPu_fyUDjO22Yg.zCqjvwYI3x0_dYlHxt7Q3FSnk2R1ci1dijyMfGYAlfIg.JPEG/SE-7f639b89-9620-11f1-84a5-a5e1a73ee9ea.jpg?type=w966",
+      "photo_id": 1718046642
+     },
+     {
+      "url": "https://postfiles.pstatic.net/MjAyNjA4MTJfMjI4/MDAxNzg2NTIwMTc0NDcz.jdwaDyBOlrB_ZpXSrPccQGlANrQ_vxm2n6eOnCK3r6sg.8BujnUkdwxAHYdS6gv9EcV4BUL6DAzJ2Ys8xXt4Oxxwg.JPEG/900_20260729_120747.jpg?type=w466",
+      "photo_id": 1718046655
+     },
+     {
+      "url": "https://postfiles.pstatic.net/MjAyNjA4MTJfMjYy/MDAxNzg2NTIwMTc0Mzk2.vaq_17tlfRBo_efQPF1xorCS66noQ21Hy79mE8sqdJYg.zr5_R7T8q-L75C1qYRHrNq0U7RZANnTno-KOJFizmzsg.JPEG/900_20260729_120701.jpg?type=w966",
+      "photo_id": 1718046640
+     },
+     {
+      "url": "https://postfiles.pstatic.net/MjAyNjA4MTJfMTEz/MDAxNzg2NTIwMTc0NDYx.RhPzHKBtB6MqgKyBS0YUaDVr_gZKnSCpn4Cx7zpwbCMg.eoHN5JB1k5ObuuB5QhwQPCF0RbPhqlWIx8hWMEJ87mYg.JPEG/900_20260729_120706.jpg?type=w966",
+      "photo_id": 1718046636
+     },
+     {
+      "url": "https://postfiles.pstatic.net/MjAyNjA4MTJfMTg0/MDAxNzg2NTIwMTc2MDYz.hinu-36Nsek-LD6cIJf3Tloa-sVi7U_BCIZZrCPUPVsg.wQ2F8nNT1Xe-wb5oa-kQ6LLwaBVN5oid2QDH43uUIEog.JPEG/900_20260729_120735.jpg?type=w466",
+      "photo_id": 1718046634
+     }
+    ]
+   },
+   {
+    "confirm_id": "12101050",
+    "review_id": "114319396",
+    "title": "코엑스 오크우드 일식집 마쯔가제 런치정식 내돈내산후기",
+    "contents": "코엑스 오크우드 일식집 마쯔가제 런치정식 내돈내산후기 삼성동에서 볼일이 있어서 점심을 먹으러 찾아보다가 네이버 예약으로 미리 예약하고 마쯔가제에 다녀왔어요. 평일 점심시간이라 사람이 많지 않을 줄 알았는데, 생각보다 손님이 정말 많더라고요ㅎㅎㅎㅎ 예약하고 방문하길 잘했다는 생각이 들었어요. 마쯔가제 서울특별시 강남구 테헤란로87길 46 호텔오크우드프리미어 ",
+    "registered_at": "2026-07-24 09:59:00",
+    "author": "Bon voyage.",
+    "origin_url": "https://blog.naver.com/ybnver/224356290980",
+    "photo_count": 15,
+    "photos": [
+     {
+      "url": "https://postfiles.pstatic.net/MjAyNjA3MjRfNTgg/MDAxNzg0ODUzMTU3NDQ3.Nfdy1dbiUvU_1bUy4o-eW9XJnCkhD15CUQzpCuxnkKIg.rWQakkzx2j3cIo5Mr1cV-UJTHGILNFjKVOvOS4bp6yAg.JPEG/IMG%EF%BC%BF9221.JPG?type=w966",
+      "photo_id": 1682026824
+     },
+     {
+      "url": "https://postfiles.pstatic.net/MjAyNjA3MjRfMSAg/MDAxNzg0ODUzMzM0Nzkx.0CmuLNZRyfpDWK28H-oLH1tdgEMoVuFemb4lcGYT__Qg.5wcbnkL-Knb0mpnbtszGktAySr9v86SEz0XrYMjfdnwg.JPEG/SE-3DA566AC-6537-4AD7-87AB-6C409BCA3DFC.jpg?type=w466",
+      "photo_id": 1682026771
+     },
+     {
+      "url": "https://postfiles.pstatic.net/MjAyNjA3MjRfNzMg/MDAxNzg0ODUzMTcxNjY0.SSp5cVCgI8dBqb9YJK5nzwTy2ZsJRYhPAk2Ifq4JyQgg.rKMgJtMqHAtKzB-0KAXqZFFbVc5Ytx3CNkWBxuqMFlQg.JPEG/output%EF%BC%BF1726977114.jpg?type=w966",
+      "photo_id": 1682026676
+     },
+     {
+      "url": "https://postfiles.pstatic.net/MjAyNjA3MjRfMTc2/MDAxNzg0ODUzMzM1NjYw.O90ofN_jyDKMyT3uWSKsw9P8D_ZSL_ebthbWS9VY7yQg.UTiF-daq6bXOshIUsfgPFStpjle0CMrYxaBRlgYCOvog.JPEG/SE-C134E954-3623-47BF-A22E-5A2424964B85.jpg?type=w466",
+      "photo_id": 1682026734
+     },
+     {
+      "url": "https://postfiles.pstatic.net/MjAyNjA3MjRfMjMx/MDAxNzg0ODUzMTgxNDY4.yTqkgjGFD7Sk2OeoYsu2OLBWyRgTzuLnpDGjBniWY_8g.H7aYRZBuZzCpVH7RX6_n4hD5HLzvWifbfAVuNRF9_pgg.JPEG/IMG%EF%BC%BF9222.JPG?type=w966",
+      "photo_id": 1682026690
+     },
+     {
+      "url": "https://postfiles.pstatic.net/MjAyNjA3MjRfNTkg/MDAxNzg0ODUzMTk4Nzcy.dn_bl117vRCVu8ocS2G709TZ5v2_EykbM88FLPtsypEg.aB3sXGQmixBvXjmQ1JcsS6f163BgOjrjOuRQVmRD8tkg.JPEG/output%EF%BC%BF3881307954.jpg?type=w966",
+      "photo_id": 1682026864
+     },
+     {
+      "url": "https://postfiles.pstatic.net/MjAyNjA3MjRfMTgz/MDAxNzg0ODUzMTU2OTYw.aYMwjIE7E8Lya5r8vDBE7yUdn1ygTe-hThMGQG__81cg.aToSuRByQdxIDDFel35ydlKk1fCoE6LD38S_SSs7e5sg.JPEG/IMG%EF%BC%BF9217.JPG?type=w966",
+      "photo_id": 1682026858
+     },
+     {
+      "url": "https://postfiles.pstatic.net/MjAyNjA3MjRfMTA3/MDAxNzg0ODU0NDA5NjE5.wktPcCnkA9_B4cwNj2tPbdF0O6A2EATZD_Bszp__7ZIg.TSoWgFqx9SAqWQkMJ-IgQxVCC7UVquF3CWKESzyysn0g.PNG/%EC%82%BC%EC%84%B1%EB%8F%99%EC%98%A4%ED%81%AC%EC%9A%B0%EB%93%9C_%EB%A7%9B%EC%A7%91_%EB%A7%88%EC%AF%94%EA%B0%80%EC%A0%9C_%EC%B6%94%EC%B2%9C_%ED%9B%84%EA%B8%B0.png?type=w966",
+      "photo_id": 1682026733
+     },
+     {
+      "url": "https://postfiles.pstatic.net/MjAyNjA3MjRfMTU4/MDAxNzg0ODUzMTgxMTEx.AZOd42pAU9J3Kd8E23sbvUSVrT7Jy3r6cBUmVAyU6NAg.60WoFn4jnLA2TiZhjvz5ZPB8pQP9B-Acx04mHVh0IwEg.JPEG/IMG%EF%BC%BF9223.JPG?type=w966",
+      "photo_id": 1682026654
+     },
+     {
+      "url": "https://postfiles.pstatic.net/MjAyNjA3MjRfMTkx/MDAxNzg0ODUzMzM2NzAx.A6KsSNZ1GfJ5lZZb0mzvA-HbJGg5A4lzAJdci4bmo8gg.md6erK-eSa2IGzlPHmWtmqnRcvhnf_Wxr2WwCK87v4wg.JPEG/SE-E74DE4A8-CA8F-48B7-A08C-A339EED61AD8.jpg?type=w466",
+      "photo_id": 1682026609
+     }
+    ]
+   },
+   {
+    "confirm_id": "12101050",
+    "review_id": "107088976",
+    "title": "삼성동 일식당 마쯔가제 룸접대 런치코스 8만원 카제코스 후기",
+    "contents": "평일 점심에 삼성동 오크우드 호텔 안 3층에 위치한 마쯔가제에 다녀왔다. 미리 예약하고 갔고, 방문 시기는 3월 평일 점심이었다. 룸으로 안내받았는데 조용해서 확실히 접대나 미팅용으로 좋겠다는 생각이 들었다. 룸 분위기가 생각보다 훨씬 차분하고 프라이빗했다. 내가 찍은 사진이 없어서 공식 홈페이지 사진으로 대체... 마쯔가제 몇 번 가봤는데 아래 사진처럼 ",
+    "registered_at": "2026-03-27 15:25:00",
+    "author": "기록하는 일상 차곡이",
+    "origin_url": "https://blog.naver.com/dream6347/224231478289",
+    "photo_count": 9,
+    "photos": [
+     {
+      "url": "https://postfiles.pstatic.net/MjAyNjAzMjdfNCAg/MDAxNzc0NTkwNzI2OTc4.UoN8mGh2OCaCjzbr9B1rMgDtD9R1wcifVecnjUpd79Ug.22u9HbSWQ7gKOv8qjSujMlxVn5xvIcYOIn4yyHez_RQg.JPEG/900%EF%BC%BF1774590560013.jpg?type=w773",
+      "photo_id": 1594879844
+     },
+     {
+      "url": "https://postfiles.pstatic.net/MjAyNjAzMjdfMTgx/MDAxNzc0NTkwNzI2MTMw.TlDO1yqlMYxlbwCikkxeoB_wImUSmfOxsxaviR-Q8RAg.VMMRKhRv_vlvT0W8NPrxF5rkCTlA223nhtxm5hfCB58g.JPEG/900%EF%BC%BF1774590599466.jpg?type=w773",
+      "photo_id": 1594879823
+     },
+     {
+      "url": "https://postfiles.pstatic.net/MjAyNjAzMjdfNDgg/MDAxNzc0NTkwNzI2MTIz.G_1lBKL6kcqGRPwCUGd0z0ZmNiBA1P-ULPr8T4YRijIg.ADcIlVf5Qzpp1IzHZBzcQpiwUOpt2GW-o5GWVV_-ETAg.JPEG/900%EF%BC%BF1774590630314.jpg?type=w773",
+      "photo_id": 1594879925
+     },
+     {
+      "url": "https://postfiles.pstatic.net/MjAyNjAzMjdfNzQg/MDAxNzc0NTkwNzI3Mjk4.LpGUwgmmBWaX1sXiDkzzVkSQ2MIAGsLCNOkcg7dZa4wg.dXaMXLzdIQ3eeLq-kpJSYJrJZi_sYXZdP_IPCzkhprIg.JPEG/900%EF%BC%BF1774590657195.jpg?type=w773",
+      "photo_id": 1594880043
+     },
+     {
+      "url": "https://postfiles.pstatic.net/MjAyNjAzMjdfMjQ2/MDAxNzc0NTkwNzI2MDQ4.0pvucLQc_pHJJ58GQcCeMFjciuu0WhDJc7IyhHI2lpsg.KlLwP5OyBxOH4qFh4lsLjk7K9eZavRCBEF8Hzxll7Psg.JPEG/900%EF%BC%BF1774590690760.jpg?type=w773",
+      "photo_id": 1594879940
+     },
+     {
+      "url": "https://postfiles.pstatic.net/MjAyNjAzMjdfMTA2/MDAxNzc0NTkwNzI2MTIz.1d_nJaxTojVPAOSLIodR437ZvhUWnLPXLaloTJbQPZcg.Vwq8Ff0qJHX0f5j17LxUCj1_1T2WQnC63TJ-FJ0SdZMg.JPEG/900%EF%BC%BF20260327%EF%BC%BF114621.jpg?type=w773",
+      "photo_id": 1594879878
+     },
+     {
+      "url": "https://postfiles.pstatic.net/MjAyNjAzMjdfMTAx/MDAxNzc0NTkwNzI3MTc0.tfEtZ5qCERvlHlbmIRCfzuRi5AWrDozyvBlZDTWrFtEg.izmDmv6fbNMeTyGHxC4Mj5Ha1EjerCiZT28Mq3HaQVgg.JPEG/900%EF%BC%BF20260327%EF%BC%BF123039.jpg?type=w386",
+      "photo_id": 1594879971
+     },
+     {
+      "url": "https://postfiles.pstatic.net/MjAyNjAzMjdfMTM4/MDAxNzc0NTkwNzI3OTE2.1RV_EDSbvDffE01aTqWHekDzP-lyAjhtCg1R7NbGIHAg.pTDcL73fX3c2DSZf3ohbOAyjUCFpj8tQX7fNqO3gnHAg.JPEG/900%EF%BC%BF20260327%EF%BC%BF120435.jpg?type=w773",
+      "photo_id": 1594879805
+     },
+     {
+      "url": "https://postfiles.pstatic.net/MjAyNjAzMjdfMjU1/MDAxNzc0NTkwNzI3MDcx.cQ5xJGMlGjskB_jvwTPyy97ZzGvmwCzZIROZpwV3Qnsg.Y_YB3gKpz4ERYIY3QbDlvoksJzIJWegIrugkUTD1Zr0g.JPEG/900%EF%BC%BFScreenshot%EF%BC%BF20260327%EF%BC%BF144754%EF%BC%BFCatchTable.jpg?type=w773",
+      "photo_id": 1594879862
+     }
+    ]
+   }
+  ],
+  "current_review_count": 4,
+  "last_review_id": "107088976",
+  "last_registered_at": "2026-03-27 15:25:00",
+  "requested_page_size": 4,
+  "requested_page": 1
+ },
+ "kakaomap_review": {
+  "score_set": {
+   "review_count": 10,
+   "total_score": 23,
+   "average_score": 2.3,
+   "photo_count": 7,
+   "strength_counts": [
+    {
+     "id": 2,
+     "count": 2
+    },
+    {
+     "id": 3,
+     "count": 2
+    },
+    {
+     "id": 5,
+     "count": 1
+    },
+    {
+     "id": 4,
+     "count": 1
+    }
+   ],
+   "strength_uv": 3
+  },
+  "strength_description": [
+   {
+    "id": 5,
+    "name": "맛",
+    "icon_url": "https://t1.kakaocdn.net/kakaomap_mobile/android/icon_review_delicious.png"
+   },
+   {
+    "id": 1,
+    "name": "가성비",
+    "icon_url": "https://t1.kakaocdn.net/kakaomap_mobile/android/icon_review_money.png"
+   },
+   {
+    "id": 2,
+    "name": "친절",
+    "icon_url": "https://t1.kakaocdn.net/kakaomap_mobile/android/icon_review_kind.png"
+   },
+   {
+    "id": 3,
+    "name": "분위기",
+    "icon_url": "https://t1.kakaocdn.net/kakaomap_mobile/android/icon_review_mood.png"
+   },
+   {
+    "id": 4,
+    "name": "주차",
+    "icon_url": "https://t1.kakaocdn.net/kakaomap_mobile/android/icon_review_parking.png"
+   }
+  ],
+  "reviews": [
+   {
+    "review_id": 15257898,
+    "star_rating": 3,
+    "contents": "쏘쏘함\n특별히 맛있는 정돈 아님\n부산에 장어덮밥 맛있는 곳들이 있다보니\n전체적으로 맛이 상향 평준화 된 듯?\n\n그에 비해 여기는 평범한 느낌\n가격은 글쎄용",
+    "photo_count": 4,
+    "photos": [
+     {
+      "url": "http://t1.kakaocdn.net/local/kakaomapPhoto/review/d6a938f927e33a60f21cb0e83ff316e90988ea9e?original",
+      "photo_id": 8484347,
+      "media_type": "PHOTO",
+      "status": "S",
+      "ui_type": "PROFILE",
+      "duration": 0,
+      "review_id": 15257898,
+      "updated_at": "2026-04-13 23:26:26",
+      "meta": {
+       "owner": {
+        "map_user_id": "2716265112",
+        "nickname": "햄짱이",
+        "image_url": "http://t1.kakaocdn.net/local/kakaomapPhoto/profile/95d8571d5a70665b2b2de06d63d6b6239f5d3b35?original",
+        "timeline_level": {
+         "badge": "02",
+         "now_level": 21,
+         "show_other": true
+        },
+        "review_count": 14,
+        "follower_count": 2,
+        "profile_links": [],
+        "average_score": 3.8,
+        "profile_status": "S"
+       },
+       "is_liked_by_me": false,
+       "view_count": 5,
+       "like_count": 0,
+       "near": true,
+       "place": {
+        "confirm_id": "12101050",
+        "place_name": "마쯔가제"
+       }
+      }
+     },
+     {
+      "url": "http://t1.kakaocdn.net/local/kakaomapPhoto/review/745c8dd10377364d3df415f6aa98b9b79df9350b?original",
+      "photo_id": 8484348,
+      "media_type": "PHOTO",
+      "status": "S",
+      "ui_type": "PROFILE",
+      "duration": 0,
+      "review_id": 15257898,
+      "updated_at": "2026-04-13 23:26:26",
+      "meta": {
+       "owner": {
+        "map_user_id": "2716265112",
+        "nickname": "햄짱이",
+        "image_url": "http://t1.kakaocdn.net/local/kakaomapPhoto/profile/95d8571d5a70665b2b2de06d63d6b6239f5d3b35?original",
+        "timeline_level": {
+         "badge": "02",
+         "now_level": 21,
+         "show_other": true
+        },
+        "review_count": 14,
+        "follower_count": 2,
+        "profile_links": [],
+        "average_score": 3.8,
+        "profile_status": "S"
+       },
+       "is_liked_by_me": false,
+       "view_count": 35,
+       "like_count": 0,
+       "near": true,
+       "place": {
+        "confirm_id": "12101050",
+        "place_name": "마쯔가제"
+       }
+      }
+     },
+     {
+      "url": "http://t1.kakaocdn.net/local/kakaomapPhoto/review/3858f0897eb61dedab6fcf6f73897982385e778d?original",
+      "photo_id": 8484349,
+      "media_type": "PHOTO",
+      "status": "S",
+      "ui_type": "PROFILE",
+      "duration": 0,
+      "review_id": 15257898,
+      "updated_at": "2026-04-13 23:26:26",
+      "meta": {
+       "owner": {
+        "map_user_id": "2716265112",
+        "nickname": "햄짱이",
+        "image_url": "http://t1.kakaocdn.net/local/kakaomapPhoto/profile/95d8571d5a70665b2b2de06d63d6b6239f5d3b35?original",
+        "timeline_level": {
+         "badge": "02",
+         "now_level": 21,
+         "show_other": true
+        },
+        "review_count": 14,
+        "follower_count": 2,
+        "profile_links": [],
+        "average_score": 3.8,
+        "profile_status": "S"
+       },
+       "is_liked_by_me": false,
+       "view_count": 7,
+       "like_count": 0,
+       "near": true,
+       "place": {
+        "confirm_id": "12101050",
+        "place_name": "마쯔가제"
+       }
+      }
+     },
+     {
+      "url": "http://t1.kakaocdn.net/local/kakaomapPhoto/review/4d03693c41c13214e7181f41593e5b1113f71aec?original",
+      "photo_id": 8484350,
+      "media_type": "PHOTO",
+      "status": "S",
+      "ui_type": "PROFILE",
+      "duration": 0,
+      "review_id": 15257898,
+      "updated_at": "2026-04-13 23:26:26",
+      "meta": {
+       "owner": {
+        "map_user_id": "2716265112",
+        "nickname": "햄짱이",
+        "image_url": "http://t1.kakaocdn.net/local/kakaomapPhoto/profile/95d8571d5a70665b2b2de06d63d6b6239f5d3b35?original",
+        "timeline_level": {
+         "badge": "02",
+         "now_level": 21,
+         "show_other": true
+        },
+        "review_count": 14,
+        "follower_count": 2,
+        "profile_links": [],
+        "average_score": 3.8,
+        "profile_status": "S"
+       },
+       "is_liked_by_me": false,
+       "view_count": 5,
+       "like_count": 0,
+       "near": true,
+       "place": {
+        "confirm_id": "12101050",
+        "place_name": "마쯔가제"
+       }
+      }
+     }
+    ],
+    "status": "S",
+    "registered_at": "2026-04-13 23:26:26",
+    "updated_at": "2026-04-13 23:26:26",
+    "meta": {
+     "owner": {
+      "map_user_id": "2716265112",
+      "nickname": "햄짱이",
+      "profile_image_url": "http://t1.kakaocdn.net/local/kakaomapPhoto/profile/95d8571d5a70665b2b2de06d63d6b6239f5d3b35?original",
+      "timeline_level": {
+       "badge": "02",
+       "now_level": 21
+      },
+      "review_count": 14,
+      "follower_count": 2,
+      "average_score": 3.8,
+      "profile_status": "S",
+      "is_following": false
+     },
+     "is_liked_by_me": false,
+     "is_owner_me": false,
+     "like_count": 1,
+     "like_user_profile_image_list": [
+      "http://th-p.talk.kakao.co.kr/th/talkp/wkLaKPm3i5/AeePDER6LEe3TfhGMjDSH1/x75l3t.jpg"
+     ],
+     "is_place_owner_pick": false,
+     "place": {
+      "confirm_id": "12101050",
+      "place_name": "마쯔가제"
+     }
+    }
+   },
+   {
+    "review_id": 12102051,
+    "star_rating": 5,
+    "contents": "조용한 분위기에서 오랜만에 맛있는 초밥 먹었어요 !\n초밥도 쫄깃하게 맛있지만 튀김이 맛도리네요 😋",
+    "photo_count": 1,
+    "photos": [
+     {
+      "url": "http://t1.kakaocdn.net/local/kakaomapPhoto/review/ad507a98de29460476f4e4769ba17a75f270fe6d?original",
+      "photo_id": 5888421,
+      "media_type": "PHOTO",
+      "status": "S",
+      "ui_type": "PROFILE",
+      "review_id": 12102051,
+      "updated_at": "2025-02-10 21:13:15",
+      "meta": {
+       "owner": {
+        "map_user_id": "1108807821",
+        "nickname": "쵸이",
+        "timeline_level": {
+         "badge": "02",
+         "now_level": 11,
+         "show_other": true
+        },
+        "review_count": 22,
+        "follower_count": 0,
+        "profile_links": [],
+        "average_score": 4.8,
+        "profile_status": "S"
+       },
+       "is_liked_by_me": false,
+       "view_count": 155,
+       "like_count": 0,
+       "near": true,
+       "place": {
+        "confirm_id": "12101050",
+        "place_name": "마쯔가제"
+       }
+      }
+     }
+    ],
+    "status": "S",
+    "registered_at": "2025-02-10 21:13:15",
+    "updated_at": "2025-02-10 21:13:15",
+    "meta": {
+     "owner": {
+      "map_user_id": "1108807821",
+      "nickname": "쵸이",
+      "timeline_level": {
+       "badge": "02",
+       "now_level": 11
+      },
+      "review_count": 22,
+      "follower_count": 0,
+      "average_score": 4.8,
+      "profile_status": "S",
+      "is_following": false
+     },
+     "is_liked_by_me": false,
+     "is_owner_me": false,
+     "like_count": 0,
+     "like_user_profile_image_list": [],
+     "is_place_owner_pick": false,
+     "place": {
+      "confirm_id": "12101050",
+      "place_name": "마쯔가제"
+     }
+    }
+   },
+   {
+    "review_id": 9171778,
+    "star_rating": 1,
+    "contents": "점심정식보다 히츠마부시가 그나마.. 내돈내산하긴 진짜 아까운집",
+    "photo_count": 1,
+    "photos": [
+     {
+      "url": "http://t1.kakaocdn.net/local/kakaomapPhoto/review/92e231130057c72b7dcc51f45206890b6e63ee3e?original",
+      "photo_id": 3945848,
+      "media_type": "PHOTO",
+      "status": "S",
+      "ui_type": "PROFILE",
+      "review_id": 9171778,
+      "updated_at": "2023-12-20 11:25:20",
+      "meta": {
+       "owner": {
+        "map_user_id": "444796018",
+        "nickname": "두루미",
+        "image_url": "http://t1.kakaocdn.net/local/kakaomapPhoto/profile/eaaa3186eb129cffbb5b31fc45512caa539c95e9?original",
+        "timeline_level": {
+         "badge": "02",
+         "now_level": 23,
+         "show_other": true
+        },
+        "review_count": 40,
+        "follower_count": 1,
+        "profile_links": [],
+        "average_score": 4.2,
+        "profile_status": "S"
+       },
+       "is_liked_by_me": false,
+       "view_count": 82,
+       "like_count": 0,
+       "near": true,
+       "place": {
+        "confirm_id": "12101050",
+        "place_name": "마쯔가제"
+       }
+      }
+     }
+    ],
+    "status": "S",
+    "registered_at": "2023-12-20 11:25:20",
+    "updated_at": "2023-12-20 11:25:20",
+    "meta": {
+     "owner": {
+      "map_user_id": "444796018",
+      "nickname": "두루미",
+      "profile_image_url": "http://t1.kakaocdn.net/local/kakaomapPhoto/profile/eaaa3186eb129cffbb5b31fc45512caa539c95e9?original",
+      "timeline_level": {
+       "badge": "02",
+       "now_level": 23
+      },
+      "review_count": 40,
+      "follower_count": 1,
+      "average_score": 4.2,
+      "profile_status": "S",
+      "is_following": false
+     },
+     "is_liked_by_me": false,
+     "is_owner_me": false,
+     "like_count": 1,
+     "like_user_profile_image_list": [
+      "http://t1.kakaocdn.net/local/kakaomapPhoto/profile/8009bf96f3138b6f56e2dc500f780d9f22aba161?original"
+     ],
+     "is_place_owner_pick": false,
+     "place": {
+      "confirm_id": "12101050",
+      "place_name": "마쯔가제"
+     }
+    }
+   }
+  ],
+  "photos": [
+   {
+    "url": "http://t1.kakaocdn.net/local/kakaomapPhoto/review/745c8dd10377364d3df415f6aa98b9b79df9350b?original",
+    "photo_id": 8484348,
+    "media_type": "PHOTO",
+    "status": "S",
+    "ui_type": "PROFILE",
+    "duration": 0,
+    "review_id": 15257898,
+    "updated_at": "2026-09-30 05:45:14",
+    "meta": {
+     "owner": {
+      "map_user_id": "2716265112",
+      "nickname": "햄짱이",
+      "image_url": "http://t1.kakaocdn.net/local/kakaomapPhoto/profile/95d8571d5a70665b2b2de06d63d6b6239f5d3b35?original",
+      "timeline_level": {
+       "badge": "02",
+       "now_level": 21,
+       "show_other": true
+      },
+      "review_count": 14,
+      "follower_count": 2,
+      "profile_links": [],
+      "average_score": 3.8,
+      "profile_status": "S"
+     },
+     "is_liked_by_me": false,
+     "near": false,
+     "place": {
+      "confirm_id": "12101050",
+      "place_name": "마쯔가제"
+     }
+    }
+   },
+   {
+    "url": "http://t1.kakaocdn.net/local/kakaomapPhoto/review/ad507a98de29460476f4e4769ba17a75f270fe6d?original",
+    "photo_id": 5888421,
+    "media_type": "PHOTO",
+    "status": "S",
+    "ui_type": "PROFILE",
+    "review_id": 12102051,
+    "updated_at": "2026-09-29 16:40:03",
+    "meta": {
+     "owner": {
+      "map_user_id": "1108807821",
+      "nickname": "쵸이",
+      "timeline_level": {
+       "badge": "02",
+       "now_level": 11,
+       "show_other": true
+      },
+      "review_count": 22,
+      "follower_count": 0,
+      "profile_links": [],
+      "average_score": 4.8,
+      "profile_status": "S"
+     },
+     "is_liked_by_me": false,
+     "near": false,
+     "place": {
+      "confirm_id": "12101050",
+      "place_name": "마쯔가제"
+     }
+    }
+   },
+   {
+    "url": "http://t1.kakaocdn.net/local/kakaomapPhoto/review/d6a938f927e33a60f21cb0e83ff316e90988ea9e?original",
+    "photo_id": 8484347,
+    "media_type": "PHOTO",
+    "status": "S",
+    "ui_type": "PROFILE",
+    "duration": 0,
+    "review_id": 15257898,
+    "updated_at": "2026-09-30 05:45:14",
+    "meta": {
+     "owner": {
+      "map_user_id": "2716265112",
+      "nickname": "햄짱이",
+      "image_url": "http://t1.kakaocdn.net/local/kakaomapPhoto/profile/95d8571d5a70665b2b2de06d63d6b6239f5d3b35?original",
+      "timeline_level": {
+       "badge": "02",
+       "now_level": 21,
+       "show_other": true
+      },
+      "review_count": 14,
+      "follower_count": 2,
+      "profile_links": [],
+      "average_score": 3.8,
+      "profile_status": "S"
+     },
+     "is_liked_by_me": false,
+     "near": false,
+     "place": {
+      "confirm_id": "12101050",
+      "place_name": "마쯔가제"
+     }
+    }
+   },
+   {
+    "url": "http://t1.kakaocdn.net/local/kakaomapPhoto/review/4d03693c41c13214e7181f41593e5b1113f71aec?original",
+    "photo_id": 8484350,
+    "media_type": "PHOTO",
+    "status": "S",
+    "ui_type": "PROFILE",
+    "duration": 0,
+    "review_id": 15257898,
+    "updated_at": "2026-09-30 05:45:14",
+    "meta": {
+     "owner": {
+      "map_user_id": "2716265112",
+      "nickname": "햄짱이",
+      "image_url": "http://t1.kakaocdn.net/local/kakaomapPhoto/profile/95d8571d5a70665b2b2de06d63d6b6239f5d3b35?original",
+      "timeline_level": {
+       "badge": "02",
+       "now_level": 21,
+       "show_other": true
+      },
+      "review_count": 14,
+      "follower_count": 2,
+      "profile_links": [],
+      "average_score": 3.8,
+      "profile_status": "S"
+     },
+     "is_liked_by_me": false,
+     "near": false,
+     "place": {
+      "confirm_id": "12101050",
+      "place_name": "마쯔가제"
+     }
+    }
+   },
+   {
+    "url": "http://t1.kakaocdn.net/local/kakaomapPhoto/review/3858f0897eb61dedab6fcf6f73897982385e778d?original",
+    "photo_id": 8484349,
+    "media_type": "PHOTO",
+    "status": "S",
+    "ui_type": "PROFILE",
+    "duration": 0,
+    "review_id": 15257898,
+    "updated_at": "2026-09-30 05:45:14",
+    "meta": {
+     "owner": {
+      "map_user_id": "2716265112",
+      "nickname": "햄짱이",
+      "image_url": "http://t1.kakaocdn.net/local/kakaomapPhoto/profile/95d8571d5a70665b2b2de06d63d6b6239f5d3b35?original",
+      "timeline_level": {
+       "badge": "02",
+       "now_level": 21,
+       "show_other": true
+      },
+      "review_count": 14,
+      "follower_count": 2,
+      "profile_links": [],
+      "average_score": 3.8,
+      "profile_status": "S"
+     },
+     "is_liked_by_me": false,
+     "near": false,
+     "place": {
+      "confirm_id": "12101050",
+      "place_name": "마쯔가제"
+     }
+    }
+   },
+   {
+    "url": "http://t1.kakaocdn.net/local/kakaomapPhoto/review/ae7373aee2e56768c3c7a2569ddc9afc27e308e0?original",
+    "photo_id": 5621867,
+    "media_type": "PHOTO",
+    "status": "S",
+    "ui_type": "PROFILE",
+    "review_id": 11658899,
+    "updated_at": "2026-09-29 15:16:16",
+    "meta": {
+     "owner": {
+      "map_user_id": "770521480",
+      "nickname": "꿈지니",
+      "image_url": "http://t1.kakaocdn.net/local/kakaomapPhoto/profile/f887238e68419e0a134a34e020a9b7de60ef3e0b?original",
+      "timeline_level": {
+       "badge": "03",
+       "now_level": 53,
+       "show_other": true
+      },
+      "review_count": 342,
+      "follower_count": 64,
+      "profile_links": [],
+      "average_score": 4.0,
+      "profile_status": "S"
+     },
+     "is_liked_by_me": false,
+     "near": false,
+     "place": {
+      "confirm_id": "12101050",
+      "place_name": "마쯔가제"
+     }
+    }
+   },
+   {
+    "url": "http://t1.kakaocdn.net/local/kakaomapPhoto/review/92e231130057c72b7dcc51f45206890b6e63ee3e?original",
+    "photo_id": 3945848,
+    "media_type": "PHOTO",
+    "status": "S",
+    "ui_type": "PROFILE",
+    "review_id": 9171778,
+    "updated_at": "2026-09-29 06:56:18",
+    "meta": {
+     "owner": {
+      "map_user_id": "444796018",
+      "nickname": "두루미",
+      "image_url": "http://t1.kakaocdn.net/local/kakaomapPhoto/profile/eaaa3186eb129cffbb5b31fc45512caa539c95e9?original",
+      "timeline_level": {
+       "badge": "02",
+       "now_level": 23,
+       "show_other": true
+      },
+      "review_count": 40,
+      "follower_count": 1,
+      "profile_links": [],
+      "average_score": 4.2,
+      "profile_status": "S"
+     },
+     "is_liked_by_me": false,
+     "near": false,
+     "place": {
+      "confirm_id": "12101050",
+      "place_name": "마쯔가제"
+     }
+    }
+   }
+  ],
+  "timeline_score_table": {
+   "act_review": {
+    "event": 0,
+    "place_banner": [
+     {
+      "title": "사진/영상 등록",
+      "score": 3
+     },
+     {
+      "title": "글 작성",
+      "score": 2
+     }
+    ]
+   }
+  },
+  "has_next": false,
+  "has_my_review": false
+ },
+ "find_way": {
+  "subway": {
+   "station_simple_name": "삼성중앙역",
+   "exit_num": "4",
+   "to_exit_distance": 582,
+   "subway_list": [
+    {
+     "subway_line_id": "SES9",
+     "subway_line_icon_name": "9"
+    }
+   ],
+   "to_exit_minute": 10
+  }
+ },
+ "navi_guides": [
+  {
+   "guide_id": "774902",
+   "name": "주차장",
+   "flag": "G",
+   "type": "PARKING",
+   "point": {
+    "lon": 127.058054351531,
+    "lat": 37.5106918978367
+   }
+  },
+  {
+   "guide_id": "774903",
+   "name": "입구",
+   "flag": "G",
+   "point": {
+    "lon": 127.057863816062,
+    "lat": 37.5110467167379
+   }
+  }
+ ],
+ "trend_rank": {
+  "show_ranking_card": true
+ },
+ "place_add_info": {
+  "facilities": {
+   "is_parking": true,
+   "is_pet": false,
+   "is_fordisabled": true,
+   "is_kidzone": false
+  },
+  "store_facility_icons": [
+   {
+    "text": "주차가능",
+    "url": "https://t1.kakaocdn.net/localimg/2025_place/parking_line.png"
+   },
+   {
+    "text": "휠체어사용",
+    "url": "https://t1.kakaocdn.net/localimg/2025_place/wheelchair_line.png"
+   }
+  ],
+  "tags": [
+   "상견례",
+   "이동약자접근",
+   "점심식사",
+   "초복메뉴추천",
+   "코스요리",
+   "회식장소"
+  ],
+  "ai_mate": {
+   "store_facility_icons": [
+    {
+     "text": "예약가능",
+     "url": "https://t1.kakaocdn.net/localimg/2025_AIMATE/reservation_line.png"
+    },
+    {
+     "text": "포장가능",
+     "url": "https://t1.kakaocdn.net/localimg/2025_AIMATE/takeout_line.png"
+    }
+   ],
+   "store_infos": [
+    {
+     "title": "주차",
+     "summary": "호텔 지하 주차장 이용 가능, 식사 시 3시간 무료 주차 지원, 발렛파킹 가능"
+    },
+    {
+     "title": "기타",
+     "summary": "화장실 남녀분리"
+    }
+   ]
+  },
+  "simple_parking_infos": {
+   "texts": [
+    "무료 주차",
+    "발렛파킹"
+   ],
+   "summary": "호텔 지하 주차장 이용 가능, 식사 시 3시간 무료 주차 지원, 발렛파킹 가능",
+   "has_ai_mate_data": true
+  },
+  "full_detail_infos": [
+   {
+    "title": "주차 정보",
+    "summary": "호텔 지하 주차장 이용 가능, 식사 시 3시간 무료 주차 지원, 발렛파킹 가능",
+    "items": [
+     {
+      "icon": {
+       "text": "주차 가능",
+       "url": "https://t1.kakaocdn.net/localimg/place/2026/infoIcon/icon_parkingsquare_line.svg"
+      },
+      "tags": {
+       "text": "무료",
+       "color": "Blue"
+      },
+      "contents": [
+       {
+        "label": "주차 가능"
+       }
+      ]
+     },
+     {
+      "icon": {
+       "text": "발렛파킹",
+       "url": "https://t1.kakaocdn.net/localimg/place/2026/infoIcon/icon_valetparking_line.svg"
+      },
+      "contents": [
+       {
+        "label": "발렛파킹"
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "title": "좌석 옵션",
+    "items": [
+     {
+      "icon": {
+       "text": "프라이빗룸",
+       "url": "https://t1.kakaocdn.net/localimg/place/2026/infoIcon/icon_door_line.svg"
+      },
+      "contents": [
+       {
+        "label": "프라이빗룸"
+       }
+      ]
+     },
+     {
+      "icon": {
+       "text": "단체석",
+       "url": "https://t1.kakaocdn.net/localimg/place/2026/infoIcon/icon_peoples_line.svg"
+      },
+      "contents": [
+       {
+        "label": "단체석"
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "title": "편의 시설",
+    "items": [
+     {
+      "icon": {
+       "text": "남녀분리 화장실",
+       "url": "https://t1.kakaocdn.net/localimg/place/2026/infoIcon/icon_toiletline_line.svg"
+      },
+      "contents": [
+       {
+        "label": "남녀분리 화장실"
+       }
+      ]
+     },
+     {
+      "icon": {
+       "text": "콜키지 부과",
+       "url": "https://t1.kakaocdn.net/localimg/place/2026/infoIcon/icon_wine_line.svg"
+      },
+      "contents": [
+       {
+        "label": "콜키지 부과"
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "title": "상세 정보",
+    "items": [
+     {
+      "icon": {
+       "text": "결제 방식",
+       "url": "https://t1.kakaocdn.net/localimg/place/2026/infoIcon/icon_wallet_line.svg"
+      },
+      "contents": [
+       {
+        "label": "제로페이",
+        "landing_url": "https://www.zeropay.or.kr"
+       }
+      ]
+     },
+     {
+      "icon": {
+       "text": "장소키워드",
+       "url": "https://t1.kakaocdn.net/localimg/place/2026/infoIcon/icon_tag_line.svg"
+      },
+      "contents": [
+       {
+        "label": "상견례",
+        "landing_url": "https://map.kakao.com/?q=상견례"
+       },
+       {
+        "label": "이동약자접근",
+        "landing_url": "https://map.kakao.com/?q=이동약자접근"
+       },
+       {
+        "label": "점심식사",
+        "landing_url": "https://map.kakao.com/?q=점심식사"
+       },
+       {
+        "label": "초복메뉴추천",
+        "landing_url": "https://map.kakao.com/?q=초복메뉴추천"
+       },
+       {
+        "label": "코스요리",
+        "landing_url": "https://map.kakao.com/?q=코스요리"
+       },
+       {
+        "label": "회식장소",
+        "landing_url": "https://map.kakao.com/?q=회식장소"
+       }
+      ]
+     },
+     {
+      "icon": {
+       "text": "유아의자",
+       "url": "https://t1.kakaocdn.net/localimg/place/2026/infoIcon/icon_babychair_line.svg"
+      },
+      "contents": [
+       {
+        "label": "유아의자"
+       }
+      ]
+     }
+    ]
+   }
+  ],
+  "add_info_summaries": [
+   {
+    "texts": [
+     "무료 주차",
+     "발렛파킹"
+    ],
+    "summary": "호텔 지하 주차장 이용 가능, 식사 시 3시간 무료 주차 지원, 발렛파킹 가능",
+    "icon": {
+     "text": "주차정보",
+     "url": "https://t1.kakaocdn.net/localimg/place/2026/infoIconMini/parkingicon.svg"
+    },
+    "has_ai_mate_data": true
+   }
+  ],
+  "simple_detail_infos": [
+   {
+    "text": "단체석",
+    "url": "https://t1.kakaocdn.net/localimg/place/2026/infoIcon/icon_peoples_line.svg"
+   },
+   {
+    "text": "프라이빗룸",
+    "url": "https://t1.kakaocdn.net/localimg/place/2026/infoIcon/icon_door_line.svg"
+   },
+   {
+    "text": "콜키지 부과",
+    "url": "https://t1.kakaocdn.net/localimg/place/2026/infoIcon/icon_wine_line.svg"
+   },
+   {
+    "text": "유아의자",
+    "url": "https://t1.kakaocdn.net/localimg/place/2026/infoIcon/icon_babychair_line.svg"
+   }
+  ]
+ },
+ "reward": {
+  "fiy": {
+   "basic_info": 0,
+   "contact": 200,
+   "menu": 200,
+   "open_hour": 200,
+   "delete_place": 200,
+   "add_info": 0,
+   "max_amount": 600
+  }
+ },
+ "ai_content_warning": {
+  "is_home_tab_display_enabled": true,
+  "is_info_tab_display_enabled": true
+ }
+}

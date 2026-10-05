@@ -1,0 +1,2583 @@
+{
+ "ai_mate": {
+  "summary": {
+   "title": "신선한 해산물과 고급스러운 호텔 뷔페",
+   "contents": [
+    "프라이빗룸",
+    "케이크 반입 가능",
+    "키즈프렌들리, 유아의자 있음",
+    "채식 메뉴"
+   ]
+  },
+  "bottom_sheet": {
+   "title": "신선한 해산물과 고급스러운 호텔 뷔페",
+   "summary": "신선한 해산물과 다양한 고급 요리를 제공하는 호텔 뷔페입니다. 특히 해산물 코너가 강점이며, 중식과 디저트도 다양하게 구성되어 있어 가족 모임이나 기념일 식사에 적합합니다. 고급스러운 분위기와 편안한 좌석 배치로 여유로운 식사가 가능합니다.",
+   "sheets": [
+    {
+     "title": "어린이 옵션",
+     "keywords": [
+      "키즈프렌들리",
+      "유아의자 있음",
+      "키즈메뉴 있음"
+     ],
+     "text": "아이의 체형에 맞는 전용 의자 세팅, 아기의자 및 아이식기 구비, 웰컴 키즈 어메니티 제공, 키즈 프렌들리 서비스, 프리미엄 어린이 전용 식기 제공",
+     "ui_type": "KEYWORDS_TEXT"
+    },
+    {
+     "title": "제공 서비스",
+     "list": [
+      {
+       "title": "좌석 옵션",
+       "keywords": [
+        "프라이빗룸",
+        "단체석"
+       ]
+      },
+      {
+       "title": "매장 특징",
+       "keywords": [
+        "케이크 반입 가능",
+        "콜키지 부과"
+       ]
+      },
+      {
+       "title": "채식 메뉴",
+       "keywords": [
+        "제공"
+       ]
+      }
+     ],
+     "ui_type": "LIST"
+    }
+   ],
+   "landing_url": "https://kanana.kakao.com/place/redirect?entry=kakaomap&cid=2179756"
+  },
+  "blog_summaries": [
+   {
+    "title": "분위기",
+    "keywords": [
+     "고급스러운",
+     "차분한",
+     "세련된"
+    ]
+   },
+   {
+    "title": "방문 목적",
+    "keywords": [
+     "기념일"
+    ]
+   },
+   {
+    "title": "맛",
+    "keywords": [
+     "고소한",
+     "신선한"
+    ]
+   },
+   {
+    "title": "동반인",
+    "keywords": [
+     "친구·지인",
+     "가족",
+     "연인·데이트 커플"
+    ]
+   }
+  ],
+  "price_level": {
+   "symbol": "₩₩₩₩₩"
+  },
+  "ai_questions": [
+   "가족 프로모션은 있나요?",
+   "예약은 필수인가요?",
+   "가성비 좋은 메뉴 추천해줘",
+   "전반적인 가격대 알려줘"
+  ],
+  "suggested_questions": [
+   {
+    "text": "가족 프로모션은 있나요?",
+    "landing_url": "https://kanana.kakao.com/place/redirect?entry=kakaomap&t_src=kakaomap&t_ch=pw_place&q=%EA%B0%80%EC%A1%B1+%ED%94%84%EB%A1%9C%EB%AA%A8%EC%85%98%EC%9D%80+%EC%9E%88%EB%82%98%EC%9A%94%3F&cid=2179756"
+   },
+   {
+    "text": "예약은 필수인가요?",
+    "landing_url": "https://kanana.kakao.com/place/redirect?entry=kakaomap&t_src=kakaomap&t_ch=pw_place&q=%EC%98%88%EC%95%BD%EC%9D%80+%ED%95%84%EC%88%98%EC%9D%B8%EA%B0%80%EC%9A%94%3F&cid=2179756"
+   },
+   {
+    "text": "가성비 좋은 메뉴 추천해줘",
+    "landing_url": "https://kanana.kakao.com/place/redirect?entry=kakaomap&t_src=kakaomap&t_ch=pw_place&q=%EA%B0%80%EC%84%B1%EB%B9%84+%EC%A2%8B%EC%9D%80+%EB%A9%94%EB%89%B4+%EC%B6%94%EC%B2%9C%ED%95%B4%EC%A4%98&cid=2179756"
+   },
+   {
+    "text": "전반적인 가격대 알려줘",
+    "landing_url": "https://kanana.kakao.com/place/redirect?entry=kakaomap&t_src=kakaomap&t_ch=pw_place&q=%EC%A0%84%EB%B0%98%EC%A0%81%EC%9D%B8+%EA%B0%80%EA%B2%A9%EB%8C%80+%EC%95%8C%EB%A0%A4%EC%A4%98&cid=2179756"
+   }
+  ]
+ },
+ "panel_card_tags": [
+  "TITLE",
+  "PHOTO",
+  "BIZ",
+  "NEWS",
+  "AI_MATE",
+  "SUMMARY",
+  "INFO",
+  "EVENT_KEYWORD",
+  "PRODUCT",
+  "AI_QUESTION",
+  "BOOKING",
+  "SPECIAL",
+  "RELATION",
+  "VISITOR",
+  "REVIEW",
+  "RANKING",
+  "BLOG"
+ ],
+ "panel_tab_tags": [
+  "PRODUCT",
+  "RELATION",
+  "PHOTO",
+  "REVIEW",
+  "BOOKING",
+  "SPECIAL",
+  "NEWS",
+  "BLOG",
+  "RANKING"
+ ],
+ "restrict": {
+  "fiy": {
+   "is_restrict": false
+  },
+  "blog": {
+   "is_restrict": false
+  },
+  "review_read": {
+   "is_restrict": false
+  },
+  "photo": {
+   "is_restrict": false
+  },
+  "fiy_add_info": {
+   "is_restrict": false
+  },
+  "ranking": {
+   "is_restrict": false
+  }
+ },
+ "summary": {
+  "meta": {
+   "updated_at": "2026-06-29 10:13:50"
+  },
+  "confirm_id": "2179756",
+  "name": "온테이블",
+  "status": "Y",
+  "category": {
+   "name": "양식",
+   "id1": "9",
+   "id2": "26",
+   "name1": "음식점",
+   "name2": "양식"
+  },
+  "point": {
+   "lon": 127.0572150862864,
+   "lat": 37.51288742389192
+  },
+  "address": {
+   "disp": "서울 강남구 봉은사로 524 L층 (삼성동)",
+   "jibun": "삼성동 159",
+   "road": "서울 강남구 봉은사로 524 L층",
+   "base_zone_no": "06164",
+   "road_part": "봉은사로 524 L층",
+   "jibun_part": "삼성동 159",
+   "address_detail_part": "L층"
+  },
+  "road_view": {
+   "pano_id": "1208738318",
+   "pan": 206.0,
+   "tilt": -1.0,
+   "point": {
+    "lon": 127.05733739565287,
+    "lat": 37.51308558546849
+   },
+   "level": 0,
+   "url": "https://map.kakaocdn.net/map_roadview/2026/04/9151722/2_100639_9151722_20260413035439_cube/left_800.jpg"
+  },
+  "regions": [
+   {
+    "depth": 1,
+    "id": "I",
+    "name": "서울",
+    "simple_name": "서울"
+   },
+   {
+    "depth": 2,
+    "id": "I1000",
+    "name": "강남구",
+    "simple_name": "강남구"
+   },
+   {
+    "depth": 3,
+    "id": "I10000400",
+    "name": "삼성동",
+    "simple_name": "삼성동"
+   }
+  ],
+  "homepages": [
+   "https://www.thewestinseoulparnas.com/kor/dining/on-table"
+  ],
+  "related_links": {
+   "primary_links": [
+    {
+     "url": "https://www.thewestinseoulparnas.com/kor/dining/on-table",
+     "display_text": "https://www.thewestinseoulparnas.com/kor/dining/on-table"
+    }
+   ]
+  },
+  "phone_numbers": [
+   {
+    "tel": "02-3430-8585"
+   }
+  ],
+  "payments": [],
+  "main_photo_url": "http://t1.kakaocdn.net/local/kakaomapPhoto/review/3d7774cd10fbf593d7990346c6adf5e7ff21d095?original",
+  "display_info": {
+   "display_name1": "온테이블"
+  }
+ },
+ "my_store_notice": {
+  "status": "READY_TO_REGISTER",
+  "notice_count": 0,
+  "is_available_booking": false
+ },
+ "open_hours": {
+  "headline": {
+   "code": "BREAK_TIME",
+   "display_text": "브레이크타임",
+   "display_text_info": "18:00 오픈"
+  },
+  "week_from_today": {
+   "week_periods": [
+    {
+     "days": [
+      {
+       "day_of_the_week_desc": "월(10/5)",
+       "on_days": {
+        "start_end_time_desc": "06:30 ~ 22:00",
+        "break_times_desc": [
+         "10:00 ~ 12:00 브레이크타임",
+         "14:30 ~ 18:00 브레이크타임"
+        ]
+       },
+       "is_highlight": true
+      },
+      {
+       "day_of_the_week_desc": "화(10/6)",
+       "on_days": {
+        "start_end_time_desc": "06:30 ~ 22:00",
+        "break_times_desc": [
+         "10:00 ~ 12:00 브레이크타임",
+         "14:30 ~ 18:00 브레이크타임"
+        ]
+       },
+       "is_highlight": false
+      },
+      {
+       "day_of_the_week_desc": "수(10/7)",
+       "on_days": {
+        "start_end_time_desc": "06:30 ~ 22:00",
+        "break_times_desc": [
+         "10:00 ~ 12:00 브레이크타임",
+         "14:30 ~ 18:00 브레이크타임"
+        ]
+       },
+       "is_highlight": false
+      },
+      {
+       "day_of_the_week_desc": "목(10/8)",
+       "on_days": {
+        "start_end_time_desc": "06:30 ~ 22:00",
+        "break_times_desc": [
+         "10:00 ~ 12:00 브레이크타임",
+         "14:30 ~ 18:00 브레이크타임"
+        ]
+       },
+       "is_highlight": false
+      },
+      {
+       "day_of_the_week_desc": "금(10/9)",
+       "on_days": {
+        "start_end_time_desc": "06:30 ~ 22:00",
+        "break_times_desc": [
+         "10:00 ~ 12:00 브레이크타임",
+         "14:30 ~ 18:00 브레이크타임"
+        ]
+       },
+       "is_highlight": false
+      },
+      {
+       "day_of_the_week_desc": "토(10/10)",
+       "on_days": {
+        "start_end_time_desc": "06:30 ~ 22:00",
+        "break_times_desc": [
+         "10:00 ~ 12:00 브레이크타임",
+         "14:30 ~ 18:00 브레이크타임"
+        ]
+       },
+       "is_highlight": false
+      },
+      {
+       "day_of_the_week_desc": "일(10/11)",
+       "on_days": {
+        "start_end_time_desc": "06:30 ~ 22:00",
+        "break_times_desc": [
+         "10:00 ~ 12:00 브레이크타임",
+         "14:30 ~ 18:00 브레이크타임"
+        ]
+       },
+       "is_highlight": false
+      }
+     ]
+    }
+   ]
+  }
+ },
+ "photos": {
+  "counts": {
+   "total": 1635,
+   "mystore": 0,
+   "vendor": 0,
+   "vod": 0,
+   "kakaomap_review": 23,
+   "food": 26,
+   "indoor": 224,
+   "outdoor": 19,
+   "menu": 0
+  },
+  "photos": [
+   {
+    "confirm_id": "2179756",
+    "url": "http://t1.kakaocdn.net/local/kakaomapPhoto/review/3d7774cd10fbf593d7990346c6adf5e7ff21d095?original",
+    "type": "KMAPREVIEW",
+    "photo_id": 8674212,
+    "review_id": 15469303,
+    "registered_at": "2026-05-10 11:12:39",
+    "updated_at": "2026-09-30 06:43:25",
+    "kakaomap_review_photo_meta": {
+     "owner": {
+      "map_user_id": "1541598523",
+      "nickname": "제주사랑",
+      "image_url": "http://t1.kakaocdn.net/local/kakaomapPhoto/profile/734b2da4a251027346d2affb2d225cb9d3c73364?original",
+      "timeline_level": {
+       "badge": "03",
+       "now_level": 40,
+       "show_other": true
+      },
+      "review_count": 149,
+      "follower_count": 23,
+      "profile_links": [],
+      "average_score": 4.2,
+      "profile_status": "S"
+     }
+    },
+    "title": "",
+    "media_type": "PHOTO",
+    "ui_type": "PROFILE",
+    "duration": 0
+   },
+   {
+    "confirm_id": "2179756",
+    "url": "http://t1.kakaocdn.net/local/kakaomapPhoto/review/b09a25a1e88f5d3874479482dd272fe50cfe3faa?original",
+    "type": "KMAPREVIEW",
+    "photo_id": 8485849,
+    "review_id": 15259557,
+    "registered_at": "2026-04-14 11:19:42",
+    "updated_at": "2026-09-30 05:46:49",
+    "kakaomap_review_photo_meta": {
+     "owner": {
+      "map_user_id": "1596360900",
+      "nickname": "먹도리탕",
+      "image_url": "http://t1.kakaocdn.net/local/kakaomapPhoto/profile/f216f1e44df681acad444758c1992ab9f0baf35f?original",
+      "timeline_level": {
+       "badge": "04",
+       "now_level": 72,
+       "show_other": true
+      },
+      "review_count": 267,
+      "follower_count": 1153,
+      "profile_links": [
+       "[네이버 블로그] 블로그를 소개합니다. 어서와 먹리츄의 블로그 | 먹리츄 https://m.blog.naver.com/meelee2001"
+      ],
+      "average_score": 4.3,
+      "profile_status": "S"
+     }
+    },
+    "title": "",
+    "media_type": "PHOTO",
+    "ui_type": "PROFILE",
+    "duration": 0
+   },
+   {
+    "confirm_id": "2179756",
+    "url": "http://t1.kakaocdn.net/local/kakaomapPhoto/review/b0d5ba669b7adaf1ecdf49f031ce8b101ba19da5?original",
+    "type": "KMAPREVIEW",
+    "photo_id": 8485851,
+    "review_id": 15259557,
+    "registered_at": "2026-04-14 11:19:42",
+    "updated_at": "2026-09-30 05:46:49",
+    "kakaomap_review_photo_meta": {
+     "owner": {
+      "map_user_id": "1596360900",
+      "nickname": "먹도리탕",
+      "image_url": "http://t1.kakaocdn.net/local/kakaomapPhoto/profile/f216f1e44df681acad444758c1992ab9f0baf35f?original",
+      "timeline_level": {
+       "badge": "04",
+       "now_level": 72,
+       "show_other": true
+      },
+      "review_count": 267,
+      "follower_count": 1153,
+      "profile_links": [
+       "[네이버 블로그] 블로그를 소개합니다. 어서와 먹리츄의 블로그 | 먹리츄 https://m.blog.naver.com/meelee2001"
+      ],
+      "average_score": 4.3,
+      "profile_status": "S"
+     }
+    },
+    "title": "",
+    "media_type": "PHOTO",
+    "ui_type": "PROFILE",
+    "duration": 0
+   },
+   {
+    "confirm_id": "2179756",
+    "url": "http://t1.kakaocdn.net/local/kakaomapPhoto/review/c10a599e52425eed99d86137d9e1b1ddf67c696f?original",
+    "type": "KMAPREVIEW",
+    "photo_id": 8485852,
+    "review_id": 15259557,
+    "registered_at": "2026-04-14 11:19:42",
+    "updated_at": "2026-09-30 05:46:49",
+    "kakaomap_review_photo_meta": {
+     "owner": {
+      "map_user_id": "1596360900",
+      "nickname": "먹도리탕",
+      "image_url": "http://t1.kakaocdn.net/local/kakaomapPhoto/profile/f216f1e44df681acad444758c1992ab9f0baf35f?original",
+      "timeline_level": {
+       "badge": "04",
+       "now_level": 72,
+       "show_other": true
+      },
+      "review_count": 267,
+      "follower_count": 1153,
+      "profile_links": [
+       "[네이버 블로그] 블로그를 소개합니다. 어서와 먹리츄의 블로그 | 먹리츄 https://m.blog.naver.com/meelee2001"
+      ],
+      "average_score": 4.3,
+      "profile_status": "S"
+     }
+    },
+    "title": "",
+    "media_type": "PHOTO",
+    "ui_type": "PROFILE",
+    "duration": 0
+   },
+   {
+    "confirm_id": "2179756",
+    "url": "http://t1.kakaocdn.net/local/kakaomapPhoto/review/d30a098e32538b28c63400a245c65cf8c27e7c81?original",
+    "type": "KMAPREVIEW",
+    "photo_id": 7701091,
+    "review_id": 14361011,
+    "registered_at": "2025-12-12 14:33:50",
+    "updated_at": "2026-09-30 01:47:32",
+    "kakaomap_review_photo_meta": {
+     "owner": {
+      "map_user_id": "492614658",
+      "nickname": "지니팡",
+      "image_url": "http://t1.kakaocdn.net/local/kakaomapPhoto/profile/0635529eecef32806bbcb702db4a73270fb4e8c3?original",
+      "timeline_level": {
+       "badge": "03",
+       "now_level": 52,
+       "show_other": true
+      },
+      "review_count": 263,
+      "follower_count": 214,
+      "profile_links": [
+       "https://www.instagram.com/jinheesss"
+      ],
+      "average_score": 4.4,
+      "profile_status": "S"
+     }
+    },
+    "title": "",
+    "media_type": "PHOTO",
+    "ui_type": "PROFILE",
+    "duration": 0
+   },
+   {
+    "confirm_id": "2179756",
+    "url": "http://t1.kakaocdn.net/local/kakaomapPhoto/review/1a7a754b0dcf5630d472542b5dc400aff26a8e23?original",
+    "type": "KMAPREVIEW",
+    "photo_id": 7701073,
+    "review_id": 14361011,
+    "registered_at": "2025-12-12 14:32:32",
+    "updated_at": "2026-09-30 01:47:32",
+    "kakaomap_review_photo_meta": {
+     "owner": {
+      "map_user_id": "492614658",
+      "nickname": "지니팡",
+      "image_url": "http://t1.kakaocdn.net/local/kakaomapPhoto/profile/0635529eecef32806bbcb702db4a73270fb4e8c3?original",
+      "timeline_level": {
+       "badge": "03",
+       "now_level": 52,
+       "show_other": true
+      },
+      "review_count": 263,
+      "follower_count": 214,
+      "profile_links": [
+       "https://www.instagram.com/jinheesss"
+      ],
+      "average_score": 4.4,
+      "profile_status": "S"
+     }
+    },
+    "title": "",
+    "media_type": "PHOTO",
+    "ui_type": "PROFILE",
+    "duration": 0
+   },
+   {
+    "confirm_id": "2179756",
+    "url": "http://t1.kakaocdn.net/local/kakaomapPhoto/review/b9e29b80bd74412d26f7db1bb3cc2cedb09404d0?original",
+    "type": "KMAPREVIEW",
+    "photo_id": 7345849,
+    "review_id": 13938930,
+    "registered_at": "2025-10-13 21:56:17",
+    "updated_at": "2026-09-29 23:56:21",
+    "kakaomap_review_photo_meta": {
+     "owner": {
+      "map_user_id": "426776971",
+      "nickname": "Where the light is",
+      "image_url": "http://t1.kakaocdn.net/local/kakaomapPhoto/profile/fea7f625f0d66a820d784a62b3e2fbee6a8464a0?original",
+      "timeline_level": {
+       "badge": "03",
+       "now_level": 48,
+       "show_other": true
+      },
+      "review_count": 229,
+      "follower_count": 32,
+      "profile_links": [],
+      "average_score": 3.9,
+      "profile_status": "S"
+     }
+    },
+    "title": "",
+    "media_type": "PHOTO",
+    "ui_type": "PROFILE",
+    "duration": 0
+   },
+   {
+    "confirm_id": "2179756",
+    "url": "http://t1.kakaocdn.net/local/kakaomapPhoto/review/3afd9521666423b1c8780b43418bcd9e3a47bf55?original",
+    "type": "KMAPREVIEW",
+    "photo_id": 7345848,
+    "review_id": 13938930,
+    "registered_at": "2025-10-13 21:56:17",
+    "updated_at": "2026-09-29 23:56:21",
+    "kakaomap_review_photo_meta": {
+     "owner": {
+      "map_user_id": "426776971",
+      "nickname": "Where the light is",
+      "image_url": "http://t1.kakaocdn.net/local/kakaomapPhoto/profile/fea7f625f0d66a820d784a62b3e2fbee6a8464a0?original",
+      "timeline_level": {
+       "badge": "03",
+       "now_level": 48,
+       "show_other": true
+      },
+      "review_count": 229,
+      "follower_count": 32,
+      "profile_links": [],
+      "average_score": 3.9,
+      "profile_status": "S"
+     }
+    },
+    "title": "",
+    "media_type": "PHOTO",
+    "ui_type": "PROFILE",
+    "duration": 0
+   },
+   {
+    "confirm_id": "2179756",
+    "url": "http://t1.kakaocdn.net/local/kakaomapPhoto/review/22fcff72a183e0b2ee3cfa84ced9a49a9a101236?original",
+    "type": "KMAPREVIEW",
+    "photo_id": 7345847,
+    "review_id": 13938930,
+    "registered_at": "2025-10-13 21:56:17",
+    "updated_at": "2026-09-29 23:56:21",
+    "kakaomap_review_photo_meta": {
+     "owner": {
+      "map_user_id": "426776971",
+      "nickname": "Where the light is",
+      "image_url": "http://t1.kakaocdn.net/local/kakaomapPhoto/profile/fea7f625f0d66a820d784a62b3e2fbee6a8464a0?original",
+      "timeline_level": {
+       "badge": "03",
+       "now_level": 48,
+       "show_other": true
+      },
+      "review_count": 229,
+      "follower_count": 32,
+      "profile_links": [],
+      "average_score": 3.9,
+      "profile_status": "S"
+     }
+    },
+    "title": "",
+    "media_type": "PHOTO",
+    "ui_type": "PROFILE",
+    "duration": 0
+   },
+   {
+    "confirm_id": "2179756",
+    "url": "https://postfiles.pstatic.net/MjAyNjA1MTFfMjU3/MDAxNzc4NTAxMjkxMzA4.gAdolicLLuSY0NlSNTap-R1ohNRdT3w4kQWdyFFU1PQg.x7KcXCA0qgfWenFclPSQYeAdJqYbuS1ht_YPcgV1etgg.JPEG/SE-ea687a9c-4cf5-11f1-8d90-230cdf11d6af.jpg?type=w466",
+    "type": "BLOG",
+    "photo_id": 1655306650,
+    "review_id": 112141044,
+    "registered_at": "2026-06-17 11:49:42",
+    "updated_at": "2026-06-17 12:06:01",
+    "title": "[웨스틴 서울 파르나스] 5월 가정의 달 뷔페, SAY CHEEEEEZ! | 온:테이블",
+    "blog_link_url": "http://blog.naver.com/dusrhcdus/224282360489",
+    "media_type": "PHOTO",
+    "ui_type": "POST"
+   },
+   {
+    "confirm_id": "2179756",
+    "url": "https://postfiles.pstatic.net/MjAyNjA1MTFfMjA1/MDAxNzc4NTAxMjkyMjM0.HEI55Z2SHmDCo7Li6B3R3JW643SIQVxGEa48Mye0VE8g.GZPlaRVoRYTfktYEcnO6PeR8vcloPkFIktv14sWror4g.JPEG/SE-ea6482f9-4cf5-11f1-8d90-1bdd7fdf81d3.jpg?type=w966",
+    "type": "BLOG",
+    "photo_id": 1655306621,
+    "review_id": 112141044,
+    "registered_at": "2026-06-17 11:49:38",
+    "updated_at": "2026-06-17 12:06:01",
+    "title": "[웨스틴 서울 파르나스] 5월 가정의 달 뷔페, SAY CHEEEEEZ! | 온:테이블",
+    "blog_link_url": "http://blog.naver.com/dusrhcdus/224282360489",
+    "media_type": "PHOTO",
+    "ui_type": "POST"
+   },
+   {
+    "confirm_id": "2179756",
+    "url": "https://postfiles.pstatic.net/MjAyNjA1MTFfMjE1/MDAxNzc4NDc1NDYxMTM1.03F30FrhIGoVy8Ad5bozzpdB-4QAp5er4mGzjsAoH8Qg.9uevcBzpQ_LmeW5GrbHS367phbblz8Evh3AGaP3x1c8g.JPEG/900_20260510_135329.jpg?type=w466",
+    "type": "BLOG",
+    "photo_id": 1655306618,
+    "review_id": 112141044,
+    "registered_at": "2026-06-17 11:49:37",
+    "updated_at": "2026-06-17 12:06:01",
+    "title": "[웨스틴 서울 파르나스] 5월 가정의 달 뷔페, SAY CHEEEEEZ! | 온:테이블",
+    "blog_link_url": "http://blog.naver.com/dusrhcdus/224282360489",
+    "media_type": "PHOTO",
+    "ui_type": "POST"
+   },
+   {
+    "confirm_id": "2179756",
+    "url": "https://postfiles.pstatic.net/MjAyNjA1MTFfMTkz/MDAxNzc4NTAxMjg5NzIx.vdtWX0cuiapcw7B5uQi34zeGUTfdCutC4f8gvcV_ZQAg.Cahhff3KKAasjUrdWWyESjP4RoztPskYaOh023ckQ1Mg.JPEG/SE-ea5c4590-4cf5-11f1-8d90-3714222bdfb6.jpg?type=w966",
+    "type": "BLOG",
+    "photo_id": 1655306574,
+    "review_id": 112141044,
+    "registered_at": "2026-06-17 11:49:31",
+    "updated_at": "2026-06-17 12:06:01",
+    "title": "[웨스틴 서울 파르나스] 5월 가정의 달 뷔페, SAY CHEEEEEZ! | 온:테이블",
+    "blog_link_url": "http://blog.naver.com/dusrhcdus/224282360489",
+    "media_type": "PHOTO",
+    "ui_type": "POST"
+   },
+   {
+    "confirm_id": "2179756",
+    "url": "https://postfiles.pstatic.net/MjAyNjA1MTFfNjMg/MDAxNzc4NTAxMjk3Njgx.HFxK6T19F3yVoZ_2A3u6xxK3rpkppx2CfUrKNgkUWQAg.50rH2G0HuACuoRwCsuqeUR0byZFKornIWm1PYqv-2Xog.JPEG/SE-ea6d83b2-4cf5-11f1-8d90-d7ab3add15f7.jpg?type=w966",
+    "type": "BLOG",
+    "photo_id": 1655306601,
+    "review_id": 112141044,
+    "registered_at": "2026-06-17 11:49:36",
+    "updated_at": "2026-06-17 12:06:01",
+    "title": "[웨스틴 서울 파르나스] 5월 가정의 달 뷔페, SAY CHEEEEEZ! | 온:테이블",
+    "blog_link_url": "http://blog.naver.com/dusrhcdus/224282360489",
+    "media_type": "PHOTO",
+    "ui_type": "POST"
+   },
+   {
+    "confirm_id": "2179756",
+    "url": "https://postfiles.pstatic.net/MjAyNjA1MTFfMTUz/MDAxNzc4NDc1NDYyODkw.pYPQXgNiWEeXaEy0f6zIV_2hKN5Vzgdub9UgJGihMHMg.E9g_LiKvp3-y8KAm--HVEs-VC1LuUQDMDCabq7LLy_8g.JPEG/900_20260510_132853.jpg?type=w966",
+    "type": "BLOG",
+    "photo_id": 1655306573,
+    "review_id": 112141044,
+    "registered_at": "2026-06-17 11:49:31",
+    "updated_at": "2026-06-17 12:06:01",
+    "title": "[웨스틴 서울 파르나스] 5월 가정의 달 뷔페, SAY CHEEEEEZ! | 온:테이블",
+    "blog_link_url": "http://blog.naver.com/dusrhcdus/224282360489",
+    "media_type": "PHOTO",
+    "ui_type": "POST"
+   },
+   {
+    "confirm_id": "2179756",
+    "url": "https://postfiles.pstatic.net/MjAyNjA1MTlfMjEz/MDAxNzc5MjAwODY4NDM1.lCj_DEuntZncPGUfkwgCwjRNLQNL8BXkX7gr3akZoOkg.agHn3QMnxqMTaK7lSTUsEEM6ZlTzfcEu9SRdn3dAnOYg.JPEG/SE-9BAD0569-C29B-45F7-9474-8D30BCF6CDEA.jpg?type=w966",
+    "type": "BLOG",
+    "photo_id": 1634695314,
+    "review_id": 110443608,
+    "registered_at": "2026-05-22 00:03:24",
+    "updated_at": "2026-05-22 00:11:51",
+    "title": "웨스틴 서울 파르나스 온테이블 호텔 뷔페 평일 런치 디너 차이, 내돈내산",
+    "blog_link_url": "http://blog.naver.com/tact_1663/224290966554",
+    "media_type": "PHOTO",
+    "ui_type": "POST"
+   },
+   {
+    "confirm_id": "2179756",
+    "url": "https://postfiles.pstatic.net/MjAyNjA1MTlfMTA2/MDAxNzc5MjAwODY5NDQ5.wSsEbyFgk6dHNcbK3_uOQUQBytco5BbrpMVBIFijFzsg.iqEPBtaBd-XEhyK9tKzlUGw48AsS_wLl1dhhVea72N8g.JPEG/SE-23044A2E-809C-46D7-8F18-E90D95DE2D7C.jpg?type=w966",
+    "type": "BLOG",
+    "photo_id": 1634695284,
+    "review_id": 110443608,
+    "registered_at": "2026-05-22 00:03:18",
+    "updated_at": "2026-05-22 00:11:51",
+    "title": "웨스틴 서울 파르나스 온테이블 호텔 뷔페 평일 런치 디너 차이, 내돈내산",
+    "blog_link_url": "http://blog.naver.com/tact_1663/224290966554",
+    "media_type": "PHOTO",
+    "ui_type": "POST"
+   },
+   {
+    "confirm_id": "2179756",
+    "url": "https://postfiles.pstatic.net/MjAyNjA1MTlfMjU1/MDAxNzc5MTkwODI5NTk3.M3m-mz1UyQhKN6wxxu5ITc3wq66r8LVbcLOxDbK4rKgg.Lhb1kU9Je_v2SAjRvgFmkCq88KvY7jnmvHUJZEX1fzYg.JPEG/IMG%EF%BC%BF9107.jpg?type=w966",
+    "type": "BLOG",
+    "photo_id": 1634695551,
+    "review_id": 110443608,
+    "registered_at": "2026-05-22 00:04:05",
+    "updated_at": "2026-05-22 00:11:51",
+    "title": "웨스틴 서울 파르나스 온테이블 호텔 뷔페 평일 런치 디너 차이, 내돈내산",
+    "blog_link_url": "http://blog.naver.com/tact_1663/224290966554",
+    "media_type": "PHOTO",
+    "ui_type": "POST"
+   },
+   {
+    "confirm_id": "2179756",
+    "url": "https://postfiles.pstatic.net/MjAyNjA1MTlfMTMg/MDAxNzc5MTg5OTUxNDky.L0fFi-8wfWkOEcc3xe3mLR6TahzNt6tR4cpXMEJRGxkg.2D43GpMvWdfXvS9ytl0FuIc1UkEIl73tSkzCLbhF-Nwg.JPEG/IMG%EF%BC%BF9094.jpg?type=w966",
+    "type": "BLOG",
+    "photo_id": 1634695503,
+    "review_id": 110443608,
+    "registered_at": "2026-05-22 00:03:56",
+    "updated_at": "2026-05-22 00:11:51",
+    "title": "웨스틴 서울 파르나스 온테이블 호텔 뷔페 평일 런치 디너 차이, 내돈내산",
+    "blog_link_url": "http://blog.naver.com/tact_1663/224290966554",
+    "media_type": "PHOTO",
+    "ui_type": "POST"
+   },
+   {
+    "confirm_id": "2179756",
+    "url": "https://postfiles.pstatic.net/MjAyNjA1MTlfMTM1/MDAxNzc5MTkwODM2OTE2.QiMQx25lsdcCzusqLiguGoRia2V_2o0nKQ9jc_MGPN8g.w2Xlj6CAvMQFyOGfKqfsWj4Nrz-uIp-gy1uaajVRf9Mg.JPEG/IMG%EF%BC%BF9098.jpg?type=w966",
+    "type": "BLOG",
+    "photo_id": 1634695505,
+    "review_id": 110443608,
+    "registered_at": "2026-05-22 00:03:56",
+    "updated_at": "2026-05-22 00:11:51",
+    "title": "웨스틴 서울 파르나스 온테이블 호텔 뷔페 평일 런치 디너 차이, 내돈내산",
+    "blog_link_url": "http://blog.naver.com/tact_1663/224290966554",
+    "media_type": "PHOTO",
+    "ui_type": "POST"
+   },
+   {
+    "confirm_id": "2179756",
+    "url": "https://postfiles.pstatic.net/MjAyNjA1MTlfMjEx/MDAxNzc5MTkwODA3NTUz.jhhrZwGeYxmAmuOase4yE66KhauvJFrMvcf205sfIfsg.tD65ibsJHOUqW-SjHMfP6wKhsWZNsgAPUy2G-42D4QEg.JPEG/IMG%EF%BC%BF9167.jpg?type=w966",
+    "type": "BLOG",
+    "photo_id": 1634695393,
+    "review_id": 110443608,
+    "registered_at": "2026-05-22 00:03:40",
+    "updated_at": "2026-05-22 00:11:51",
+    "title": "웨스틴 서울 파르나스 온테이블 호텔 뷔페 평일 런치 디너 차이, 내돈내산",
+    "blog_link_url": "http://blog.naver.com/tact_1663/224290966554",
+    "media_type": "PHOTO",
+    "ui_type": "POST"
+   },
+   {
+    "confirm_id": "2179756",
+    "url": "https://postfiles.pstatic.net/MjAyNjA1MTlfMjMz/MDAxNzc5MTkwNzk1MDQ2.DawsmoL2UY2Cz9QR-1D8FKoc2bpoqqUpGnlVNSQC0o4g.coqMACil1LO-dxZdXALz7B0fq-rx-VuYSeiI68fmox8g.JPEG/IMG%EF%BC%BF9146.jpg?type=w966",
+    "type": "BLOG",
+    "photo_id": 1634695442,
+    "review_id": 110443608,
+    "registered_at": "2026-05-22 00:03:46",
+    "updated_at": "2026-05-22 00:11:51",
+    "title": "웨스틴 서울 파르나스 온테이블 호텔 뷔페 평일 런치 디너 차이, 내돈내산",
+    "blog_link_url": "http://blog.naver.com/tact_1663/224290966554",
+    "media_type": "PHOTO",
+    "ui_type": "POST"
+   },
+   {
+    "confirm_id": "2179756",
+    "url": "https://postfiles.pstatic.net/MjAyNjA1MTlfOTkg/MDAxNzc5MTkwODM3NTc5.W-UNF_da1n9AXkUT_7LF0GuUvXz4T3ee4hWeJ9zGPh0g.lgTyQIJovzX97TXVLGL9ty4r0yKoKVXCuY16Q5NFaBgg.JPEG/IMG%EF%BC%BF9092.jpg?type=w966",
+    "type": "BLOG",
+    "photo_id": 1634695486,
+    "review_id": 110443608,
+    "registered_at": "2026-05-22 00:03:52",
+    "updated_at": "2026-05-22 00:11:51",
+    "title": "웨스틴 서울 파르나스 온테이블 호텔 뷔페 평일 런치 디너 차이, 내돈내산",
+    "blog_link_url": "http://blog.naver.com/tact_1663/224290966554",
+    "media_type": "PHOTO",
+    "ui_type": "POST"
+   },
+   {
+    "confirm_id": "2179756",
+    "url": "https://postfiles.pstatic.net/MjAyNjA1MTlfOTQg/MDAxNzc5MTg5OTUyMDA0.InpAXSk-jotgjLwfaDyYX6drFTuz36dUR6Zobdl_iDAg.l41gFtcH4Bf7fH_WfA8BQkJzgAWxTp7JS92eN-vQTAAg.JPEG/IMG%EF%BC%BF9136.jpg?type=w966",
+    "type": "BLOG",
+    "photo_id": 1634695497,
+    "review_id": 110443608,
+    "registered_at": "2026-05-22 00:03:54",
+    "updated_at": "2026-05-22 00:11:51",
+    "title": "웨스틴 서울 파르나스 온테이블 호텔 뷔페 평일 런치 디너 차이, 내돈내산",
+    "blog_link_url": "http://blog.naver.com/tact_1663/224290966554",
+    "media_type": "PHOTO",
+    "ui_type": "POST"
+   },
+   {
+    "confirm_id": "2179756",
+    "url": "https://postfiles.pstatic.net/MjAyNjA1MTdfMTUy/MDAxNzc5MDA2MTgzMzM0.3YgQOakwo81nfiCk0CSmdhphwKmWe4Gw23SX0_VPAQ4g.xsSSDMAlhmSYQgeu0I8wYGpuvfF6GvHheSssVB4nzogg.JPEG/SE-4AD3CC02-6FB5-41B3-BC99-413DB904440A.jpg?type=w386",
+    "type": "BLOG",
+    "photo_id": 1632946531,
+    "review_id": 110294673,
+    "registered_at": "2026-05-19 17:03:28",
+    "updated_at": "2026-05-19 17:25:31",
+    "title": "웨스틴 서울 파르나스 온:테이블 주말 런치 후기 할인 예약 정보",
+    "blog_link_url": "http://blog.naver.com/500manhahaha/224288223461",
+    "media_type": "PHOTO",
+    "ui_type": "POST"
+   },
+   {
+    "confirm_id": "2179756",
+    "url": "https://postfiles.pstatic.net/MjAyNjA1MTdfMjg5/MDAxNzc5MDA2MTgxNTQ1.BK2c7p2K6geSqW_jFTuhrz_DjMj7NwLFeNNLO0r7FQEg.GdEyOYBUorLMoNB-fHyoEVQKsqbYllhUZkBMwROd88Ag.JPEG/SE-450599DB-9A1B-4B25-BDB1-450DD4C95E23.jpg?type=w386",
+    "type": "BLOG",
+    "photo_id": 1632946501,
+    "review_id": 110294673,
+    "registered_at": "2026-05-19 17:03:26",
+    "updated_at": "2026-05-19 17:25:31",
+    "title": "웨스틴 서울 파르나스 온:테이블 주말 런치 후기 할인 예약 정보",
+    "blog_link_url": "http://blog.naver.com/500manhahaha/224288223461",
+    "media_type": "PHOTO",
+    "ui_type": "POST"
+   },
+   {
+    "confirm_id": "2179756",
+    "url": "https://postfiles.pstatic.net/MjAyNjA1MTFfMjY1/MDAxNzc4NTAyNTYzMzE5.zhWxeHWHzF4vBZnxFh5PC7zx9Af5YASf4WaXG-WSMYYg.8EkAIHvb4XgW8UVQaqNNl7CrFybCAXaS_TxBzGbO3ugg.JPEG/SE-30F753BF-93AD-49E0-BD13-9ED893974293.jpg?type=w386",
+    "type": "BLOG",
+    "photo_id": 1632946720,
+    "review_id": 110294673,
+    "registered_at": "2026-05-19 17:03:42",
+    "updated_at": "2026-05-19 17:25:31",
+    "title": "웨스틴 서울 파르나스 온:테이블 주말 런치 후기 할인 예약 정보",
+    "blog_link_url": "http://blog.naver.com/500manhahaha/224288223461",
+    "media_type": "PHOTO",
+    "ui_type": "POST"
+   },
+   {
+    "confirm_id": "2179756",
+    "url": "https://postfiles.pstatic.net/MjAyNjA1MTdfNTkg/MDAxNzc5MDA2MTgyNDkw.Alh0eihsqXKmQARWTMn3CoIZgn10lIzaxw5yoxugkU8g.aRulQL58molHRvX-5FAUbQm0SBSLYhg8j5X1pC_q07kg.JPEG/SE-F61A9BAF-D8E1-4A55-A61D-7C91D1FA32F2.jpg?type=w386",
+    "type": "BLOG",
+    "photo_id": 1632946588,
+    "review_id": 110294673,
+    "registered_at": "2026-05-19 17:03:33",
+    "updated_at": "2026-05-19 17:25:31",
+    "title": "웨스틴 서울 파르나스 온:테이블 주말 런치 후기 할인 예약 정보",
+    "blog_link_url": "http://blog.naver.com/500manhahaha/224288223461",
+    "media_type": "PHOTO",
+    "ui_type": "POST"
+   },
+   {
+    "confirm_id": "2179756",
+    "url": "https://dthumb-phinf.pstatic.net/?src=%22https%3A%2F%2Fugc-images.catchtable.co.kr%2Fshop%2Fmanager%2Fimages%2Fbe2cdbedc15b4b48b627ab991d2c9a2c%22&type=ff500_300",
+    "type": "BLOG",
+    "photo_id": 1632946689,
+    "review_id": 110294673,
+    "registered_at": "2026-05-19 17:03:40",
+    "updated_at": "2026-05-19 17:25:31",
+    "title": "웨스틴 서울 파르나스 온:테이블 주말 런치 후기 할인 예약 정보",
+    "blog_link_url": "http://blog.naver.com/500manhahaha/224288223461",
+    "media_type": "PHOTO",
+    "ui_type": "POST"
+   },
+   {
+    "confirm_id": "2179756",
+    "url": "https://postfiles.pstatic.net/MjAyNjA1MTdfMjg3/MDAxNzc5MDA2MTc5NjYz.eHu84KJpFnR83awbNwl9zKpU6G5Z9f6Q__H4ZDOAqnIg.Thv5fSqJVf1aGtKHcHsidkNYRB9GFbxJEKpOQgaJcREg.JPEG/SE-0FDC9D3F-4E0B-4F18-895E-DA44A14F3431.jpg?type=w386",
+    "type": "BLOG",
+    "photo_id": 1632946667,
+    "review_id": 110294673,
+    "registered_at": "2026-05-19 17:03:39",
+    "updated_at": "2026-05-19 17:25:31",
+    "title": "웨스틴 서울 파르나스 온:테이블 주말 런치 후기 할인 예약 정보",
+    "blog_link_url": "http://blog.naver.com/500manhahaha/224288223461",
+    "media_type": "PHOTO",
+    "ui_type": "POST"
+   }
+  ]
+ },
+ "blog_review": {
+  "review_count": 49,
+  "reviews": [
+   {
+    "confirm_id": "2179756",
+    "review_id": "110443608",
+    "title": "웨스틴 서울 파르나스 온테이블 호텔 뷔페 평일 런치 디너 차이, 내돈내산",
+    "contents": "안녕하세요 설레임잇 입니당! 예... 참지 못하고 또 다녀왔습니다 호텔 뷔페 ㅋㅋㅋㅋㅋㅋㅋㅋ 나이 들면서 소화기관은 약해지는데 원래도 크지 않던 위는 더 작아지고ㅠ 양이 줄어서 뷔페 갈 때마다 항상 아쉽고 당분간 뷔페 오지 말아야지.. 다짐하는데 또 한두달만 지나면 고통스러웠던 배부름을 망각하고 또 호텔뷔페 가고싶은거에요!!! 저는 최근에 금주 하면서 겸사",
+    "registered_at": "2026-05-20 09:28:00",
+    "author": "라라라라랋라ㅏ",
+    "origin_url": "https://blog.naver.com/tact_1663/224290966554",
+    "photo_count": 27,
+    "photos": [
+     {
+      "url": "https://postfiles.pstatic.net/MjAyNjA1MTlfNzAg/MDAxNzc5MTkwODE0NjAz.8BJ9pjVMaciWDHFZAX0mqfZmkY0Un7F9eBSQQjc_DTIg.J9d18h8DWP_u1mX56y2NvKaSTUJ5ex0an9XY9Sk7ylog.JPEG/IMG%EF%BC%BF9112.jpg?type=w966",
+      "photo_id": 1634695421
+     },
+     {
+      "url": "https://postfiles.pstatic.net/MjAyNjA1MTlfOTMg/MDAxNzc5MTkwODEyNDY1.zq2qNwaP-9JV73FnFMyZYbO9FsqCi7lpQK23RzEfZ-4g.tzC3lhdgDquL892RvTfmTUR3YyJH3S3FP_bXU-pBESkg.JPEG/IMG%EF%BC%BF9119.jpg?type=w966",
+      "photo_id": 1634695327
+     },
+     {
+      "url": "https://postfiles.pstatic.net/MjAyNjA1MTlfMTg2/MDAxNzc5MTkwNzk4MDI1.ZkKxwr_kYKUp-G-mwK7k2aaHwO_T5pIeI4owl-MP5vog.YgfsK02oNytwr6IwKqSWzeFdVAtGu9fp-0d4ceUD85wg.JPEG/IMG%EF%BC%BF9088.jpg?type=w966",
+      "photo_id": 1634695394
+     },
+     {
+      "url": "https://postfiles.pstatic.net/MjAyNjA1MTlfMTQz/MDAxNzc5MTkwODAxNzQ2.FL3PJgTFOslrkkvxeZgM5z--MrlshezxJaqNUUsB7Dwg.QzX09jNzfNgaW1iFXljNuPzaHcFSWOD1bBJKzXNXfxsg.JPEG/IMG%EF%BC%BF9145.jpg?type=w966",
+      "photo_id": 1634695331
+     },
+     {
+      "url": "https://postfiles.pstatic.net/MjAyNjA1MTlfMTgx/MDAxNzc5MTkwODExMjgw.h_OA1pRocqe5LCjsPmuFB9Z49PhRf3uCCKYBk7dBamAg.jV-EOAQuwPVG4isXFEjaQyyE6gA9gFLmHy_YhAEcpYIg.JPEG/IMG%EF%BC%BF9122.jpg?type=w966",
+      "photo_id": 1634695528
+     },
+     {
+      "url": "https://postfiles.pstatic.net/MjAyNjA1MTlfMTUx/MDAxNzc5MTkwODA2ODY5.PQww4HFZqhtWPX6Nfu3EIsoh2JRH2lsS0sNJtFiSLg8g.WLjN2nvdC4W3ub9se9akGeHS3cJTrfbwEEJnosPSSh0g.JPEG/IMG%EF%BC%BF9097.jpg?type=w966",
+      "photo_id": 1634695437
+     },
+     {
+      "url": "https://postfiles.pstatic.net/MjAyNjA1MTlfOTQg/MDAxNzc5MTg5OTUyMDA0.InpAXSk-jotgjLwfaDyYX6drFTuz36dUR6Zobdl_iDAg.l41gFtcH4Bf7fH_WfA8BQkJzgAWxTp7JS92eN-vQTAAg.JPEG/IMG%EF%BC%BF9136.jpg?type=w966",
+      "photo_id": 1634695497
+     },
+     {
+      "url": "https://postfiles.pstatic.net/MjAyNjA1MTlfOTkg/MDAxNzc5MTkwODM3NTc5.W-UNF_da1n9AXkUT_7LF0GuUvXz4T3ee4hWeJ9zGPh0g.lgTyQIJovzX97TXVLGL9ty4r0yKoKVXCuY16Q5NFaBgg.JPEG/IMG%EF%BC%BF9092.jpg?type=w966",
+      "photo_id": 1634695486
+     },
+     {
+      "url": "https://postfiles.pstatic.net/MjAyNjA1MTlfNzEg/MDAxNzc5MTkwNzk5MTE2.-MitMnqN7kNLKsRPjZgYmq33s3iH-r1b2ZzI540fdkog.4R5ztzRo5Q9DyQv667uX0oJZ15XXV4IpSVSmRalE1NUg.JPEG/IMG%EF%BC%BF9089.jpg?type=w966",
+      "photo_id": 1634695319
+     },
+     {
+      "url": "https://postfiles.pstatic.net/MjAyNjA1MTlfMjYy/MDAxNzc5MTkwODA4OTM4.ueLKp9FrPSCqTUSRFCIDMmjgQ-Fw7kgXt9DXy2gXNbcg.ZqeaZAmggAR9562dqeoAwtyXXmDT2gqHPBNFI8pD9RQg.JPEG/IMG%EF%BC%BF9121.jpg?type=w966",
+      "photo_id": 1634695515
+     }
+    ]
+   },
+   {
+    "confirm_id": "2179756",
+    "review_id": "110294673",
+    "title": "웨스틴 서울 파르나스 온:테이블 주말 런치 후기 할인 예약 정보",
+    "contents": "주말을 맞아 특별한 식사를 하고 싶어서 다녀온 곳은 바로 웨스틴 서울 파르나스 의 뷔페 레스토랑 온:테이블이에요. 평소에도 후기가 좋아 궁금했던 곳인데 직접 방문해보니 왜 인기가 많은지 알겠더라고요. 특히 주말 런치는 메뉴 구성이 다양하고 음식 퀄리티도 좋아 만족도가 높았어요. 가족 모임이나 기념일 식사 장소로도 잘 어울리는 분위기였습니다. 예약부터 할인 ",
+    "registered_at": "2026-05-17 17:24:00",
+    "author": "tou",
+    "origin_url": "https://blog.naver.com/500manhahaha/224288223461",
+    "photo_count": 36,
+    "photos": [
+     {
+      "url": "https://dthumb-phinf.pstatic.net/?src=%22https%3A%2F%2Fugc-images.catchtable.co.kr%2Fshop%2Fmanager%2Fimages%2Fbe2cdbedc15b4b48b627ab991d2c9a2c%22&type=ff500_300",
+      "photo_id": 1632946689
+     },
+     {
+      "url": "https://postfiles.pstatic.net/MjAyNjA1MTdfMjMz/MDAxNzc5MDA2MTk3NDg2.J2gOpVpwJtFmr9xUbMM_vVxQakKk7GB5NmhDPX2o_p0g.PTPRnRcugWSogeJLcYqJzhPvnM_oHCtSiCWdENE2hbog.JPEG/SE-2E0B20F4-9770-42C1-A510-82D03BDE0AF9.jpg?type=w386",
+      "photo_id": 1632946682
+     },
+     {
+      "url": "https://postfiles.pstatic.net/MjAyNjA1MTdfMTc3/MDAxNzc5MDA2MjA3ODQy.ICm5vFAEGv5v3dDTmGGX5D8rGtH5M6MLsipscKIXUyEg.aTQGyQd0wyEm-FoYG8OSzoPcmtE7TlXNsoSzgiHlTCAg.JPEG/SE-161821CF-1A90-49F9-B4CE-48B488582C41.jpg?type=w386",
+      "photo_id": 1632946684
+     },
+     {
+      "url": "https://postfiles.pstatic.net/MjAyNjA1MTdfOTkg/MDAxNzc5MDA2MTc4NTU1.fsdBeULXV36UwaOqbrtnR2I1_9QBU3Q5u0a3HObg_yUg.VUyxeW0uI-Vo43kyow8BJdJbCRHcdP4Cf8k-uwpA5G0g.JPEG/SE-5D3880DA-4FA8-4B2A-BFED-D9DA59975C8A.jpg?type=w773",
+      "photo_id": 1632946778
+     },
+     {
+      "url": "https://postfiles.pstatic.net/MjAyNjA1MTdfNTkg/MDAxNzc5MDA2MTgyNDkw.Alh0eihsqXKmQARWTMn3CoIZgn10lIzaxw5yoxugkU8g.aRulQL58molHRvX-5FAUbQm0SBSLYhg8j5X1pC_q07kg.JPEG/SE-F61A9BAF-D8E1-4A55-A61D-7C91D1FA32F2.jpg?type=w386",
+      "photo_id": 1632946588
+     },
+     {
+      "url": "https://postfiles.pstatic.net/MjAyNjA1MTdfMTAz/MDAxNzc5MDA2MjA4Njk0.Sj_cmFee8i2ixRgbV2t2kKmKfHBsEooBC8jfukjtZPUg.0BNm-I08A08iSPIUXAw5MtS5CiEJUE00LOF0cNCZxC0g.JPEG/SE-879A2FA0-FA01-450F-803E-79B7CF37D2D8.jpg?type=w386",
+      "photo_id": 1632946753
+     },
+     {
+      "url": "https://postfiles.pstatic.net/MjAyNjA1MTFfMjY1/MDAxNzc4NTAyNTYzMzE5.zhWxeHWHzF4vBZnxFh5PC7zx9Af5YASf4WaXG-WSMYYg.8EkAIHvb4XgW8UVQaqNNl7CrFybCAXaS_TxBzGbO3ugg.JPEG/SE-30F753BF-93AD-49E0-BD13-9ED893974293.jpg?type=w386",
+      "photo_id": 1632946720
+     },
+     {
+      "url": "https://postfiles.pstatic.net/MjAyNjA1MTdfMjQ4/MDAxNzc5MDA2MTg0MzI3.-hyt5Bg8xzgruCY-9E8lri5gGGOqc9B59oK0i3uNcJ8g.CU3isNnR8M9guWLhNp_Mon83kiKGjgk9SJBxt-mPmUAg.JPEG/SE-E0392F89-5FE8-4B28-BB76-B91B18F86B8E.jpg?type=w386",
+      "photo_id": 1632946747
+     },
+     {
+      "url": "https://postfiles.pstatic.net/MjAyNjA1MTdfMjQz/MDAxNzc5MDA2MjA2MTQw.kiBsfGLu5NgouZxp69YBpzBdSuZeYbNvWLl0TmHBA7wg.MhigN1swUZnSfFBGvawYbAhaHV9awmngpO0vHSE31Skg.JPEG/SE-ac6f7819-53c1-41a8-82bf-40851c080919.jpg?type=w386",
+      "photo_id": 1632946755
+     },
+     {
+      "url": "https://postfiles.pstatic.net/MjAyNjA1MTdfMjE3/MDAxNzc5MDA2MTkyODM0.Nbg86x6FuYHLQKbieBDCAqHrhIy5j0D0fFOtcNroRcgg.ZHkYZGQ-7OXnjTieFUn0cjPhlr3fgRLV76zqwiQTv04g.JPEG/SE-62D6C3C8-569A-4EF1-9243-E4D25210AE42.jpg?type=w386",
+      "photo_id": 1632946647
+     }
+    ]
+   },
+   {
+    "confirm_id": "2179756",
+    "review_id": "112141044",
+    "title": "[웨스틴 서울 파르나스] 5월 가정의 달 뷔페, SAY CHEEEEEZ! | 온:테이블",
+    "contents": "온:테이블, 세이 치즈! 웨스틴 서울 파르나스 남자친구가 작년 연말에 회사에서 ‘온:테이블’을 다녀왔었는데, 너무 맛있어서 꼭 나를 데려오고 싶었다고 했다. 데리고 와줘서 고마워🥰 웅장한 입구의 THE WESTIN SEOUL PARNAS (웨스틴 서울 파르나스) 1층 로비 기준으로 입장 후 우측으로 두 번 이동하면 온:테이블 입구를 만날 수 있다. 입구 앞",
+    "registered_at": "2026-05-12 00:13:00",
+    "author": "항니 에이아이",
+    "origin_url": "https://blog.naver.com/dusrhcdus/224282360489",
+    "photo_count": 24,
+    "photos": [
+     {
+      "url": "https://postfiles.pstatic.net/MjAyNjA1MTFfMjM4/MDAxNzc4NTAxMzAwNDE2.CpyRz4U-j1Rjvb2RXoDbaAH-USr6BJ3iS8DVCyWcxK0g.eGDsN9XJ43qKAmedoov2VumiBDk_59JAaKl3pTIAiU0g.JPEG/SE-ea6bd600-4cf5-11f1-8d90-abdcb952bc05.jpg?type=w466",
+      "photo_id": 1655306613
+     },
+     {
+      "url": "https://postfiles.pstatic.net/MjAyNjA1MTFfMTUz/MDAxNzc4NDc1NDYyODkw.pYPQXgNiWEeXaEy0f6zIV_2hKN5Vzgdub9UgJGihMHMg.E9g_LiKvp3-y8KAm--HVEs-VC1LuUQDMDCabq7LLy_8g.JPEG/900_20260510_132853.jpg?type=w966",
+      "photo_id": 1655306573
+     },
+     {
+      "url": "https://postfiles.pstatic.net/MjAyNjA1MTFfMjU5/MDAxNzc4NDc1NDU4NzYy.WSZjTVrN80Q5oNbPy_PNVVUcMNO5RUlX9OHlFNW70R4g.PW9oEXsBqYg53qt3QV1S5RsX3i_2sfWqVK_BxhUyx8kg.JPEG/900_20260510_132859.jpg?type=w466",
+      "photo_id": 1655306628
+     },
+     {
+      "url": "https://postfiles.pstatic.net/MjAyNjA1MTFfMTY3/MDAxNzc4NDc1NDY0MDQ4.0XRynKTASdDkKzWpK1L9awR3QjfzRsMEqZxB6L535-sg.uYBeNRAsGBWERlatZccjkk8ClNhk3NTn8LM5ltQd1LMg.JPEG/900_20260510_121517.jpg?type=w966",
+      "photo_id": 1655306610
+     },
+     {
+      "url": "https://postfiles.pstatic.net/MjAyNjA1MTFfNTUg/MDAxNzc4NTAxMjg4NDIw.Em8R7zyKQfquNIHMWmLwyW5pyptuyNJtoYs53GLy7Cwg.pcfg673ihY8iBEy6F2KQBw67V_K6eHHGxJvmJpWi3f0g.JPEG/SE-ea628727-4cf5-11f1-8d90-9368646fee47.jpg?type=w966",
+      "photo_id": 1655306596
+     },
+     {
+      "url": "https://postfiles.pstatic.net/MjAyNjA1MTJfMjYx/MDAxNzc4NTExNzk4ODQz.LaVJFcAlkK4_N_m1qb9q_tGL9AJ7pU2I8zY1Ro_1Gkcg.PZ61_aGzfnE4o57YyPRChPj9QEvr-KagGo0yRDiMiEQg.JPEG/SE-b55a43f9-9010-4184-a4c7-411ce40083ff.jpg?type=w466",
+      "photo_id": 1655306546
+     },
+     {
+      "url": "https://postfiles.pstatic.net/MjAyNjA1MTFfNjkg/MDAxNzc4NDc1NDYyNTMy.ky3UDbY8ERJcNM5gLbQxk5zpE5DqmmhLRkW0B4AmIzwg.kodYcx4RSlsQwrhdhhfO9ipYmVYsjCd88uWDBTUU-9og.JPEG/900_20260510_115951.jpg?type=w466",
+      "photo_id": 1655306626
+     },
+     {
+      "url": "https://postfiles.pstatic.net/MjAyNjA1MTFfMjgx/MDAxNzc4NDc1NDY1MDM2._gcim0mjCy_5BEKrYUpobqd6skklSy0WJJr4GzaLAiEg.7dvjDCVX9WhyjTWJejyqqQt721_gfUxALFHSngYXMs0g.JPEG/900_20260510_135007.jpg?type=w466",
+      "photo_id": 1655306551
+     },
+     {
+      "url": "https://postfiles.pstatic.net/MjAyNjA1MTFfMTQw/MDAxNzc4NDc1NDY3NDIz.U4aVMRse4qmcKHsJFSBGN-8kPDTwRa8Bdyuz6_FR3V4g.BZ4rDR0Wt4suNGAzNBJsMxfN3cOOcpaDLbnOKcqRHHsg.JPEG/900_20260510_112926.jpg?type=w466",
+      "photo_id": 1655306570
+     },
+     {
+      "url": "https://postfiles.pstatic.net/MjAyNjA1MTFfMTYx/MDAxNzc4NDc1NDU4MDk2.EYNW6Y0pz_WITU9S6QB5-Dd3Lg_3wEj55OtfLQNxofMg.ZESWZT4Nf2MIwzAFgyMHCKROYLWnLOgm3cbxMlIi-RQg.JPEG/900_20260510_133229.jpg?type=w466",
+      "photo_id": 1655306568
+     }
+    ]
+   },
+   {
+    "confirm_id": "2179756",
+    "review_id": "109814044",
+    "title": "웨스틴 파르나스 온테이블 평일디너 | 서울 강남 호텔뷔페 추천 온:테이블",
+    "contents": "웨스틴 파르나스 온:테이블 평일디너 후기 모임, 기념일, 부모님 모시고 가기 좋은 서울호텔 뷔페 온테이블 다녀왔어요 ~! 🤍 마침 생일+회사동기모임+임신축하 다 겹치고 다들 가정과 육아 각자의 사정(?)..이 있다보니 만나기가 힘들었는데 여러군데 돌아다니기도 힘들어서 한방에 해결가능한 .. 그리고 너무 가고싶었던 온테이블로 고고 💚 너무 배고픈 나머지...",
+    "registered_at": "2026-05-09 22:14:00",
+    "author": "••",
+    "origin_url": "https://blog.naver.com/bssoonii/224280191803",
+    "photo_count": 29,
+    "photos": [
+     {
+      "url": "https://postfiles.pstatic.net/MjAyNjA1MDlfMTgw/MDAxNzc4MzI5MzUwNzE5.nyQdq66HQaauG206vp3P2vc0WdQN-_vQZZzPgLjx65Mg.WdBCzGu9Jyf5_UlNKAz1qAMI9x86rdZQEzYnd-czomEg.JPEG/IMG%EF%BC%BF6744.jpg?type=w773",
+      "photo_id": 1627359725
+     },
+     {
+      "url": "https://postfiles.pstatic.net/MjAyNjA1MDlfMTk1/MDAxNzc4MzI5MzUwNzgw.PLoc1XGDKUhHkz4VyS3Jmeiq6plkt7qk2S7Os2xGieEg.CF7AdQh-TkVCTr7HnE0Tomtz6-sQCIgSazsF7RFP_Nog.JPEG/IMG%EF%BC%BF6747.jpg?type=w773",
+      "photo_id": 1627359747
+     },
+     {
+      "url": "https://postfiles.pstatic.net/MjAyNjA1MDlfMTg3/MDAxNzc4MzI5MzUxMjMz.K8xfolQ4xpsA-fTEnQdf098CMdbJyF0NgH7mmQ69KY4g.4-bNugSKeI7Kbrou1Mf6itck2z95kkOZ7vvpJlNkelog.JPEG/IMG%EF%BC%BF6751.jpg?type=w773",
+      "photo_id": 1627359688
+     },
+     {
+      "url": "https://postfiles.pstatic.net/MjAyNjA1MDlfMTc3/MDAxNzc4MzI5MzUxNTQx.bpksUiYGcFiVyWzT9ri74_7Qm2bKELGlToawTpb_wtQg.K10-G7792g6qmUpUCgYBk_8uCVFk0AGRR0dm_hVXzBMg.JPEG/IMG%EF%BC%BF6756.jpg?type=w773",
+      "photo_id": 1627359567
+     },
+     {
+      "url": "https://postfiles.pstatic.net/MjAyNjA1MDlfMTUx/MDAxNzc4MzI5MzQ5NjU0.WWrQx_K5OAgPdXiX3b7qKM8GZo7s_ZY5VoktbNaIo3wg.CLArCRHklxdq1W3Xpi7UI7Ykutw7NRmIzrqiyNwNZvYg.JPEG/IMG%EF%BC%BF6734.jpg?type=w773",
+      "photo_id": 1627359509
+     },
+     {
+      "url": "https://postfiles.pstatic.net/MjAyNjA1MDlfMjAy/MDAxNzc4MzI5MzUwMTcx.T32ID3bePp0CuMJpfJOeWMzhhWk9Lzp-pSUOa1i2MO8g.7de-HWmLr5KnwbTKrqKjZZlsabScYSoV3mN5zx6-jjEg.JPEG/IMG%EF%BC%BF6739.jpg?type=w773",
+      "photo_id": 1627359477
+     },
+     {
+      "url": "https://postfiles.pstatic.net/MjAyNjA1MDlfOTgg/MDAxNzc4MzI5MzUxNDgz.RVJfsP8OrfRqQQkDuH2tkAnivbK1jgu6w-J6k-nyhgUg.J4fNQvYOwaJOuVfJ0nqLm4wPMQ3PrrBwzCWpd2gsK4Ig.JPEG/IMG%EF%BC%BF6755.jpg?type=w773",
+      "photo_id": 1627359662
+     },
+     {
+      "url": "https://postfiles.pstatic.net/MjAyNjA1MDlfMTQ0/MDAxNzc4MzI5MzUxNzE5.AFBDE3m5sCXKi-OMn_3FwkDX7pjxX-ZDMAuPkPAMEQIg.pcoELtHBI4HmHx0bV2ynaFV8YoGpYjjQjGVkm2Fy6Gsg.JPEG/IMG%EF%BC%BF6758.jpg?type=w773",
+      "photo_id": 1627359553
+     },
+     {
+      "url": "https://postfiles.pstatic.net/MjAyNjA1MDlfODcg/MDAxNzc4MzI5MzUxMjgy.XE2-w-zXuf78p1cc-_i7mdjL0SfzWewM_1Gm9oXGFPMg.vLBw4L_XeS2sTL-fmChMtdirZhg5Cv8xAbE46uLyvHAg.JPEG/IMG%EF%BC%BF6753.jpg?type=w773",
+      "photo_id": 1627359743
+     },
+     {
+      "url": "https://postfiles.pstatic.net/MjAyNjA1MDlfMjQx/MDAxNzc4MzI5MzUxMDIz.zmZ7Sp--XXxz4h0-hKwzoMPKIZYUUs1QPLqvZMGIzxog.fsac28tEFZnOO4wnh6l1xkDJpYFiU4Yv1G7cMAZPao4g.JPEG/IMG%EF%BC%BF6750.jpg?type=w773",
+      "photo_id": 1627359742
+     }
+    ]
+   }
+  ],
+  "current_review_count": 4,
+  "last_review_id": "109814044",
+  "last_registered_at": "2026-05-09 22:14:00",
+  "requested_page_size": 4,
+  "requested_page": 1
+ },
+ "kakaomap_review": {
+  "score_set": {
+   "review_count": 9,
+   "total_score": 38,
+   "average_score": 4.2,
+   "photo_count": 23,
+   "strength_counts": [
+    {
+     "id": 2,
+     "count": 4
+    },
+    {
+     "id": 3,
+     "count": 4
+    },
+    {
+     "id": 5,
+     "count": 3
+    },
+    {
+     "id": 4,
+     "count": 2
+    },
+    {
+     "id": 1,
+     "count": 1
+    }
+   ],
+   "strength_uv": 4
+  },
+  "strength_description": [
+   {
+    "id": 5,
+    "name": "맛",
+    "icon_url": "https://t1.kakaocdn.net/kakaomap_mobile/android/icon_review_delicious.png"
+   },
+   {
+    "id": 1,
+    "name": "가성비",
+    "icon_url": "https://t1.kakaocdn.net/kakaomap_mobile/android/icon_review_money.png"
+   },
+   {
+    "id": 2,
+    "name": "친절",
+    "icon_url": "https://t1.kakaocdn.net/kakaomap_mobile/android/icon_review_kind.png"
+   },
+   {
+    "id": 3,
+    "name": "분위기",
+    "icon_url": "https://t1.kakaocdn.net/kakaomap_mobile/android/icon_review_mood.png"
+   },
+   {
+    "id": 4,
+    "name": "주차",
+    "icon_url": "https://t1.kakaocdn.net/kakaomap_mobile/android/icon_review_parking.png"
+   }
+  ],
+  "reviews": [
+   {
+    "review_id": 15862131,
+    "star_rating": 5,
+    "contents": "딱 먹을만한 음식들로 구성되어있고 공간분리가 잘 되어있어 즐거운 모임 가졌네요 ㅎㅎ\n음식퀄리티가 쭉 이어졌으면 합니다 ㅎㅎ",
+    "photo_count": 1,
+    "photos": [
+     {
+      "url": "http://t1.kakaocdn.net/local/kakaomapPhoto/review/85af0d316ea4a4b3c65036ea6f0e6c311629278b?original",
+      "photo_id": 9016793,
+      "media_type": "PHOTO",
+      "status": "S",
+      "ui_type": "PROFILE",
+      "duration": 0,
+      "review_id": 15862131,
+      "updated_at": "2026-06-29 11:23:55",
+      "meta": {
+       "owner": {
+        "map_user_id": "1226710164",
+        "nickname": "혁준",
+        "image_url": "http://t1.kakaocdn.net/local/kakaomapPhoto/profile/ab8dc78e204bc4e6fc6cca184e9d16c7c9c38a64?original",
+        "timeline_level": {
+         "badge": "02",
+         "now_level": 24,
+         "show_other": true
+        },
+        "review_count": 47,
+        "follower_count": 3,
+        "profile_links": [],
+        "average_score": 3.8,
+        "profile_status": "S"
+       },
+       "is_liked_by_me": false,
+       "view_count": 65,
+       "like_count": 0,
+       "near": true,
+       "place": {
+        "confirm_id": "2179756",
+        "place_name": "온테이블"
+       }
+      }
+     }
+    ],
+    "status": "S",
+    "registered_at": "2026-06-29 11:23:55",
+    "updated_at": "2026-06-29 11:23:55",
+    "meta": {
+     "owner": {
+      "map_user_id": "1226710164",
+      "nickname": "혁준",
+      "profile_image_url": "http://t1.kakaocdn.net/local/kakaomapPhoto/profile/ab8dc78e204bc4e6fc6cca184e9d16c7c9c38a64?original",
+      "timeline_level": {
+       "badge": "02",
+       "now_level": 24
+      },
+      "review_count": 47,
+      "follower_count": 3,
+      "average_score": 3.8,
+      "profile_status": "S",
+      "is_following": false
+     },
+     "is_liked_by_me": false,
+     "is_owner_me": false,
+     "like_count": 0,
+     "like_user_profile_image_list": [],
+     "is_place_owner_pick": false,
+     "place": {
+      "confirm_id": "2179756",
+      "place_name": "온테이블"
+     }
+    }
+   },
+   {
+    "review_id": 15469303,
+    "star_rating": 4,
+    "contents": "토욜 저녁에 갔는데 붐비지 않아 편안하게 식사했어요.메뉴가 많지 않고 적당했어요.\n고기류는 미리 구워놓아서 아쉬웠어요.\n해산물이 많아 좋았어요.\n망고는 직접 썰어주시고 오렌지랑 사과는 부탁하면 까서 가져다 주십니다.",
+    "photo_count": 7,
+    "photos": [
+     {
+      "url": "http://t1.kakaocdn.net/local/kakaomapPhoto/review/3d7774cd10fbf593d7990346c6adf5e7ff21d095?original",
+      "photo_id": 8674212,
+      "media_type": "PHOTO",
+      "status": "S",
+      "ui_type": "PROFILE",
+      "duration": 0,
+      "review_id": 15469303,
+      "updated_at": "2026-05-10 11:12:39",
+      "meta": {
+       "owner": {
+        "map_user_id": "1541598523",
+        "nickname": "제주사랑",
+        "image_url": "http://t1.kakaocdn.net/local/kakaomapPhoto/profile/734b2da4a251027346d2affb2d225cb9d3c73364?original",
+        "timeline_level": {
+         "badge": "03",
+         "now_level": 40,
+         "show_other": true
+        },
+        "review_count": 149,
+        "follower_count": 23,
+        "profile_links": [],
+        "average_score": 4.2,
+        "profile_status": "S"
+       },
+       "is_liked_by_me": false,
+       "view_count": 118,
+       "like_count": 0,
+       "near": true,
+       "place": {
+        "confirm_id": "2179756",
+        "place_name": "온테이블"
+       }
+      }
+     },
+     {
+      "url": "http://t1.kakaocdn.net/local/kakaomapPhoto/review/e52554f6b13f7bffb12599df6f528a192f5c1cb6?original",
+      "photo_id": 8674213,
+      "media_type": "PHOTO",
+      "status": "S",
+      "ui_type": "PROFILE",
+      "duration": 0,
+      "review_id": 15469303,
+      "updated_at": "2026-05-10 11:12:39",
+      "meta": {
+       "owner": {
+        "map_user_id": "1541598523",
+        "nickname": "제주사랑",
+        "image_url": "http://t1.kakaocdn.net/local/kakaomapPhoto/profile/734b2da4a251027346d2affb2d225cb9d3c73364?original",
+        "timeline_level": {
+         "badge": "03",
+         "now_level": 40,
+         "show_other": true
+        },
+        "review_count": 149,
+        "follower_count": 23,
+        "profile_links": [],
+        "average_score": 4.2,
+        "profile_status": "S"
+       },
+       "is_liked_by_me": false,
+       "view_count": 37,
+       "like_count": 0,
+       "near": true,
+       "place": {
+        "confirm_id": "2179756",
+        "place_name": "온테이블"
+       }
+      }
+     },
+     {
+      "url": "http://t1.kakaocdn.net/local/kakaomapPhoto/review/6230be5e7f79dc0429404a4dd549d4938f492d06?original",
+      "photo_id": 8674214,
+      "media_type": "PHOTO",
+      "status": "S",
+      "ui_type": "PROFILE",
+      "duration": 0,
+      "review_id": 15469303,
+      "updated_at": "2026-05-10 11:12:39",
+      "meta": {
+       "owner": {
+        "map_user_id": "1541598523",
+        "nickname": "제주사랑",
+        "image_url": "http://t1.kakaocdn.net/local/kakaomapPhoto/profile/734b2da4a251027346d2affb2d225cb9d3c73364?original",
+        "timeline_level": {
+         "badge": "03",
+         "now_level": 40,
+         "show_other": true
+        },
+        "review_count": 149,
+        "follower_count": 23,
+        "profile_links": [],
+        "average_score": 4.2,
+        "profile_status": "S"
+       },
+       "is_liked_by_me": false,
+       "view_count": 37,
+       "like_count": 0,
+       "near": true,
+       "place": {
+        "confirm_id": "2179756",
+        "place_name": "온테이블"
+       }
+      }
+     },
+     {
+      "url": "http://t1.kakaocdn.net/local/kakaomapPhoto/review/cf551abfa7ea5b5f8a41f57adf9bb52de99b14f4?original",
+      "photo_id": 8674215,
+      "media_type": "PHOTO",
+      "status": "S",
+      "ui_type": "PROFILE",
+      "duration": 0,
+      "review_id": 15469303,
+      "updated_at": "2026-05-10 11:12:39",
+      "meta": {
+       "owner": {
+        "map_user_id": "1541598523",
+        "nickname": "제주사랑",
+        "image_url": "http://t1.kakaocdn.net/local/kakaomapPhoto/profile/734b2da4a251027346d2affb2d225cb9d3c73364?original",
+        "timeline_level": {
+         "badge": "03",
+         "now_level": 40,
+         "show_other": true
+        },
+        "review_count": 149,
+        "follower_count": 23,
+        "profile_links": [],
+        "average_score": 4.2,
+        "profile_status": "S"
+       },
+       "is_liked_by_me": false,
+       "view_count": 33,
+       "like_count": 0,
+       "near": true,
+       "place": {
+        "confirm_id": "2179756",
+        "place_name": "온테이블"
+       }
+      }
+     },
+     {
+      "url": "http://t1.kakaocdn.net/local/kakaomapPhoto/review/1a9ca6c61cacff331075a1e394dadcd576ee0834?original",
+      "photo_id": 8674216,
+      "media_type": "PHOTO",
+      "status": "S",
+      "ui_type": "PROFILE",
+      "duration": 0,
+      "review_id": 15469303,
+      "updated_at": "2026-05-10 11:12:39",
+      "meta": {
+       "owner": {
+        "map_user_id": "1541598523",
+        "nickname": "제주사랑",
+        "image_url": "http://t1.kakaocdn.net/local/kakaomapPhoto/profile/734b2da4a251027346d2affb2d225cb9d3c73364?original",
+        "timeline_level": {
+         "badge": "03",
+         "now_level": 40,
+         "show_other": true
+        },
+        "review_count": 149,
+        "follower_count": 23,
+        "profile_links": [],
+        "average_score": 4.2,
+        "profile_status": "S"
+       },
+       "is_liked_by_me": false,
+       "view_count": 34,
+       "like_count": 0,
+       "near": true,
+       "place": {
+        "confirm_id": "2179756",
+        "place_name": "온테이블"
+       }
+      }
+     },
+     {
+      "url": "http://t1.kakaocdn.net/local/kakaomapPhoto/review/550a136c8c911c72a5c32c1252c143676041326e?original",
+      "photo_id": 8674217,
+      "media_type": "PHOTO",
+      "status": "S",
+      "ui_type": "PROFILE",
+      "duration": 0,
+      "review_id": 15469303,
+      "updated_at": "2026-05-10 11:12:39",
+      "meta": {
+       "owner": {
+        "map_user_id": "1541598523",
+        "nickname": "제주사랑",
+        "image_url": "http://t1.kakaocdn.net/local/kakaomapPhoto/profile/734b2da4a251027346d2affb2d225cb9d3c73364?original",
+        "timeline_level": {
+         "badge": "03",
+         "now_level": 40,
+         "show_other": true
+        },
+        "review_count": 149,
+        "follower_count": 23,
+        "profile_links": [],
+        "average_score": 4.2,
+        "profile_status": "S"
+       },
+       "is_liked_by_me": false,
+       "view_count": 30,
+       "like_count": 0,
+       "near": true,
+       "place": {
+        "confirm_id": "2179756",
+        "place_name": "온테이블"
+       }
+      }
+     },
+     {
+      "url": "http://t1.kakaocdn.net/local/kakaomapPhoto/review/a9a77d6595a6ddf1467596d1fa96b2572cc3926f?original",
+      "photo_id": 8674218,
+      "media_type": "PHOTO",
+      "status": "S",
+      "ui_type": "PROFILE",
+      "duration": 0,
+      "review_id": 15469303,
+      "updated_at": "2026-05-10 11:12:39",
+      "meta": {
+       "owner": {
+        "map_user_id": "1541598523",
+        "nickname": "제주사랑",
+        "image_url": "http://t1.kakaocdn.net/local/kakaomapPhoto/profile/734b2da4a251027346d2affb2d225cb9d3c73364?original",
+        "timeline_level": {
+         "badge": "03",
+         "now_level": 40,
+         "show_other": true
+        },
+        "review_count": 149,
+        "follower_count": 23,
+        "profile_links": [],
+        "average_score": 4.2,
+        "profile_status": "S"
+       },
+       "is_liked_by_me": false,
+       "view_count": 27,
+       "like_count": 0,
+       "near": true,
+       "place": {
+        "confirm_id": "2179756",
+        "place_name": "온테이블"
+       }
+      }
+     }
+    ],
+    "status": "S",
+    "registered_at": "2026-05-10 11:12:39",
+    "updated_at": "2026-05-10 11:12:39",
+    "meta": {
+     "owner": {
+      "map_user_id": "1541598523",
+      "nickname": "제주사랑",
+      "profile_image_url": "http://t1.kakaocdn.net/local/kakaomapPhoto/profile/734b2da4a251027346d2affb2d225cb9d3c73364?original",
+      "timeline_level": {
+       "badge": "03",
+       "now_level": 40
+      },
+      "review_count": 149,
+      "follower_count": 23,
+      "average_score": 4.2,
+      "profile_status": "S",
+      "is_following": false
+     },
+     "is_liked_by_me": false,
+     "is_owner_me": false,
+     "like_count": 0,
+     "like_user_profile_image_list": [],
+     "is_place_owner_pick": false,
+     "place": {
+      "confirm_id": "2179756",
+      "place_name": "온테이블"
+     }
+    }
+   },
+   {
+    "review_id": 15259557,
+    "star_rating": 5,
+    "contents": "아기의자도 잘 준비되어있고 음식들도 조금씩 계속 리필되서 따듯하게 먹을 수 있었어요!\n최근 갔던 뷔페중에 제일 만족스러웠습니다!👍",
+    "photo_count": 10,
+    "photos": [
+     {
+      "url": "http://t1.kakaocdn.net/local/kakaomapPhoto/review/5512e94b5a81539d5237096b6a5eb5924ced2dc2?original",
+      "photo_id": 8485843,
+      "media_type": "PHOTO",
+      "status": "S",
+      "ui_type": "PROFILE",
+      "duration": 0,
+      "review_id": 15259557,
+      "updated_at": "2026-04-14 11:19:42",
+      "meta": {
+       "owner": {
+        "map_user_id": "1596360900",
+        "nickname": "먹도리탕",
+        "image_url": "http://t1.kakaocdn.net/local/kakaomapPhoto/profile/f216f1e44df681acad444758c1992ab9f0baf35f?original",
+        "timeline_level": {
+         "badge": "04",
+         "now_level": 72,
+         "show_other": true
+        },
+        "review_count": 267,
+        "follower_count": 1153,
+        "profile_links": [
+         "[네이버 블로그] 블로그를 소개합니다. 어서와 먹리츄의 블로그 | 먹리츄 https://m.blog.naver.com/meelee2001"
+        ],
+        "average_score": 4.3,
+        "profile_status": "S"
+       },
+       "is_liked_by_me": false,
+       "view_count": 44,
+       "like_count": 0,
+       "near": true,
+       "place": {
+        "confirm_id": "2179756",
+        "place_name": "온테이블"
+       }
+      }
+     },
+     {
+      "url": "http://t1.kakaocdn.net/local/kakaomapPhoto/review/90002b9555a0ae24a3b9fe79a262953a38df21ef?original",
+      "photo_id": 8485844,
+      "media_type": "PHOTO",
+      "status": "S",
+      "ui_type": "PROFILE",
+      "duration": 0,
+      "review_id": 15259557,
+      "updated_at": "2026-04-14 11:19:42",
+      "meta": {
+       "owner": {
+        "map_user_id": "1596360900",
+        "nickname": "먹도리탕",
+        "image_url": "http://t1.kakaocdn.net/local/kakaomapPhoto/profile/f216f1e44df681acad444758c1992ab9f0baf35f?original",
+        "timeline_level": {
+         "badge": "04",
+         "now_level": 72,
+         "show_other": true
+        },
+        "review_count": 267,
+        "follower_count": 1153,
+        "profile_links": [
+         "[네이버 블로그] 블로그를 소개합니다. 어서와 먹리츄의 블로그 | 먹리츄 https://m.blog.naver.com/meelee2001"
+        ],
+        "average_score": 4.3,
+        "profile_status": "S"
+       },
+       "is_liked_by_me": false,
+       "view_count": 33,
+       "like_count": 0,
+       "near": true,
+       "place": {
+        "confirm_id": "2179756",
+        "place_name": "온테이블"
+       }
+      }
+     },
+     {
+      "url": "http://t1.kakaocdn.net/local/kakaomapPhoto/review/1594bc8deeb331f608195c1ae0f9a3585d20952d?original",
+      "photo_id": 8485845,
+      "media_type": "PHOTO",
+      "status": "S",
+      "ui_type": "PROFILE",
+      "duration": 0,
+      "review_id": 15259557,
+      "updated_at": "2026-04-14 11:19:42",
+      "meta": {
+       "owner": {
+        "map_user_id": "1596360900",
+        "nickname": "먹도리탕",
+        "image_url": "http://t1.kakaocdn.net/local/kakaomapPhoto/profile/f216f1e44df681acad444758c1992ab9f0baf35f?original",
+        "timeline_level": {
+         "badge": "04",
+         "now_level": 72,
+         "show_other": true
+        },
+        "review_count": 267,
+        "follower_count": 1153,
+        "profile_links": [
+         "[네이버 블로그] 블로그를 소개합니다. 어서와 먹리츄의 블로그 | 먹리츄 https://m.blog.naver.com/meelee2001"
+        ],
+        "average_score": 4.3,
+        "profile_status": "S"
+       },
+       "is_liked_by_me": false,
+       "view_count": 29,
+       "like_count": 0,
+       "near": true,
+       "place": {
+        "confirm_id": "2179756",
+        "place_name": "온테이블"
+       }
+      }
+     },
+     {
+      "url": "http://t1.kakaocdn.net/local/kakaomapPhoto/review/9e398fb5c17feee107ba9bd87128da3d05f391e2?original",
+      "photo_id": 8485846,
+      "media_type": "PHOTO",
+      "status": "S",
+      "ui_type": "PROFILE",
+      "duration": 0,
+      "review_id": 15259557,
+      "updated_at": "2026-04-14 11:19:42",
+      "meta": {
+       "owner": {
+        "map_user_id": "1596360900",
+        "nickname": "먹도리탕",
+        "image_url": "http://t1.kakaocdn.net/local/kakaomapPhoto/profile/f216f1e44df681acad444758c1992ab9f0baf35f?original",
+        "timeline_level": {
+         "badge": "04",
+         "now_level": 72,
+         "show_other": true
+        },
+        "review_count": 267,
+        "follower_count": 1153,
+        "profile_links": [
+         "[네이버 블로그] 블로그를 소개합니다. 어서와 먹리츄의 블로그 | 먹리츄 https://m.blog.naver.com/meelee2001"
+        ],
+        "average_score": 4.3,
+        "profile_status": "S"
+       },
+       "is_liked_by_me": false,
+       "view_count": 24,
+       "like_count": 0,
+       "near": true,
+       "place": {
+        "confirm_id": "2179756",
+        "place_name": "온테이블"
+       }
+      }
+     },
+     {
+      "url": "http://t1.kakaocdn.net/local/kakaomapPhoto/review/4927a1b1574dca3ce618f200ea5f6056bdaf37e9?original",
+      "photo_id": 8485847,
+      "media_type": "PHOTO",
+      "status": "S",
+      "ui_type": "PROFILE",
+      "duration": 0,
+      "review_id": 15259557,
+      "updated_at": "2026-04-14 11:19:42",
+      "meta": {
+       "owner": {
+        "map_user_id": "1596360900",
+        "nickname": "먹도리탕",
+        "image_url": "http://t1.kakaocdn.net/local/kakaomapPhoto/profile/f216f1e44df681acad444758c1992ab9f0baf35f?original",
+        "timeline_level": {
+         "badge": "04",
+         "now_level": 72,
+         "show_other": true
+        },
+        "review_count": 267,
+        "follower_count": 1153,
+        "profile_links": [
+         "[네이버 블로그] 블로그를 소개합니다. 어서와 먹리츄의 블로그 | 먹리츄 https://m.blog.naver.com/meelee2001"
+        ],
+        "average_score": 4.3,
+        "profile_status": "S"
+       },
+       "is_liked_by_me": false,
+       "view_count": 21,
+       "like_count": 0,
+       "near": true,
+       "place": {
+        "confirm_id": "2179756",
+        "place_name": "온테이블"
+       }
+      }
+     },
+     {
+      "url": "http://t1.kakaocdn.net/local/kakaomapPhoto/review/b6fc41d18ad7fa5015efb02b81db064a5c337035?original",
+      "photo_id": 8485848,
+      "media_type": "PHOTO",
+      "status": "S",
+      "ui_type": "PROFILE",
+      "duration": 0,
+      "review_id": 15259557,
+      "updated_at": "2026-04-14 11:19:42",
+      "meta": {
+       "owner": {
+        "map_user_id": "1596360900",
+        "nickname": "먹도리탕",
+        "image_url": "http://t1.kakaocdn.net/local/kakaomapPhoto/profile/f216f1e44df681acad444758c1992ab9f0baf35f?original",
+        "timeline_level": {
+         "badge": "04",
+         "now_level": 72,
+         "show_other": true
+        },
+        "review_count": 267,
+        "follower_count": 1153,
+        "profile_links": [
+         "[네이버 블로그] 블로그를 소개합니다. 어서와 먹리츄의 블로그 | 먹리츄 https://m.blog.naver.com/meelee2001"
+        ],
+        "average_score": 4.3,
+        "profile_status": "S"
+       },
+       "is_liked_by_me": false,
+       "view_count": 23,
+       "like_count": 0,
+       "near": true,
+       "place": {
+        "confirm_id": "2179756",
+        "place_name": "온테이블"
+       }
+      }
+     },
+     {
+      "url": "http://t1.kakaocdn.net/local/kakaomapPhoto/review/b09a25a1e88f5d3874479482dd272fe50cfe3faa?original",
+      "photo_id": 8485849,
+      "media_type": "PHOTO",
+      "status": "S",
+      "ui_type": "PROFILE",
+      "duration": 0,
+      "review_id": 15259557,
+      "updated_at": "2026-04-14 11:19:42",
+      "meta": {
+       "owner": {
+        "map_user_id": "1596360900",
+        "nickname": "먹도리탕",
+        "image_url": "http://t1.kakaocdn.net/local/kakaomapPhoto/profile/f216f1e44df681acad444758c1992ab9f0baf35f?original",
+        "timeline_level": {
+         "badge": "04",
+         "now_level": 72,
+         "show_other": true
+        },
+        "review_count": 267,
+        "follower_count": 1153,
+        "profile_links": [
+         "[네이버 블로그] 블로그를 소개합니다. 어서와 먹리츄의 블로그 | 먹리츄 https://m.blog.naver.com/meelee2001"
+        ],
+        "average_score": 4.3,
+        "profile_status": "S"
+       },
+       "is_liked_by_me": false,
+       "view_count": 110,
+       "like_count": 0,
+       "near": true,
+       "place": {
+        "confirm_id": "2179756",
+        "place_name": "온테이블"
+       }
+      }
+     },
+     {
+      "url": "http://t1.kakaocdn.net/local/kakaomapPhoto/review/a47a715adf2c6580834832f34a76d50461209a29?original",
+      "photo_id": 8485850,
+      "media_type": "PHOTO",
+      "status": "S",
+      "ui_type": "PROFILE",
+      "duration": 0,
+      "review_id": 15259557,
+      "updated_at": "2026-04-14 11:19:42",
+      "meta": {
+       "owner": {
+        "map_user_id": "1596360900",
+        "nickname": "먹도리탕",
+        "image_url": "http://t1.kakaocdn.net/local/kakaomapPhoto/profile/f216f1e44df681acad444758c1992ab9f0baf35f?original",
+        "timeline_level": {
+         "badge": "04",
+         "now_level": 72,
+         "show_other": true
+        },
+        "review_count": 267,
+        "follower_count": 1153,
+        "profile_links": [
+         "[네이버 블로그] 블로그를 소개합니다. 어서와 먹리츄의 블로그 | 먹리츄 https://m.blog.naver.com/meelee2001"
+        ],
+        "average_score": 4.3,
+        "profile_status": "S"
+       },
+       "is_liked_by_me": false,
+       "view_count": 20,
+       "like_count": 0,
+       "near": true,
+       "place": {
+        "confirm_id": "2179756",
+        "place_name": "온테이블"
+       }
+      }
+     },
+     {
+      "url": "http://t1.kakaocdn.net/local/kakaomapPhoto/review/b0d5ba669b7adaf1ecdf49f031ce8b101ba19da5?original",
+      "photo_id": 8485851,
+      "media_type": "PHOTO",
+      "status": "S",
+      "ui_type": "PROFILE",
+      "duration": 0,
+      "review_id": 15259557,
+      "updated_at": "2026-04-14 11:19:42",
+      "meta": {
+       "owner": {
+        "map_user_id": "1596360900",
+        "nickname": "먹도리탕",
+        "image_url": "http://t1.kakaocdn.net/local/kakaomapPhoto/profile/f216f1e44df681acad444758c1992ab9f0baf35f?original",
+        "timeline_level": {
+         "badge": "04",
+         "now_level": 72,
+         "show_other": true
+        },
+        "review_count": 267,
+        "follower_count": 1153,
+        "profile_links": [
+         "[네이버 블로그] 블로그를 소개합니다. 어서와 먹리츄의 블로그 | 먹리츄 https://m.blog.naver.com/meelee2001"
+        ],
+        "average_score": 4.3,
+        "profile_status": "S"
+       },
+       "is_liked_by_me": false,
+       "view_count": 94,
+       "like_count": 0,
+       "near": true,
+       "place": {
+        "confirm_id": "2179756",
+        "place_name": "온테이블"
+       }
+      }
+     },
+     {
+      "url": "http://t1.kakaocdn.net/local/kakaomapPhoto/review/c10a599e52425eed99d86137d9e1b1ddf67c696f?original",
+      "photo_id": 8485852,
+      "media_type": "PHOTO",
+      "status": "S",
+      "ui_type": "PROFILE",
+      "duration": 0,
+      "review_id": 15259557,
+      "updated_at": "2026-04-14 11:19:42",
+      "meta": {
+       "owner": {
+        "map_user_id": "1596360900",
+        "nickname": "먹도리탕",
+        "image_url": "http://t1.kakaocdn.net/local/kakaomapPhoto/profile/f216f1e44df681acad444758c1992ab9f0baf35f?original",
+        "timeline_level": {
+         "badge": "04",
+         "now_level": 72,
+         "show_other": true
+        },
+        "review_count": 267,
+        "follower_count": 1153,
+        "profile_links": [
+         "[네이버 블로그] 블로그를 소개합니다. 어서와 먹리츄의 블로그 | 먹리츄 https://m.blog.naver.com/meelee2001"
+        ],
+        "average_score": 4.3,
+        "profile_status": "S"
+       },
+       "is_liked_by_me": false,
+       "view_count": 83,
+       "like_count": 0,
+       "near": true,
+       "place": {
+        "confirm_id": "2179756",
+        "place_name": "온테이블"
+       }
+      }
+     }
+    ],
+    "status": "S",
+    "registered_at": "2026-04-14 11:19:42",
+    "updated_at": "2026-04-14 11:19:42",
+    "meta": {
+     "owner": {
+      "map_user_id": "1596360900",
+      "nickname": "먹도리탕",
+      "profile_image_url": "http://t1.kakaocdn.net/local/kakaomapPhoto/profile/f216f1e44df681acad444758c1992ab9f0baf35f?original",
+      "timeline_level": {
+       "badge": "04",
+       "now_level": 72
+      },
+      "review_count": 267,
+      "follower_count": 1153,
+      "average_score": 4.3,
+      "profile_status": "S",
+      "is_following": false
+     },
+     "is_liked_by_me": false,
+     "is_owner_me": false,
+     "like_count": 1,
+     "like_user_profile_image_list": [
+      "http://t1.kakaocdn.net/local/kakaomapPhoto/profile/f216f1e44df681acad444758c1992ab9f0baf35f?original"
+     ],
+     "is_place_owner_pick": false,
+     "place": {
+      "confirm_id": "2179756",
+      "place_name": "온테이블"
+     }
+    }
+   }
+  ],
+  "photos": [
+   {
+    "url": "http://t1.kakaocdn.net/local/kakaomapPhoto/review/3d7774cd10fbf593d7990346c6adf5e7ff21d095?original",
+    "photo_id": 8674212,
+    "media_type": "PHOTO",
+    "status": "S",
+    "ui_type": "PROFILE",
+    "duration": 0,
+    "review_id": 15469303,
+    "updated_at": "2026-09-30 06:43:25",
+    "meta": {
+     "owner": {
+      "map_user_id": "1541598523",
+      "nickname": "제주사랑",
+      "image_url": "http://t1.kakaocdn.net/local/kakaomapPhoto/profile/734b2da4a251027346d2affb2d225cb9d3c73364?original",
+      "timeline_level": {
+       "badge": "03",
+       "now_level": 40,
+       "show_other": true
+      },
+      "review_count": 149,
+      "follower_count": 23,
+      "profile_links": [],
+      "average_score": 4.2,
+      "profile_status": "S"
+     },
+     "is_liked_by_me": false,
+     "near": false,
+     "place": {
+      "confirm_id": "2179756",
+      "place_name": "온테이블"
+     }
+    }
+   },
+   {
+    "url": "http://t1.kakaocdn.net/local/kakaomapPhoto/review/b09a25a1e88f5d3874479482dd272fe50cfe3faa?original",
+    "photo_id": 8485849,
+    "media_type": "PHOTO",
+    "status": "S",
+    "ui_type": "PROFILE",
+    "duration": 0,
+    "review_id": 15259557,
+    "updated_at": "2026-09-30 05:46:49",
+    "meta": {
+     "owner": {
+      "map_user_id": "1596360900",
+      "nickname": "먹도리탕",
+      "image_url": "http://t1.kakaocdn.net/local/kakaomapPhoto/profile/f216f1e44df681acad444758c1992ab9f0baf35f?original",
+      "timeline_level": {
+       "badge": "04",
+       "now_level": 72,
+       "show_other": true
+      },
+      "review_count": 267,
+      "follower_count": 1153,
+      "profile_links": [
+       "[네이버 블로그] 블로그를 소개합니다. 어서와 먹리츄의 블로그 | 먹리츄 https://m.blog.naver.com/meelee2001"
+      ],
+      "average_score": 4.3,
+      "profile_status": "S"
+     },
+     "is_liked_by_me": false,
+     "near": false,
+     "place": {
+      "confirm_id": "2179756",
+      "place_name": "온테이블"
+     }
+    }
+   },
+   {
+    "url": "http://t1.kakaocdn.net/local/kakaomapPhoto/review/b0d5ba669b7adaf1ecdf49f031ce8b101ba19da5?original",
+    "photo_id": 8485851,
+    "media_type": "PHOTO",
+    "status": "S",
+    "ui_type": "PROFILE",
+    "duration": 0,
+    "review_id": 15259557,
+    "updated_at": "2026-09-30 05:46:49",
+    "meta": {
+     "owner": {
+      "map_user_id": "1596360900",
+      "nickname": "먹도리탕",
+      "image_url": "http://t1.kakaocdn.net/local/kakaomapPhoto/profile/f216f1e44df681acad444758c1992ab9f0baf35f?original",
+      "timeline_level": {
+       "badge": "04",
+       "now_level": 72,
+       "show_other": true
+      },
+      "review_count": 267,
+      "follower_count": 1153,
+      "profile_links": [
+       "[네이버 블로그] 블로그를 소개합니다. 어서와 먹리츄의 블로그 | 먹리츄 https://m.blog.naver.com/meelee2001"
+      ],
+      "average_score": 4.3,
+      "profile_status": "S"
+     },
+     "is_liked_by_me": false,
+     "near": false,
+     "place": {
+      "confirm_id": "2179756",
+      "place_name": "온테이블"
+     }
+    }
+   },
+   {
+    "url": "http://t1.kakaocdn.net/local/kakaomapPhoto/review/c10a599e52425eed99d86137d9e1b1ddf67c696f?original",
+    "photo_id": 8485852,
+    "media_type": "PHOTO",
+    "status": "S",
+    "ui_type": "PROFILE",
+    "duration": 0,
+    "review_id": 15259557,
+    "updated_at": "2026-09-30 05:46:49",
+    "meta": {
+     "owner": {
+      "map_user_id": "1596360900",
+      "nickname": "먹도리탕",
+      "image_url": "http://t1.kakaocdn.net/local/kakaomapPhoto/profile/f216f1e44df681acad444758c1992ab9f0baf35f?original",
+      "timeline_level": {
+       "badge": "04",
+       "now_level": 72,
+       "show_other": true
+      },
+      "review_count": 267,
+      "follower_count": 1153,
+      "profile_links": [
+       "[네이버 블로그] 블로그를 소개합니다. 어서와 먹리츄의 블로그 | 먹리츄 https://m.blog.naver.com/meelee2001"
+      ],
+      "average_score": 4.3,
+      "profile_status": "S"
+     },
+     "is_liked_by_me": false,
+     "near": false,
+     "place": {
+      "confirm_id": "2179756",
+      "place_name": "온테이블"
+     }
+    }
+   },
+   {
+    "url": "http://t1.kakaocdn.net/local/kakaomapPhoto/review/d30a098e32538b28c63400a245c65cf8c27e7c81?original",
+    "photo_id": 7701091,
+    "media_type": "PHOTO",
+    "status": "S",
+    "ui_type": "PROFILE",
+    "duration": 0,
+    "review_id": 14361011,
+    "updated_at": "2026-09-30 01:47:32",
+    "meta": {
+     "owner": {
+      "map_user_id": "492614658",
+      "nickname": "지니팡",
+      "image_url": "http://t1.kakaocdn.net/local/kakaomapPhoto/profile/0635529eecef32806bbcb702db4a73270fb4e8c3?original",
+      "timeline_level": {
+       "badge": "03",
+       "now_level": 52,
+       "show_other": true
+      },
+      "review_count": 263,
+      "follower_count": 214,
+      "profile_links": [
+       "https://www.instagram.com/jinheesss"
+      ],
+      "average_score": 4.4,
+      "profile_status": "S"
+     },
+     "is_liked_by_me": false,
+     "near": false,
+     "place": {
+      "confirm_id": "2179756",
+      "place_name": "온테이블"
+     }
+    }
+   },
+   {
+    "url": "http://t1.kakaocdn.net/local/kakaomapPhoto/review/1a7a754b0dcf5630d472542b5dc400aff26a8e23?original",
+    "photo_id": 7701073,
+    "media_type": "PHOTO",
+    "status": "S",
+    "ui_type": "PROFILE",
+    "duration": 0,
+    "review_id": 14361011,
+    "updated_at": "2026-09-30 01:47:32",
+    "meta": {
+     "owner": {
+      "map_user_id": "492614658",
+      "nickname": "지니팡",
+      "image_url": "http://t1.kakaocdn.net/local/kakaomapPhoto/profile/0635529eecef32806bbcb702db4a73270fb4e8c3?original",
+      "timeline_level": {
+       "badge": "03",
+       "now_level": 52,
+       "show_other": true
+      },
+      "review_count": 263,
+      "follower_count": 214,
+      "profile_links": [
+       "https://www.instagram.com/jinheesss"
+      ],
+      "average_score": 4.4,
+      "profile_status": "S"
+     },
+     "is_liked_by_me": false,
+     "near": false,
+     "place": {
+      "confirm_id": "2179756",
+      "place_name": "온테이블"
+     }
+    }
+   },
+   {
+    "url": "http://t1.kakaocdn.net/local/kakaomapPhoto/review/b9e29b80bd74412d26f7db1bb3cc2cedb09404d0?original",
+    "photo_id": 7345849,
+    "media_type": "PHOTO",
+    "status": "S",
+    "ui_type": "PROFILE",
+    "duration": 0,
+    "review_id": 13938930,
+    "updated_at": "2026-09-29 23:56:21",
+    "meta": {
+     "owner": {
+      "map_user_id": "426776971",
+      "nickname": "Where the light is",
+      "image_url": "http://t1.kakaocdn.net/local/kakaomapPhoto/profile/fea7f625f0d66a820d784a62b3e2fbee6a8464a0?original",
+      "timeline_level": {
+       "badge": "03",
+       "now_level": 48,
+       "show_other": true
+      },
+      "review_count": 229,
+      "follower_count": 32,
+      "profile_links": [],
+      "average_score": 3.9,
+      "profile_status": "S"
+     },
+     "is_liked_by_me": false,
+     "near": false,
+     "place": {
+      "confirm_id": "2179756",
+      "place_name": "온테이블"
+     }
+    }
+   },
+   {
+    "url": "http://t1.kakaocdn.net/local/kakaomapPhoto/review/3afd9521666423b1c8780b43418bcd9e3a47bf55?original",
+    "photo_id": 7345848,
+    "media_type": "PHOTO",
+    "status": "S",
+    "ui_type": "PROFILE",
+    "duration": 0,
+    "review_id": 13938930,
+    "updated_at": "2026-09-29 23:56:21",
+    "meta": {
+     "owner": {
+      "map_user_id": "426776971",
+      "nickname": "Where the light is",
+      "image_url": "http://t1.kakaocdn.net/local/kakaomapPhoto/profile/fea7f625f0d66a820d784a62b3e2fbee6a8464a0?original",
+      "timeline_level": {
+       "badge": "03",
+       "now_level": 48,
+       "show_other": true
+      },
+      "review_count": 229,
+      "follower_count": 32,
+      "profile_links": [],
+      "average_score": 3.9,
+      "profile_status": "S"
+     },
+     "is_liked_by_me": false,
+     "near": false,
+     "place": {
+      "confirm_id": "2179756",
+      "place_name": "온테이블"
+     }
+    }
+   },
+   {
+    "url": "http://t1.kakaocdn.net/local/kakaomapPhoto/review/22fcff72a183e0b2ee3cfa84ced9a49a9a101236?original",
+    "photo_id": 7345847,
+    "media_type": "PHOTO",
+    "status": "S",
+    "ui_type": "PROFILE",
+    "duration": 0,
+    "review_id": 13938930,
+    "updated_at": "2026-09-29 23:56:21",
+    "meta": {
+     "owner": {
+      "map_user_id": "426776971",
+      "nickname": "Where the light is",
+      "image_url": "http://t1.kakaocdn.net/local/kakaomapPhoto/profile/fea7f625f0d66a820d784a62b3e2fbee6a8464a0?original",
+      "timeline_level": {
+       "badge": "03",
+       "now_level": 48,
+       "show_other": true
+      },
+      "review_count": 229,
+      "follower_count": 32,
+      "profile_links": [],
+      "average_score": 3.9,
+      "profile_status": "S"
+     },
+     "is_liked_by_me": false,
+     "near": false,
+     "place": {
+      "confirm_id": "2179756",
+      "place_name": "온테이블"
+     }
+    }
+   },
+   {
+    "url": "http://t1.kakaocdn.net/local/kakaomapPhoto/review/85af0d316ea4a4b3c65036ea6f0e6c311629278b?original",
+    "photo_id": 9016793,
+    "media_type": "PHOTO",
+    "status": "S",
+    "ui_type": "PROFILE",
+    "duration": 0,
+    "review_id": 15862131,
+    "updated_at": "2026-09-30 08:28:34",
+    "meta": {
+     "owner": {
+      "map_user_id": "1226710164",
+      "nickname": "혁준",
+      "image_url": "http://t1.kakaocdn.net/local/kakaomapPhoto/profile/ab8dc78e204bc4e6fc6cca184e9d16c7c9c38a64?original",
+      "timeline_level": {
+       "badge": "02",
+       "now_level": 24,
+       "show_other": true
+      },
+      "review_count": 47,
+      "follower_count": 3,
+      "profile_links": [],
+      "average_score": 3.8,
+      "profile_status": "S"
+     },
+     "is_liked_by_me": false,
+     "near": false,
+     "place": {
+      "confirm_id": "2179756",
+      "place_name": "온테이블"
+     }
+    }
+   }
+  ],
+  "timeline_score_table": {
+   "act_review": {
+    "event": 0,
+    "place_banner": [
+     {
+      "title": "사진/영상 등록",
+      "score": 3
+     },
+     {
+      "title": "글 작성",
+      "score": 2
+     }
+    ]
+   }
+  },
+  "has_next": false,
+  "has_my_review": false
+ },
+ "find_way": {
+  "subway": {
+   "station_simple_name": "봉은사역",
+   "exit_num": "7",
+   "to_exit_distance": 312,
+   "subway_list": [
+    {
+     "subway_line_id": "SES9",
+     "subway_line_icon_name": "9"
+    }
+   ],
+   "to_exit_minute": 5
+  }
+ },
+ "navi_guides": [
+  {
+   "guide_id": "2593151",
+   "name": "입구",
+   "flag": "G",
+   "point": {
+    "lon": 127.056840139287,
+    "lat": 37.5128999486642
+   }
+  }
+ ],
+ "trend_rank": {
+  "show_ranking_card": true
+ },
+ "place_add_info": {
+  "tags": [
+   "가족모임",
+   "친목모임"
+  ],
+  "ai_mate": {
+   "store_facility_icons": [
+    {
+     "text": "예약가능",
+     "url": "https://t1.kakaocdn.net/localimg/2025_AIMATE/reservation_line.png"
+    }
+   ],
+   "store_infos": [
+    {
+     "title": "주차",
+     "summary": "조식 중식 3시간 석식 4시간 무료주차 가능, 발렛주차비 35000원, 제휴카드 무료 발렛파킹 가능"
+    },
+    {
+     "title": "기타",
+     "summary": "매장 내 화장실"
+    }
+   ]
+  },
+  "simple_parking_infos": {
+   "texts": [
+    "무료 주차",
+    "발렛파킹"
+   ],
+   "summary": "조식 중식 3시간 석식 4시간 무료주차 가능, 발렛주차비 35000원, 제휴카드 무료 발렛파킹 가능",
+   "has_ai_mate_data": true
+  },
+  "full_detail_infos": [
+   {
+    "title": "주차 정보",
+    "summary": "조식 중식 3시간 석식 4시간 무료주차 가능, 발렛주차비 35000원, 제휴카드 무료 발렛파킹 가능",
+    "items": [
+     {
+      "icon": {
+       "text": "주차 가능",
+       "url": "https://t1.kakaocdn.net/localimg/place/2026/infoIcon/icon_parkingsquare_line.svg"
+      },
+      "tags": {
+       "text": "무료",
+       "color": "Blue"
+      },
+      "contents": [
+       {
+        "label": "주차 가능"
+       }
+      ]
+     },
+     {
+      "icon": {
+       "text": "발렛파킹",
+       "url": "https://t1.kakaocdn.net/localimg/place/2026/infoIcon/icon_valetparking_line.svg"
+      },
+      "contents": [
+       {
+        "label": "발렛파킹"
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "title": "좌석 옵션",
+    "items": [
+     {
+      "icon": {
+       "text": "프라이빗룸",
+       "url": "https://t1.kakaocdn.net/localimg/place/2026/infoIcon/icon_door_line.svg"
+      },
+      "contents": [
+       {
+        "label": "프라이빗룸"
+       }
+      ]
+     },
+     {
+      "icon": {
+       "text": "단체석",
+       "url": "https://t1.kakaocdn.net/localimg/place/2026/infoIcon/icon_peoples_line.svg"
+      },
+      "contents": [
+       {
+        "label": "단체석"
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "title": "어린이 옵션",
+    "summary": "아이의 체형에 맞는 전용 의자 세팅, 아기의자 및 아이식기 구비, 웰컴 키즈 어메니티 제공, 키즈 프렌들리 서비스, 프리미엄 어린이 전용 식기 제공",
+    "items": [
+     {
+      "icon": {
+       "text": "키즈프렌들리",
+       "url": "https://t1.kakaocdn.net/localimg/place/2026/infoIcon/icon_kids_line.svg"
+      },
+      "contents": [
+       {
+        "label": "키즈프렌들리"
+       }
+      ]
+     },
+     {
+      "icon": {
+       "text": "유아의자",
+       "url": "https://t1.kakaocdn.net/localimg/place/2026/infoIcon/icon_babychair_line.svg"
+      },
+      "contents": [
+       {
+        "label": "유아의자"
+       }
+      ]
+     },
+     {
+      "icon": {
+       "text": "키즈메뉴",
+       "url": "https://t1.kakaocdn.net/localimg/place/2026/infoIcon/icon_kidsmenu_line.svg"
+      },
+      "contents": [
+       {
+        "label": "키즈메뉴"
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "title": "편의 시설",
+    "items": [
+     {
+      "icon": {
+       "text": "매장 내 화장실",
+       "url": "https://t1.kakaocdn.net/localimg/place/2026/infoIcon/icon_toilet_line.svg"
+      },
+      "contents": [
+       {
+        "label": "매장 내 화장실"
+       }
+      ]
+     },
+     {
+      "icon": {
+       "text": "케이크 반입 가능",
+       "url": "https://t1.kakaocdn.net/localimg/place/2026/infoIcon/icon_cake_line.svg"
+      },
+      "contents": [
+       {
+        "label": "케이크 반입 가능"
+       }
+      ]
+     },
+     {
+      "icon": {
+       "text": "콜키지 부과",
+       "url": "https://t1.kakaocdn.net/localimg/place/2026/infoIcon/icon_wine_line.svg"
+      },
+      "contents": [
+       {
+        "label": "콜키지 부과"
+       }
+      ]
+     },
+     {
+      "icon": {
+       "text": "채식 메뉴",
+       "url": "https://t1.kakaocdn.net/localimg/place/2026/infoIcon/icon_vagatable_line.svg"
+      },
+      "contents": [
+       {
+        "label": "채식 메뉴"
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "title": "상세 정보",
+    "items": [
+     {
+      "icon": {
+       "text": "장소키워드",
+       "url": "https://t1.kakaocdn.net/localimg/place/2026/infoIcon/icon_tag_line.svg"
+      },
+      "contents": [
+       {
+        "label": "가족모임",
+        "landing_url": "https://map.kakao.com/?q=가족모임"
+       },
+       {
+        "label": "친목모임",
+        "landing_url": "https://map.kakao.com/?q=친목모임"
+       }
+      ]
+     }
+    ]
+   }
+  ],
+  "add_info_summaries": [
+   {
+    "texts": [
+     "무료 주차",
+     "발렛파킹"
+    ],
+    "summary": "조식 중식 3시간 석식 4시간 무료주차 가능, 발렛주차비 35000원, 제휴카드 무료 발렛파킹 가능",
+    "icon": {
+     "text": "주차정보",
+     "url": "https://t1.kakaocdn.net/localimg/place/2026/infoIconMini/parkingicon.svg"
+    },
+    "has_ai_mate_data": true
+   }
+  ],
+  "simple_detail_infos": [
+   {
+    "text": "단체석",
+    "url": "https://t1.kakaocdn.net/localimg/place/2026/infoIcon/icon_peoples_line.svg"
+   },
+   {
+    "text": "프라이빗룸",
+    "url": "https://t1.kakaocdn.net/localimg/place/2026/infoIcon/icon_door_line.svg"
+   },
+   {
+    "text": "채식 메뉴",
+    "url": "https://t1.kakaocdn.net/localimg/place/2026/infoIcon/icon_vagatable_line.svg"
+   },
+   {
+    "text": "콜키지 부과",
+    "url": "https://t1.kakaocdn.net/localimg/place/2026/infoIcon/icon_wine_line.svg"
+   }
+  ]
+ },
+ "reward": {
+  "fiy": {
+   "basic_info": 0,
+   "contact": 200,
+   "menu": 200,
+   "open_hour": 200,
+   "delete_place": 200,
+   "add_info": 0,
+   "max_amount": 600
+  }
+ },
+ "ai_content_warning": {
+  "is_home_tab_display_enabled": true,
+  "is_info_tab_display_enabled": true
+ }
+}

@@ -1,0 +1,2426 @@
+{
+ "menu": {
+  "menus": {
+   "photos": [
+    {
+     "confirm_id": "26428654",
+     "url": "https://postfiles.pstatic.net/MjAyNjA2MTBfMjkz/MDAxNzgxMDU1MTQwMjk5.bvJ-XpWN5XOUES3G3vxRXIpDb7hAsHt16Y7xqNuCr4Qg.kRkEUyEzh-oNK-0X3cTm5mbkF5uz4bBEyFxu78UkVEAg.JPEG/IMG%EF%BC%BF8507.JPG?type=w966",
+     "type": "BLOG",
+     "photo_id": 1650434864,
+     "review_id": 111741603,
+     "registered_at": "2026-06-11 06:33:49",
+     "updated_at": "2026-06-11 06:52:56",
+     "title": "서울 코엑스몰 맛집 하동관 내돈내산 주말 점심",
+     "blog_link_url": "http://blog.naver.com/tear0912/224311662597",
+     "media_type": "PHOTO",
+     "ui_type": "POST"
+    }
+   ],
+   "items": [
+    {
+     "product_id": 7,
+     "name": "곰탕 (보)",
+     "price": 17000,
+     "is_recommend": false,
+     "is_ai_mate": true,
+     "recommend_reasons": [
+      "부드러운 양지 고기",
+      "쫄깃한 내장 식감"
+     ],
+     "ai_mate_desc": "맑은 국물에 부드러운 양지와 쫄깃한 내장이 듬뿍 들어간 곰탕",
+     "mod_at": "2026-06-17 15:36:15"
+    },
+    {
+     "product_id": 12,
+     "name": "곰탕 (특)",
+     "price": 19000,
+     "is_recommend": false,
+     "is_ai_mate": false,
+     "mod_at": "2026-06-17 15:36:15"
+    },
+    {
+     "product_id": 9,
+     "name": "25공 곰탕",
+     "price": 25000,
+     "is_recommend": false,
+     "is_ai_mate": false,
+     "mod_at": "2019-08-23 10:00:38"
+    },
+    {
+     "product_id": 10,
+     "name": "30공 곰탕",
+     "price": 30000,
+     "is_recommend": false,
+     "is_ai_mate": false,
+     "mod_at": "2022-09-06 15:44:31"
+    },
+    {
+     "product_id": 8,
+     "name": "수육 (중)",
+     "price": 40000,
+     "is_recommend": false,
+     "is_ai_mate": false,
+     "mod_at": "2024-02-15 08:33:14"
+    },
+    {
+     "product_id": 13,
+     "name": "수육 (대)",
+     "price": 60000,
+     "is_recommend": false,
+     "is_ai_mate": false,
+     "mod_at": "2024-02-15 22:58:19"
+    }
+   ],
+   "items_updated_at": "2026-06-17 15:36:15",
+   "menu_type": "FOOD"
+  },
+  "default_menu_icon_url": "https://t1.kakaocdn.net/localimg/place/2026/menu/icon_restaurant_solid.svg"
+ },
+ "visitor": {
+  "labels": [
+   0,
+   1,
+   2,
+   3,
+   4,
+   5,
+   6,
+   7,
+   8,
+   9,
+   10,
+   11,
+   12,
+   13,
+   14,
+   15,
+   16,
+   17,
+   18,
+   19,
+   20,
+   21,
+   22,
+   23
+  ],
+  "weekly_uv_average": [
+   -1,
+   -1,
+   -1,
+   -1,
+   -1,
+   -1,
+   -1,
+   -1,
+   -1,
+   -1,
+   126,
+   165,
+   204,
+   92,
+   55,
+   -1,
+   87,
+   63,
+   70,
+   -1,
+   -1,
+   -1,
+   -1,
+   -1
+  ],
+  "sunday_uv": [
+   -1,
+   -1,
+   -1,
+   -1,
+   -1,
+   -1,
+   -1,
+   -1,
+   -1,
+   -1,
+   135,
+   163,
+   162,
+   145,
+   85,
+   -1,
+   211,
+   48,
+   127,
+   -1,
+   -1,
+   -1,
+   -1,
+   -1
+  ],
+  "monday_uv": [
+   -1,
+   -1,
+   -1,
+   -1,
+   -1,
+   -1,
+   -1,
+   -1,
+   -1,
+   -1,
+   34,
+   64,
+   144,
+   40,
+   70,
+   -1,
+   112,
+   80,
+   44,
+   -1,
+   -1,
+   -1,
+   -1,
+   -1
+  ],
+  "tuesday_uv": [
+   -1,
+   -1,
+   -1,
+   -1,
+   -1,
+   -1,
+   -1,
+   -1,
+   -1,
+   -1,
+   78,
+   155,
+   148,
+   38,
+   29,
+   -1,
+   71,
+   43,
+   46,
+   -1,
+   -1,
+   -1,
+   -1,
+   -1
+  ],
+  "wednesday_uv": [
+   -1,
+   -1,
+   -1,
+   -1,
+   -1,
+   -1,
+   -1,
+   -1,
+   -1,
+   -1,
+   166,
+   247,
+   112,
+   88,
+   34,
+   -1,
+   39,
+   93,
+   94,
+   -1,
+   -1,
+   -1,
+   -1,
+   -1
+  ],
+  "thursday_uv": [
+   -1,
+   -1,
+   -1,
+   -1,
+   -1,
+   -1,
+   -1,
+   -1,
+   -1,
+   -1,
+   250,
+   250,
+   326,
+   132,
+   36,
+   -1,
+   40,
+   53,
+   53,
+   -1,
+   -1,
+   -1,
+   -1,
+   -1
+  ],
+  "friday_uv": [
+   -1,
+   -1,
+   -1,
+   -1,
+   -1,
+   -1,
+   -1,
+   -1,
+   -1,
+   -1,
+   86,
+   119,
+   244,
+   95,
+   83,
+   -1,
+   87,
+   57,
+   64,
+   -1,
+   -1,
+   -1,
+   -1,
+   -1
+  ],
+  "saturday_uv": [
+   -1,
+   -1,
+   -1,
+   -1,
+   -1,
+   -1,
+   -1,
+   -1,
+   -1,
+   -1,
+   133,
+   161,
+   298,
+   110,
+   50,
+   -1,
+   53,
+   71,
+   67,
+   -1,
+   -1,
+   -1,
+   -1,
+   -1
+  ],
+  "max_uv": 326,
+  "updated_at": "2026-10-05 01:26:20",
+  "day_of_week": "MONDAY"
+ },
+ "relation": {
+  "role": "CHILD"
+ },
+ "ai_mate": {
+  "summary": {
+   "title": "진한 육향 가득한 전통 곰탕",
+   "contents": [
+    "곰탕 (보) 추천",
+    "단체석"
+   ]
+  },
+  "bottom_sheet": {
+   "title": "진한 육향 가득한 전통 곰탕",
+   "summary": "80년 전통의 한우 곰탕 전문점으로, 쇼핑이나 전시 관람 후 편안하게 식사할 수 있는 장소입니다. 맑고 깊은 국물의 곰탕은 고기와 밥이 함께 제공되어 든든한 한 끼를 제공합니다. 특히, 김치와 깍두기가 곰탕과 잘 어우러져 맛의 조화를 이루며, 빠른 회전율로 점심시간에 적합한 곳입니다.",
+   "sheets": [
+    {
+     "title": "추천 메뉴",
+     "keywords": [
+      "곰탕 (보)"
+     ],
+     "ui_type": "KEYWORDS"
+    },
+    {
+     "title": "제공 서비스",
+     "list": [
+      {
+       "title": "좌석 옵션",
+       "keywords": [
+        "단체석"
+       ]
+      }
+     ],
+     "ui_type": "LIST"
+    }
+   ],
+   "landing_url": "https://kanana.kakao.com/place/redirect?entry=kakaomap&cid=26428654"
+  },
+  "blog_summaries": [
+   {
+    "title": "분위기",
+    "keywords": [
+     "편안한",
+     "전통적인"
+    ]
+   },
+   {
+    "title": "방문 목적",
+    "keywords": [
+     "점심식사",
+     "혼밥",
+     "가족 단위 식사",
+     "관광 전후 식사"
+    ]
+   },
+   {
+    "title": "맛",
+    "keywords": [
+     "담백한",
+     "깊은 맛"
+    ]
+   },
+   {
+    "title": "동반인",
+    "keywords": [
+     "가족",
+     "비즈니스·직장 모임",
+     "어린이 동반"
+    ]
+   }
+  ],
+  "price_level": {
+   "symbol": "₩₩₩₩"
+  },
+  "ai_questions": [
+   "점심 대기 시간은 얼마나 되나요?",
+   "곰탕 특의 구성은 어떻게 되나요?",
+   "전반적인 가격대 알려줘",
+   "매장 특징 알려줘"
+  ],
+  "suggested_questions": [
+   {
+    "text": "점심 대기 시간은 얼마나 되나요?",
+    "landing_url": "https://kanana.kakao.com/place/redirect?entry=kakaomap&t_src=kakaomap&t_ch=pw_place&q=%EC%A0%90%EC%8B%AC+%EB%8C%80%EA%B8%B0+%EC%8B%9C%EA%B0%84%EC%9D%80+%EC%96%BC%EB%A7%88%EB%82%98+%EB%90%98%EB%82%98%EC%9A%94%3F&cid=26428654"
+   },
+   {
+    "text": "곰탕 특의 구성은 어떻게 되나요?",
+    "landing_url": "https://kanana.kakao.com/place/redirect?entry=kakaomap&t_src=kakaomap&t_ch=pw_place&q=%EA%B3%B0%ED%83%95+%ED%8A%B9%EC%9D%98+%EA%B5%AC%EC%84%B1%EC%9D%80+%EC%96%B4%EB%96%BB%EA%B2%8C+%EB%90%98%EB%82%98%EC%9A%94%3F&cid=26428654"
+   },
+   {
+    "text": "전반적인 가격대 알려줘",
+    "landing_url": "https://kanana.kakao.com/place/redirect?entry=kakaomap&t_src=kakaomap&t_ch=pw_place&q=%EC%A0%84%EB%B0%98%EC%A0%81%EC%9D%B8+%EA%B0%80%EA%B2%A9%EB%8C%80+%EC%95%8C%EB%A0%A4%EC%A4%98&cid=26428654"
+   },
+   {
+    "text": "매장 특징 알려줘",
+    "landing_url": "https://kanana.kakao.com/place/redirect?entry=kakaomap&t_src=kakaomap&t_ch=pw_place&q=%EB%A7%A4%EC%9E%A5+%ED%8A%B9%EC%A7%95+%EC%95%8C%EB%A0%A4%EC%A4%98&cid=26428654"
+   }
+  ]
+ },
+ "panel_card_tags": [
+  "TITLE",
+  "PHOTO",
+  "BIZ",
+  "NEWS",
+  "AI_MATE",
+  "SUMMARY",
+  "INFO",
+  "EVENT_KEYWORD",
+  "PRODUCT",
+  "AI_QUESTION",
+  "BOOKING",
+  "SPECIAL",
+  "RELATION",
+  "VISITOR",
+  "REVIEW",
+  "RANKING",
+  "BLOG"
+ ],
+ "panel_tab_tags": [
+  "PRODUCT",
+  "PHOTO",
+  "REVIEW",
+  "BOOKING",
+  "SPECIAL",
+  "NEWS",
+  "BLOG",
+  "RELATION",
+  "RANKING"
+ ],
+ "restrict": {
+  "fiy": {
+   "is_restrict": false
+  },
+  "blog": {
+   "is_restrict": false
+  },
+  "review_read": {
+   "is_restrict": false
+  },
+  "photo": {
+   "is_restrict": false
+  },
+  "fiy_add_info": {
+   "is_restrict": false
+  },
+  "ranking": {
+   "is_restrict": false
+  }
+ },
+ "summary": {
+  "meta": {
+   "updated_at": "2026-09-01 00:08:29"
+  },
+  "confirm_id": "26428654",
+  "name": "하동관 코엑스몰직영점",
+  "status": "Y",
+  "category": {
+   "name": "곰탕",
+   "id1": "9",
+   "id2": "124",
+   "id3": "18163",
+   "name1": "음식점",
+   "name2": "한식",
+   "name3": "곰탕"
+  },
+  "point": {
+   "lon": 127.05980627070032,
+   "lat": 37.51128956098357
+  },
+  "address": {
+   "disp": "서울 강남구 영동대로 513 지하1층 J101호 (삼성동)",
+   "jibun": "삼성동 159",
+   "road": "서울 강남구 영동대로 513 지하1층 J101호",
+   "base_zone_no": "06164",
+   "road_part": "영동대로 513 지하1층 J101호",
+   "jibun_part": "삼성동 159",
+   "address_detail_part": "지하1층 J101호"
+  },
+  "road_view": {
+   "pano_id": "1183842842",
+   "pan": 296.0,
+   "tilt": -2.0,
+   "point": {
+    "lon": 127.06101838899511,
+    "lat": 37.510816814795106
+   },
+   "level": 1,
+   "url": "https://map.kakaocdn.net/map_roadview/2024/08/9144044/2_100873_9144044_20240809021732_cube/left_800.jpg"
+  },
+  "regions": [
+   {
+    "depth": 1,
+    "id": "I",
+    "name": "서울",
+    "simple_name": "서울"
+   },
+   {
+    "depth": 2,
+    "id": "I1000",
+    "name": "강남구",
+    "simple_name": "강남구"
+   },
+   {
+    "depth": 3,
+    "id": "I10000400",
+    "name": "삼성동",
+    "simple_name": "삼성동"
+   }
+  ],
+  "phone_numbers": [
+   {
+    "tel": "02-551-5959"
+   }
+  ],
+  "payments": [],
+  "main_photo_url": "http://t1.kakaocdn.net/local/kakaomapPhoto/review/263f025fef157a7f91e8f2b7987caa5314ce884f?original",
+  "display_info": {
+   "display_name1": "하동관"
+  }
+ },
+ "my_store_notice": {
+  "status": "READY_TO_REGISTER",
+  "notice_count": 0,
+  "is_available_booking": false
+ },
+ "open_hours": {
+  "headline": {
+   "code": "BREAK_TIME",
+   "display_text": "브레이크타임",
+   "display_text_info": "16:30 오픈"
+  },
+  "week_from_today": {
+   "week_periods": [
+    {
+     "days": [
+      {
+       "day_of_the_week_desc": "월(10/5)",
+       "on_days": {
+        "start_end_time_desc": "10:30 ~ 19:00",
+        "break_times_desc": [
+         "15:00 ~ 16:30 브레이크타임"
+        ]
+       },
+       "is_highlight": true
+      },
+      {
+       "day_of_the_week_desc": "화(10/6)",
+       "on_days": {
+        "start_end_time_desc": "10:30 ~ 19:00",
+        "break_times_desc": [
+         "15:00 ~ 16:30 브레이크타임"
+        ]
+       },
+       "is_highlight": false
+      },
+      {
+       "day_of_the_week_desc": "수(10/7)",
+       "on_days": {
+        "start_end_time_desc": "10:30 ~ 19:00",
+        "break_times_desc": [
+         "15:00 ~ 16:30 브레이크타임"
+        ]
+       },
+       "is_highlight": false
+      },
+      {
+       "day_of_the_week_desc": "목(10/8)",
+       "on_days": {
+        "start_end_time_desc": "10:30 ~ 19:00",
+        "break_times_desc": [
+         "15:00 ~ 16:30 브레이크타임"
+        ]
+       },
+       "is_highlight": false
+      },
+      {
+       "day_of_the_week_desc": "금(10/9)",
+       "on_days": {
+        "start_end_time_desc": "10:30 ~ 19:00",
+        "break_times_desc": [
+         "15:00 ~ 16:30 브레이크타임"
+        ]
+       },
+       "is_highlight": false
+      },
+      {
+       "day_of_the_week_desc": "토(10/10)",
+       "on_days": {
+        "start_end_time_desc": "10:30 ~ 19:00",
+        "break_times_desc": [
+         "15:00 ~ 16:30 브레이크타임"
+        ]
+       },
+       "is_highlight": false
+      },
+      {
+       "day_of_the_week_desc": "일(10/11)",
+       "on_days": {
+        "start_end_time_desc": "10:30 ~ 19:00",
+        "break_times_desc": [
+         "15:00 ~ 16:30 브레이크타임"
+        ]
+       },
+       "is_highlight": false
+      }
+     ]
+    }
+   ]
+  }
+ },
+ "photos": {
+  "counts": {
+   "total": 1101,
+   "mystore": 0,
+   "vendor": 0,
+   "vod": 0,
+   "kakaomap_review": 51,
+   "food": 33,
+   "indoor": 82,
+   "outdoor": 70,
+   "menu": 1
+  },
+  "photos": [
+   {
+    "confirm_id": "26428654",
+    "url": "http://t1.kakaocdn.net/local/kakaomapPhoto/review/263f025fef157a7f91e8f2b7987caa5314ce884f?original",
+    "type": "KMAPREVIEW",
+    "photo_id": 7617378,
+    "review_id": 14263571,
+    "registered_at": "2025-11-27 23:27:40",
+    "updated_at": "2026-09-30 01:23:08",
+    "kakaomap_review_photo_meta": {
+     "owner": {
+      "map_user_id": "968167080",
+      "nickname": "파는건 맛있어야지!",
+      "image_url": "http://th-p.talk.kakao.co.kr/th/talkp/wkZsVwdpoW/XMOEdqI0uEVkzBCWgkFXj0/cifaxq.jpg",
+      "timeline_level": {
+       "badge": "04",
+       "now_level": 75,
+       "show_other": true
+      },
+      "review_count": 1069,
+      "follower_count": 257,
+      "profile_links": [],
+      "average_score": 3.4,
+      "profile_status": "S"
+     }
+    },
+    "title": "",
+    "media_type": "PHOTO",
+    "ui_type": "PROFILE",
+    "duration": 0
+   },
+   {
+    "confirm_id": "26428654",
+    "url": "http://t1.kakaocdn.net/local/kakaomapPhoto/review/f4c44d783338ee59dbc67e54874cbe82ff2dbc46?original",
+    "type": "KMAPREVIEW",
+    "photo_id": 4561547,
+    "review_id": 10148647,
+    "registered_at": "2024-05-18 14:22:56",
+    "updated_at": "2026-09-29 10:04:04",
+    "kakaomap_review_photo_meta": {
+     "owner": {
+      "map_user_id": "363817405",
+      "nickname": "태평동팅커벨",
+      "image_url": "http://t1.kakaocdn.net/local/kakaomapPhoto/profile/fd4bfc4ba00225f294c49c19fcdb639b0ac7de28?original",
+      "timeline_level": {
+       "badge": "02",
+       "now_level": 22,
+       "show_other": true
+      },
+      "review_count": 30,
+      "follower_count": 2,
+      "profile_links": [],
+      "average_score": 4.9,
+      "profile_status": "S"
+     }
+    },
+    "title": "",
+    "media_type": "PHOTO",
+    "ui_type": "PROFILE"
+   },
+   {
+    "confirm_id": "26428654",
+    "url": "http://t1.kakaocdn.net/local/kakaomapPhoto/review/50ca0da85390d4936f123479eae3f709bcce29ac?original",
+    "type": "KMAPREVIEW",
+    "photo_id": 2484607,
+    "review_id": 6639622,
+    "registered_at": "2022-12-03 02:54:58",
+    "updated_at": "2026-09-29 00:11:46",
+    "kakaomap_review_photo_meta": {
+     "owner": {
+      "map_user_id": "1154182449",
+      "nickname": "서초럽",
+      "image_url": "http://t1.kakaocdn.net/local/kakaomapPhoto/profile/820b52e698c7a08aac719472984dadb1a86eb0a6?original",
+      "timeline_level": {
+       "badge": "03",
+       "now_level": 41,
+       "show_other": true
+      },
+      "review_count": 184,
+      "follower_count": 17,
+      "profile_links": [],
+      "average_score": 3.2,
+      "profile_status": "S"
+     }
+    },
+    "title": "",
+    "media_type": "PHOTO",
+    "ui_type": "PROFILE"
+   },
+   {
+    "confirm_id": "26428654",
+    "url": "http://t1.kakaocdn.net/local/kakaomapPhoto/review/23d04960d371035e8c59e762ae6af134acc77e2c?original",
+    "type": "KMAPREVIEW",
+    "photo_id": 2339804,
+    "review_id": 6364283,
+    "registered_at": "2022-10-09 13:15:43",
+    "updated_at": "2026-09-28 23:38:27",
+    "kakaomap_review_photo_meta": {
+     "owner": {
+      "map_user_id": "2404875917",
+      "nickname": "갈봉대",
+      "image_url": "http://t1.kakaocdn.net/local/kakaomapPhoto/profile/1a042ae75bb514f17cbff2f4d21d746021f45103?original",
+      "timeline_level": {
+       "badge": "02",
+       "now_level": 17,
+       "show_other": true
+      },
+      "review_count": 17,
+      "follower_count": 6,
+      "profile_links": [],
+      "average_score": 4.0,
+      "profile_status": "S"
+     }
+    },
+    "title": "",
+    "media_type": "PHOTO",
+    "ui_type": "PROFILE"
+   },
+   {
+    "confirm_id": "26428654",
+    "url": "http://t1.kakaocdn.net/local/kakaomapPhoto/review/ced0e2efccbc22247dda10342b0be519652bd903?original",
+    "type": "KMAPREVIEW",
+    "photo_id": 1923526,
+    "review_id": 5526887,
+    "registered_at": "2022-05-17 11:53:59",
+    "updated_at": "2026-09-28 21:38:38",
+    "kakaomap_review_photo_meta": {
+     "owner": {
+      "map_user_id": "518203710",
+      "nickname": "성한킴",
+      "image_url": "http://th-p.talk.kakao.co.kr/th/talkp/wkEuU5edpV/sI4lhlUK27zo3kw9vgm9rK/nfm4cu.jpg",
+      "timeline_level": {
+       "badge": "02",
+       "now_level": 11,
+       "show_other": true
+      },
+      "review_count": 15,
+      "follower_count": 0,
+      "profile_links": [],
+      "average_score": 4.5,
+      "profile_status": "S"
+     }
+    },
+    "title": "",
+    "media_type": "PHOTO",
+    "ui_type": "PROFILE"
+   },
+   {
+    "confirm_id": "26428654",
+    "url": "http://t1.kakaocdn.net/local/kakaomapPhoto/review/d9b01d79adc7f602ca7532ffb42dc5bbe8af2267?original",
+    "type": "KMAPREVIEW",
+    "photo_id": 368551,
+    "review_id": 1192460,
+    "registered_at": "2019-10-25 16:00:56",
+    "updated_at": "2026-09-28 14:58:45",
+    "kakaomap_review_photo_meta": {
+     "owner": {
+      "map_user_id": "257693575",
+      "nickname": "박덕수",
+      "image_url": "http://th-p.talk.kakao.co.kr/th/talkp/wkvq607tpK/k20WIfDgKcnaQeRY9WlZMk/7m2try.jpg",
+      "timeline_level": {
+       "badge": "03",
+       "now_level": 59,
+       "show_other": true
+      },
+      "review_count": 240,
+      "follower_count": 631,
+      "profile_links": [],
+      "average_score": 3.4,
+      "profile_status": "S"
+     }
+    },
+    "title": "",
+    "media_type": "PHOTO",
+    "ui_type": "PROFILE"
+   },
+   {
+    "confirm_id": "26428654",
+    "url": "http://t1.kakaocdn.net/local/kakaomapPhoto/review/30438a26ce149ba221ed0b60dcb75494427321dc?original",
+    "type": "KMAPREVIEW",
+    "photo_id": 357593,
+    "review_id": 1150910,
+    "registered_at": "2019-10-11 15:54:59",
+    "updated_at": "2026-09-28 14:58:43",
+    "kakaomap_review_photo_meta": {
+     "owner": {
+      "map_user_id": "746622425",
+      "nickname": "여름여름",
+      "image_url": "http://t1.kakaocdn.net/local/kakaomapPhoto/profile/52ff5efb2968835f2748b664337c667bae885052?original",
+      "timeline_level": {
+       "badge": "04",
+       "now_level": 67,
+       "show_other": true
+      },
+      "review_count": 717,
+      "follower_count": 245,
+      "profile_links": [],
+      "average_score": 4.3,
+      "profile_status": "S"
+     }
+    },
+    "title": "",
+    "media_type": "PHOTO",
+    "ui_type": "PROFILE"
+   },
+   {
+    "confirm_id": "26428654",
+    "url": "http://t1.kakaocdn.net/local/kakaomapPhoto/review/b27e22a59319e9412be0f5772ff98cf502ad04e1?original",
+    "type": "KMAPREVIEW",
+    "photo_id": 302118,
+    "review_id": 943410,
+    "registered_at": "2019-07-28 20:11:13",
+    "updated_at": "2026-09-28 14:46:04",
+    "kakaomap_review_photo_meta": {
+     "owner": {
+      "map_user_id": "418427710",
+      "nickname": "S:D",
+      "image_url": "http://t1.kakaocdn.net/local/kakaomapPhoto/profile/895e9b2d973fda80a2c31591380c2eb841b7d933?original",
+      "timeline_level": {
+       "badge": "05",
+       "now_level": 82,
+       "show_other": true
+      },
+      "review_count": 830,
+      "follower_count": 988,
+      "profile_links": [],
+      "average_score": 3.7,
+      "profile_status": "S"
+     }
+    },
+    "title": "",
+    "media_type": "PHOTO",
+    "ui_type": "PROFILE"
+   },
+   {
+    "confirm_id": "26428654",
+    "url": "http://t1.kakaocdn.net/local/kakaomapPhoto/review/a5df8fd5658310e31f899b2e3112aba628778600?original",
+    "type": "KMAPREVIEW",
+    "photo_id": 302119,
+    "review_id": 943410,
+    "registered_at": "2019-07-28 20:11:13",
+    "updated_at": "2026-09-28 14:46:04",
+    "kakaomap_review_photo_meta": {
+     "owner": {
+      "map_user_id": "418427710",
+      "nickname": "S:D",
+      "image_url": "http://t1.kakaocdn.net/local/kakaomapPhoto/profile/895e9b2d973fda80a2c31591380c2eb841b7d933?original",
+      "timeline_level": {
+       "badge": "05",
+       "now_level": 82,
+       "show_other": true
+      },
+      "review_count": 830,
+      "follower_count": 988,
+      "profile_links": [],
+      "average_score": 3.7,
+      "profile_status": "S"
+     }
+    },
+    "title": "",
+    "media_type": "PHOTO",
+    "ui_type": "PROFILE"
+   },
+   {
+    "confirm_id": "26428654",
+    "url": "http://t1.kakaocdn.net/local/kakaomapPhoto/review/320bff28bf11b2040401bf1ea6f5d10aa250a78e?original",
+    "type": "KMAPREVIEW",
+    "photo_id": 50068,
+    "review_id": 161653,
+    "registered_at": "2018-06-30 15:53:41",
+    "updated_at": "2026-09-28 11:58:53",
+    "kakaomap_review_photo_meta": {
+     "owner": {
+      "map_user_id": "490575509",
+      "nickname": "달타냥",
+      "image_url": "http://t1.kakaocdn.net/local/kakaomapPhoto/profile/bfe5063cff4e9df3bc58bbf4d39873be3c481391c6a2262f5e6b9f36c2c0b987",
+      "timeline_level": {
+       "badge": "04",
+       "now_level": 62,
+       "show_other": true
+      },
+      "review_count": 465,
+      "follower_count": 499,
+      "profile_links": [],
+      "average_score": 4.4,
+      "profile_status": "S"
+     }
+    },
+    "title": "",
+    "media_type": "PHOTO",
+    "ui_type": "PROFILE"
+   },
+   {
+    "confirm_id": "26428654",
+    "url": "https://t1.kakaocdn.net/local/review_placeapp/btqia5X45ny_qH2YKrt9JB1bTSK11GYBmK_img.jpg",
+    "type": "KMAPREVIEW",
+    "photo_id": 256323,
+    "review_id": 791734,
+    "registered_at": "2017-10-28 12:14:20",
+    "updated_at": "2026-09-28 14:26:06",
+    "kakaomap_review_photo_meta": {
+     "owner": {
+      "map_user_id": "960533811",
+      "nickname": "태희사랑",
+      "image_url": "http://t1.kakaocdn.net/local/kakaomapPhoto/profile/bfec6b03837c612367c08e2efb8668f4551a9501?original",
+      "timeline_level": {
+       "badge": "03",
+       "now_level": 34,
+       "show_other": true
+      },
+      "review_count": 130,
+      "follower_count": 12,
+      "profile_links": [],
+      "average_score": 3.7,
+      "profile_status": "S"
+     }
+    },
+    "title": "",
+    "media_type": "PHOTO",
+    "ui_type": "PROFILE"
+   },
+   {
+    "confirm_id": "26428654",
+    "url": "https://t1.kakaocdn.net/local/review_placeapp/btqh56YbWjF_CZHQabG90JoHG3qPyiNHgk_img.jpg",
+    "type": "KMAPREVIEW",
+    "photo_id": 231073,
+    "review_id": 702559,
+    "registered_at": "2017-10-29 17:48:47",
+    "updated_at": "2026-09-28 14:08:07",
+    "kakaomap_review_photo_meta": {
+     "owner": {
+      "map_user_id": "1087840562",
+      "nickname": "여우하품",
+      "image_url": "http://t1.kakaocdn.net/local/kakaomapPhoto/profile/b5bb69cc92e031f8a17c2f8ece76ddab2e5fee2b?original",
+      "timeline_level": {
+       "badge": "04",
+       "now_level": 74,
+       "show_other": true
+      },
+      "review_count": 532,
+      "follower_count": 1151,
+      "profile_links": [],
+      "average_score": 3.5,
+      "profile_status": "S"
+     }
+    },
+    "title": "",
+    "media_type": "PHOTO",
+    "ui_type": "PROFILE"
+   },
+   {
+    "confirm_id": "26428654",
+    "url": "https://t1.kakaocdn.net/local/review_placeapp/btqh56jBreR_3O5rqeIJEtawiEZaxKSoN0_img.jpg",
+    "type": "KMAPREVIEW",
+    "photo_id": 231074,
+    "review_id": 702559,
+    "registered_at": "2017-10-29 17:48:47",
+    "updated_at": "2026-09-28 14:08:07",
+    "kakaomap_review_photo_meta": {
+     "owner": {
+      "map_user_id": "1087840562",
+      "nickname": "여우하품",
+      "image_url": "http://t1.kakaocdn.net/local/kakaomapPhoto/profile/b5bb69cc92e031f8a17c2f8ece76ddab2e5fee2b?original",
+      "timeline_level": {
+       "badge": "04",
+       "now_level": 74,
+       "show_other": true
+      },
+      "review_count": 532,
+      "follower_count": 1151,
+      "profile_links": [],
+      "average_score": 3.5,
+      "profile_status": "S"
+     }
+    },
+    "title": "",
+    "media_type": "PHOTO",
+    "ui_type": "PROFILE"
+   },
+   {
+    "confirm_id": "26428654",
+    "url": "https://postfiles.pstatic.net/MjAyNjA5MThfMTcz/MDAxNzg5NjY2NzIyMDQy.Q4Z9XT5D6WUjE9FSMnl5ZiItt61n9jMnaOvRyPM7EOsg.ROjMmOOMc9cff0wN4ZaKIw69y_bqN0DlUWsowFVDe9gg.JPEG/SE-2f8ec95a-ffe0-458d-8b12-05117e620bd9.jpg?type=w773",
+    "type": "BLOG",
+    "photo_id": 1716546260,
+    "review_id": 117071105,
+    "registered_at": "2026-09-19 00:33:00",
+    "updated_at": "2026-09-19 00:48:39",
+    "title": "코엑스 맛집 하동관 곰탕 내돈내산 메뉴 가격 및 솔직 후기 (혼밥하기 좋은곳)",
+    "blog_link_url": "http://blog.naver.com/tongtong_diary-/224415531633",
+    "media_type": "PHOTO",
+    "ui_type": "POST"
+   },
+   {
+    "confirm_id": "26428654",
+    "url": "https://postfiles.pstatic.net/MjAyNjA5MThfMTcz/MDAxNzg5NjY2Njc5MjYw.Ot38xjpe3uY-K5lTqcZFbpYYCRMVRrutEc3egc40M3Ug.hyvEpZpHQ-o9i9x7GcZvkYj38uzAHSJC2__Yak-TRHkg.JPEG/SE-a7d06cb4-764e-4472-b7d2-a1c0dc88d611.jpg?type=w773",
+    "type": "BLOG",
+    "photo_id": 1716546443,
+    "review_id": 117071105,
+    "registered_at": "2026-09-19 00:33:14",
+    "updated_at": "2026-09-19 00:48:39",
+    "title": "코엑스 맛집 하동관 곰탕 내돈내산 메뉴 가격 및 솔직 후기 (혼밥하기 좋은곳)",
+    "blog_link_url": "http://blog.naver.com/tongtong_diary-/224415531633",
+    "media_type": "PHOTO",
+    "ui_type": "POST"
+   },
+   {
+    "confirm_id": "26428654",
+    "url": "https://postfiles.pstatic.net/MjAyNjA5MThfMjE4/MDAxNzg5NjY2NjQzNzM0.E0UbBhirA5kemGjvSUET8Oclkq_v25TB-hjFoGjpH-Qg.nIigu0oGWVYm85engCWuxO-jeFWpkgJb0B7TFNgRFQEg.JPEG/SE-8e14b8bd-8274-471d-a209-18eaede66233.jpg?type=w773",
+    "type": "BLOG",
+    "photo_id": 1716546416,
+    "review_id": 117071105,
+    "registered_at": "2026-09-19 00:33:12",
+    "updated_at": "2026-09-19 00:48:39",
+    "title": "코엑스 맛집 하동관 곰탕 내돈내산 메뉴 가격 및 솔직 후기 (혼밥하기 좋은곳)",
+    "blog_link_url": "http://blog.naver.com/tongtong_diary-/224415531633",
+    "media_type": "PHOTO",
+    "ui_type": "POST"
+   },
+   {
+    "confirm_id": "26428654",
+    "url": "https://postfiles.pstatic.net/MjAyNjA5MDNfNjUg/MDAxNzg4NDA2MjQ4NTEz.ipbtpS4sUVNskMrMeeMnICuBFiGqG5-7Vo1bWSI-fjcg.I59GEq4aOClreSteY7POyFQjpGpPrChLYGKmPn43YHUg.JPEG/output%EF%BC%BF2807277875.jpg?type=w773",
+    "type": "BLOG",
+    "photo_id": 1707988804,
+    "review_id": 116384161,
+    "registered_at": "2026-09-05 15:08:47",
+    "updated_at": "2026-09-05 15:24:12",
+    "title": "코엑스 맛집 하동관 코엑스몰직영점 내돈내산｜곰탕 섞어·웨이팅·포장",
+    "blog_link_url": "http://blog.naver.com/younhi369/224399563469",
+    "media_type": "PHOTO",
+    "ui_type": "POST"
+   },
+   {
+    "confirm_id": "26428654",
+    "url": "https://postfiles.pstatic.net/MjAyNjA5MDNfMjYx/MDAxNzg4NDA2Mzk5NzYy.A1I3Ydx9kkhiDeLKv52xlNgqSd8gnVm5tLhoKT0qNesg.FpzBNq7sTO6KezP8xk5wbZxWROEXTY3OhjY7FT33Rf0g.JPEG/IMG%EF%BC%BF8989.jpg?type=w773",
+    "type": "BLOG",
+    "photo_id": 1707988780,
+    "review_id": 116384161,
+    "registered_at": "2026-09-05 15:08:45",
+    "updated_at": "2026-09-05 15:24:12",
+    "title": "코엑스 맛집 하동관 코엑스몰직영점 내돈내산｜곰탕 섞어·웨이팅·포장",
+    "blog_link_url": "http://blog.naver.com/younhi369/224399563469",
+    "media_type": "PHOTO",
+    "ui_type": "POST"
+   },
+   {
+    "confirm_id": "26428654",
+    "url": "https://postfiles.pstatic.net/MjAyNjA5MDNfNjkg/MDAxNzg4NDA2MjcwNDc1.KNiZwOPT4Q2cp82lkjJV6PLWTm2_d0Lubw7NWvsh9f8g.BUC4G7vfF-mAcMV_R98-Mi2MsEzJrIjRQTVcmjtBk_4g.JPEG/IMG%EF%BC%BF8985.jpg?type=w773",
+    "type": "BLOG",
+    "photo_id": 1707988784,
+    "review_id": 116384161,
+    "registered_at": "2026-09-05 15:08:46",
+    "updated_at": "2026-09-05 15:24:12",
+    "title": "코엑스 맛집 하동관 코엑스몰직영점 내돈내산｜곰탕 섞어·웨이팅·포장",
+    "blog_link_url": "http://blog.naver.com/younhi369/224399563469",
+    "media_type": "PHOTO",
+    "ui_type": "POST"
+   },
+   {
+    "confirm_id": "26428654",
+    "url": "https://postfiles.pstatic.net/MjAyNjA4MzFfNTIg/MDAxNzg4MTc5MjA0Mjc1.NwdLvDB4LePIatZmGpsNkkRG8T-qpEJ4gX6v9J_huW4g.3Pj3sz140zwhWyLvcdn3s7MkA8VBRy2FXONxfQt_j8Yg.JPEG/SE-93a6018a-f544-4c0c-a381-0fb446c298ab.jpg?type=w773",
+    "type": "BLOG",
+    "photo_id": 1707930505,
+    "review_id": 116379466,
+    "registered_at": "2026-09-05 12:53:19",
+    "updated_at": "2026-09-05 13:17:43",
+    "title": "코엑스 곰탕 맛집ㅣ7년째 믿고 먹는 하동관(feat. 나만의 주문법)",
+    "blog_link_url": "http://blog.naver.com/by__sophie/224396519437",
+    "media_type": "PHOTO",
+    "ui_type": "POST"
+   },
+   {
+    "confirm_id": "26428654",
+    "url": "https://postfiles.pstatic.net/MjAyNjA4MzFfMTg5/MDAxNzg4MTc5MjA2OTEw.YU8PXi-GO8UH8jK_QLJcvsVLlFK-CBeq87ytTpTGXkkg.M0RRF2S9MsjKbJA5ocTkZ1Mw30acYTg-CGfUOcTjPSog.JPEG/SE-1e661a9d-50d5-45b6-a178-8b0594b9608b.jpg?type=w773",
+    "type": "BLOG",
+    "photo_id": 1707930531,
+    "review_id": 116379466,
+    "registered_at": "2026-09-05 12:53:21",
+    "updated_at": "2026-09-05 13:17:43",
+    "title": "코엑스 곰탕 맛집ㅣ7년째 믿고 먹는 하동관(feat. 나만의 주문법)",
+    "blog_link_url": "http://blog.naver.com/by__sophie/224396519437",
+    "media_type": "PHOTO",
+    "ui_type": "POST"
+   },
+   {
+    "confirm_id": "26428654",
+    "url": "https://postfiles.pstatic.net/MjAyNjA4MzFfMjAw/MDAxNzg4MTc4Nzg3MTE3.1HTl0vmG_5nemijCeskGfBDs9ZujZznh1jyBxSGq9zYg.QaIk71rtJ2H1CZEkIMXSK5CoYY9dj1CGorEsOq3j7n8g.JPEG/KakaoTalk_Photo_2026-08-31-20-53-57_005.jpeg?type=w773",
+    "type": "BLOG",
+    "photo_id": 1707930501,
+    "review_id": 116379466,
+    "registered_at": "2026-09-05 12:53:18",
+    "updated_at": "2026-09-05 13:17:43",
+    "title": "코엑스 곰탕 맛집ㅣ7년째 믿고 먹는 하동관(feat. 나만의 주문법)",
+    "blog_link_url": "http://blog.naver.com/by__sophie/224396519437",
+    "media_type": "PHOTO",
+    "ui_type": "POST"
+   },
+   {
+    "confirm_id": "26428654",
+    "url": "https://postfiles.pstatic.net/MjAyNjA4MjRfMTkw/MDAxNzg3NTQyODk1NTg5.-N92VFe-CCyWC1Jiq-SCDyVS227Bu804ePxwchgv_1Ig.5YhJ-jj_EtfGwfT2gYgNvvHqRi5yrdp5sKoh6ciee0cg.JPEG/900_20260823_162211.jpg?type=w773",
+    "type": "BLOG",
+    "photo_id": 1700586904,
+    "review_id": 115795763,
+    "registered_at": "2026-08-24 13:07:45",
+    "updated_at": "2026-08-24 13:27:27",
+    "title": "코엑스 맛집 \"하동관\" 돌아다니다 지친 다리를 살려준 따뜻한 곰탕 한 그릇",
+    "blog_link_url": "http://blog.naver.com/freedombay/224388369337",
+    "media_type": "PHOTO",
+    "ui_type": "POST"
+   },
+   {
+    "confirm_id": "26428654",
+    "url": "https://postfiles.pstatic.net/MjAyNjA4MDZfMjE5/MDAxNzg1OTkyMzU0MTA0.j_5aKGpN0nH3S6VvlocMnBxpq1gwO3A7FDPFYlKGYjwg.zCkqpM867D0eYY3XyzMWHhmlukn2hqv4iRkBo8upjd8g.JPEG/SE-00b6b4d8-2a99-4e0a-a174-7271cc185bcc.jpg?type=w466",
+    "type": "BLOG",
+    "photo_id": 1697683299,
+    "review_id": 115569158,
+    "registered_at": "2026-08-21 09:59:31",
+    "updated_at": "2026-08-21 10:14:20",
+    "title": "코엑스몰 곰탕전문점 하동관 코엑스몰 식당",
+    "blog_link_url": "http://blog.naver.com/kimjk20/224369985427",
+    "media_type": "PHOTO",
+    "ui_type": "POST"
+   },
+   {
+    "confirm_id": "26428654",
+    "url": "https://postfiles.pstatic.net/MjAyNjA4MDZfMTIy/MDAxNzg1OTkyMzU4MTEx.8DUrSWSjDzofFIHmxA-7tLQwIMY76Xh9Np1O00mzfV4g.xd3lH3UEgjeXig9_Ymfj-plMtPiKMId4zGuW31uHymIg.JPEG/SE-489b5b0d-f07b-495d-bb6b-fbc16b10a2aa.jpg?type=w466",
+    "type": "BLOG",
+    "photo_id": 1697683314,
+    "review_id": 115569158,
+    "registered_at": "2026-08-21 09:59:33",
+    "updated_at": "2026-08-21 10:14:20",
+    "title": "코엑스몰 곰탕전문점 하동관 코엑스몰 식당",
+    "blog_link_url": "http://blog.naver.com/kimjk20/224369985427",
+    "media_type": "PHOTO",
+    "ui_type": "POST"
+   },
+   {
+    "confirm_id": "26428654",
+    "url": "https://postfiles.pstatic.net/MjAyNjA4MTRfMTkg/MDAxNzg2Njk3NDA2Nzgw.MBuTzd2Z6JZVZhYV3ZPlh3lO7PmFJ75tW9Ano4ihnY0g.6WCF-HhLiMW9wwqievH4mjzZ1W5AiCN_B7gYEkffnX0g.JPEG/output%EF%BC%BF4226736767.jpg?type=w773",
+    "type": "BLOG",
+    "photo_id": 1695731857,
+    "review_id": 115411663,
+    "registered_at": "2026-08-17 04:49:02",
+    "updated_at": "2026-08-17 05:09:37",
+    "title": "하우스아카이브 홈디깅페어 코엑스 맛집 추천! 하동관 내돈내산 후기",
+    "blog_link_url": "http://blog.naver.com/cheezenyang/224378737773",
+    "media_type": "PHOTO",
+    "ui_type": "POST"
+   },
+   {
+    "confirm_id": "26428654",
+    "url": "https://postfiles.pstatic.net/MjAyNjA4MDVfMjAw/MDAxNzg1OTAzMTIzNTY1.PwrtlFnuZKrP7Ol19VxF45ObQpQ9_Eg3rPUxkHuRffog.X64SOFIQmoha2peYTARMxy-aYLFqv_Fezv0V0b61bmog.JPEG/900_20260620_171657.jpg?type=w275",
+    "type": "BLOG",
+    "photo_id": 1694571362,
+    "review_id": 115318151,
+    "registered_at": "2026-08-15 17:05:10",
+    "updated_at": "2026-08-15 17:24:23",
+    "title": "하동관, 구관이 명관 80년 역사의 한우 곰탕 명가에서 삼성 코엑스 혼밥 추천",
+    "blog_link_url": "http://blog.naver.com/neotaboo/224368848087",
+    "media_type": "PHOTO",
+    "ui_type": "POST"
+   },
+   {
+    "confirm_id": "26428654",
+    "url": "https://postfiles.pstatic.net/MjAyNjA4MDVfMTMy/MDAxNzg1OTAzMDQzMDc4.ZQW8mmyLXChpV7ui0dRjG1BT4dTsqzmFYXwYgtqAD00g.Qq5U12r7-MaYSpb-FTOeWhoFl3x_hotgr30NaEWU76Ag.JPEG/900_20260620_171530.jpg?type=w275",
+    "type": "BLOG",
+    "photo_id": 1694571328,
+    "review_id": 115318151,
+    "registered_at": "2026-08-15 17:05:08",
+    "updated_at": "2026-08-15 17:24:23",
+    "title": "하동관, 구관이 명관 80년 역사의 한우 곰탕 명가에서 삼성 코엑스 혼밥 추천",
+    "blog_link_url": "http://blog.naver.com/neotaboo/224368848087",
+    "media_type": "PHOTO",
+    "ui_type": "POST"
+   },
+   {
+    "confirm_id": "26428654",
+    "url": "https://postfiles.pstatic.net/MjAyNjA4MTFfMjEw/MDAxNzg2NDM0ODQ1MDYz.anMTbAm4qMi4P8Azy4qdRa3qoTqZaO8Ptwmde3yDvVMg.IV6Y3I-xfLPlDiH9rvCXSuxLLqDweJCaR5X1Wq43hSog.JPEG/20260703_115451049.jpg?type=w966",
+    "type": "BLOG",
+    "photo_id": 1692921692,
+    "review_id": 115192207,
+    "registered_at": "2026-08-12 08:38:23",
+    "updated_at": "2026-08-12 08:57:54",
+    "title": "코엑스몰 맛집 하동관, 특곰탕 19000원 내장 곰탕 솔직 후기(내돈내산)",
+    "blog_link_url": "http://blog.naver.com/minicar/224375320123",
+    "media_type": "PHOTO",
+    "ui_type": "POST"
+   },
+   {
+    "confirm_id": "26428654",
+    "url": "https://postfiles.pstatic.net/MjAyNjA4MTFfMTY5/MDAxNzg2NDM0MjE2OTE0.BaIi07qyMsC7LuDpB2wu7TJg-2acTflh_rgudplvJlQg.y-zH0OsEaH8VGep4d49Pqb6XLiHmsWep2FppNZsrwrog.JPEG/20260703_114339990.jpg?type=w966",
+    "type": "BLOG",
+    "photo_id": 1692921690,
+    "review_id": 115192207,
+    "registered_at": "2026-08-12 08:38:23",
+    "updated_at": "2026-08-12 08:57:54",
+    "title": "코엑스몰 맛집 하동관, 특곰탕 19000원 내장 곰탕 솔직 후기(내돈내산)",
+    "blog_link_url": "http://blog.naver.com/minicar/224375320123",
+    "media_type": "PHOTO",
+    "ui_type": "POST"
+   }
+  ]
+ },
+ "blog_review": {
+  "review_count": 339,
+  "reviews": [
+   {
+    "confirm_id": "26428654",
+    "review_id": "117071105",
+    "title": "코엑스 맛집 하동관 곰탕 내돈내산 메뉴 가격 및 솔직 후기 (혼밥하기 좋은곳)",
+    "contents": "코엑스몰에 들렀다가 점심시간이 되어 든든하게 먹을 곳을 찾았어요. 평소에도 워낙 유명해서 자주 이야기 들었던 곳인데, 마침 근처를 지나가다 깊고 맑은 국물이 떠올라 직접 다녀왔답니다. 제가 다녀온 곳은 스타필드 코엑스몰 지하 1층에 자리한 하동관 코엑스몰직영점이에요. 코엑스 하동관 위치 및 영업정보 도로명 주소: 서울 강남구 영동대로 513 찾아가는 길: ",
+    "registered_at": "2026-09-18 07:56:00",
+    "author": "통통이의 하루",
+    "origin_url": "https://blog.naver.com/tongtong_diary-/224415531633",
+    "photo_count": 11,
+    "photos": [
+     {
+      "url": "https://postfiles.pstatic.net/MjAyNjA5MThfMTQz/MDAxNzg5NjY2NzEzNjE4.Vwmfn0DyIBnaPOhr5bdsLQwUMbILcYrxWTrSsC5601sg.9D8uIfOi-ysiLumHwzTBHK5rXmFlRF_XLzpGSXE3W5gg.JPEG/SE-c24d749d-370e-4e70-b1f6-428e90529075.jpg?type=w773",
+      "photo_id": 1716546339
+     },
+     {
+      "url": "https://postfiles.pstatic.net/MjAyNjA5MThfMTA5/MDAxNzg5NjY2NzMzOTUy.yK6WRBmUaasNoeKcMQ8jAA0wJHcyQxFjN5bMOR9j80wg.RPUpGBZVyosgKma3i1kXuGN_f73JmRHDFH6qljzuwHEg.JPEG/SE-6ec07b57-b6b3-43f6-a0aa-e91bb8269c67.jpg?type=w773",
+      "photo_id": 1716546304
+     },
+     {
+      "url": "https://postfiles.pstatic.net/MjAyNjA5MThfMTMz/MDAxNzg5NjY2NzQyMzYw.NJQ4FOykktAftFMCMfLIfT4C0zwABUxTLtZas7aedTAg.6mT1fk9yLm1kId40_iPaWwMX3WX_nBve39qe5sTIzpYg.JPEG/SE-963daa4a-766b-4f8f-9dd1-55a20ae630af.jpg?type=w773",
+      "photo_id": 1716546373
+     },
+     {
+      "url": "https://postfiles.pstatic.net/MjAyNjA5MThfNTYg/MDAxNzg5NjY2NzA1Nzc0.sKSN_L6WRZuwJxIQJKz8yWVBRwzuhP4s81BWX9rJmAMg.f6cXWme8jO8Yuvms2T06-nvHmSbVblCYaxs1KzU-VqUg.JPEG/SE-fa7d94c4-c6b5-4d47-94e5-62cf262673a3.jpg?type=w773",
+      "photo_id": 1716546348
+     },
+     {
+      "url": "https://postfiles.pstatic.net/MjAyNjA5MThfMTc5/MDAxNzg5NjY2Njg5MzQ0.keBekOV3Yziee75WniJ7E_S_n6bqUm0VBBWXgdoOp90g.1hiBZcnYe1I_1tQ8Kep-tKpBgemrffoAOfbbczrM3jcg.JPEG/SE-e1ce21f1-fa99-4e25-85dd-20cb65371733.jpg?type=w773",
+      "photo_id": 1716546239
+     },
+     {
+      "url": "https://postfiles.pstatic.net/MjAyNjA5MThfNDYg/MDAxNzg5NjY2NzU5MDAy.kK5e5ct2iH6wqRDqGkYFQv2A7q2d8WkR7KFOSUps8xEg.ugnjr2u2ljiOcfN1iNp9DHM0Qkk1Avc7unZkmt3eg6Ig.JPEG/SE-f119fe6c-8eb8-47eb-8ca2-bb252b732296.jpg?type=w773",
+      "photo_id": 1716546291
+     },
+     {
+      "url": "https://postfiles.pstatic.net/MjAyNjA5MThfMTM2/MDAxNzg5NjY2Njk3ODg3.Qy3BSvEstLIvdbBHhnRnQxT3fMRK8G9Mk4HviUoV_sgg.U3kuxYr0YgK3jfvrzDGSJo9LfpIW8rI87waMUG5dVUEg.JPEG/SE-318652ac-72ee-4bab-9b17-5d9645a9289d.jpg?type=w773",
+      "photo_id": 1716546395
+     },
+     {
+      "url": "https://postfiles.pstatic.net/MjAyNjA5MThfMjky/MDAxNzg5NjY2NzUwMzE2.I9FjW0fGP1PLPYeuZWSrd36pPtmx_rg2rK9-jyr3a4og.Paz1L086z4WwZAHpi-zGLUNCq2WjUgfRxQCnrNcjJW4g.JPEG/SE-5b74371f-a3ac-452d-903f-313cee4a8db5.jpg?type=w773",
+      "photo_id": 1716546370
+     },
+     {
+      "url": "https://postfiles.pstatic.net/MjAyNjA5MThfMjE4/MDAxNzg5NjY2NjQzNzM0.E0UbBhirA5kemGjvSUET8Oclkq_v25TB-hjFoGjpH-Qg.nIigu0oGWVYm85engCWuxO-jeFWpkgJb0B7TFNgRFQEg.JPEG/SE-8e14b8bd-8274-471d-a209-18eaede66233.jpg?type=w773",
+      "photo_id": 1716546416
+     },
+     {
+      "url": "https://postfiles.pstatic.net/MjAyNjA5MThfMTcz/MDAxNzg5NjY2Njc5MjYw.Ot38xjpe3uY-K5lTqcZFbpYYCRMVRrutEc3egc40M3Ug.hyvEpZpHQ-o9i9x7GcZvkYj38uzAHSJC2__Yak-TRHkg.JPEG/SE-a7d06cb4-764e-4472-b7d2-a1c0dc88d611.jpg?type=w773",
+      "photo_id": 1716546443
+     }
+    ]
+   },
+   {
+    "confirm_id": "26428654",
+    "review_id": "116384161",
+    "title": "코엑스 맛집 하동관 코엑스몰직영점 내돈내산｜곰탕 섞어·웨이팅·포장",
+    "contents": "안녕하세요, 유니입니다 :) 코엑스에서 든든한 점심 메뉴를 찾다가 하동관 코엑스몰직영점에 다녀왔어요. 하동관 코엑스 내돈내산 국밥 추천 맛집 후기 웨이팅 점심 피크를 피하려고 12시 전에 갔는데도 입구 앞에 웨이팅이 있더라고요! 하동관 코엑스 내돈내산 국밥 추천 맛집 후기 웨이팅 그래도 곰탕이 빠르게 나오고 식사 회전율도 높은 편이라 5~10분 정도만 기다",
+    "registered_at": "2026-09-04 08:00:00",
+    "author": "군포에 머무르는 중••",
+    "origin_url": "https://blog.naver.com/younhi369/224399563469",
+    "photo_count": 7,
+    "photos": [
+     {
+      "url": "https://postfiles.pstatic.net/MjAyNjA5MDNfNjkg/MDAxNzg4NDA2MjcwNDc1.KNiZwOPT4Q2cp82lkjJV6PLWTm2_d0Lubw7NWvsh9f8g.BUC4G7vfF-mAcMV_R98-Mi2MsEzJrIjRQTVcmjtBk_4g.JPEG/IMG%EF%BC%BF8985.jpg?type=w773",
+      "photo_id": 1707988784
+     },
+     {
+      "url": "https://postfiles.pstatic.net/MjAyNjA5MDNfMTQ1/MDAxNzg4NDA2MzQzNjUw.X9S9ZI1pnzCH5ecEKj0weHA82XiYpl748oFO8Zxe_o0g.y5X4dAPfCHNPcvc348Xd0p_OKRbxBYazivjPq2EsvZYg.JPEG/IMG%EF%BC%BF8988.jpg?type=w773",
+      "photo_id": 1707988793
+     },
+     {
+      "url": "https://postfiles.pstatic.net/MjAyNjA5MDNfMjYx/MDAxNzg4NDA2Mzk5NzYy.A1I3Ydx9kkhiDeLKv52xlNgqSd8gnVm5tLhoKT0qNesg.FpzBNq7sTO6KezP8xk5wbZxWROEXTY3OhjY7FT33Rf0g.JPEG/IMG%EF%BC%BF8989.jpg?type=w773",
+      "photo_id": 1707988780
+     },
+     {
+      "url": "https://postfiles.pstatic.net/MjAyNjA5MDNfNjcg/MDAxNzg4NDA2MDk5Njk0.GJOyjvHZ0lv4fCjtr99ToXJ8xZ1m_jWHE_6DhulXkAYg.9Y49nfFiZHWPpCrB41jq-nrUMplKRAr6NLyIFOyPwLkg.JPEG/IMG%EF%BC%BF8983.jpg?type=w773",
+      "photo_id": 1707988791
+     },
+     {
+      "url": "https://postfiles.pstatic.net/MjAyNjA5MDNfNzMg/MDAxNzg4NDA2Mjk4MzE4.kccnoZ32rWG55hwobRbEKuViuaaDcewcvhEtLWOKQzMg.4mNmC3AH7pcPRCnyn92BWXDb22MvPDkLwD5pyyeX_r4g.JPEG/output%EF%BC%BF4285083689.jpg?type=w773",
+      "photo_id": 1707988766
+     },
+     {
+      "url": "https://postfiles.pstatic.net/MjAyNjA5MDNfNjUg/MDAxNzg4NDA2MjQ4NTEz.ipbtpS4sUVNskMrMeeMnICuBFiGqG5-7Vo1bWSI-fjcg.I59GEq4aOClreSteY7POyFQjpGpPrChLYGKmPn43YHUg.JPEG/output%EF%BC%BF2807277875.jpg?type=w773",
+      "photo_id": 1707988804
+     },
+     {
+      "url": "https://postfiles.pstatic.net/MjAyNjA5MDNfMTYg/MDAxNzg4NDA2MTc0MjE2.ZZllV0Gbyq2F1au-VWmezeDc8nRYUEnvSU_RTX_msZwg.TPbTkh9WGBV0hyN_lL9KZ97NXNc7426B0Gh9_6Z7Qeog.JPEG/Batch%EF%BC%BFAC06ACB8%EF%BC%8D7FF2%EF%BC%8D4101%EF%BC%8D9FB6%EF%BC%8D6AEB6561D074%EF%BC%BF0.jpg?type=w773",
+      "photo_id": 1707988799
+     }
+    ]
+   },
+   {
+    "confirm_id": "26428654",
+    "review_id": "116379466",
+    "title": "코엑스 곰탕 맛집ㅣ7년째 믿고 먹는 하동관(feat. 나만의 주문법)",
+    "contents": "하동관 코엑스몰을 갈 때마다 꼭 들르게 되는 곳이 있어요. 바로 하동관 코엑스직영점. 국물이 맑은데 진하고 깊어서 생각날 때마다 자연스럽게 발걸음이 향하는, 벌써 7년째 다니고 있는 저의 단골집이에요. 7년째 다니고 있는 이유 Previous image Next image 하동관은 1939년 서울 중구 수하동에서 문을 연 오래된 곰탕집이에요. 제가 다니는 ",
+    "registered_at": "2026-09-01 08:00:00",
+    "author": "by Sophie",
+    "origin_url": "https://blog.naver.com/by__sophie/224396519437",
+    "photo_count": 7,
+    "photos": [
+     {
+      "url": "https://postfiles.pstatic.net/MjAyNjA4MzFfMTU1/MDAxNzg4MTc4NjU5ODYz.3wV9zanI4Bn7C8LdGF17XDRBtX008Vk_8BsaRRgysNkg.KBi0k-JVeWmTkJ3sU6CVsMr93O3qALeuuZtnOg4xMl8g.JPEG/KakaoTalk_Photo_2026-08-31-20-54-01_013.jpeg?type=w773",
+      "photo_id": 1707930504
+     },
+     {
+      "url": "https://postfiles.pstatic.net/MjAyNjA4MzFfMjAw/MDAxNzg4MTc4Nzg3MTE3.1HTl0vmG_5nemijCeskGfBDs9ZujZznh1jyBxSGq9zYg.QaIk71rtJ2H1CZEkIMXSK5CoYY9dj1CGorEsOq3j7n8g.JPEG/KakaoTalk_Photo_2026-08-31-20-53-57_005.jpeg?type=w773",
+      "photo_id": 1707930501
+     },
+     {
+      "url": "https://postfiles.pstatic.net/MjAyNjA4MzFfNDYg/MDAxNzg4MTgyNTUzMTM1.aKP298sOfeckDKrgAvGatMCeTTa7MUgx4E-Wt5DF6AMg.LfiGDIrGpKSBy78OHdQlHDDWco_vcSv4JnBOIsrxFd0g.JPEG/KakaoTalk_Photo_2026-08-31-20-53-56_002.jpeg?type=w386",
+      "photo_id": 1707930527
+     },
+     {
+      "url": "https://postfiles.pstatic.net/MjAyNjA4MzFfMTE0/MDAxNzg4MTc4Nzg4MTYy.5eXOanuABncIJpu9E1lxCQbT_MlNDZgJjGifrsoHqqMg.WTzvpAmc0jI4jvQiEXLmsJaLXkWqAB1OY2GW5C69R7Qg.JPEG/KakaoTalk_Photo_2026-08-31-20-53-58_006.jpeg?type=w773",
+      "photo_id": 1707930530
+     },
+     {
+      "url": "https://postfiles.pstatic.net/MjAyNjA4MzFfMjky/MDAxNzg4MTc4Nzg4MTY3.XKDj5BgmEWeKs6_TX1GVcYC-9vr87bSbc3PXQnR4dMcg.12f3Qa0xMdfWxC7fhR6GQN2DzEovBbcmaKXp8JZC8M8g.JPEG/KakaoTalk_Photo_2026-08-31-20-53-58_007.jpeg?type=w773",
+      "photo_id": 1707930535
+     },
+     {
+      "url": "https://postfiles.pstatic.net/MjAyNjA4MzFfMTg5/MDAxNzg4MTc5MjA2OTEw.YU8PXi-GO8UH8jK_QLJcvsVLlFK-CBeq87ytTpTGXkkg.M0RRF2S9MsjKbJA5ocTkZ1Mw30acYTg-CGfUOcTjPSog.JPEG/SE-1e661a9d-50d5-45b6-a178-8b0594b9608b.jpg?type=w773",
+      "photo_id": 1707930531
+     },
+     {
+      "url": "https://postfiles.pstatic.net/MjAyNjA4MzFfNTIg/MDAxNzg4MTc5MjA0Mjc1.NwdLvDB4LePIatZmGpsNkkRG8T-qpEJ4gX6v9J_huW4g.3Pj3sz140zwhWyLvcdn3s7MkA8VBRy2FXONxfQt_j8Yg.JPEG/SE-93a6018a-f544-4c0c-a381-0fb446c298ab.jpg?type=w773",
+      "photo_id": 1707930505
+     }
+    ]
+   },
+   {
+    "confirm_id": "26428654",
+    "review_id": "115795763",
+    "title": "코엑스 맛집 \"하동관\" 돌아다니다 지친 다리를 살려준 따뜻한 곰탕 한 그릇",
+    "contents": "하동관 코엑스몰직영점 서울특별시 강남구 영동대로 513 코엑스몰 B1 J101 안녕하세요 광빠입니다. 코엑스 구경하다 보면 이상하게 배가 빨리 고파집니다. 분명 밥 먹은 지 얼마 안 된 것 같은데 별마당도 보고 여기저기 걷다 보면 어느 순간 머릿속에는 “뭐 먹지?”만 남더라고요. 😆 이번에는 뜨끈하고 든든한 메뉴가 당겨서 하동관 코엑스몰직영점에 다녀왔습니다",
+    "registered_at": "2026-08-24 12:44:00",
+    "author": "광빠로그",
+    "origin_url": "https://blog.naver.com/freedombay/224388369337",
+    "photo_count": 2,
+    "photos": [
+     {
+      "url": "https://postfiles.pstatic.net/MjAyNjA4MjRfMTkw/MDAxNzg3NTQyODk1NTg5.-N92VFe-CCyWC1Jiq-SCDyVS227Bu804ePxwchgv_1Ig.5YhJ-jj_EtfGwfT2gYgNvvHqRi5yrdp5sKoh6ciee0cg.JPEG/900_20260823_162211.jpg?type=w773",
+      "photo_id": 1700586904
+     },
+     {
+      "url": "https://postfiles.pstatic.net/MjAyNjA4MjRfNzUg/MDAxNzg3NTQyOTI5OTc3.IRSJOqFEPy_hSegsYu41dewdNNzi7HwHXslyM1vpDS8g.YIxX43QFTuHQfjzMg7hNSKVUgZfDbsQi1TBAggWWET4g.JPEG/900_1787542089357.jpg?type=w773",
+      "photo_id": 1700586890
+     }
+    ]
+   }
+  ],
+  "current_review_count": 4,
+  "last_review_id": "115795763",
+  "last_registered_at": "2026-08-24 12:44:00",
+  "requested_page_size": 4,
+  "requested_page": 1
+ },
+ "kakaomap_review": {
+  "score_set": {
+   "review_count": 206,
+   "total_score": 684,
+   "average_score": 3.3,
+   "photo_count": 51,
+   "strength_counts": [
+    {
+     "id": 5,
+     "count": 46
+    },
+    {
+     "id": 2,
+     "count": 17
+    },
+    {
+     "id": 3,
+     "count": 8
+    },
+    {
+     "id": 1,
+     "count": 7
+    },
+    {
+     "id": 4,
+     "count": 7
+    }
+   ],
+   "strength_uv": 52
+  },
+  "strength_description": [
+   {
+    "id": 5,
+    "name": "맛",
+    "icon_url": "https://t1.kakaocdn.net/kakaomap_mobile/android/icon_review_delicious.png"
+   },
+   {
+    "id": 1,
+    "name": "가성비",
+    "icon_url": "https://t1.kakaocdn.net/kakaomap_mobile/android/icon_review_money.png"
+   },
+   {
+    "id": 2,
+    "name": "친절",
+    "icon_url": "https://t1.kakaocdn.net/kakaomap_mobile/android/icon_review_kind.png"
+   },
+   {
+    "id": 3,
+    "name": "분위기",
+    "icon_url": "https://t1.kakaocdn.net/kakaomap_mobile/android/icon_review_mood.png"
+   },
+   {
+    "id": 4,
+    "name": "주차",
+    "icon_url": "https://t1.kakaocdn.net/kakaomap_mobile/android/icon_review_parking.png"
+   }
+  ],
+  "reviews": [
+   {
+    "review_id": 11489726,
+    "star_rating": 3,
+    "contents": "가격 오름 \n또 오름",
+    "photo_count": 4,
+    "photos": [
+     {
+      "url": "http://t1.kakaocdn.net/local/kakaomapPhoto/review/717d74129033f342f9734c65d257c1a1213262a8?original",
+      "photo_id": 5500277,
+      "media_type": "PHOTO",
+      "status": "S",
+      "ui_type": "PROFILE",
+      "review_id": 11489726,
+      "updated_at": "2024-11-23 12:37:16",
+      "meta": {
+       "owner": {
+        "map_user_id": "298531043",
+        "nickname": "🐑",
+        "image_url": "http://t1.kakaocdn.net/local/kakaomapPhoto/profile/dfd047e23f890b6b78f540e30454a975b2e2adb5?original",
+        "timeline_level": {
+         "badge": "03",
+         "now_level": 36,
+         "show_other": true
+        },
+        "review_count": 151,
+        "follower_count": 6,
+        "profile_links": [],
+        "average_score": 3.5,
+        "profile_status": "S"
+       },
+       "is_liked_by_me": false,
+       "view_count": 84,
+       "like_count": 0,
+       "near": true,
+       "place": {
+        "confirm_id": "26428654",
+        "place_name": "하동관 코엑스몰직영점"
+       }
+      }
+     },
+     {
+      "url": "http://t1.kakaocdn.net/local/kakaomapPhoto/review/dc8cc01f36b11491adcd632947534802962a460c?original",
+      "photo_id": 5500278,
+      "media_type": "PHOTO",
+      "status": "S",
+      "ui_type": "PROFILE",
+      "review_id": 11489726,
+      "updated_at": "2024-11-23 12:37:16",
+      "meta": {
+       "owner": {
+        "map_user_id": "298531043",
+        "nickname": "🐑",
+        "image_url": "http://t1.kakaocdn.net/local/kakaomapPhoto/profile/dfd047e23f890b6b78f540e30454a975b2e2adb5?original",
+        "timeline_level": {
+         "badge": "03",
+         "now_level": 36,
+         "show_other": true
+        },
+        "review_count": 151,
+        "follower_count": 6,
+        "profile_links": [],
+        "average_score": 3.5,
+        "profile_status": "S"
+       },
+       "is_liked_by_me": false,
+       "view_count": 160,
+       "like_count": 0,
+       "near": true,
+       "place": {
+        "confirm_id": "26428654",
+        "place_name": "하동관 코엑스몰직영점"
+       }
+      }
+     },
+     {
+      "url": "http://t1.kakaocdn.net/local/kakaomapPhoto/review/b1446a1cf7eeebf1b8985a838fa6c532e783da1e?original",
+      "photo_id": 7040233,
+      "media_type": "PHOTO",
+      "status": "S",
+      "ui_type": "PROFILE",
+      "duration": 0,
+      "review_id": 11489726,
+      "updated_at": "2025-08-25 12:45:18",
+      "meta": {
+       "owner": {
+        "map_user_id": "298531043",
+        "nickname": "🐑",
+        "image_url": "http://t1.kakaocdn.net/local/kakaomapPhoto/profile/dfd047e23f890b6b78f540e30454a975b2e2adb5?original",
+        "timeline_level": {
+         "badge": "03",
+         "now_level": 36,
+         "show_other": true
+        },
+        "review_count": 151,
+        "follower_count": 6,
+        "profile_links": [],
+        "average_score": 3.5,
+        "profile_status": "S"
+       },
+       "is_liked_by_me": false,
+       "view_count": 230,
+       "like_count": 0,
+       "near": false,
+       "place": {
+        "confirm_id": "26428654",
+        "place_name": "하동관 코엑스몰직영점"
+       }
+      }
+     },
+     {
+      "url": "http://t1.kakaocdn.net/local/kakaomapPhoto/review/911a995a340622bbe7419f23c7623b43e227791f?original",
+      "photo_id": 9208563,
+      "media_type": "PHOTO",
+      "status": "S",
+      "ui_type": "PROFILE",
+      "duration": 0,
+      "review_id": 11489726,
+      "updated_at": "2026-07-25 19:59:19",
+      "meta": {
+       "owner": {
+        "map_user_id": "298531043",
+        "nickname": "🐑",
+        "image_url": "http://t1.kakaocdn.net/local/kakaomapPhoto/profile/dfd047e23f890b6b78f540e30454a975b2e2adb5?original",
+        "timeline_level": {
+         "badge": "03",
+         "now_level": 36,
+         "show_other": true
+        },
+        "review_count": 151,
+        "follower_count": 6,
+        "profile_links": [],
+        "average_score": 3.5,
+        "profile_status": "S"
+       },
+       "is_liked_by_me": false,
+       "view_count": 27,
+       "like_count": 0,
+       "near": true,
+       "place": {
+        "confirm_id": "26428654",
+        "place_name": "하동관 코엑스몰직영점"
+       }
+      }
+     }
+    ],
+    "status": "S",
+    "registered_at": "2024-11-23 12:37:16",
+    "updated_at": "2026-07-25 19:59:19",
+    "meta": {
+     "owner": {
+      "map_user_id": "298531043",
+      "nickname": "🐑",
+      "profile_image_url": "http://t1.kakaocdn.net/local/kakaomapPhoto/profile/dfd047e23f890b6b78f540e30454a975b2e2adb5?original",
+      "timeline_level": {
+       "badge": "03",
+       "now_level": 36
+      },
+      "review_count": 151,
+      "follower_count": 6,
+      "average_score": 3.5,
+      "profile_status": "S",
+      "is_following": false
+     },
+     "is_liked_by_me": false,
+     "is_owner_me": false,
+     "like_count": 3,
+     "like_user_profile_image_list": [
+      "",
+      "http://t1.kakaocdn.net/local/kakaomapPhoto/profile/64225cc5e53a39b756a33981767471eb0fbf61dc?original",
+      "http://th-p.talk.kakao.co.kr/th/talkp/wkeMKs8vYL/MUw7OygkSLRtFKrtoP72E0/ih96eu.jpg"
+     ],
+     "is_place_owner_pick": false,
+     "place": {
+      "confirm_id": "26428654",
+      "place_name": "하동관 코엑스몰직영점"
+     }
+    }
+   },
+   {
+    "review_id": 15221631,
+    "star_rating": 3,
+    "contents": "맛은 쏘쏘한데 이 가격 주고 먹을 정돈 아님.. 17,000원이 제일 작은 사이즈인데 고기 양이나 밥 양이나 납득 불가",
+    "photo_count": 1,
+    "photos": [
+     {
+      "url": "http://t1.kakaocdn.net/local/kakaomapPhoto/review/a2da5252c70d734588c4a4267bc83f17d40c4a86?original",
+      "photo_id": 8451629,
+      "media_type": "PHOTO",
+      "status": "S",
+      "ui_type": "PROFILE",
+      "duration": 0,
+      "review_id": 15221631,
+      "updated_at": "2026-04-09 12:28:10",
+      "meta": {
+       "owner": {
+        "map_user_id": "934416454",
+        "nickname": "모구",
+        "image_url": "http://t1.kakaocdn.net/local/kakaomapPhoto/profile/52965b12f3ada6d7d5d010f3247abe6984c156ae?original",
+        "timeline_level": {
+         "badge": "02",
+         "now_level": 19,
+         "show_other": true
+        },
+        "review_count": 25,
+        "follower_count": 1,
+        "profile_links": [],
+        "average_score": 4.3,
+        "profile_status": "S"
+       },
+       "is_liked_by_me": false,
+       "view_count": 173,
+       "like_count": 0,
+       "near": true,
+       "place": {
+        "confirm_id": "26428654",
+        "place_name": "하동관 코엑스몰직영점"
+       }
+      }
+     }
+    ],
+    "status": "S",
+    "registered_at": "2026-04-09 12:28:10",
+    "updated_at": "2026-04-09 12:28:10",
+    "meta": {
+     "owner": {
+      "map_user_id": "934416454",
+      "nickname": "모구",
+      "profile_image_url": "http://t1.kakaocdn.net/local/kakaomapPhoto/profile/52965b12f3ada6d7d5d010f3247abe6984c156ae?original",
+      "timeline_level": {
+       "badge": "02",
+       "now_level": 19
+      },
+      "review_count": 25,
+      "follower_count": 1,
+      "average_score": 4.3,
+      "profile_status": "S",
+      "is_following": false
+     },
+     "is_liked_by_me": false,
+     "is_owner_me": false,
+     "like_count": 1,
+     "like_user_profile_image_list": [
+      "http://t1.kakaocdn.net/local/kakaomapPhoto/profile/64225cc5e53a39b756a33981767471eb0fbf61dc?original"
+     ],
+     "is_place_owner_pick": false,
+     "place": {
+      "confirm_id": "26428654",
+      "place_name": "하동관 코엑스몰직영점"
+     }
+    }
+   },
+   {
+    "review_id": 14963900,
+    "star_rating": 4,
+    "contents": "여기는 맛이 보장된다. 오래전부터 나녔지만 맛이 한결같다. 하지만 가격은 한결같지 않다. 가격을 선도해서 올린다. 맛은 기가 막힌데..보통 17,000원은 저항요인이다. 원래 ‘하동관 강남분점’ 이었다가 ‘수하동’으로 바뀐 한 집안, 두 가족이 된 그곳은 15,000원 이다. 맛은 뭐..쌍둥이격이다. \n첫 번째 혼술 사진은 2023년 11월 문 열자마자 들어가서 손님 몰리기 전에 여유롭게 한 잔하는 사진. 두 번째 혼밥 사진은 2026년 3월 오후 1시 지나서 웨이팅 별로 없을 때 혼밥한 사진. 맛은 정말 좋다. ",
+    "photo_count": 2,
+    "photos": [
+     {
+      "url": "http://t1.kakaocdn.net/local/kakaomapPhoto/review/038725e286292a8768061f5c14a8e378e2fd6639?original",
+      "photo_id": 8223880,
+      "media_type": "PHOTO",
+      "status": "S",
+      "ui_type": "PROFILE",
+      "duration": 0,
+      "review_id": 14963900,
+      "updated_at": "2026-03-04 20:15:22",
+      "meta": {
+       "owner": {
+        "map_user_id": "1388353899",
+        "nickname": "맛집지도 공유해 드림",
+        "image_url": "http://t1.kakaocdn.net/local/kakaomapPhoto/profile/ab340fb49cd21ae591eabfb15850254840562457?original",
+        "timeline_level": {
+         "badge": "04",
+         "now_level": 61,
+         "show_other": true
+        },
+        "review_count": 453,
+        "follower_count": 242,
+        "profile_links": [],
+        "average_score": 3.3,
+        "profile_status": "S"
+       },
+       "is_liked_by_me": false,
+       "view_count": 80,
+       "like_count": 0,
+       "near": false,
+       "place": {
+        "confirm_id": "26428654",
+        "place_name": "하동관 코엑스몰직영점"
+       }
+      }
+     },
+     {
+      "url": "http://t1.kakaocdn.net/local/kakaomapPhoto/review/bf29447cf0e85b65e89869898da1253f11fea1b9?original",
+      "photo_id": 8223881,
+      "media_type": "PHOTO",
+      "status": "S",
+      "ui_type": "PROFILE",
+      "duration": 0,
+      "review_id": 14963900,
+      "updated_at": "2026-03-04 20:15:22",
+      "meta": {
+       "owner": {
+        "map_user_id": "1388353899",
+        "nickname": "맛집지도 공유해 드림",
+        "image_url": "http://t1.kakaocdn.net/local/kakaomapPhoto/profile/ab340fb49cd21ae591eabfb15850254840562457?original",
+        "timeline_level": {
+         "badge": "04",
+         "now_level": 61,
+         "show_other": true
+        },
+        "review_count": 453,
+        "follower_count": 242,
+        "profile_links": [],
+        "average_score": 3.3,
+        "profile_status": "S"
+       },
+       "is_liked_by_me": false,
+       "view_count": 71,
+       "like_count": 0,
+       "near": true,
+       "place": {
+        "confirm_id": "26428654",
+        "place_name": "하동관 코엑스몰직영점"
+       }
+      }
+     }
+    ],
+    "status": "S",
+    "registered_at": "2026-03-04 20:14:43",
+    "updated_at": "2026-03-04 20:15:22",
+    "meta": {
+     "owner": {
+      "map_user_id": "1388353899",
+      "nickname": "맛집지도 공유해 드림",
+      "profile_image_url": "http://t1.kakaocdn.net/local/kakaomapPhoto/profile/ab340fb49cd21ae591eabfb15850254840562457?original",
+      "timeline_level": {
+       "badge": "04",
+       "now_level": 61
+      },
+      "review_count": 453,
+      "follower_count": 242,
+      "average_score": 3.3,
+      "profile_status": "S",
+      "is_following": false
+     },
+     "is_liked_by_me": false,
+     "is_owner_me": false,
+     "like_count": 0,
+     "like_user_profile_image_list": [],
+     "is_place_owner_pick": false,
+     "place": {
+      "confirm_id": "26428654",
+      "place_name": "하동관 코엑스몰직영점"
+     }
+    }
+   }
+  ],
+  "photos": [
+   {
+    "url": "http://t1.kakaocdn.net/local/kakaomapPhoto/review/263f025fef157a7f91e8f2b7987caa5314ce884f?original",
+    "photo_id": 7617378,
+    "media_type": "PHOTO",
+    "status": "S",
+    "ui_type": "PROFILE",
+    "duration": 0,
+    "review_id": 14263571,
+    "updated_at": "2026-09-30 01:23:08",
+    "meta": {
+     "owner": {
+      "map_user_id": "968167080",
+      "nickname": "파는건 맛있어야지!",
+      "image_url": "http://th-p.talk.kakao.co.kr/th/talkp/wkZsVwdpoW/XMOEdqI0uEVkzBCWgkFXj0/cifaxq.jpg",
+      "timeline_level": {
+       "badge": "04",
+       "now_level": 75,
+       "show_other": true
+      },
+      "review_count": 1069,
+      "follower_count": 257,
+      "profile_links": [],
+      "average_score": 3.4,
+      "profile_status": "S"
+     },
+     "is_liked_by_me": false,
+     "near": false,
+     "place": {
+      "confirm_id": "26428654",
+      "place_name": "하동관 코엑스몰직영점"
+     }
+    }
+   },
+   {
+    "url": "http://t1.kakaocdn.net/local/kakaomapPhoto/review/f4c44d783338ee59dbc67e54874cbe82ff2dbc46?original",
+    "photo_id": 4561547,
+    "media_type": "PHOTO",
+    "status": "S",
+    "ui_type": "PROFILE",
+    "review_id": 10148647,
+    "updated_at": "2026-09-29 10:04:04",
+    "meta": {
+     "owner": {
+      "map_user_id": "363817405",
+      "nickname": "태평동팅커벨",
+      "image_url": "http://t1.kakaocdn.net/local/kakaomapPhoto/profile/fd4bfc4ba00225f294c49c19fcdb639b0ac7de28?original",
+      "timeline_level": {
+       "badge": "02",
+       "now_level": 22,
+       "show_other": true
+      },
+      "review_count": 30,
+      "follower_count": 2,
+      "profile_links": [],
+      "average_score": 4.9,
+      "profile_status": "S"
+     },
+     "is_liked_by_me": false,
+     "near": false,
+     "place": {
+      "confirm_id": "26428654",
+      "place_name": "하동관 코엑스몰직영점"
+     }
+    }
+   },
+   {
+    "url": "http://t1.kakaocdn.net/local/kakaomapPhoto/review/50ca0da85390d4936f123479eae3f709bcce29ac?original",
+    "photo_id": 2484607,
+    "media_type": "PHOTO",
+    "status": "S",
+    "ui_type": "PROFILE",
+    "review_id": 6639622,
+    "updated_at": "2026-09-29 00:11:46",
+    "meta": {
+     "owner": {
+      "map_user_id": "1154182449",
+      "nickname": "서초럽",
+      "image_url": "http://t1.kakaocdn.net/local/kakaomapPhoto/profile/820b52e698c7a08aac719472984dadb1a86eb0a6?original",
+      "timeline_level": {
+       "badge": "03",
+       "now_level": 41,
+       "show_other": true
+      },
+      "review_count": 184,
+      "follower_count": 17,
+      "profile_links": [],
+      "average_score": 3.2,
+      "profile_status": "S"
+     },
+     "is_liked_by_me": false,
+     "near": false,
+     "place": {
+      "confirm_id": "26428654",
+      "place_name": "하동관 코엑스몰직영점"
+     }
+    }
+   },
+   {
+    "url": "http://t1.kakaocdn.net/local/kakaomapPhoto/review/23d04960d371035e8c59e762ae6af134acc77e2c?original",
+    "photo_id": 2339804,
+    "media_type": "PHOTO",
+    "status": "S",
+    "ui_type": "PROFILE",
+    "review_id": 6364283,
+    "updated_at": "2026-09-28 23:38:27",
+    "meta": {
+     "owner": {
+      "map_user_id": "2404875917",
+      "nickname": "갈봉대",
+      "image_url": "http://t1.kakaocdn.net/local/kakaomapPhoto/profile/1a042ae75bb514f17cbff2f4d21d746021f45103?original",
+      "timeline_level": {
+       "badge": "02",
+       "now_level": 17,
+       "show_other": true
+      },
+      "review_count": 17,
+      "follower_count": 6,
+      "profile_links": [],
+      "average_score": 4.0,
+      "profile_status": "S"
+     },
+     "is_liked_by_me": false,
+     "near": false,
+     "place": {
+      "confirm_id": "26428654",
+      "place_name": "하동관 코엑스몰직영점"
+     }
+    }
+   },
+   {
+    "url": "http://t1.kakaocdn.net/local/kakaomapPhoto/review/ced0e2efccbc22247dda10342b0be519652bd903?original",
+    "photo_id": 1923526,
+    "media_type": "PHOTO",
+    "status": "S",
+    "ui_type": "PROFILE",
+    "review_id": 5526887,
+    "updated_at": "2026-09-28 21:38:38",
+    "meta": {
+     "owner": {
+      "map_user_id": "518203710",
+      "nickname": "성한킴",
+      "image_url": "http://th-p.talk.kakao.co.kr/th/talkp/wkEuU5edpV/sI4lhlUK27zo3kw9vgm9rK/nfm4cu.jpg",
+      "timeline_level": {
+       "badge": "02",
+       "now_level": 11,
+       "show_other": true
+      },
+      "review_count": 15,
+      "follower_count": 0,
+      "profile_links": [],
+      "average_score": 4.5,
+      "profile_status": "S"
+     },
+     "is_liked_by_me": false,
+     "near": false,
+     "place": {
+      "confirm_id": "26428654",
+      "place_name": "하동관 코엑스몰직영점"
+     }
+    }
+   },
+   {
+    "url": "http://t1.kakaocdn.net/local/kakaomapPhoto/review/d9b01d79adc7f602ca7532ffb42dc5bbe8af2267?original",
+    "photo_id": 368551,
+    "media_type": "PHOTO",
+    "status": "S",
+    "ui_type": "PROFILE",
+    "review_id": 1192460,
+    "updated_at": "2026-09-28 14:58:45",
+    "meta": {
+     "owner": {
+      "map_user_id": "257693575",
+      "nickname": "박덕수",
+      "image_url": "http://th-p.talk.kakao.co.kr/th/talkp/wkvq607tpK/k20WIfDgKcnaQeRY9WlZMk/7m2try.jpg",
+      "timeline_level": {
+       "badge": "03",
+       "now_level": 59,
+       "show_other": true
+      },
+      "review_count": 240,
+      "follower_count": 631,
+      "profile_links": [],
+      "average_score": 3.4,
+      "profile_status": "S"
+     },
+     "is_liked_by_me": false,
+     "near": false,
+     "place": {
+      "confirm_id": "26428654",
+      "place_name": "하동관 코엑스몰직영점"
+     }
+    }
+   },
+   {
+    "url": "http://t1.kakaocdn.net/local/kakaomapPhoto/review/30438a26ce149ba221ed0b60dcb75494427321dc?original",
+    "photo_id": 357593,
+    "media_type": "PHOTO",
+    "status": "S",
+    "ui_type": "PROFILE",
+    "review_id": 1150910,
+    "updated_at": "2026-09-28 14:58:43",
+    "meta": {
+     "owner": {
+      "map_user_id": "746622425",
+      "nickname": "여름여름",
+      "image_url": "http://t1.kakaocdn.net/local/kakaomapPhoto/profile/52ff5efb2968835f2748b664337c667bae885052?original",
+      "timeline_level": {
+       "badge": "04",
+       "now_level": 67,
+       "show_other": true
+      },
+      "review_count": 717,
+      "follower_count": 245,
+      "profile_links": [],
+      "average_score": 4.3,
+      "profile_status": "S"
+     },
+     "is_liked_by_me": false,
+     "near": false,
+     "place": {
+      "confirm_id": "26428654",
+      "place_name": "하동관 코엑스몰직영점"
+     }
+    }
+   },
+   {
+    "url": "http://t1.kakaocdn.net/local/kakaomapPhoto/review/b27e22a59319e9412be0f5772ff98cf502ad04e1?original",
+    "photo_id": 302118,
+    "media_type": "PHOTO",
+    "status": "S",
+    "ui_type": "PROFILE",
+    "review_id": 943410,
+    "updated_at": "2026-09-28 14:46:04",
+    "meta": {
+     "owner": {
+      "map_user_id": "418427710",
+      "nickname": "S:D",
+      "image_url": "http://t1.kakaocdn.net/local/kakaomapPhoto/profile/895e9b2d973fda80a2c31591380c2eb841b7d933?original",
+      "timeline_level": {
+       "badge": "05",
+       "now_level": 82,
+       "show_other": true
+      },
+      "review_count": 830,
+      "follower_count": 988,
+      "profile_links": [],
+      "average_score": 3.7,
+      "profile_status": "S"
+     },
+     "is_liked_by_me": false,
+     "near": false,
+     "place": {
+      "confirm_id": "26428654",
+      "place_name": "하동관 코엑스몰직영점"
+     }
+    }
+   },
+   {
+    "url": "http://t1.kakaocdn.net/local/kakaomapPhoto/review/a5df8fd5658310e31f899b2e3112aba628778600?original",
+    "photo_id": 302119,
+    "media_type": "PHOTO",
+    "status": "S",
+    "ui_type": "PROFILE",
+    "review_id": 943410,
+    "updated_at": "2026-09-28 14:46:04",
+    "meta": {
+     "owner": {
+      "map_user_id": "418427710",
+      "nickname": "S:D",
+      "image_url": "http://t1.kakaocdn.net/local/kakaomapPhoto/profile/895e9b2d973fda80a2c31591380c2eb841b7d933?original",
+      "timeline_level": {
+       "badge": "05",
+       "now_level": 82,
+       "show_other": true
+      },
+      "review_count": 830,
+      "follower_count": 988,
+      "profile_links": [],
+      "average_score": 3.7,
+      "profile_status": "S"
+     },
+     "is_liked_by_me": false,
+     "near": false,
+     "place": {
+      "confirm_id": "26428654",
+      "place_name": "하동관 코엑스몰직영점"
+     }
+    }
+   },
+   {
+    "url": "http://t1.kakaocdn.net/local/kakaomapPhoto/review/320bff28bf11b2040401bf1ea6f5d10aa250a78e?original",
+    "photo_id": 50068,
+    "media_type": "PHOTO",
+    "status": "S",
+    "ui_type": "PROFILE",
+    "review_id": 161653,
+    "updated_at": "2026-09-28 11:58:53",
+    "meta": {
+     "owner": {
+      "map_user_id": "490575509",
+      "nickname": "달타냥",
+      "image_url": "http://t1.kakaocdn.net/local/kakaomapPhoto/profile/bfe5063cff4e9df3bc58bbf4d39873be3c481391c6a2262f5e6b9f36c2c0b987",
+      "timeline_level": {
+       "badge": "04",
+       "now_level": 62,
+       "show_other": true
+      },
+      "review_count": 465,
+      "follower_count": 499,
+      "profile_links": [],
+      "average_score": 4.4,
+      "profile_status": "S"
+     },
+     "is_liked_by_me": false,
+     "near": false,
+     "place": {
+      "confirm_id": "26428654",
+      "place_name": "하동관 코엑스몰직영점"
+     }
+    }
+   }
+  ],
+  "timeline_score_table": {
+   "act_review": {
+    "event": 0,
+    "place_banner": [
+     {
+      "title": "사진/영상 등록",
+      "score": 3
+     },
+     {
+      "title": "글 작성",
+      "score": 2
+     }
+    ]
+   }
+  },
+  "has_next": false,
+  "has_my_review": false
+ },
+ "find_way": {
+  "subway": {
+   "station_simple_name": "봉은사역",
+   "exit_num": "7",
+   "to_exit_distance": 372,
+   "subway_list": [
+    {
+     "subway_line_id": "SES9",
+     "subway_line_icon_name": "9"
+    }
+   ],
+   "to_exit_minute": 6
+  }
+ },
+ "navi_guides": [
+  {
+   "guide_id": "775942",
+   "name": " GATE 2(동문) 주차장",
+   "flag": "G",
+   "type": "PARKING",
+   "point": {
+    "lon": 127.061109037337,
+    "lat": 37.5108787570246
+   }
+  },
+  {
+   "guide_id": "775939",
+   "name": "GATE 4(북문) 주차장",
+   "flag": "8",
+   "type": "PARKING",
+   "point": {
+    "lon": 127.058891220489,
+    "lat": 37.5135705522162
+   }
+  },
+  {
+   "guide_id": "775905",
+   "name": " GATE 5(서문) 주차장",
+   "flag": "8",
+   "type": "PARKING",
+   "point": {
+    "lon": 127.057421306234,
+    "lat": 37.5117352098398
+   }
+  },
+  {
+   "guide_id": "775938",
+   "name": "아셈타워GATE 주차장",
+   "flag": "8",
+   "type": "PARKING",
+   "point": {
+    "lon": 127.060276654982,
+    "lat": 37.5125227965924
+   }
+  },
+  {
+   "guide_id": "779184",
+   "name": "트레이드타워GATE 주차장",
+   "flag": "8",
+   "type": "PARKING",
+   "point": {
+    "lon": 127.061338266637,
+    "lat": 37.5108340384976
+   }
+  },
+  {
+   "guide_id": "775935",
+   "name": "동문 입구",
+   "flag": "G",
+   "point": {
+    "lon": 127.06093084443,
+    "lat": 37.5115118045844
+   }
+  },
+  {
+   "guide_id": "779183",
+   "name": "남문1 입구",
+   "flag": "G",
+   "point": {
+    "lon": 127.059699941594,
+    "lat": 37.5104263625087
+   }
+  },
+  {
+   "guide_id": "779182",
+   "name": "남문2 입구",
+   "flag": "G",
+   "point": {
+    "lon": 127.060431253349,
+    "lat": 37.5106730460327
+   }
+  },
+  {
+   "guide_id": "775907",
+   "name": "서문 입구",
+   "flag": "8",
+   "point": {
+    "lon": 127.058137601968,
+    "lat": 37.5105520210113
+   }
+  },
+  {
+   "guide_id": "775940",
+   "name": "북문 입구",
+   "flag": "G",
+   "point": {
+    "lon": 127.058404953987,
+    "lat": 37.5134173526869
+   }
+  }
+ ],
+ "trend_rank": {
+  "show_ranking_card": true
+ },
+ "place_add_info": {
+  "facilities": {
+   "is_parking": true,
+   "is_pet": false,
+   "is_fordisabled": true
+  },
+  "store_facility_icons": [
+   {
+    "text": "유료주차",
+    "url": "https://t1.kakaocdn.net/localimg/2025_place/parking_line.png"
+   },
+   {
+    "text": "휠체어사용",
+    "url": "https://t1.kakaocdn.net/localimg/2025_place/wheelchair_line.png"
+   }
+  ],
+  "tags": [
+   "노포",
+   "혼밥"
+  ],
+  "ai_mate": {
+   "store_facility_icons": [
+    {
+     "text": "주차가능",
+     "url": "https://t1.kakaocdn.net/localimg/2025_AIMATE/parking_line.png"
+    },
+    {
+     "text": "포장가능",
+     "url": "https://t1.kakaocdn.net/localimg/2025_AIMATE/takeout_line.png"
+    }
+   ],
+   "store_infos": [
+    {
+     "title": "주차",
+     "summary": "코엑스몰 내 주차 가능"
+    },
+    {
+     "title": "기타",
+     "summary": "화장실 남녀분리"
+    }
+   ]
+  },
+  "simple_parking_infos": {
+   "texts": [
+    "주차 가능"
+   ],
+   "summary": "코엑스몰 내 주차 가능",
+   "has_ai_mate_data": true
+  },
+  "full_detail_infos": [
+   {
+    "title": "주차 정보",
+    "summary": "코엑스몰 내 주차 가능",
+    "items": [
+     {
+      "icon": {
+       "text": "주차 가능",
+       "url": "https://t1.kakaocdn.net/localimg/place/2026/infoIcon/icon_parkingsquare_line.svg"
+      },
+      "contents": [
+       {
+        "label": "주차 가능"
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "title": "상세 정보",
+    "items": [
+     {
+      "icon": {
+       "text": "장소키워드",
+       "url": "https://t1.kakaocdn.net/localimg/place/2026/infoIcon/icon_tag_line.svg"
+      },
+      "contents": [
+       {
+        "label": "노포",
+        "landing_url": "https://map.kakao.com/?q=노포"
+       },
+       {
+        "label": "혼밥",
+        "landing_url": "https://map.kakao.com/?q=혼밥"
+       }
+      ]
+     },
+     {
+      "icon": {
+       "text": "단체석",
+       "url": "https://t1.kakaocdn.net/localimg/place/2026/infoIcon/icon_peoples_line.svg"
+      },
+      "contents": [
+       {
+        "label": "단체석"
+       }
+      ]
+     },
+     {
+      "icon": {
+       "text": "남녀분리 화장실",
+       "url": "https://t1.kakaocdn.net/localimg/place/2026/infoIcon/icon_toiletline_line.svg"
+      },
+      "contents": [
+       {
+        "label": "남녀분리 화장실"
+       }
+      ]
+     }
+    ]
+   }
+  ],
+  "add_info_summaries": [
+   {
+    "texts": [
+     "주차 가능"
+    ],
+    "summary": "코엑스몰 내 주차 가능",
+    "icon": {
+     "text": "주차정보",
+     "url": "https://t1.kakaocdn.net/localimg/place/2026/infoIconMini/parkingicon.svg"
+    },
+    "has_ai_mate_data": true
+   }
+  ],
+  "simple_detail_infos": [
+   {
+    "text": "단체석",
+    "url": "https://t1.kakaocdn.net/localimg/place/2026/infoIcon/icon_peoples_line.svg"
+   }
+  ]
+ },
+ "main_indoor": {
+  "lon": 127.0598042,
+  "lat": 37.5112906,
+  "zone_id": "48750",
+  "floor": "B1"
+ },
+ "reward": {
+  "fiy": {
+   "basic_info": 0,
+   "contact": 200,
+   "menu": 200,
+   "open_hour": 200,
+   "delete_place": 200,
+   "add_info": 0,
+   "max_amount": 600
+  }
+ },
+ "ai_content_warning": {
+  "is_home_tab_display_enabled": true,
+  "is_info_tab_display_enabled": true
+ }
+}

@@ -1,0 +1,2770 @@
+{
+ "menu": {
+  "menus": {
+   "photos": [
+    {
+     "confirm_id": "576159166",
+     "url": "https://postfiles.pstatic.net/MjAyNjA5MThfMTU5/MDAxNzg5NzM3Mjk2NDky.7P4zevPgKHP0jrtKQBQjuDKDiLOKp0m3tLFouhL0SUkg.dvC_gnBMS2z9alwueJhwDxZ0Ouiy1runTMx0ciGvNOcg.JPEG/900_20260912_230051.jpg?type=w773",
+     "type": "BLOG",
+     "photo_id": 1716782497,
+     "review_id": 117089934,
+     "registered_at": "2026-09-19 05:20:48",
+     "updated_at": "2026-09-19 05:40:14",
+     "title": "하이디라오 코엑스점 솔직후기 | 준비 없이 가면 당황하는 이유 (+건희소스·탄탄면·주문 꿀팁)",
+     "blog_link_url": "http://blog.naver.com/been9012/224416483368",
+     "media_type": "PHOTO",
+     "ui_type": "POST"
+    },
+    {
+     "confirm_id": "576159166",
+     "url": "https://postfiles.pstatic.net/MjAyNjA4MjdfNjkg/MDAxNzg3NzU2NTkxMTI4.AKCZfXO6zz2Pekqw2GbF8uczh-XNplxX1j7x19OIo4Ug.enSs_k1AKP_mgHyrg7mD9zUS8MK6R0uL2PtRKm_EaZ4g.JPEG/SE-d74f089f-f97c-4362-b627-12586b647213.jpg?type=w386",
+     "type": "BLOG",
+     "photo_id": 1705224160,
+     "review_id": 116162820,
+     "registered_at": "2026-08-31 18:57:26",
+     "updated_at": "2026-08-31 19:16:18",
+     "title": "삼성역 맛집 하이디라오 코엑스점 메뉴 가격 소스 레시피 후기",
+     "blog_link_url": "http://blog.naver.com/jjjjy0_0/224396074939",
+     "media_type": "PHOTO",
+     "ui_type": "POST"
+    },
+    {
+     "confirm_id": "576159166",
+     "url": "https://postfiles.pstatic.net/MjAyNjA4MjdfMSAg/MDAxNzg3ODM4MjY5Nzg3.8eEv3qt4wDyWmiBMr-gKzywOpHR20Z4DJ21h4vnaKDYg.fnC7R-E2TY4w9wf2kg_0Ugmt3_42ZiO3-5UfKKl5E2Ug.JPEG/SE-89aee9ac-1059-430b-91d0-34c44ad77e74.jpg?type=w773",
+     "type": "BLOG",
+     "photo_id": 1705224152,
+     "review_id": 116162820,
+     "registered_at": "2026-08-31 18:57:25",
+     "updated_at": "2026-08-31 19:16:18",
+     "title": "삼성역 맛집 하이디라오 코엑스점 메뉴 가격 소스 레시피 후기",
+     "blog_link_url": "http://blog.naver.com/jjjjy0_0/224396074939",
+     "media_type": "PHOTO",
+     "ui_type": "POST"
+    },
+    {
+     "confirm_id": "576159166",
+     "url": "https://postfiles.pstatic.net/MjAyNjA4MjNfMTY3/MDAxNzg3NDE3Nzg0MTc2.7Xjt875lKOe-9jJIcN4XwkZeceFrQDv8JTvUYZVi0-Qg.YyLKEvIy1LUekHlvcuv6bzhN0cSXqsgUVakq2t9N7wkg.JPEG/IMG%EF%BC%BF5093.jpg?type=w773",
+     "type": "BLOG",
+     "photo_id": 1699515428,
+     "review_id": 115707719,
+     "registered_at": "2026-08-23 02:51:15",
+     "updated_at": "2026-08-23 03:04:53",
+     "title": "삼성역 코엑스 하이디라오 방문 후기 #코엑스맛집 #하이디라오메뉴추천 #하이디라오웨이팅",
+     "blog_link_url": "http://blog.naver.com/zzrecord/224387049414",
+     "media_type": "PHOTO",
+     "ui_type": "POST"
+    }
+   ],
+   "items": [
+    {
+     "product_id": 13,
+     "name": "새우완자",
+     "price": -1,
+     "is_recommend": false,
+     "is_ai_mate": true,
+     "recommend_reasons": [
+      "탱글탱글한 식감",
+      "유부와 함께 즐기는 조합"
+     ],
+     "ai_mate_desc": "새우살과 다진 새우로 만든 동글동글한 완자",
+     "mod_at": "2024-03-27 02:31:13"
+    },
+    {
+     "product_id": 16,
+     "name": "마라훠궈",
+     "price": -1,
+     "is_recommend": false,
+     "is_ai_mate": true,
+     "recommend_reasons": [
+      "얼얼하고 칼칼한 맛",
+      "마라향 가득한 국물"
+     ],
+     "ai_mate_desc": "얼얼하고 칼칼한 마라향이 배인 훠궈탕",
+     "mod_at": "2024-03-27 22:51:21"
+    },
+    {
+     "product_id": 4,
+     "name": "두유피튀김",
+     "price": 0,
+     "is_recommend": false,
+     "is_ai_mate": true,
+     "recommend_reasons": [
+      "바삭하고 촉촉한 식감",
+      "고기와 함께 즐기는 조합"
+     ],
+     "ai_mate_desc": "바삭하고 촉촉한 두유피 튀김으로 탕에 살짝 적셔 먹는 메뉴",
+     "mod_at": "2026-06-20 01:11:37"
+    },
+    {
+     "product_id": 10,
+     "name": "만두",
+     "price": -1,
+     "is_recommend": false,
+     "is_ai_mate": false,
+     "mod_at": "2024-03-27 02:31:13"
+    },
+    {
+     "product_id": 19,
+     "name": "꽃빵튀김",
+     "price": -1,
+     "is_recommend": false,
+     "is_ai_mate": false,
+     "mod_at": "2026-06-20 01:11:37"
+    },
+    {
+     "product_id": 27,
+     "name": "감자",
+     "price": -1,
+     "is_recommend": false,
+     "is_ai_mate": false,
+     "mod_at": "2026-06-20 01:11:37"
+    },
+    {
+     "product_id": 34,
+     "name": "닭튀김",
+     "price": -1,
+     "is_recommend": false,
+     "is_ai_mate": false,
+     "mod_at": "2026-06-20 01:11:37"
+    },
+    {
+     "product_id": 23,
+     "name": "해산물모듬",
+     "price": -1,
+     "is_recommend": false,
+     "is_ai_mate": false,
+     "mod_at": "2026-06-20 01:11:37"
+    },
+    {
+     "product_id": 24,
+     "name": "해산물",
+     "price": -1,
+     "is_recommend": false,
+     "is_ai_mate": false,
+     "mod_at": "2026-06-20 01:11:37"
+    },
+    {
+     "product_id": 14,
+     "name": "양갈비살",
+     "price": -1,
+     "is_recommend": false,
+     "is_ai_mate": false,
+     "mod_at": "2026-06-20 01:11:37"
+    },
+    {
+     "product_id": 8,
+     "name": "하이디라오 특제소고기",
+     "price": 0,
+     "is_recommend": false,
+     "is_ai_mate": false,
+     "mod_at": "2026-06-20 01:11:37"
+    },
+    {
+     "product_id": 15,
+     "name": "특선소갈비살",
+     "price": -1,
+     "is_recommend": false,
+     "is_ai_mate": false,
+     "mod_at": "2026-06-20 01:11:37"
+    },
+    {
+     "product_id": 17,
+     "name": "우삼겹",
+     "price": -1,
+     "is_recommend": false,
+     "is_ai_mate": false,
+     "mod_at": "2026-06-20 01:11:37"
+    },
+    {
+     "product_id": 22,
+     "name": "소갈비살",
+     "price": -1,
+     "is_recommend": false,
+     "is_ai_mate": false,
+     "mod_at": "2026-06-20 01:11:37"
+    },
+    {
+     "product_id": 28,
+     "name": "차돌박이",
+     "price": -1,
+     "is_recommend": false,
+     "is_ai_mate": false,
+     "mod_at": "2026-06-20 01:11:37"
+    },
+    {
+     "product_id": 33,
+     "name": "한우목심",
+     "price": -1,
+     "is_recommend": false,
+     "is_ai_mate": false,
+     "mod_at": "2026-06-20 01:11:37"
+    },
+    {
+     "product_id": 11,
+     "name": "탄탄면",
+     "price": -1,
+     "is_recommend": false,
+     "is_ai_mate": false,
+     "mod_at": "2026-06-20 01:11:37"
+    },
+    {
+     "product_id": 25,
+     "name": "전복",
+     "price": -1,
+     "is_recommend": false,
+     "is_ai_mate": false,
+     "mod_at": "2026-06-20 01:11:37"
+    },
+    {
+     "product_id": 2,
+     "name": "돈삼겹살",
+     "price": 0,
+     "is_recommend": false,
+     "is_ai_mate": false,
+     "mod_at": "2026-06-20 01:11:37"
+    },
+    {
+     "product_id": 9,
+     "name": "돈목살",
+     "price": 0,
+     "is_recommend": false,
+     "is_ai_mate": false,
+     "mod_at": "2026-06-20 01:11:37"
+    },
+    {
+     "product_id": 29,
+     "name": "한치",
+     "price": -1,
+     "is_recommend": false,
+     "is_ai_mate": false,
+     "mod_at": "2026-06-20 01:11:37"
+    },
+    {
+     "product_id": 32,
+     "name": "닭다리",
+     "price": -1,
+     "is_recommend": false,
+     "is_ai_mate": false,
+     "mod_at": "2026-06-20 01:11:37"
+    },
+    {
+     "product_id": 5,
+     "name": "팡가시우 메기살",
+     "price": 0,
+     "is_recommend": false,
+     "is_ai_mate": false,
+     "mod_at": "2026-06-20 01:11:37"
+    },
+    {
+     "product_id": 7,
+     "name": "하이디라오 특제면",
+     "price": 0,
+     "is_recommend": false,
+     "is_ai_mate": false,
+     "mod_at": "2026-06-20 01:11:37"
+    },
+    {
+     "product_id": 3,
+     "name": "오리피",
+     "price": 0,
+     "is_recommend": false,
+     "is_ai_mate": false,
+     "mod_at": "2026-06-20 01:11:37"
+    },
+    {
+     "product_id": 12,
+     "name": "훠궈탕",
+     "price": -1,
+     "is_recommend": false,
+     "is_ai_mate": false,
+     "mod_at": "2026-06-20 01:11:37"
+    },
+    {
+     "product_id": 20,
+     "name": "전골",
+     "price": -1,
+     "is_recommend": false,
+     "is_ai_mate": false,
+     "mod_at": "2026-06-20 01:11:37"
+    },
+    {
+     "product_id": 26,
+     "name": "쭈꾸미미",
+     "price": -1,
+     "is_recommend": false,
+     "is_ai_mate": false,
+     "mod_at": "2026-05-08 16:40:16"
+    },
+    {
+     "product_id": 30,
+     "name": "쭈꾸미",
+     "price": -1,
+     "is_recommend": false,
+     "is_ai_mate": false,
+     "mod_at": "2026-05-08 16:40:16"
+    },
+    {
+     "product_id": 6,
+     "name": "하이디라오 천엽",
+     "price": 0,
+     "is_recommend": false,
+     "is_ai_mate": false,
+     "mod_at": "2026-06-20 01:11:37"
+    },
+    {
+     "product_id": 18,
+     "name": "유부",
+     "price": -1,
+     "is_recommend": false,
+     "is_ai_mate": false,
+     "mod_at": "2026-05-08 16:40:16"
+    },
+    {
+     "product_id": 21,
+     "name": "스시",
+     "price": -1,
+     "is_recommend": false,
+     "is_ai_mate": false,
+     "mod_at": "2026-05-08 16:40:16"
+    },
+    {
+     "product_id": 31,
+     "name": "치즈떡",
+     "price": -1,
+     "is_recommend": false,
+     "is_ai_mate": false,
+     "mod_at": "2026-06-20 01:11:37"
+    }
+   ],
+   "items_updated_at": "2026-06-20 01:11:37",
+   "menu_type": "FOOD"
+  },
+  "default_menu_icon_url": "https://t1.kakaocdn.net/localimg/place/2026/menu/icon_restaurant_solid.svg"
+ },
+ "visitor": {
+  "labels": [
+   0,
+   1,
+   2,
+   3,
+   4,
+   5,
+   6,
+   7,
+   8,
+   9,
+   10,
+   11,
+   12,
+   13,
+   14,
+   15,
+   16,
+   17,
+   18,
+   19,
+   20,
+   21,
+   22,
+   23
+  ],
+  "weekly_uv_average": [
+   681,
+   557,
+   315,
+   -1,
+   -1,
+   -1,
+   -1,
+   -1,
+   -1,
+   -1,
+   1574,
+   2783,
+   2795,
+   2345,
+   1690,
+   1695,
+   2123,
+   2810,
+   3080,
+   2391,
+   2100,
+   1975,
+   1321,
+   999
+  ],
+  "sunday_uv": [
+   794,
+   674,
+   445,
+   -1,
+   -1,
+   -1,
+   -1,
+   -1,
+   -1,
+   -1,
+   1837,
+   3276,
+   3297,
+   3218,
+   2184,
+   1935,
+   2464,
+   2704,
+   2653,
+   2251,
+   3175,
+   2168,
+   1359,
+   1062
+  ],
+  "monday_uv": [
+   600,
+   643,
+   272,
+   -1,
+   -1,
+   -1,
+   -1,
+   -1,
+   -1,
+   -1,
+   1402,
+   2148,
+   2249,
+   2017,
+   1419,
+   1655,
+   1699,
+   2208,
+   2529,
+   2213,
+   2086,
+   1792,
+   1028,
+   586
+  ],
+  "tuesday_uv": [
+   638,
+   526,
+   325,
+   -1,
+   -1,
+   -1,
+   -1,
+   -1,
+   -1,
+   -1,
+   1452,
+   2682,
+   2180,
+   1821,
+   1246,
+   1304,
+   1806,
+   2598,
+   2988,
+   2371,
+   1691,
+   1950,
+   887,
+   816
+  ],
+  "wednesday_uv": [
+   729,
+   279,
+   289,
+   -1,
+   -1,
+   -1,
+   -1,
+   -1,
+   -1,
+   -1,
+   1533,
+   2893,
+   2608,
+   1670,
+   1371,
+   1598,
+   1746,
+   2720,
+   3223,
+   2096,
+   2213,
+   1981,
+   978,
+   710
+  ],
+  "thursday_uv": [
+   569,
+   457,
+   282,
+   -1,
+   -1,
+   -1,
+   -1,
+   -1,
+   -1,
+   -1,
+   1512,
+   2799,
+   2474,
+   1782,
+   1454,
+   1268,
+   1895,
+   2857,
+   3130,
+   2302,
+   1710,
+   1780,
+   1105,
+   794
+  ],
+  "friday_uv": [
+   729,
+   562,
+   222,
+   -1,
+   -1,
+   -1,
+   -1,
+   -1,
+   -1,
+   -1,
+   1512,
+   2555,
+   2572,
+   2515,
+   1813,
+   1883,
+   2282,
+   3232,
+   3632,
+   2955,
+   1983,
+   1861,
+   1959,
+   1560
+  ],
+  "saturday_uv": [
+   710,
+   758,
+   373,
+   -1,
+   -1,
+   -1,
+   -1,
+   -1,
+   -1,
+   -1,
+   1770,
+   3134,
+   4185,
+   3395,
+   2347,
+   2225,
+   2969,
+   3354,
+   3407,
+   2555,
+   1842,
+   2297,
+   1933,
+   1466
+  ],
+  "max_uv": 4185,
+  "updated_at": "2026-10-05 01:29:00",
+  "day_of_week": "MONDAY"
+ },
+ "place_badge_for_panel3": [
+  {
+   "text": "강남구 마라탕 인기 맛집",
+   "style": {
+    "text_color": "#206DEF",
+    "background_color": "#EFF3FF",
+    "bold": false
+   },
+   "landing_url": "kakaomap://open?page=placerank&catetype=food&sort=favorite&internal_keepstate=true&category=menu_hotpot&regionid=I10000400",
+   "left_icons": [
+    "https://t1.kakaocdn.net/localimg/place/2026/certifications/icon_ranknum_top_left.svg",
+    "https://t1.kakaocdn.net/localimg/place/2026/certifications/icon_place_solid.svg"
+   ],
+   "right_icons": [
+    "https://t1.kakaocdn.net/localimg/place/2026/certifications/icon_ranknum_top_right.svg"
+   ]
+  }
+ ],
+ "ai_mate": {
+  "summary": {
+   "title": "정성 가득한 중국식 훠궈 명가",
+   "contents": [
+    "두유피튀김 추천",
+    "프라이빗룸",
+    "케이크 반입 가능",
+    "유아의자 있음"
+   ]
+  },
+  "bottom_sheet": {
+   "title": "정성 가득한 중국식 훠궈 명가",
+   "summary": "중국식 훠궈 전문점으로, 다양한 육수와 신선한 재료를 제공하며, 고객 맞춤형 소스 바와 생일 축하 서비스가 특징입니다.",
+   "sheets": [
+    {
+     "title": "추천 메뉴",
+     "keywords": [
+      "두유피튀김",
+      "새우완자",
+      "마라훠궈"
+     ],
+     "ui_type": "KEYWORDS"
+    },
+    {
+     "title": "어린이 옵션",
+     "keywords": [
+      "유아의자 있음",
+      "키즈메뉴 있음"
+     ],
+     "text": "아기 의자와 유아용 식기 세트 구비, 자극 없는 토마토탕과 삼선탕 등 어린이 메뉴 제공",
+     "ui_type": "KEYWORDS_TEXT"
+    },
+    {
+     "title": "제공 서비스",
+     "list": [
+      {
+       "title": "좌석 옵션",
+       "keywords": [
+        "프라이빗룸",
+        "단체석"
+       ]
+      },
+      {
+       "title": "매장 특징",
+       "keywords": [
+        "케이크 반입 가능"
+       ]
+      }
+     ],
+     "ui_type": "LIST"
+    }
+   ],
+   "landing_url": "https://kanana.kakao.com/place/redirect?entry=kakaomap&cid=576159166"
+  },
+  "blog_summaries": [
+   {
+    "title": "분위기",
+    "keywords": [
+     "넓은 공간감",
+     "활기찬 무드"
+    ]
+   },
+   {
+    "title": "방문 목적",
+    "keywords": [
+     "단체 회식",
+     "생일기념",
+     "단체 모임"
+    ]
+   },
+   {
+    "title": "맛",
+    "keywords": [
+     "매운",
+     "담백한",
+     "상큼한"
+    ]
+   },
+   {
+    "title": "동반인",
+    "keywords": [
+     "친구·지인",
+     "가족",
+     "연인·데이트 커플"
+    ]
+   }
+  ],
+  "price_level": {
+   "symbol": "₩₩"
+  },
+  "ai_questions": [
+   "생일 축하 서비스 있나요?",
+   "룸 타입 좌석은 있나요?",
+   "둘이서 먹기 좋은 메뉴 추천",
+   "대표메뉴 가격과 함께 알려줘"
+  ],
+  "suggested_questions": [
+   {
+    "text": "생일 축하 서비스 있나요?",
+    "landing_url": "https://kanana.kakao.com/place/redirect?entry=kakaomap&t_src=kakaomap&t_ch=pw_place&q=%EC%83%9D%EC%9D%BC+%EC%B6%95%ED%95%98+%EC%84%9C%EB%B9%84%EC%8A%A4+%EC%9E%88%EB%82%98%EC%9A%94%3F&cid=576159166"
+   },
+   {
+    "text": "룸 타입 좌석은 있나요?",
+    "landing_url": "https://kanana.kakao.com/place/redirect?entry=kakaomap&t_src=kakaomap&t_ch=pw_place&q=%EB%A3%B8+%ED%83%80%EC%9E%85+%EC%A2%8C%EC%84%9D%EC%9D%80+%EC%9E%88%EB%82%98%EC%9A%94%3F&cid=576159166"
+   },
+   {
+    "text": "둘이서 먹기 좋은 메뉴 추천",
+    "landing_url": "https://kanana.kakao.com/place/redirect?entry=kakaomap&t_src=kakaomap&t_ch=pw_place&q=%EB%91%98%EC%9D%B4%EC%84%9C+%EB%A8%B9%EA%B8%B0+%EC%A2%8B%EC%9D%80+%EB%A9%94%EB%89%B4+%EC%B6%94%EC%B2%9C&cid=576159166"
+   },
+   {
+    "text": "대표메뉴 가격과 함께 알려줘",
+    "landing_url": "https://kanana.kakao.com/place/redirect?entry=kakaomap&t_src=kakaomap&t_ch=pw_place&q=%EB%8C%80%ED%91%9C%EB%A9%94%EB%89%B4+%EA%B0%80%EA%B2%A9%EA%B3%BC+%ED%95%A8%EA%BB%98+%EC%95%8C%EB%A0%A4%EC%A4%98&cid=576159166"
+   }
+  ]
+ },
+ "panel_card_tags": [
+  "TITLE",
+  "PHOTO",
+  "BIZ",
+  "NEWS",
+  "AI_MATE",
+  "SUMMARY",
+  "INFO",
+  "EVENT_KEYWORD",
+  "PRODUCT",
+  "AI_QUESTION",
+  "BOOKING",
+  "SPECIAL",
+  "RELATION",
+  "VISITOR",
+  "REVIEW",
+  "RANKING",
+  "BLOG"
+ ],
+ "panel_tab_tags": [
+  "PRODUCT",
+  "RELATION",
+  "PHOTO",
+  "REVIEW",
+  "BOOKING",
+  "SPECIAL",
+  "NEWS",
+  "BLOG",
+  "RANKING"
+ ],
+ "restrict": {
+  "fiy": {
+   "is_restrict": false
+  },
+  "blog": {
+   "is_restrict": false
+  },
+  "review_read": {
+   "is_restrict": false
+  },
+  "photo": {
+   "is_restrict": false
+  },
+  "fiy_add_info": {
+   "is_restrict": false
+  },
+  "ranking": {
+   "is_restrict": false
+  }
+ },
+ "summary": {
+  "meta": {
+   "updated_at": "2026-06-20 01:11:37"
+  },
+  "confirm_id": "576159166",
+  "name": "하이디라오 COEX점",
+  "status": "Y",
+  "category": {
+   "name": "중국요리",
+   "id1": "9",
+   "id2": "2810",
+   "id3": "597",
+   "name1": "음식점",
+   "name2": "중식",
+   "name3": "중국요리"
+  },
+  "point": {
+   "lon": 127.05775254098064,
+   "lat": 37.511661796717505
+  },
+  "address": {
+   "disp": "서울 강남구 테헤란로87길 58 컨벤션별관 지하2층 2A09호 (삼성동)",
+   "jibun": "삼성동 159",
+   "road": "서울 강남구 테헤란로87길 58 컨벤션별관 지하2층 2A09호",
+   "base_zone_no": "06164",
+   "road_part": "테헤란로87길 58 컨벤션별관 지하2층 2A09호",
+   "jibun_part": "삼성동 159",
+   "address_detail_part": "컨벤션별관 지하2층 2A09호"
+  },
+  "road_view": {
+   "pano_id": "1212304921",
+   "pan": 61.0,
+   "tilt": -2.0,
+   "point": {
+    "lon": 127.05750362228757,
+    "lat": 37.51155379765139
+   },
+   "level": 3,
+   "url": "https://map.kakaocdn.net/map_roadview/2026/06/9152730/2_101261_9152730_20260623061031_cube/left_800.jpg"
+  },
+  "regions": [
+   {
+    "depth": 1,
+    "id": "I",
+    "name": "서울",
+    "simple_name": "서울"
+   },
+   {
+    "depth": 2,
+    "id": "I1000",
+    "name": "강남구",
+    "simple_name": "강남구"
+   },
+   {
+    "depth": 3,
+    "id": "I10000400",
+    "name": "삼성동",
+    "simple_name": "삼성동"
+   }
+  ],
+  "homepages": [
+   "https://www.instagram.com/haidilaokorea/",
+   "https://blog.naver.com/haidilaokorea",
+   "https://app.catchtable.co.kr/ct/shop/hidirao_coex"
+  ],
+  "related_links": {
+   "primary_links": [
+    {
+     "url": "https://www.instagram.com/haidilaokorea/",
+     "display_text": "인스타그램"
+    }
+   ],
+   "secondary_links": [
+    {
+     "url": "https://blog.naver.com/haidilaokorea",
+     "display_text": "https://blog.naver.com/haidilaokorea"
+    },
+    {
+     "url": "https://app.catchtable.co.kr/ct/shop/hidirao_coex",
+     "display_text": "캐치테이블"
+    }
+   ]
+  },
+  "phone_numbers": [
+   {
+    "tel": "02-562-1005"
+   }
+  ],
+  "payments": [],
+  "main_photo_url": "http://t1.kakaocdn.net/local/kakaomapPhoto/review/699b89b8c18e190ef660cfcee354db199652cc44?original",
+  "display_info": {
+   "display_name1": "하이디라오"
+  }
+ },
+ "my_store_notice": {
+  "status": "READY_TO_REGISTER",
+  "notice_count": 0,
+  "is_available_booking": false
+ },
+ "open_hours": {
+  "headline": {
+   "code": "OPEN",
+   "display_text": "영업 중",
+   "display_text_info": "03:00 까지"
+  },
+  "week_from_today": {
+   "week_periods": [
+    {
+     "days": [
+      {
+       "day_of_the_week_desc": "월(10/5)",
+       "on_days": {
+        "start_end_time_desc": "10:00 ~ 03:00",
+        "last_order_times_desc": [
+         "02:55 라스트오더"
+        ]
+       },
+       "is_highlight": true
+      },
+      {
+       "day_of_the_week_desc": "화(10/6)",
+       "on_days": {
+        "start_end_time_desc": "10:00 ~ 03:00",
+        "last_order_times_desc": [
+         "02:55 라스트오더"
+        ]
+       },
+       "is_highlight": false
+      },
+      {
+       "day_of_the_week_desc": "수(10/7)",
+       "on_days": {
+        "start_end_time_desc": "10:00 ~ 03:00",
+        "last_order_times_desc": [
+         "02:55 라스트오더"
+        ]
+       },
+       "is_highlight": false
+      },
+      {
+       "day_of_the_week_desc": "목(10/8)",
+       "on_days": {
+        "start_end_time_desc": "10:00 ~ 03:00",
+        "last_order_times_desc": [
+         "02:55 라스트오더"
+        ]
+       },
+       "is_highlight": false
+      },
+      {
+       "day_of_the_week_desc": "금(10/9)",
+       "on_days": {
+        "start_end_time_desc": "10:00 ~ 03:00",
+        "last_order_times_desc": [
+         "02:55 라스트오더"
+        ]
+       },
+       "is_highlight": false
+      },
+      {
+       "day_of_the_week_desc": "토(10/10)",
+       "on_days": {
+        "start_end_time_desc": "10:00 ~ 03:00",
+        "last_order_times_desc": [
+         "02:55 라스트오더"
+        ]
+       },
+       "is_highlight": false
+      },
+      {
+       "day_of_the_week_desc": "일(10/11)",
+       "on_days": {
+        "start_end_time_desc": "10:00 ~ 03:00",
+        "last_order_times_desc": [
+         "02:55 라스트오더"
+        ]
+       },
+       "is_highlight": false
+      }
+     ]
+    }
+   ]
+  }
+ },
+ "photos": {
+  "counts": {
+   "total": 1747,
+   "mystore": 0,
+   "vendor": 0,
+   "vod": 2,
+   "kakaomap_review": 83,
+   "food": 22,
+   "indoor": 214,
+   "outdoor": 7,
+   "menu": 4
+  },
+  "photos": [
+   {
+    "confirm_id": "576159166",
+    "url": "https://thumb.kakaocdn.net/dna/kamp/source/rvrl3xm11ddzd7srvhggb42qk/thumbs/1.jpg?credential=TuMuFGKUIcirOSjFzOpncbomGFEIdZWK&expires=33346308669&kamp_tidx=0&signature=GeJOt7s6qR0ACCzFP4CF919ViPw%3D&ts=1789399869",
+    "type": "KMAPREVIEW",
+    "photo_id": 9603924,
+    "review_id": 16527167,
+    "registered_at": "2026-09-15 00:31:10",
+    "updated_at": "2026-09-15 00:48:19",
+    "kakaomap_review_photo_meta": {
+     "owner": {
+      "map_user_id": "1271418871",
+      "nickname": "고수없으예",
+      "image_url": "http://t1.kakaocdn.net/local/kakaomapPhoto/profile/3b64b16752f03a71c9a6451f2eb7ab3cff6838ea?original",
+      "timeline_level": {
+       "badge": "03",
+       "now_level": 42,
+       "show_other": true
+      },
+      "review_count": 115,
+      "follower_count": 83,
+      "profile_links": [],
+      "average_score": 3.8,
+      "profile_status": "S"
+     }
+    },
+    "title": "",
+    "media_type": "VOD",
+    "vid": "rvrl3xm11ddzd7srvhggb42qk",
+    "ui_type": "PROFILE",
+    "duration": 18,
+    "preview": "https://vst.play.kakao.com/s-kakaomap/vod/rvrl3xm11ddzd7srvhggb42qk/mp4/mp4/preview.mp4?px-time=1791193944&px-bps=4893128&px-bufahead=35&px-hash=f3f4eb8a858de98f72f1a48e7e8c5e0b"
+   },
+   {
+    "confirm_id": "576159166",
+    "url": "http://t1.kakaocdn.net/local/kakaomapPhoto/review/699b89b8c18e190ef660cfcee354db199652cc44?original",
+    "type": "KMAPREVIEW",
+    "photo_id": 9312415,
+    "review_id": 16200798,
+    "registered_at": "2026-08-07 18:22:10",
+    "updated_at": "2026-09-30 10:02:46",
+    "kakaomap_review_photo_meta": {
+     "owner": {
+      "map_user_id": "1339982433",
+      "nickname": "십알칸초",
+      "image_url": "http://t1.kakaocdn.net/local/kakaomapPhoto/profile/a44ff6e90abff0408491a9761413c8d52352a3cf?original",
+      "timeline_level": {
+       "badge": "04",
+       "now_level": 72,
+       "show_other": true
+      },
+      "review_count": 408,
+      "follower_count": 1092,
+      "profile_links": [],
+      "average_score": 4.1,
+      "profile_status": "S"
+     }
+    },
+    "title": "",
+    "media_type": "PHOTO",
+    "ui_type": "PROFILE",
+    "duration": 0
+   },
+   {
+    "confirm_id": "576159166",
+    "url": "http://t1.kakaocdn.net/local/kakaomapPhoto/review/d171659b4d79467d3e3b689857e979f731725ec6?original",
+    "type": "KMAPREVIEW",
+    "photo_id": 8577109,
+    "review_id": 15362084,
+    "registered_at": "2026-04-27 17:37:26",
+    "updated_at": "2026-09-30 06:15:36",
+    "kakaomap_review_photo_meta": {
+     "owner": {
+      "map_user_id": "2106047254",
+      "nickname": "미니소",
+      "image_url": "http://t1.kakaocdn.net/local/kakaomapPhoto/profile/eadc19bf0de13b9c9695fc805aa149f9b558fbc7?original",
+      "timeline_level": {
+       "badge": "02",
+       "now_level": 23,
+       "show_other": true
+      },
+      "review_count": 38,
+      "follower_count": 2,
+      "profile_links": [],
+      "average_score": 5.0,
+      "profile_status": "S"
+     }
+    },
+    "title": "",
+    "media_type": "PHOTO",
+    "ui_type": "PROFILE",
+    "duration": 0
+   },
+   {
+    "confirm_id": "576159166",
+    "url": "https://thumb.kakaocdn.net/dna/kamp/source/rvcxt9fdmlgugsg5nx6ywcy7k/thumbs/1.jpg?credential=TuMuFGKUIcirOSjFzOpncbomGFEIdZWK&expires=33313378845&kamp_tidx=0&signature=T%2FQGjJOVILPGEcfCWBo5Ah7T6Dw%3D&ts=1756470045",
+    "type": "KMAPREVIEW",
+    "photo_id": 7066275,
+    "review_id": 13593248,
+    "registered_at": "2025-08-29 21:20:47",
+    "updated_at": "2025-08-29 21:37:02",
+    "kakaomap_review_photo_meta": {
+     "owner": {
+      "map_user_id": "1790091405",
+      "nickname": "기록기록",
+      "image_url": "http://t1.kakaocdn.net/local/kakaomapPhoto/profile/eb2564e792eb984cc6f32e2a462ead8b3c3d206b?original",
+      "timeline_level": {
+       "badge": "03",
+       "now_level": 54,
+       "show_other": true
+      },
+      "review_count": 237,
+      "follower_count": 273,
+      "profile_links": [],
+      "average_score": 3.7,
+      "profile_status": "S"
+     }
+    },
+    "title": "",
+    "media_type": "VOD",
+    "vid": "rvcxt9fdmlgugsg5nx6ywcy7k",
+    "ui_type": "PROFILE",
+    "duration": 1,
+    "preview": "https://vst.play.kakao.com/s-kakaomap/vod/rvcxt9fdmlgugsg5nx6ywcy7k/mp4/1/mp4/preview.mp4?px-time=1791193944&px-bps=8767460&px-bufahead=24&px-hash=14a89852a49dfe9854ff3eab63003589"
+   },
+   {
+    "confirm_id": "576159166",
+    "url": "http://t1.kakaocdn.net/local/kakaomapPhoto/review/b3ee4a14a15328ae72deb7686579dcf3a5ec2d20?original",
+    "type": "KMAPREVIEW",
+    "photo_id": 5726475,
+    "review_id": 11886010,
+    "registered_at": "2025-01-10 20:10:46",
+    "updated_at": "2026-09-29 15:49:44",
+    "kakaomap_review_photo_meta": {
+     "owner": {
+      "map_user_id": "3227749470",
+      "nickname": "엱",
+      "image_url": "http://t1.kakaocdn.net/local/kakaomapPhoto/profile/2f35e7ac76c33e88eb6c0d040eceb3d99bb2ad58?original",
+      "timeline_level": {
+       "badge": "03",
+       "now_level": 48,
+       "show_other": true
+      },
+      "review_count": 260,
+      "follower_count": 53,
+      "profile_links": [],
+      "average_score": 4.3,
+      "profile_status": "S"
+     }
+    },
+    "title": "",
+    "media_type": "PHOTO",
+    "ui_type": "PROFILE"
+   },
+   {
+    "confirm_id": "576159166",
+    "url": "https://postfiles.pstatic.net/MjAyNjEwMDRfMzMg/MDAxNzkxMDkxNTIxNjQ5.2PzVkrO0wUq8hP9uM8MstN3gRqSGuJMkCtxw6IaLA-sg.KU0WmrhJTSabP52CO2ONrz_6e06EKD_mqIDy_vWFGKgg.JPEG/IMG%EF%BC%BF0984.JPG?type=w773",
+    "type": "BLOG",
+    "photo_id": 1726753074,
+    "review_id": 117896038,
+    "registered_at": "2026-10-04 16:28:16",
+    "updated_at": "2026-10-04 16:41:26",
+    "title": "하이디라오 코엑스점 후기｜신상 치즈연유꽃빵부터 소스 조합, 생일파티 꿀팁까지_웨이팅정보",
+    "blog_link_url": "http://blog.naver.com/aejoo03/224431086481",
+    "media_type": "PHOTO",
+    "ui_type": "POST"
+   },
+   {
+    "confirm_id": "576159166",
+    "url": "https://postfiles.pstatic.net/MjAyNjEwMDRfMTQ4/MDAxNzkxMDkxODkwNDIy.CZ-E4pgPMdd-Mq4cKsBsw5EZBf17J3q2H43oWgbG9lAg.CWXYK9VYApXgejc8Xo0VZkx_vNHg4GcCyC7jykMs9Ckg.JPEG/IMG%EF%BC%BF4720.jpg?type=w773",
+    "type": "BLOG",
+    "photo_id": 1726753075,
+    "review_id": 117896038,
+    "registered_at": "2026-10-04 16:28:16",
+    "updated_at": "2026-10-04 16:41:26",
+    "title": "하이디라오 코엑스점 후기｜신상 치즈연유꽃빵부터 소스 조합, 생일파티 꿀팁까지_웨이팅정보",
+    "blog_link_url": "http://blog.naver.com/aejoo03/224431086481",
+    "media_type": "PHOTO",
+    "ui_type": "POST"
+   },
+   {
+    "confirm_id": "576159166",
+    "url": "https://postfiles.pstatic.net/MjAyNjEwMDRfNjYg/MDAxNzkxMDkyMzU1MTU2.tu9mQcaVUfvfkx5LEHq6HyhaNSBTAl913Y-0UUU6Xpog.Ea22zN6ybTHQRzxln-KkjwBvt8xzcZk5r-LGtmRPrEsg.JPEG/output%EF%BC%BF2937337213.jpg?type=w773",
+    "type": "BLOG",
+    "photo_id": 1726753078,
+    "review_id": 117896038,
+    "registered_at": "2026-10-04 16:28:16",
+    "updated_at": "2026-10-04 16:41:26",
+    "title": "하이디라오 코엑스점 후기｜신상 치즈연유꽃빵부터 소스 조합, 생일파티 꿀팁까지_웨이팅정보",
+    "blog_link_url": "http://blog.naver.com/aejoo03/224431086481",
+    "media_type": "PHOTO",
+    "ui_type": "POST"
+   },
+   {
+    "confirm_id": "576159166",
+    "url": "https://postfiles.pstatic.net/MjAyNjA5MjlfMTY5/MDAxNzkwNjc5NjM1ODEy.YuGH89MJu2kMvGsiVQOaRCgq953rt0BCXuS3FkRm5c0g.hbqO5dUn6wP3GfoIc0VASw4nRU-EAZELb5i-Ns8qdBwg.JPEG/20260920_140514_Edited.jpg?type=w966",
+    "type": "BLOG",
+    "photo_id": 1725050640,
+    "review_id": 117757085,
+    "registered_at": "2026-10-02 12:45:33",
+    "updated_at": "2026-10-02 13:02:37",
+    "title": "아이와 서울여행 ④ 삼성 하이디라오 코엑스점 가는법 주말 후기",
+    "blog_link_url": "http://blog.naver.com/2artshow/224427316739",
+    "media_type": "PHOTO",
+    "ui_type": "POST"
+   },
+   {
+    "confirm_id": "576159166",
+    "url": "https://postfiles.pstatic.net/MjAyNjA5MTdfNzMg/MDAxNzg5NjUxMDAzMDg5.6bAN6WOdlAFNphFEQ1ls6d_BGP62fb_pjypo811F0Tsg.mVgKmAB2PBWbq92-R9YWJGdD-2q-IUurIPlKsYYatEsg.JPEG/IMG%EF%BC%BF0189.JPG?type=w966",
+    "type": "BLOG",
+    "photo_id": 1723528536,
+    "review_id": 117629288,
+    "registered_at": "2026-09-28 23:26:39",
+    "updated_at": "2026-09-28 23:46:36",
+    "title": "하이디라오 코엑스점 2인 가격 주말 점심 웨이팅 시간",
+    "blog_link_url": "http://blog.naver.com/silversun__/224416134499",
+    "media_type": "PHOTO",
+    "ui_type": "POST"
+   },
+   {
+    "confirm_id": "576159166",
+    "url": "https://postfiles.pstatic.net/MjAyNjA5MTdfMTk3/MDAxNzg5NjUxMDAyODcz.gSbl8S_H0yK9f6X9Lun_wPWc9QyZ1PIoWR5g44CDyAUg.NO12CE-ReYDsZvvLSboA9MUxwCdvJcpDyuhQ_8YHucIg.JPEG/IMG%EF%BC%BF0184.JPG?type=w966",
+    "type": "BLOG",
+    "photo_id": 1723528520,
+    "review_id": 117629288,
+    "registered_at": "2026-09-28 23:26:38",
+    "updated_at": "2026-09-28 23:46:36",
+    "title": "하이디라오 코엑스점 2인 가격 주말 점심 웨이팅 시간",
+    "blog_link_url": "http://blog.naver.com/silversun__/224416134499",
+    "media_type": "PHOTO",
+    "ui_type": "POST"
+   },
+   {
+    "confirm_id": "576159166",
+    "url": "https://postfiles.pstatic.net/MjAyNjA5MThfMjIy/MDAxNzg5NzMxMzIyOTUz.sh-QriEzPvFCD8Lw7mmQp9agMJK4MHuJokIq4A5vleQg.aeAuzLq4BNZXSCcEJRahx5_fpgWwwAb6NCd_IsZCZ78g.JPEG/output%EF%BC%BF1061813284.jpg?type=w966",
+    "type": "BLOG",
+    "photo_id": 1723528645,
+    "review_id": 117629288,
+    "registered_at": "2026-09-28 23:26:47",
+    "updated_at": "2026-09-28 23:46:36",
+    "title": "하이디라오 코엑스점 2인 가격 주말 점심 웨이팅 시간",
+    "blog_link_url": "http://blog.naver.com/silversun__/224416134499",
+    "media_type": "PHOTO",
+    "ui_type": "POST"
+   },
+   {
+    "confirm_id": "576159166",
+    "url": "https://postfiles.pstatic.net/MjAyNjA5MTdfMTAy/MDAxNzg5NjUxMDAzNDA5.7oUkC-hCsEkRFKnA59Dh8PlotH278j8KZfY1JaJIxLEg.y7lmamaU4vZBleIxPpKDux_LCKZBb17H93JO0mz7caQg.JPEG/IMG%EF%BC%BF0178.JPG?type=w966",
+    "type": "BLOG",
+    "photo_id": 1723528622,
+    "review_id": 117629288,
+    "registered_at": "2026-09-28 23:26:45",
+    "updated_at": "2026-09-28 23:46:36",
+    "title": "하이디라오 코엑스점 2인 가격 주말 점심 웨이팅 시간",
+    "blog_link_url": "http://blog.naver.com/silversun__/224416134499",
+    "media_type": "PHOTO",
+    "ui_type": "POST"
+   },
+   {
+    "confirm_id": "576159166",
+    "url": "https://postfiles.pstatic.net/MjAyNjA5MTVfMTMy/MDAxNzg5NDUwMjU1MTMz.Cxcqa4uy_uPXH7jHBjlwEwFT-j-Cp5OSEopHRTSh1J8g.IRFH5pAMOYWVUR66chPwJ6HxN3GN9qUC7BnVCNB2r2Ag.JPEG/IMG%EF%BC%BF8738.JPG?type=w773",
+    "type": "BLOG",
+    "photo_id": 1723379095,
+    "review_id": 117618179,
+    "registered_at": "2026-09-28 19:45:27",
+    "updated_at": "2026-09-28 20:06:38",
+    "title": "코엑스 점심 회식 | 하이디라오 코엑스점 런치 3인 세트",
+    "blog_link_url": "http://blog.naver.com/ruirongruirong/224412622109",
+    "media_type": "PHOTO",
+    "ui_type": "POST"
+   },
+   {
+    "confirm_id": "576159166",
+    "url": "https://postfiles.pstatic.net/MjAyNjA5MTVfMTcx/MDAxNzg5NDgxMTA4NTQz.HUvPrymzeURG0W58JyOrNIckPaZ3o0ISI76Pe489hHYg.5AxhlVa7-yfzuk2cnfwelmdMGnIA71-x_uWLrngcdfcg.PNG/8FA419F6%EF%BC%8DCFEF%EF%BC%8D463E%EF%BC%8D8ABE%EF%BC%8D6670AC6AC22E.png?type=w773",
+    "type": "BLOG",
+    "photo_id": 1722931093,
+    "review_id": 117581816,
+    "registered_at": "2026-09-28 07:05:34",
+    "updated_at": "2026-09-28 07:27:28",
+    "title": "삼성역 훠궈 맛집_하이디라오 코엑스점",
+    "blog_link_url": "http://blog.naver.com/song___song_/224416277333",
+    "media_type": "PHOTO",
+    "ui_type": "POST"
+   },
+   {
+    "confirm_id": "576159166",
+    "url": "https://postfiles.pstatic.net/MjAyNjA5MTVfMTM2/MDAxNzg5NDgwOTIxMzA1.qcvvd8_0hHXiNskmJIuMZPClMinTzlyUs4wL3ri7_3gg.V92qIkiJbWwMqapO8UCao8n6AxyD3E1OaLtnQtKvpTQg.PNG/F2B40215%EF%BC%8D15D2%EF%BC%8D4125%EF%BC%8D944B%EF%BC%8D8A66F90F45E5.png?type=w386",
+    "type": "BLOG",
+    "photo_id": 1722931107,
+    "review_id": 117581816,
+    "registered_at": "2026-09-28 07:05:35",
+    "updated_at": "2026-09-28 07:27:28",
+    "title": "삼성역 훠궈 맛집_하이디라오 코엑스점",
+    "blog_link_url": "http://blog.naver.com/song___song_/224416277333",
+    "media_type": "PHOTO",
+    "ui_type": "POST"
+   },
+   {
+    "confirm_id": "576159166",
+    "url": "https://postfiles.pstatic.net/MjAyNjA5MTVfMTUx/MDAxNzg5NDgwOTIxMTg3.uaC7g8chW5LEZYPu5l1ewhUW6JvDQjwyGJQrCkzz_mMg.cSEKDkuFH6dl2Wp-Q5ZB17fR99bMbtEOusNLcu2FPnQg.PNG/E501C879%EF%BC%8D313C%EF%BC%8D4CA2%EF%BC%8DA68C%EF%BC%8D7BE32A86D8BE.png?type=w386",
+    "type": "BLOG",
+    "photo_id": 1722931072,
+    "review_id": 117581816,
+    "registered_at": "2026-09-28 07:05:32",
+    "updated_at": "2026-09-28 07:27:28",
+    "title": "삼성역 훠궈 맛집_하이디라오 코엑스점",
+    "blog_link_url": "http://blog.naver.com/song___song_/224416277333",
+    "media_type": "PHOTO",
+    "ui_type": "POST"
+   },
+   {
+    "confirm_id": "576159166",
+    "url": "https://postfiles.pstatic.net/MjAyNjA5MjdfMjcz/MDAxNzkwNDk0MzI3NjIx.NGhEKl6hzt1bxY3HnKi0DiaRrE6Q_r94wyq1sVFgS54g.L2zdr3JgCAlTfb3XeRZqPMr5H2bfCtSNYreHVVe4rRgg.JPEG/SE-21d0b5b5-9160-11f1-b897-2b529fc87dd6.jpg?type=w966",
+    "type": "BLOG",
+    "photo_id": 1722608118,
+    "review_id": 117554776,
+    "registered_at": "2026-09-27 21:56:37",
+    "updated_at": "2026-09-27 22:15:53",
+    "title": "삼성역 코엑스 훠궈 맛집 하이디라오 COEX점 (내돈내산, 주차정보, 평일 저녁 웨이팅 후기)",
+    "blog_link_url": "http://blog.naver.com/700dudu/224424060134",
+    "media_type": "PHOTO",
+    "ui_type": "POST"
+   },
+   {
+    "confirm_id": "576159166",
+    "url": "https://postfiles.pstatic.net/MjAyNjA5MjNfMjg3/MDAxNzkwMTYwNTExMTI1.7EshRFbL8dsnUeAbSx7SG6TCmGBKsv9AQ0Ki09d4psEg.Hj8MWR_BYpuORrQLZj9THd6KpXNlgGlYOnF0TEiev8og.JPEG/IMG%EF%BC%BF9909.jpg?type=w773",
+    "type": "BLOG",
+    "photo_id": 1721154719,
+    "review_id": 117438117,
+    "registered_at": "2026-09-26 00:34:08",
+    "updated_at": "2026-09-26 00:56:45",
+    "title": "🐼하이디라오 코엑스점 예약 방문 리뷰 | 생일케이크 서비스 / 쿵푸면 쇼 후기 (∩^o^)⊃━☆✨",
+    "blog_link_url": "http://blog.naver.com/jej686/224421449913",
+    "media_type": "PHOTO",
+    "ui_type": "POST"
+   },
+   {
+    "confirm_id": "576159166",
+    "url": "https://postfiles.pstatic.net/MjAyNjA5MjRfMTUg/MDAxNzkwMTgyOTg0NjAz.WY6Bk47K-x5f2yM1NiiuSd7jHCAH3Zb4BcGrU6Wk8mUg.RIpDbJAN-inVWeMMzJWUjGgOQRRRvM-fqj5hhfbNdDAg.JPEG/SE-331972E1-7BAE-4B05-B2AC-4ED49A8E8AF0.jpg?type=w386",
+    "type": "BLOG",
+    "photo_id": 1721154744,
+    "review_id": 117438117,
+    "registered_at": "2026-09-26 00:34:11",
+    "updated_at": "2026-09-26 00:56:45",
+    "title": "🐼하이디라오 코엑스점 예약 방문 리뷰 | 생일케이크 서비스 / 쿵푸면 쇼 후기 (∩^o^)⊃━☆✨",
+    "blog_link_url": "http://blog.naver.com/jej686/224421449913",
+    "media_type": "PHOTO",
+    "ui_type": "POST"
+   },
+   {
+    "confirm_id": "576159166",
+    "url": "https://postfiles.pstatic.net/MjAyNjA5MjRfMTUz/MDAxNzkwMTgyOTg1NDIx._zGzmky5YS30R01jE0oIw_md4hSYObwaci_pJ6nZAb0g.lOOc9fIHlJQZ0cvU61rpzzQqFe1K0ZVU7zFchBcQkqYg.JPEG/SE-7671CAEE-7345-4B29-9108-9E9DC01735F1.jpg?type=w386",
+    "type": "BLOG",
+    "photo_id": 1721154710,
+    "review_id": 117438117,
+    "registered_at": "2026-09-26 00:34:08",
+    "updated_at": "2026-09-26 00:56:45",
+    "title": "🐼하이디라오 코엑스점 예약 방문 리뷰 | 생일케이크 서비스 / 쿵푸면 쇼 후기 (∩^o^)⊃━☆✨",
+    "blog_link_url": "http://blog.naver.com/jej686/224421449913",
+    "media_type": "PHOTO",
+    "ui_type": "POST"
+   },
+   {
+    "confirm_id": "576159166",
+    "url": "https://postfiles.pstatic.net/MjAyNjA5MjFfNiAg/MDAxNzg5OTc2MjAzMDQ1.UZCTzZCGXn2QySv3KoHzJJ20cMRuWPaw_qbk435MiIAg.razueL8WGrFBUwbqXxDjt1EEG-zE2Oc-b75Tq7CjfRcg.JPEG/SE-9AD10BAE-8D52-49AF-9F10-8283E54EE2CE.jpg?type=w466",
+    "type": "BLOG",
+    "photo_id": 1720115297,
+    "review_id": 117361034,
+    "registered_at": "2026-09-23 09:07:49",
+    "updated_at": "2026-09-23 09:29:34",
+    "title": "[서울/코엑스] 코엑스맛집 하이디라오 코엑스점 웨이팅 561번 실화? 캐치테이블 원격줄서기 성공 후기 & 메뉴 추천",
+    "blog_link_url": "http://blog.naver.com/hyejoojoylee/224418856938",
+    "media_type": "PHOTO",
+    "ui_type": "POST"
+   },
+   {
+    "confirm_id": "576159166",
+    "url": "https://postfiles.pstatic.net/MjAyNjA5MjFfMjY2/MDAxNzg5OTc2MjAxNDQw.Q0TUaHZEXUqCRLeiEXJ02eCCHvfg42OeOWLfebA13hAg.gTRT9NjMPozS7TkWNhCrwlBz-V8ikyDZYLjUyvpKOaAg.JPEG/SE-1E6BE36B-21D3-4184-8386-B3B7C3378D57.jpg?type=w466",
+    "type": "BLOG",
+    "photo_id": 1720115261,
+    "review_id": 117361034,
+    "registered_at": "2026-09-23 09:07:47",
+    "updated_at": "2026-09-23 09:29:34",
+    "title": "[서울/코엑스] 코엑스맛집 하이디라오 코엑스점 웨이팅 561번 실화? 캐치테이블 원격줄서기 성공 후기 & 메뉴 추천",
+    "blog_link_url": "http://blog.naver.com/hyejoojoylee/224418856938",
+    "media_type": "PHOTO",
+    "ui_type": "POST"
+   },
+   {
+    "confirm_id": "576159166",
+    "url": "https://postfiles.pstatic.net/MjAyNjA5MjFfMjMg/MDAxNzg5OTQ1MjkzNTQ5.kFu0vLOMhOV2Rj0aovbNiGPfE4kK-8Vg0yaYLlAoi8Ug.w69HYe5jktrB7ILT33jzHqCXp-GpHw6rSdwTGiBrQYgg.JPEG/IMG%EF%BC%BF7663.jpg?type=w966",
+    "type": "BLOG",
+    "photo_id": 1720115245,
+    "review_id": 117361034,
+    "registered_at": "2026-09-23 09:07:45",
+    "updated_at": "2026-09-23 09:29:34",
+    "title": "[서울/코엑스] 코엑스맛집 하이디라오 코엑스점 웨이팅 561번 실화? 캐치테이블 원격줄서기 성공 후기 & 메뉴 추천",
+    "blog_link_url": "http://blog.naver.com/hyejoojoylee/224418856938",
+    "media_type": "PHOTO",
+    "ui_type": "POST"
+   },
+   {
+    "confirm_id": "576159166",
+    "url": "https://postfiles.pstatic.net/MjAyNjA5MjFfMjc4/MDAxNzg5OTc2MzIzODMz.IguPOcRQaNW5opUENeEjgt8gGEUL-3TXPGLk8p160z8g.24VMgZZZZSLKrsEMBEVJerGDz2nAiZ9ZiOye2j6wwU8g.JPEG/SE-FBD7FF72-F643-499B-91BF-50566BD34C64.jpg?type=w466",
+    "type": "BLOG",
+    "photo_id": 1720115262,
+    "review_id": 117361034,
+    "registered_at": "2026-09-23 09:07:47",
+    "updated_at": "2026-09-23 09:29:34",
+    "title": "[서울/코엑스] 코엑스맛집 하이디라오 코엑스점 웨이팅 561번 실화? 캐치테이블 원격줄서기 성공 후기 & 메뉴 추천",
+    "blog_link_url": "http://blog.naver.com/hyejoojoylee/224418856938",
+    "media_type": "PHOTO",
+    "ui_type": "POST"
+   },
+   {
+    "confirm_id": "576159166",
+    "url": "https://postfiles.pstatic.net/MjAyNjA5MjFfMyAg/MDAxNzg5OTc2NTAzNDQ4.6FlMo4iCc_QkH4sNErA1K6vKHZBaow6RmX-xsIHhZV0g.1oWOf4bDol6hP-Aag0dBlTHjKjKsX5kU-jE1sr48EXYg.JPEG/SE-59C4233A-0F22-4B89-AB5C-D87ACFBD34FE.jpg?type=w466",
+    "type": "BLOG",
+    "photo_id": 1720115241,
+    "review_id": 117361034,
+    "registered_at": "2026-09-23 09:07:44",
+    "updated_at": "2026-09-23 09:29:34",
+    "title": "[서울/코엑스] 코엑스맛집 하이디라오 코엑스점 웨이팅 561번 실화? 캐치테이블 원격줄서기 성공 후기 & 메뉴 추천",
+    "blog_link_url": "http://blog.naver.com/hyejoojoylee/224418856938",
+    "media_type": "PHOTO",
+    "ui_type": "POST"
+   },
+   {
+    "confirm_id": "576159166",
+    "url": "https://postfiles.pstatic.net/MjAyNjA5MjFfMjE1/MDAxNzg5OTc2MzYwNTM3.n5Gm2LGK7NIboNdAzRvH3ZRd0fmocchJwr7_e2mKlYEg.jqaKgvJCjyc_UM9TRVODTZBQdxGxlhYTtCc-gF-fo3sg.JPEG/SE-2EADA333-5774-4E9A-A57B-6F9E24F03EA4.jpg?type=w466",
+    "type": "BLOG",
+    "photo_id": 1720115227,
+    "review_id": 117361034,
+    "registered_at": "2026-09-23 09:07:42",
+    "updated_at": "2026-09-23 09:29:34",
+    "title": "[서울/코엑스] 코엑스맛집 하이디라오 코엑스점 웨이팅 561번 실화? 캐치테이블 원격줄서기 성공 후기 & 메뉴 추천",
+    "blog_link_url": "http://blog.naver.com/hyejoojoylee/224418856938",
+    "media_type": "PHOTO",
+    "ui_type": "POST"
+   },
+   {
+    "confirm_id": "576159166",
+    "url": "https://postfiles.pstatic.net/MjAyNjA5MjFfMTc5/MDAxNzg5OTc2MjAyMjY2.gFJdwLAGT5u4gEM6oe2kSa060bi4u42DmwwLVr5EiIUg.WWeh1z91I7uPT58ZIFDE5uCfkog6xT50dUDN91h2qEgg.JPEG/SE-5015E7FE-4F21-4EA0-9922-6B6CEB2A5270.jpg?type=w466",
+    "type": "BLOG",
+    "photo_id": 1720115232,
+    "review_id": 117361034,
+    "registered_at": "2026-09-23 09:07:43",
+    "updated_at": "2026-09-23 09:29:34",
+    "title": "[서울/코엑스] 코엑스맛집 하이디라오 코엑스점 웨이팅 561번 실화? 캐치테이블 원격줄서기 성공 후기 & 메뉴 추천",
+    "blog_link_url": "http://blog.naver.com/hyejoojoylee/224418856938",
+    "media_type": "PHOTO",
+    "ui_type": "POST"
+   },
+   {
+    "confirm_id": "576159166",
+    "url": "https://postfiles.pstatic.net/MjAyNjA5MjFfMjQx/MDAxNzg5OTc2MzU5NzM3.OjycsltLvUYtiZuTWuNFCrRY-lgqEl541aY_2xjktDcg.LDEKp01a1oBb9su5H___N5uOK6M2DYIpDVRUf7Mg8eMg.JPEG/SE-490ECFC8-B375-4A27-A0B5-B61C48052E52.jpg?type=w466",
+    "type": "BLOG",
+    "photo_id": 1720115247,
+    "review_id": 117361034,
+    "registered_at": "2026-09-23 09:07:45",
+    "updated_at": "2026-09-23 09:29:34",
+    "title": "[서울/코엑스] 코엑스맛집 하이디라오 코엑스점 웨이팅 561번 실화? 캐치테이블 원격줄서기 성공 후기 & 메뉴 추천",
+    "blog_link_url": "http://blog.naver.com/hyejoojoylee/224418856938",
+    "media_type": "PHOTO",
+    "ui_type": "POST"
+   },
+   {
+    "confirm_id": "576159166",
+    "url": "https://postfiles.pstatic.net/MjAyNjA4MjVfNjMg/MDAxNzg3NjE5NTA4MzE4.Bf2Z0Ngh-U_GqyqTEbmEKYnb3r_Dq2WLIqNuWhaer5Eg.SAIv8rSvQqaLaIxzWcYMmdGgCrwj-m34-r3Wc1Qb9Vgg.JPEG/IMG%EF%BC%BF2218.jpg?type=w386",
+    "type": "BLOG",
+    "photo_id": 1719607562,
+    "review_id": 117319613,
+    "registered_at": "2026-09-22 19:51:01",
+    "updated_at": "2026-09-22 20:01:55",
+    "title": "강남구 코엑스 훠궈맛집 일요일 웨이팅ㅣ고수러버의 하이디라오 첫방문 솔직후기",
+    "blog_link_url": "http://blog.naver.com/rkddnfl_78/224397080094",
+    "media_type": "PHOTO",
+    "ui_type": "POST"
+   }
+  ]
+ },
+ "blog_review": {
+  "review_count": 1224,
+  "reviews": [
+   {
+    "confirm_id": "576159166",
+    "review_id": "117896038",
+    "title": "하이디라오 코엑스점 후기｜신상 치즈연유꽃빵부터 소스 조합, 생일파티 꿀팁까지_웨이팅정보",
+    "contents": "하이디라오 코엑스점 하이디라오 프리미엄 VIP인 저…ㅎ 제가 하이디라오를 정말 정말 너무 좋아해서 친구들이 저만 보면 “하이디라오 가자!” 할 정도인데요ㅋㅋㅋㅋ🤭 저번에는 하이디라오 서초점 후기를 올렸었는데, 이번에는 제가 정말 자주 가는 하이디라오 코엑스점 후기입니다❤️ https://m.blog.naver.com/aejoo03/224394187817 하",
+    "registered_at": "2026-10-04 15:24:00",
+    "author": "애주.zip",
+    "origin_url": "https://blog.naver.com/aejoo03/224431086481",
+    "photo_count": 19,
+    "photos": [
+     {
+      "url": "https://postfiles.pstatic.net/MjAyNjEwMDRfMjY1/MDAxNzkxMDkyNDMzMjkz.vmrOG50dwyWTuAuog1rLVlHpZ5heag3wX4D86zHCq_Mg.tdm7yD-qTg_DmUzZXhdXMJhpHQ-ZJRWYuJKmUeYT8Bog.JPEG/output%EF%BC%BF1251784257.jpg?type=w773",
+      "photo_id": 1726753077
+     },
+     {
+      "url": "https://postfiles.pstatic.net/MjAyNjEwMDRfMjAg/MDAxNzkxMDkxMzE3NTk3.MBrIN04fuJJWnM4vrh2cgdNGsNNz-fVLxEzNo7smvywg.iPh0yoZXlmHxBRnD_K55YAVt94MQd3UkINBWFcas6pog.JPEG/IMG%EF%BC%BF1014.JPG?type=w773",
+      "photo_id": 1726753065
+     },
+     {
+      "url": "https://postfiles.pstatic.net/MjAyNjEwMDRfMjgx/MDAxNzkxMDkxMzgyODQ0.ebbll8S6Nu47nE4I78jvWlLbhOr4312r_WrlXoMlDIsg.Y0XY5VkoQlGKYtUcneWJQ5-VGparuNayhmqDQfoT0x0g.JPEG/IMG%EF%BC%BF1003.JPG?type=w773",
+      "photo_id": 1726753064
+     },
+     {
+      "url": "https://postfiles.pstatic.net/MjAyNjEwMDRfODUg/MDAxNzkxMDkxNTIxODc3.lmMc9WKpl2a0kOydtoZo155EaxVC4xrCMXzDTpm-Yzsg.aHX5Rne9hUN25aCjB85OYnEsJXpLhBueEC-PJQkK_J4g.JPEG/IMG%EF%BC%BF0990.JPG?type=w773",
+      "photo_id": 1726753066
+     },
+     {
+      "url": "https://postfiles.pstatic.net/MjAyNjEwMDRfNDgg/MDAxNzkxMDkxNTA0MTcx.5Rt_r0bRV4DjtwsV4wUNjW5nrYqC5pXmXQWTq3aXLuUg.NA78myGtOCmuQnf12difNdxzG8pD24_Ejyg4Y8wfqu4g.JPEG/IMG%EF%BC%BF4709.jpg?type=w773",
+      "photo_id": 1726753067
+     },
+     {
+      "url": "https://dthumb-phinf.pstatic.net/?src=%22https%3A%2F%2Fblogthumb.pstatic.net%2FMjAyNjA4MjlfMTY2%2FMDAxNzg3OTc4MzEwNjYw._Xn701nOtMWTSM8FnTDkc7jxHz6e3uXl5HEBhdAfDcYg.A9Vlpn5rzIwtjSjHzShPJt89ZtwmmUuFBkS9rig94N8g.JPEG%2FIMG%25A3%25DF6156.JPG%3Ftype%3Dw2%22&type=ff500_300",
+      "photo_id": 1726753072
+     },
+     {
+      "url": "https://postfiles.pstatic.net/MjAyNjEwMDRfMTkg/MDAxNzkxMDkxNTQzOTQ3.WWU2IKdYsC7OKrWZiQnz_r-OSb-_J3LeJyVhjBLovP8g._Wc0Gs9cUL-E_q5AMWrewd76B5SSDSdwWWIPnXEMIeYg.JPEG/IMG%EF%BC%BF0980.JPG?type=w773",
+      "photo_id": 1726753056
+     },
+     {
+      "url": "https://postfiles.pstatic.net/MjAyNjEwMDRfNjYg/MDAxNzkxMDkyMzU1MTU2.tu9mQcaVUfvfkx5LEHq6HyhaNSBTAl913Y-0UUU6Xpog.Ea22zN6ybTHQRzxln-KkjwBvt8xzcZk5r-LGtmRPrEsg.JPEG/output%EF%BC%BF2937337213.jpg?type=w773",
+      "photo_id": 1726753078
+     },
+     {
+      "url": "https://postfiles.pstatic.net/MjAyNjEwMDRfMjQ2/MDAxNzkxMDkyMzMyOTUx.nih77iK4VGFGGfPihzRklonfMOt1YV9dNoVxxftsYn4g.duHXFKKp7_Y7RnWANMVtZ5Qhw2kl4GkbXc5QXvGpwu4g.JPEG/output%EF%BC%BF3172762809.jpg?type=w773",
+      "photo_id": 1726753063
+     },
+     {
+      "url": "https://postfiles.pstatic.net/MjAyNjEwMDRfMTQ4/MDAxNzkxMDkxODkwNDIy.CZ-E4pgPMdd-Mq4cKsBsw5EZBf17J3q2H43oWgbG9lAg.CWXYK9VYApXgejc8Xo0VZkx_vNHg4GcCyC7jykMs9Ckg.JPEG/IMG%EF%BC%BF4720.jpg?type=w773",
+      "photo_id": 1726753075
+     }
+    ]
+   },
+   {
+    "confirm_id": "576159166",
+    "review_id": "117937064",
+    "title": "하이디라오 코엑스점 여자 4명 방문 후기｜웨이팅 꿀팁부터 메뉴추천, 소스 조합까지",
+    "contents": "👉🏻코엑스에서 뭐 먹을지 고민하다가 오랜만에 하이디라오 COEX점에 다녀왔어요. 하이디라오는 워낙 유명해서 한 번쯤 가보고 싶었는데 막상 가려고 하면 제일 걱정되는 게 웨이팅이더라고요. 이번에는 여자 4명이서 방문했는데 탕부터 고기, 야채, 면까지 이것저것 주문해서 먹어봤어요! 처음 가는 분들이 헷갈릴 만한 부분도 많아서 👉🏻이번 포스팅에는 웨이팅하는 방법",
+    "registered_at": "2026-10-01 08:34:00",
+    "author": "짱다의 Airdrop",
+    "origin_url": "https://blog.naver.com/zzangda___/224427878357",
+    "photo_count": 14,
+    "photos": [
+     {
+      "url": "https://postfiles.pstatic.net/MjAyNjA5MzBfNTEg/MDAxNzkwNzc0OTMwMTAz.50YJjkrk2CYK2FpFAL_zhUkszpsCui4BtlNIbdhrd88g.kmbmd1MUl_VAjGwvDap0EJ7WAbXb-NONX0OVGCLQlmcg.JPEG/IMG%EF%BC%BF9046%EF%BC%BFOriginal.JPG?type=w966",
+      "photo_id": 1727262865
+     },
+     {
+      "url": "https://postfiles.pstatic.net/MjAyNjA5MzBfMTI4/MDAxNzkwNzczMTE4MzI2.9fEoQ4zIX9gtKQX1FH0sqxFvSfqMTKVuDNySFj_zTVYg.XIM4P34WdJIFyBMd4xgjxW1WqlzdMV6VgT0LBG7LEUAg.JPEG/IMG%EF%BC%BF9058%EF%BC%BFOriginal.JPG?type=w966",
+      "photo_id": 1727262881
+     },
+     {
+      "url": "https://postfiles.pstatic.net/MjAyNjA5MzBfODYg/MDAxNzkwNzczMDUwODU2.B6T1L5IPBMthQKqVUW7d2GmJun1kIB4MjqbIsEvvbikg.IQczx5hRhr_g3fF9I9FTo1dzfbNHgqm6c4cMWceemFwg.JPEG/IMG%EF%BC%BF9046%EF%BC%BFOriginal.JPG?type=w966",
+      "photo_id": 1727262873
+     },
+     {
+      "url": "https://postfiles.pstatic.net/MjAyNjA5MzBfNzUg/MDAxNzkwNzczMjE2NjAw.2lcNMSu99H6CCyc2poybbmqzySc6qt9gqs9dNZZSFgAg.EqOAzyJAK7beeXRf-BIYylvnvM7nQZLW5HtQTVUx8jwg.JPEG/output%EF%BC%BF2302429139.jpg?type=w966",
+      "photo_id": 1727262880
+     },
+     {
+      "url": "https://postfiles.pstatic.net/MjAyNjA5MzBfMjU3/MDAxNzkwNzc0ODQwODIw.Q2ZWw3HCDWTJMJaEcmWtDVK1VpYXqV5gVgfTtStA9ywg.1SWl6pvtslzww3PMRRx5aoO2HzmQriGpbmwJgHInlC4g.JPEG/output%EF%BC%BF2951180264.jpg?type=w966",
+      "photo_id": 1727262877
+     },
+     {
+      "url": "https://postfiles.pstatic.net/MjAyNjEwMDFfMTEw/MDAxNzkwODExMTg3MjAz.LPz_Oa6FEGryoYwdSKZIfxfNg4eEIqDF_gA8s7YIPT0g.g53Lhn0COF0B4ssc-XVi86ElbDKdxajwbfNUz_9H2wIg.JPEG/IMG%EF%BC%BF9052%EF%BC%BFOriginal.JPG?type=w966",
+      "photo_id": 1727262872
+     },
+     {
+      "url": "https://postfiles.pstatic.net/MjAyNjA5MzBfMjIw/MDAxNzkwNzczMjQ1OTQx.ibk-FngI8oyeY7VgDWYnip2ssKJJ1_p3W9qeGnQrdDAg.TZ5ObpexId7Pu9OCmvUXtkSUiqywz08JcLpe9BZ9sdsg.JPEG/IMG%EF%BC%BF9070%EF%BC%BFOriginal.JPG?type=w966",
+      "photo_id": 1727262876
+     },
+     {
+      "url": "https://postfiles.pstatic.net/MjAyNjEwMDFfODEg/MDAxNzkwODEwMjYwOTU5.z2G91w512JHEGl7BRoIukAdy4XU45yy13ttE6YseGFEg.2A8yxus7HCBIFGy98_kwpscPzKvuxhplyfQINAUAULog.JPEG/IMG%EF%BC%BF9071%EF%BC%BFOriginal.JPG?type=w966",
+      "photo_id": 1727262874
+     },
+     {
+      "url": "https://postfiles.pstatic.net/MjAyNjEwMDFfMTIw/MDAxNzkwODEwMzQxNDA1.1Y_EYxPxEOfmAweA_wsaY8G7yWl8_SKBt72TJFr8OLQg.QY5w6A_xOu0VGWy0FVNz6sO9ZZRYEQKPMz_8cdTo_o8g.JPEG/IMG%EF%BC%BF9047%EF%BC%BFOriginal.JPG?type=w466",
+      "photo_id": 1727262875
+     },
+     {
+      "url": "https://postfiles.pstatic.net/MjAyNjA5MzBfMTMz/MDAxNzkwNzczMTU2OTUx.GHeI7gFot27mF1XzXPJo6g2sWO03H0qU8A1F0z7HWqYg.1VXlJO1prhZfN8Y3BxuEBYawe6Gw4FUybhEYVbpf--og.JPEG/IMG%EF%BC%BF9057%EF%BC%BFOriginal.JPG?type=w966",
+      "photo_id": 1727262879
+     }
+    ]
+   },
+   {
+    "confirm_id": "576159166",
+    "review_id": "117757085",
+    "title": "아이와 서울여행 ④ 삼성 하이디라오 코엑스점 가는법 주말 후기",
+    "contents": "1박 2일 아이와 서울여행 2일차 숙소 체크아웃 후 점심을 먹으러 삼성 하이디라오 코엑스점에 방문했어요. 처음 방문하시는 분들은 가는법이 조금 헷갈릴 수 있어 가는법 설명과 함께 주말 일요일 점심 후기도 써볼게요!😋 하 이 디 라 오 C O E X 점 ⭐매장 가는법⭐ 우선 상호가 코엑스점이기도 했고 네이버 지도 업체 설명에도 삼성역 5번 출구에서 코엑스 스",
+    "registered_at": "2026-09-30 17:48:00",
+    "author": "U-vely의 연필통",
+    "origin_url": "https://blog.naver.com/2artshow/224427316739",
+    "photo_count": 21,
+    "photos": [
+     {
+      "url": "https://postfiles.pstatic.net/MjAyNjA5MjlfMjEg/MDAxNzkwNjc5NjEyMzA4.XyO_WRbGOmj35B0ReHq5Y2isdYpJmqhupCfFKGmE24wg.pDR-emCy8vP5wmEv-hdPh1lrAlZ4z54fgn-jC-s6kjcg.JPEG/20260920_125140_Edited.jpg?type=w966",
+      "photo_id": 1725050536
+     },
+     {
+      "url": "https://postfiles.pstatic.net/MjAyNjA5MjlfMTY5/MDAxNzkwNjc5NjM1ODEy.YuGH89MJu2kMvGsiVQOaRCgq953rt0BCXuS3FkRm5c0g.hbqO5dUn6wP3GfoIc0VASw4nRU-EAZELb5i-Ns8qdBwg.JPEG/20260920_140514_Edited.jpg?type=w966",
+      "photo_id": 1725050640
+     },
+     {
+      "url": "https://postfiles.pstatic.net/MjAyNjA5MjlfNDIg/MDAxNzkwNjc5NjEzMDQ2.FB0MGhGuWuBGxJfTgUjgCu8F0_hn9OYP7JfJ3Hyik-Ig.JtTF6ggTwIOawg8uvVMf825KZmrTpz1QmnRyUYggvMAg.JPEG/20260920_125322_Edited.jpg?type=w966",
+      "photo_id": 1725050569
+     },
+     {
+      "url": "https://postfiles.pstatic.net/MjAyNjA5MjlfMTQw/MDAxNzkwNjc5ODU1MDcy.iNUcSMdPa6oASEFiiU1Smgjj6pQFyhGxXDY5Z2xuXU0g.aBTScRE25YXvupSg0c8Rp4t2hnhkjzThW79MXy8ilWwg.JPEG/SE-42cc9a3d-aa6e-4f93-b184-f6246c011d84.jpg?type=w966",
+      "photo_id": 1725050637
+     },
+     {
+      "url": "https://postfiles.pstatic.net/MjAyNjA5MjlfMTY1/MDAxNzkwNjc5NjA4NzQ2.u-drv2alQWqk02jIiZ4FDWd9_Q-ZA7sDfNwAH0la2sIg.nwDsXx8oscqTh-2cmqQ_X-wAWQGG5lkakcwkGbvN0Ekg.JPEG/20260920_123552_Edited.jpg?type=w466",
+      "photo_id": 1725050662
+     },
+     {
+      "url": "https://postfiles.pstatic.net/MjAyNjA5MjlfMTMw/MDAxNzkwNjc5NjEzMzU1.jCAgIh1EsKFypo70QvcNXkCYOeqi772xby2lw3oALsQg.kQ6F65GxBSJ7UQZULTanzzLnaluUq5Lc4vyd60xaLIkg.JPEG/20260920_125200_Edited.jpg?type=w466",
+      "photo_id": 1725050564
+     },
+     {
+      "url": "https://postfiles.pstatic.net/MjAyNjA5MjlfMTcx/MDAxNzkwNjc5NjM0MTc2.CVOVXEQ30RlXSBO7zdVF8Pg_6Q1ZgWXMfh72Y4vtwnQg.2krfYewMlij-5JDYWaZSCTYYtD_47Lrt-DAVnsbp0kIg.JPEG/20260920_133526_Edited.jpg?type=w466",
+      "photo_id": 1725050626
+     },
+     {
+      "url": "https://postfiles.pstatic.net/MjAyNjA5MjlfMTky/MDAxNzkwNjc5NjEwOTAy.tcEtIBvKxSxaFxW9xrUMqI1sJN9qOUECcI1OjOl_2T8g.SQytzjtJB3Hi9prSQmGyuJ2i-U0-TeD6qdLMOPax7wYg.JPEG/20260920_124605_Edited.jpg?type=w966",
+      "photo_id": 1725050654
+     },
+     {
+      "url": "https://postfiles.pstatic.net/MjAyNjA5MjlfMTc2/MDAxNzkwNjc5NjM0MzA3.jGlDTFqHGTj5AGPNSG9zvz4oi9AfQJ4n6Lbqf-m282Yg.Uc7zoPvzHCfmn-fOELv8cI48wO0fs4Es9p3mXbT_x1wg.JPEG/20260920_133521_Edited.jpg?type=w466",
+      "photo_id": 1725050610
+     },
+     {
+      "url": "https://postfiles.pstatic.net/MjAyNjA5MjlfMTk5/MDAxNzkwNjc5NjM0MDQy.enlhKL3A8z7WI-c9NG3n9W06NjCrgqk64361W3zUA3sg.g-pHHANwl-qXze6V3xAoqxA_SMp-YGaSbjwqL-K2uaUg.JPEG/20260920_134858_Edited.jpg?type=w966",
+      "photo_id": 1725050598
+     }
+    ]
+   },
+   {
+    "confirm_id": "576159166",
+    "review_id": "117891136",
+    "title": "하이디라오 코엑스 임산부 혜택 4가지 & 어린이 서비스 꿀팁! (선물, 주차, 훠궈 추천)",
+    "contents": "추석 당일에 가족들과 함께 코엑스 오크우드몰에 위치한 하이디라오 코엑스점에 다녀왔어요. 임산부와 아이가 함께 방문해서 직접 챙겨 받은 하이디라오 임산부 혜택부터 어린이 서비스, 주차 꿀팁, 추천 탕 조합까지 알차게 정리해 드릴게요! 📍 하이디라오 코엑스점 위치 & 주차 정보 위치: 서울 강남구 테헤란로87길 58 지하 2층 (오크우드몰) 대중교통: 삼성중앙",
+    "registered_at": "2026-09-29 22:36:00",
+    "author": "내 맘대로 먹고 즐기는 블로그",
+    "origin_url": "https://blog.naver.com/break_eat/224426416886",
+    "photo_count": 24,
+    "photos": [
+     {
+      "url": "https://postfiles.pstatic.net/MjAyNjA5MjlfNjcg/MDAxNzkwNjg5MDc0Mzc2.yqsr-PgnAJHrzIleU_Mh3-m-fTov_VNy3alPpBrHIkYg._vJxY77Bk08UhS3MfWw_poz5OLboEPZfydGF65-PU5Ig.JPEG/900_20260925_120113.jpg?type=w966",
+      "photo_id": 1726690813
+     },
+     {
+      "url": "https://postfiles.pstatic.net/MjAyNjA5MjlfMzYg/MDAxNzkwNjg5MDc4MDQw.yw_nGKY9L0PDAc1SrV4Smw-1H2RXPmvDSnsdrl-MVCYg.jSXsrGIjZyk0JemFtGetz16aCgqnKrk5eUalF-I8szAg.JPEG/900_20260925_122741.jpg?type=w466",
+      "photo_id": 1726690865
+     },
+     {
+      "url": "https://postfiles.pstatic.net/MjAyNjA5MjlfMTYz/MDAxNzkwNjg5MzY2MTE1.mGkdvqwY29fDMFwfy-sHnXgmyf7OZiRAh9c9oMT75mUg.AfIBRGMKNWbnzust8vQM0tXOGqVZ764hk6ZmzT05tnAg.JPEG/SE-600d57d4-2b83-4e04-8059-5cc32ad4a9c7.jpg?type=w466",
+      "photo_id": 1726690845
+     },
+     {
+      "url": "https://postfiles.pstatic.net/MjAyNjA5MjlfMjkg/MDAxNzkwNjg5MDc1MDU2.9n2pm-hMrPck7dOOP3qW6Hz_kblzi2xKiDx-MKJR8isg.6kqHO43c_f6dOiV4Y4KhjTsNkwJvVKybNe75n3zDjtwg.JPEG/900_20260925_120648.jpg?type=w466",
+      "photo_id": 1726690836
+     },
+     {
+      "url": "https://postfiles.pstatic.net/MjAyNjA5MjlfMjE2/MDAxNzkwNjg5MDc1ODEx.o8wGLJHxeZ6k-yU-yMq8SM_mnGPJpk2FqMAINPe0Rpcg.ZOzGIlti3wHuw9oU-9Vq-cX6jxM4mXiSnIhVUUFXeI0g.JPEG/900_20260925_120632.jpg?type=w966",
+      "photo_id": 1726690738
+     },
+     {
+      "url": "https://postfiles.pstatic.net/MjAyNjA5MjlfMTI5/MDAxNzkwNjg5MDc3ODc5.nB8_9vyMrK03KwaUyxnVRR98Yprsf9QOnSLLvxsb15Mg.m7GiRnxQKSMw4scN2bDHgzvh9L2WkKpSbj0ZV4YTwZcg.JPEG/900_20260925_120626.jpg?type=w466",
+      "photo_id": 1726690644
+     },
+     {
+      "url": "https://postfiles.pstatic.net/MjAyNjA5MjlfMTg2/MDAxNzkwNjg5MDc1MDE3.QXW6JqZFKVgyZ6bu8OUDcLXISVFXXY3Te5lFSWGwZK4g.t20Tc2qI9TIzExoDtsjJKtqVj3ayhwHZ_20uG5OhH1Ig.JPEG/900_20260925_121555.jpg?type=w466",
+      "photo_id": 1726690859
+     },
+     {
+      "url": "https://postfiles.pstatic.net/MjAyNjA5MjlfMjcz/MDAxNzkwNjg5MDc0MzU5.rFV53J_bBjjYh3_y9Csafxx5MgvHovYAgZh0Wzb1LM0g.zIroKstIUp5nvYHXc8H9ErJFve3BtDDChK33lZUjo1Ag.JPEG/900_20260925_120121.jpg?type=w966",
+      "photo_id": 1726690754
+     },
+     {
+      "url": "https://postfiles.pstatic.net/MjAyNjA5MjlfMTUx/MDAxNzkwNjg5MDc2NDgy.IeNZGkHN-MafkkzrJ2HFO94DIEYSp0Vy6c6ejgDlHLog.pcsqAU3DdRfaZcYnPU1y7JScvjLQqMHrvsfGEEAnYFQg.JPEG/900_20260925_162943.jpg?type=w466",
+      "photo_id": 1726690707
+     },
+     {
+      "url": "https://postfiles.pstatic.net/MjAyNjA5MjlfMTk0/MDAxNzkwNjg5MDc2Mzg3.vnV-9n-bc-2fVKDO_jytJsaTmDuqdR8tqlOl2Le0tWQg.kz2bEUqJFTbY19O8eTw0lftLnr3vO04QlEs3b3yv0RYg.JPEG/900_20260925_125707.jpg?type=w466",
+      "photo_id": 1726690831
+     }
+    ]
+   }
+  ],
+  "current_review_count": 4,
+  "last_review_id": "117891136",
+  "last_registered_at": "2026-09-29 22:36:00",
+  "requested_page_size": 4,
+  "requested_page": 1
+ },
+ "kakaomap_review": {
+  "score_set": {
+   "review_count": 138,
+   "total_score": 515,
+   "average_score": 3.7,
+   "photo_count": 83,
+   "strength_counts": [
+    {
+     "id": 5,
+     "count": 54
+    },
+    {
+     "id": 2,
+     "count": 43
+    },
+    {
+     "id": 3,
+     "count": 22
+    },
+    {
+     "id": 4,
+     "count": 5
+    },
+    {
+     "id": 1,
+     "count": 3
+    }
+   ],
+   "strength_uv": 63
+  },
+  "strength_description": [
+   {
+    "id": 5,
+    "name": "맛",
+    "icon_url": "https://t1.kakaocdn.net/kakaomap_mobile/android/icon_review_delicious.png"
+   },
+   {
+    "id": 1,
+    "name": "가성비",
+    "icon_url": "https://t1.kakaocdn.net/kakaomap_mobile/android/icon_review_money.png"
+   },
+   {
+    "id": 2,
+    "name": "친절",
+    "icon_url": "https://t1.kakaocdn.net/kakaomap_mobile/android/icon_review_kind.png"
+   },
+   {
+    "id": 3,
+    "name": "분위기",
+    "icon_url": "https://t1.kakaocdn.net/kakaomap_mobile/android/icon_review_mood.png"
+   },
+   {
+    "id": 4,
+    "name": "주차",
+    "icon_url": "https://t1.kakaocdn.net/kakaomap_mobile/android/icon_review_parking.png"
+   }
+  ],
+  "reviews": [
+   {
+    "review_id": 16527167,
+    "star_rating": 4,
+    "contents": "지금보다 어리던 몇 년 전에는 괜히 하이디라오를 내려치기하며 일부러 인량훠궈, 미가훠궈, 불이아만 찾아 다니던 시절도 있었습니다. 하이디라오 특유의 MZ스러움이 싫었나봅니다. 이젠 깨달았습니다. 돌고돌아 하이디라오구나 나는…\n* 재방문 1회",
+    "photo_count": 2,
+    "photos": [
+     {
+      "url": "https://thumb.kakaocdn.net/dna/kamp/source/rvrl3xm11ddzd7srvhggb42qk/thumbs/1.jpg?credential=TuMuFGKUIcirOSjFzOpncbomGFEIdZWK&expires=33346308669&kamp_tidx=0&signature=GeJOt7s6qR0ACCzFP4CF919ViPw%3D&ts=1789399869",
+      "photo_id": 9603924,
+      "vid": "rvrl3xm11ddzd7srvhggb42qk",
+      "media_type": "VOD",
+      "status": "S",
+      "ui_type": "PROFILE",
+      "duration": 18,
+      "review_id": 16527167,
+      "updated_at": "2026-09-15 00:31:10",
+      "meta": {
+       "owner": {
+        "map_user_id": "1271418871",
+        "nickname": "고수없으예",
+        "image_url": "http://t1.kakaocdn.net/local/kakaomapPhoto/profile/3b64b16752f03a71c9a6451f2eb7ab3cff6838ea?original",
+        "timeline_level": {
+         "badge": "03",
+         "now_level": 42,
+         "show_other": true
+        },
+        "review_count": 115,
+        "follower_count": 83,
+        "profile_links": [],
+        "average_score": 3.8,
+        "profile_status": "S"
+       },
+       "is_liked_by_me": false,
+       "view_count": 30,
+       "like_count": 0,
+       "near": false,
+       "place": {
+        "confirm_id": "576159166",
+        "place_name": "하이디라오 COEX점"
+       }
+      }
+     },
+     {
+      "url": "http://t1.kakaocdn.net/local/kakaomapPhoto/review/c14dfa318a8e0e4f29ea4e005eb90b3ad56b3f34?original",
+      "photo_id": 9603925,
+      "media_type": "PHOTO",
+      "status": "S",
+      "ui_type": "PROFILE",
+      "duration": 0,
+      "review_id": 16527167,
+      "updated_at": "2026-09-15 00:31:10",
+      "meta": {
+       "owner": {
+        "map_user_id": "1271418871",
+        "nickname": "고수없으예",
+        "image_url": "http://t1.kakaocdn.net/local/kakaomapPhoto/profile/3b64b16752f03a71c9a6451f2eb7ab3cff6838ea?original",
+        "timeline_level": {
+         "badge": "03",
+         "now_level": 42,
+         "show_other": true
+        },
+        "review_count": 115,
+        "follower_count": 83,
+        "profile_links": [],
+        "average_score": 3.8,
+        "profile_status": "S"
+       },
+       "is_liked_by_me": false,
+       "view_count": 9,
+       "like_count": 0,
+       "near": true,
+       "place": {
+        "confirm_id": "576159166",
+        "place_name": "하이디라오 COEX점"
+       }
+      }
+     }
+    ],
+    "status": "S",
+    "registered_at": "2026-09-15 00:31:10",
+    "updated_at": "2026-09-15 00:31:10",
+    "meta": {
+     "owner": {
+      "map_user_id": "1271418871",
+      "nickname": "고수없으예",
+      "profile_image_url": "http://t1.kakaocdn.net/local/kakaomapPhoto/profile/3b64b16752f03a71c9a6451f2eb7ab3cff6838ea?original",
+      "timeline_level": {
+       "badge": "03",
+       "now_level": 42
+      },
+      "review_count": 115,
+      "follower_count": 83,
+      "average_score": 3.8,
+      "profile_status": "S",
+      "is_following": false
+     },
+     "is_liked_by_me": false,
+     "is_owner_me": false,
+     "like_count": 0,
+     "like_user_profile_image_list": [],
+     "is_place_owner_pick": false,
+     "place": {
+      "confirm_id": "576159166",
+      "place_name": "하이디라오 COEX점"
+     }
+    }
+   },
+   {
+    "review_id": 16399928,
+    "star_rating": 5,
+    "contents": "너무맛있어요 중독적인 맛입니다.\n새벽에도 웨이팅 있을정도로 인기많고, 직원들 너무친절해요. 물론 불친절한 사람 소수가 있지만 전체적으로 다정하고 일잘합니다.\n항상 감사하게 생각하는 마음으로 방문하다보니 골드회원이 되는 영광을 받았네요^^  가끔씩 장난감이나 핸드크림,과자 선물 주시는데 많은 감동 받고 갑니다ㅎㅎ",
+    "photo_count": 3,
+    "photos": [
+     {
+      "url": "http://t1.kakaocdn.net/local/kakaomapPhoto/review/c740c79fcf126b6b2273f3e11bbc2ff61c0a0d16?original",
+      "photo_id": 9489125,
+      "media_type": "PHOTO",
+      "status": "S",
+      "ui_type": "PROFILE",
+      "duration": 0,
+      "review_id": 16399928,
+      "updated_at": "2026-08-30 03:21:56",
+      "meta": {
+       "owner": {
+        "map_user_id": "1049168041",
+        "nickname": "앤쮸",
+        "image_url": "http://t1.kakaocdn.net/local/kakaomapPhoto/profile/bd75e9639f8d759d9f81aaa14dc7eb672ae83685?original",
+        "timeline_level": {
+         "badge": "05",
+         "now_level": 85,
+         "show_other": true
+        },
+        "review_count": 908,
+        "follower_count": 1358,
+        "profile_links": [
+         "https://youtube.com/@annezue?si=AbzbZREWHqva3b8X",
+         "https://www.instagram.com/annezue__/profilecard/?igsh=cDE1bHlueTR5Zjht"
+        ],
+        "average_score": 3.4,
+        "profile_status": "S"
+       },
+       "is_liked_by_me": false,
+       "view_count": 15,
+       "like_count": 0,
+       "near": true,
+       "place": {
+        "confirm_id": "576159166",
+        "place_name": "하이디라오 COEX점"
+       }
+      }
+     },
+     {
+      "url": "http://t1.kakaocdn.net/local/kakaomapPhoto/review/0b636e2bfdd94bd60a2eddfc9dd8ff7c85fd063a?original",
+      "photo_id": 9489126,
+      "media_type": "PHOTO",
+      "status": "S",
+      "ui_type": "PROFILE",
+      "duration": 0,
+      "review_id": 16399928,
+      "updated_at": "2026-08-30 03:21:56",
+      "meta": {
+       "owner": {
+        "map_user_id": "1049168041",
+        "nickname": "앤쮸",
+        "image_url": "http://t1.kakaocdn.net/local/kakaomapPhoto/profile/bd75e9639f8d759d9f81aaa14dc7eb672ae83685?original",
+        "timeline_level": {
+         "badge": "05",
+         "now_level": 85,
+         "show_other": true
+        },
+        "review_count": 908,
+        "follower_count": 1358,
+        "profile_links": [
+         "https://youtube.com/@annezue?si=AbzbZREWHqva3b8X",
+         "https://www.instagram.com/annezue__/profilecard/?igsh=cDE1bHlueTR5Zjht"
+        ],
+        "average_score": 3.4,
+        "profile_status": "S"
+       },
+       "is_liked_by_me": false,
+       "view_count": 28,
+       "like_count": 0,
+       "near": true,
+       "place": {
+        "confirm_id": "576159166",
+        "place_name": "하이디라오 COEX점"
+       }
+      }
+     },
+     {
+      "url": "http://t1.kakaocdn.net/local/kakaomapPhoto/review/93810de43bed60f4e060e93f0c388b7bec04fe8c?original",
+      "photo_id": 9489127,
+      "media_type": "PHOTO",
+      "status": "S",
+      "ui_type": "PROFILE",
+      "duration": 0,
+      "review_id": 16399928,
+      "updated_at": "2026-08-30 03:21:56",
+      "meta": {
+       "owner": {
+        "map_user_id": "1049168041",
+        "nickname": "앤쮸",
+        "image_url": "http://t1.kakaocdn.net/local/kakaomapPhoto/profile/bd75e9639f8d759d9f81aaa14dc7eb672ae83685?original",
+        "timeline_level": {
+         "badge": "05",
+         "now_level": 85,
+         "show_other": true
+        },
+        "review_count": 908,
+        "follower_count": 1358,
+        "profile_links": [
+         "https://youtube.com/@annezue?si=AbzbZREWHqva3b8X",
+         "https://www.instagram.com/annezue__/profilecard/?igsh=cDE1bHlueTR5Zjht"
+        ],
+        "average_score": 3.4,
+        "profile_status": "S"
+       },
+       "is_liked_by_me": false,
+       "view_count": 25,
+       "like_count": 0,
+       "near": true,
+       "place": {
+        "confirm_id": "576159166",
+        "place_name": "하이디라오 COEX점"
+       }
+      }
+     }
+    ],
+    "status": "S",
+    "registered_at": "2026-08-30 03:21:56",
+    "updated_at": "2026-08-30 03:21:56",
+    "meta": {
+     "owner": {
+      "map_user_id": "1049168041",
+      "nickname": "앤쮸",
+      "profile_image_url": "http://t1.kakaocdn.net/local/kakaomapPhoto/profile/bd75e9639f8d759d9f81aaa14dc7eb672ae83685?original",
+      "timeline_level": {
+       "badge": "05",
+       "now_level": 85
+      },
+      "review_count": 908,
+      "follower_count": 1358,
+      "average_score": 3.4,
+      "profile_status": "S",
+      "is_following": false
+     },
+     "is_liked_by_me": false,
+     "is_owner_me": false,
+     "like_count": 0,
+     "like_user_profile_image_list": [],
+     "is_place_owner_pick": false,
+     "place": {
+      "confirm_id": "576159166",
+      "place_name": "하이디라오 COEX점"
+     }
+    }
+   },
+   {
+    "review_id": 16093487,
+    "star_rating": 2,
+    "contents": "생일이라 하니 케잌 주셨습니다\n재료 나쁘지 않은데\n원래 바쁜 지점이라 그런지\n1대 1밀착케어 느낌은 아닙니다\n맛은있음",
+    "photo_count": 2,
+    "photos": [
+     {
+      "url": "http://t1.kakaocdn.net/local/kakaomapPhoto/review/d155374cc248f46c6f312a0a0f3bd521b9f33a16?original",
+      "photo_id": 9219141,
+      "media_type": "PHOTO",
+      "status": "S",
+      "ui_type": "PROFILE",
+      "duration": 0,
+      "review_id": 16093487,
+      "updated_at": "2026-07-26 23:31:36",
+      "meta": {
+       "owner": {
+        "map_user_id": "2179999501",
+        "nickname": "🎸",
+        "image_url": "http://k.kakaocdn.net/dn/bMojzx/btruwJiHYT0/tH9qhdN3lkVUel2mJK4R5k/img_640x640.jpg",
+        "timeline_level": {
+         "badge": "02",
+         "now_level": 30,
+         "show_other": true
+        },
+        "review_count": 76,
+        "follower_count": 5,
+        "profile_links": [],
+        "average_score": 3.0,
+        "profile_status": "S"
+       },
+       "is_liked_by_me": false,
+       "view_count": 52,
+       "like_count": 0,
+       "near": true,
+       "place": {
+        "confirm_id": "576159166",
+        "place_name": "하이디라오 COEX점"
+       }
+      }
+     },
+     {
+      "url": "http://t1.kakaocdn.net/local/kakaomapPhoto/review/36c4ded94811ddf7ca1dae6255ae68e4f6c04813?original",
+      "photo_id": 9219142,
+      "media_type": "PHOTO",
+      "status": "S",
+      "ui_type": "PROFILE",
+      "duration": 0,
+      "review_id": 16093487,
+      "updated_at": "2026-07-26 23:31:36",
+      "meta": {
+       "owner": {
+        "map_user_id": "2179999501",
+        "nickname": "🎸",
+        "image_url": "http://k.kakaocdn.net/dn/bMojzx/btruwJiHYT0/tH9qhdN3lkVUel2mJK4R5k/img_640x640.jpg",
+        "timeline_level": {
+         "badge": "02",
+         "now_level": 30,
+         "show_other": true
+        },
+        "review_count": 76,
+        "follower_count": 5,
+        "profile_links": [],
+        "average_score": 3.0,
+        "profile_status": "S"
+       },
+       "is_liked_by_me": false,
+       "view_count": 34,
+       "like_count": 0,
+       "near": true,
+       "place": {
+        "confirm_id": "576159166",
+        "place_name": "하이디라오 COEX점"
+       }
+      }
+     }
+    ],
+    "status": "S",
+    "registered_at": "2026-07-26 23:31:36",
+    "updated_at": "2026-07-26 23:31:36",
+    "meta": {
+     "owner": {
+      "map_user_id": "2179999501",
+      "nickname": "🎸",
+      "profile_image_url": "http://k.kakaocdn.net/dn/bMojzx/btruwJiHYT0/tH9qhdN3lkVUel2mJK4R5k/img_640x640.jpg",
+      "timeline_level": {
+       "badge": "02",
+       "now_level": 30
+      },
+      "review_count": 76,
+      "follower_count": 5,
+      "average_score": 3.0,
+      "profile_status": "S",
+      "is_following": false
+     },
+     "is_liked_by_me": false,
+     "is_owner_me": false,
+     "like_count": 0,
+     "like_user_profile_image_list": [],
+     "is_place_owner_pick": false,
+     "place": {
+      "confirm_id": "576159166",
+      "place_name": "하이디라오 COEX점"
+     }
+    }
+   }
+  ],
+  "photos": [
+   {
+    "url": "https://thumb.kakaocdn.net/dna/kamp/source/rvrl3xm11ddzd7srvhggb42qk/thumbs/1.jpg?credential=TuMuFGKUIcirOSjFzOpncbomGFEIdZWK&expires=33346308669&kamp_tidx=0&signature=GeJOt7s6qR0ACCzFP4CF919ViPw%3D&ts=1789399869",
+    "photo_id": 9603924,
+    "vid": "rvrl3xm11ddzd7srvhggb42qk",
+    "media_type": "VOD",
+    "status": "S",
+    "ui_type": "PROFILE",
+    "duration": 18,
+    "review_id": 16527167,
+    "updated_at": "2026-09-15 00:48:19",
+    "meta": {
+     "owner": {
+      "map_user_id": "1271418871",
+      "nickname": "고수없으예",
+      "image_url": "http://t1.kakaocdn.net/local/kakaomapPhoto/profile/3b64b16752f03a71c9a6451f2eb7ab3cff6838ea?original",
+      "timeline_level": {
+       "badge": "03",
+       "now_level": 42,
+       "show_other": true
+      },
+      "review_count": 115,
+      "follower_count": 83,
+      "profile_links": [],
+      "average_score": 3.8,
+      "profile_status": "S"
+     },
+     "is_liked_by_me": false,
+     "near": false,
+     "place": {
+      "confirm_id": "576159166",
+      "place_name": "하이디라오 COEX점"
+     }
+    },
+    "preview": "https://vst.play.kakao.com/s-kakaomap/vod/rvrl3xm11ddzd7srvhggb42qk/mp4/mp4/preview.mp4?px-time=1791193944&px-bps=4893128&px-bufahead=35&px-hash=f3f4eb8a858de98f72f1a48e7e8c5e0b"
+   },
+   {
+    "url": "http://t1.kakaocdn.net/local/kakaomapPhoto/review/699b89b8c18e190ef660cfcee354db199652cc44?original",
+    "photo_id": 9312415,
+    "media_type": "PHOTO",
+    "status": "S",
+    "ui_type": "PROFILE",
+    "duration": 0,
+    "review_id": 16200798,
+    "updated_at": "2026-09-30 10:02:46",
+    "meta": {
+     "owner": {
+      "map_user_id": "1339982433",
+      "nickname": "십알칸초",
+      "image_url": "http://t1.kakaocdn.net/local/kakaomapPhoto/profile/a44ff6e90abff0408491a9761413c8d52352a3cf?original",
+      "timeline_level": {
+       "badge": "04",
+       "now_level": 72,
+       "show_other": true
+      },
+      "review_count": 408,
+      "follower_count": 1092,
+      "profile_links": [],
+      "average_score": 4.1,
+      "profile_status": "S"
+     },
+     "is_liked_by_me": false,
+     "near": false,
+     "place": {
+      "confirm_id": "576159166",
+      "place_name": "하이디라오 COEX점"
+     }
+    }
+   },
+   {
+    "url": "http://t1.kakaocdn.net/local/kakaomapPhoto/review/d171659b4d79467d3e3b689857e979f731725ec6?original",
+    "photo_id": 8577109,
+    "media_type": "PHOTO",
+    "status": "S",
+    "ui_type": "PROFILE",
+    "duration": 0,
+    "review_id": 15362084,
+    "updated_at": "2026-09-30 06:15:36",
+    "meta": {
+     "owner": {
+      "map_user_id": "2106047254",
+      "nickname": "미니소",
+      "image_url": "http://t1.kakaocdn.net/local/kakaomapPhoto/profile/eadc19bf0de13b9c9695fc805aa149f9b558fbc7?original",
+      "timeline_level": {
+       "badge": "02",
+       "now_level": 23,
+       "show_other": true
+      },
+      "review_count": 38,
+      "follower_count": 2,
+      "profile_links": [],
+      "average_score": 5.0,
+      "profile_status": "S"
+     },
+     "is_liked_by_me": false,
+     "near": false,
+     "place": {
+      "confirm_id": "576159166",
+      "place_name": "하이디라오 COEX점"
+     }
+    }
+   },
+   {
+    "url": "https://thumb.kakaocdn.net/dna/kamp/source/rvcxt9fdmlgugsg5nx6ywcy7k/thumbs/1.jpg?credential=TuMuFGKUIcirOSjFzOpncbomGFEIdZWK&expires=33313378845&kamp_tidx=0&signature=T%2FQGjJOVILPGEcfCWBo5Ah7T6Dw%3D&ts=1756470045",
+    "photo_id": 7066275,
+    "vid": "rvcxt9fdmlgugsg5nx6ywcy7k",
+    "media_type": "VOD",
+    "status": "S",
+    "ui_type": "PROFILE",
+    "duration": 1,
+    "review_id": 13593248,
+    "updated_at": "2025-08-29 21:37:02",
+    "meta": {
+     "owner": {
+      "map_user_id": "1790091405",
+      "nickname": "기록기록",
+      "image_url": "http://t1.kakaocdn.net/local/kakaomapPhoto/profile/eb2564e792eb984cc6f32e2a462ead8b3c3d206b?original",
+      "timeline_level": {
+       "badge": "03",
+       "now_level": 54,
+       "show_other": true
+      },
+      "review_count": 237,
+      "follower_count": 273,
+      "profile_links": [],
+      "average_score": 3.7,
+      "profile_status": "S"
+     },
+     "is_liked_by_me": false,
+     "near": false,
+     "place": {
+      "confirm_id": "576159166",
+      "place_name": "하이디라오 COEX점"
+     }
+    },
+    "preview": "https://vst.play.kakao.com/s-kakaomap/vod/rvcxt9fdmlgugsg5nx6ywcy7k/mp4/1/mp4/preview.mp4?px-time=1791193944&px-bps=8767460&px-bufahead=24&px-hash=14a89852a49dfe9854ff3eab63003589"
+   },
+   {
+    "url": "http://t1.kakaocdn.net/local/kakaomapPhoto/review/b3ee4a14a15328ae72deb7686579dcf3a5ec2d20?original",
+    "photo_id": 5726475,
+    "media_type": "PHOTO",
+    "status": "S",
+    "ui_type": "PROFILE",
+    "review_id": 11886010,
+    "updated_at": "2026-09-29 15:49:44",
+    "meta": {
+     "owner": {
+      "map_user_id": "3227749470",
+      "nickname": "엱",
+      "image_url": "http://t1.kakaocdn.net/local/kakaomapPhoto/profile/2f35e7ac76c33e88eb6c0d040eceb3d99bb2ad58?original",
+      "timeline_level": {
+       "badge": "03",
+       "now_level": 48,
+       "show_other": true
+      },
+      "review_count": 260,
+      "follower_count": 53,
+      "profile_links": [],
+      "average_score": 4.3,
+      "profile_status": "S"
+     },
+     "is_liked_by_me": false,
+     "near": false,
+     "place": {
+      "confirm_id": "576159166",
+      "place_name": "하이디라오 COEX점"
+     }
+    }
+   },
+   {
+    "url": "http://t1.kakaocdn.net/local/kakaomapPhoto/review/c14dfa318a8e0e4f29ea4e005eb90b3ad56b3f34?original",
+    "photo_id": 9603925,
+    "media_type": "PHOTO",
+    "status": "S",
+    "ui_type": "PROFILE",
+    "duration": 0,
+    "review_id": 16527167,
+    "updated_at": "2026-09-15 00:48:19",
+    "meta": {
+     "owner": {
+      "map_user_id": "1271418871",
+      "nickname": "고수없으예",
+      "image_url": "http://t1.kakaocdn.net/local/kakaomapPhoto/profile/3b64b16752f03a71c9a6451f2eb7ab3cff6838ea?original",
+      "timeline_level": {
+       "badge": "03",
+       "now_level": 42,
+       "show_other": true
+      },
+      "review_count": 115,
+      "follower_count": 83,
+      "profile_links": [],
+      "average_score": 3.8,
+      "profile_status": "S"
+     },
+     "is_liked_by_me": false,
+     "near": false,
+     "place": {
+      "confirm_id": "576159166",
+      "place_name": "하이디라오 COEX점"
+     }
+    }
+   },
+   {
+    "url": "http://t1.kakaocdn.net/local/kakaomapPhoto/review/9a02ac8991a0556647e94aba250fea5dfbe10ee0?original",
+    "photo_id": 9427660,
+    "media_type": "PHOTO",
+    "status": "S",
+    "ui_type": "PROFILE",
+    "duration": 0,
+    "review_id": 16331495,
+    "updated_at": "2026-09-30 10:41:08",
+    "meta": {
+     "owner": {
+      "map_user_id": "753783489",
+      "nickname": "👤👤👤",
+      "image_url": "",
+      "timeline_level": {
+       "badge": "02",
+       "now_level": 24,
+       "show_other": true
+      },
+      "review_count": 45,
+      "follower_count": 0,
+      "profile_links": [],
+      "average_score": 4.0,
+      "profile_status": "S"
+     },
+     "is_liked_by_me": false,
+     "near": false,
+     "place": {
+      "confirm_id": "576159166",
+      "place_name": "하이디라오 COEX점"
+     }
+    }
+   },
+   {
+    "url": "http://t1.kakaocdn.net/local/kakaomapPhoto/review/4bdc72f4c4fca36666570f9b049bad863e326281?original",
+    "photo_id": 9312416,
+    "media_type": "PHOTO",
+    "status": "S",
+    "ui_type": "PROFILE",
+    "duration": 0,
+    "review_id": 16200798,
+    "updated_at": "2026-09-30 10:02:46",
+    "meta": {
+     "owner": {
+      "map_user_id": "1339982433",
+      "nickname": "십알칸초",
+      "image_url": "http://t1.kakaocdn.net/local/kakaomapPhoto/profile/a44ff6e90abff0408491a9761413c8d52352a3cf?original",
+      "timeline_level": {
+       "badge": "04",
+       "now_level": 72,
+       "show_other": true
+      },
+      "review_count": 408,
+      "follower_count": 1092,
+      "profile_links": [],
+      "average_score": 4.1,
+      "profile_status": "S"
+     },
+     "is_liked_by_me": false,
+     "near": false,
+     "place": {
+      "confirm_id": "576159166",
+      "place_name": "하이디라오 COEX점"
+     }
+    }
+   },
+   {
+    "url": "http://t1.kakaocdn.net/local/kakaomapPhoto/review/bb54027736a608e7c1159d65f69f07b1bf3b2c3b?original",
+    "photo_id": 9312419,
+    "media_type": "PHOTO",
+    "status": "S",
+    "ui_type": "PROFILE",
+    "duration": 0,
+    "review_id": 16200798,
+    "updated_at": "2026-09-30 10:02:46",
+    "meta": {
+     "owner": {
+      "map_user_id": "1339982433",
+      "nickname": "십알칸초",
+      "image_url": "http://t1.kakaocdn.net/local/kakaomapPhoto/profile/a44ff6e90abff0408491a9761413c8d52352a3cf?original",
+      "timeline_level": {
+       "badge": "04",
+       "now_level": 72,
+       "show_other": true
+      },
+      "review_count": 408,
+      "follower_count": 1092,
+      "profile_links": [],
+      "average_score": 4.1,
+      "profile_status": "S"
+     },
+     "is_liked_by_me": false,
+     "near": false,
+     "place": {
+      "confirm_id": "576159166",
+      "place_name": "하이디라오 COEX점"
+     }
+    }
+   },
+   {
+    "url": "http://t1.kakaocdn.net/local/kakaomapPhoto/review/096c1b4dea74de69a61c7ee3b40c21b3b7869bbc?original",
+    "photo_id": 9312417,
+    "media_type": "PHOTO",
+    "status": "S",
+    "ui_type": "PROFILE",
+    "duration": 0,
+    "review_id": 16200798,
+    "updated_at": "2026-09-30 10:02:46",
+    "meta": {
+     "owner": {
+      "map_user_id": "1339982433",
+      "nickname": "십알칸초",
+      "image_url": "http://t1.kakaocdn.net/local/kakaomapPhoto/profile/a44ff6e90abff0408491a9761413c8d52352a3cf?original",
+      "timeline_level": {
+       "badge": "04",
+       "now_level": 72,
+       "show_other": true
+      },
+      "review_count": 408,
+      "follower_count": 1092,
+      "profile_links": [],
+      "average_score": 4.1,
+      "profile_status": "S"
+     },
+     "is_liked_by_me": false,
+     "near": false,
+     "place": {
+      "confirm_id": "576159166",
+      "place_name": "하이디라오 COEX점"
+     }
+    }
+   }
+  ],
+  "timeline_score_table": {
+   "act_review": {
+    "event": 0,
+    "place_banner": [
+     {
+      "title": "사진/영상 등록",
+      "score": 3
+     },
+     {
+      "title": "글 작성",
+      "score": 2
+     }
+    ]
+   }
+  },
+  "has_next": false,
+  "has_my_review": false
+ },
+ "find_way": {
+  "subway": {
+   "station_simple_name": "봉은사역",
+   "exit_num": "7",
+   "to_exit_distance": 370,
+   "subway_list": [
+    {
+     "subway_line_id": "SES9",
+     "subway_line_icon_name": "9"
+    }
+   ],
+   "to_exit_minute": 6
+  }
+ },
+ "navi_guides": [
+  {
+   "guide_id": "775942",
+   "name": " GATE 2(동문) 주차장",
+   "flag": "G",
+   "type": "PARKING",
+   "point": {
+    "lon": 127.061109037337,
+    "lat": 37.5108787570246
+   }
+  },
+  {
+   "guide_id": "775939",
+   "name": "GATE 4(북문) 주차장",
+   "flag": "8",
+   "type": "PARKING",
+   "point": {
+    "lon": 127.058891220489,
+    "lat": 37.5135705522162
+   }
+  },
+  {
+   "guide_id": "775905",
+   "name": " GATE 5(서문) 주차장",
+   "flag": "8",
+   "type": "PARKING",
+   "point": {
+    "lon": 127.057421306234,
+    "lat": 37.5117352098398
+   }
+  },
+  {
+   "guide_id": "775938",
+   "name": "아셈타워GATE 주차장",
+   "flag": "8",
+   "type": "PARKING",
+   "point": {
+    "lon": 127.060276654982,
+    "lat": 37.5125227965924
+   }
+  },
+  {
+   "guide_id": "779184",
+   "name": "트레이드타워GATE 주차장",
+   "flag": "8",
+   "type": "PARKING",
+   "point": {
+    "lon": 127.061338266637,
+    "lat": 37.5108340384976
+   }
+  },
+  {
+   "guide_id": "775935",
+   "name": "동문 입구",
+   "flag": "G",
+   "point": {
+    "lon": 127.06093084443,
+    "lat": 37.5115118045844
+   }
+  },
+  {
+   "guide_id": "779183",
+   "name": "남문1 입구",
+   "flag": "G",
+   "point": {
+    "lon": 127.059699941594,
+    "lat": 37.5104263625087
+   }
+  },
+  {
+   "guide_id": "779182",
+   "name": "남문2 입구",
+   "flag": "G",
+   "point": {
+    "lon": 127.060431253349,
+    "lat": 37.5106730460327
+   }
+  },
+  {
+   "guide_id": "775907",
+   "name": "서문 입구",
+   "flag": "8",
+   "point": {
+    "lon": 127.058137601968,
+    "lat": 37.5105520210113
+   }
+  },
+  {
+   "guide_id": "775940",
+   "name": "북문 입구",
+   "flag": "G",
+   "point": {
+    "lon": 127.058404953987,
+    "lat": 37.5134173526869
+   }
+  }
+ ],
+ "trend_rank": {
+  "show_ranking_card": true,
+  "menu_rank": {
+   "menu": "menu_hotpot",
+   "name": "마라탕",
+   "rank": 12
+  },
+  "display_text": "강남구 마라탕 인기 맛집",
+  "category_value": "menu_hotpot"
+ },
+ "place_badge": [
+  {
+   "text": "강남구 마라탕 인기 맛집",
+   "style": {
+    "text_color": "#206DEF",
+    "background_color": "#EFF3FF",
+    "bold": false
+   },
+   "landing_url": "kakaomap://open?page=placerank&catetype=food&sort=favorite&internal_keepstate=true&category=menu_hotpot&regionid=I10000400",
+   "left_icons": [
+    "https://t1.kakaocdn.net/localimg/place/2026/certifications/icon_ranknum_top_left.svg",
+    "https://t1.kakaocdn.net/localimg/place/2026/certifications/icon_place_solid.svg"
+   ],
+   "right_icons": [
+    "https://t1.kakaocdn.net/localimg/place/2026/certifications/icon_ranknum_top_right.svg"
+   ]
+  }
+ ],
+ "place_add_info": {
+  "facilities": {
+   "is_parking": true,
+   "is_pet": true,
+   "is_fordisabled": false,
+   "is_kidzone": false,
+   "is_smokingroom": false
+  },
+  "store_facility_icons": [
+   {
+    "text": "무료주차",
+    "url": "https://t1.kakaocdn.net/localimg/2025_place/parking_line.png"
+   },
+   {
+    "text": "반려견동반",
+    "url": "https://t1.kakaocdn.net/localimg/2025_place/pet_line.png"
+   }
+  ],
+  "tags": [
+   "보드게임"
+  ],
+  "ai_mate": {
+   "store_facility_icons": [
+    {
+     "text": "주차장없음",
+     "url": "https://t1.kakaocdn.net/localimg/2025_AIMATE/parking_off_line.png"
+    },
+    {
+     "text": "예약가능",
+     "url": "https://t1.kakaocdn.net/localimg/2025_AIMATE/reservation_line.png"
+    }
+   ],
+   "store_infos": [
+    {
+     "title": "주차",
+     "summary": "주차는 인터컨티넨탈 호텔 쪽 권장, 코엑스 주차장 주차 이용 가능"
+    }
+   ]
+  },
+  "simple_parking_infos": {
+   "texts": [
+    "주차장 없음"
+   ],
+   "summary": "주차는 인터컨티넨탈 호텔 쪽 권장, 코엑스 주차장 주차 이용 가능",
+   "has_ai_mate_data": true
+  },
+  "full_detail_infos": [
+   {
+    "title": "주차 정보",
+    "summary": "주차는 인터컨티넨탈 호텔 쪽 권장, 코엑스 주차장 주차 이용 가능",
+    "items": [
+     {
+      "icon": {
+       "text": "주차장 없음",
+       "url": "https://t1.kakaocdn.net/localimg/place/2026/infoIcon/icon_parkingsquare_off_line.svg"
+      },
+      "contents": [
+       {
+        "label": "주차장 없음"
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "title": "좌석 옵션",
+    "items": [
+     {
+      "icon": {
+       "text": "프라이빗룸",
+       "url": "https://t1.kakaocdn.net/localimg/place/2026/infoIcon/icon_door_line.svg"
+      },
+      "contents": [
+       {
+        "label": "프라이빗룸"
+       }
+      ]
+     },
+     {
+      "icon": {
+       "text": "단체석",
+       "url": "https://t1.kakaocdn.net/localimg/place/2026/infoIcon/icon_peoples_line.svg"
+      },
+      "contents": [
+       {
+        "label": "단체석"
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "title": "어린이 옵션",
+    "summary": "아기 의자와 유아용 식기 세트 구비, 자극 없는 토마토탕과 삼선탕 등 어린이 메뉴 제공",
+    "items": [
+     {
+      "icon": {
+       "text": "유아의자",
+       "url": "https://t1.kakaocdn.net/localimg/place/2026/infoIcon/icon_babychair_line.svg"
+      },
+      "contents": [
+       {
+        "label": "유아의자"
+       }
+      ]
+     },
+     {
+      "icon": {
+       "text": "키즈메뉴",
+       "url": "https://t1.kakaocdn.net/localimg/place/2026/infoIcon/icon_kidsmenu_line.svg"
+      },
+      "contents": [
+       {
+        "label": "키즈메뉴"
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "title": "상세 정보",
+    "items": [
+     {
+      "icon": {
+       "text": "장소키워드",
+       "url": "https://t1.kakaocdn.net/localimg/place/2026/infoIcon/icon_tag_line.svg"
+      },
+      "contents": [
+       {
+        "label": "보드게임",
+        "landing_url": "https://map.kakao.com/?q=보드게임"
+       }
+      ]
+     },
+     {
+      "icon": {
+       "text": "케이크 반입 가능",
+       "url": "https://t1.kakaocdn.net/localimg/place/2026/infoIcon/icon_cake_line.svg"
+      },
+      "contents": [
+       {
+        "label": "케이크 반입 가능"
+       }
+      ]
+     }
+    ]
+   }
+  ],
+  "add_info_summaries": [
+   {
+    "texts": [
+     "주차장 없음"
+    ],
+    "summary": "주차는 인터컨티넨탈 호텔 쪽 권장, 코엑스 주차장 주차 이용 가능",
+    "icon": {
+     "text": "주차정보",
+     "url": "https://t1.kakaocdn.net/localimg/place/2026/infoIconMini/parkingicon.svg"
+    },
+    "has_ai_mate_data": true
+   }
+  ],
+  "simple_detail_infos": [
+   {
+    "text": "단체석",
+    "url": "https://t1.kakaocdn.net/localimg/place/2026/infoIcon/icon_peoples_line.svg"
+   },
+   {
+    "text": "프라이빗룸",
+    "url": "https://t1.kakaocdn.net/localimg/place/2026/infoIcon/icon_door_line.svg"
+   },
+   {
+    "text": "유아의자",
+    "url": "https://t1.kakaocdn.net/localimg/place/2026/infoIcon/icon_babychair_line.svg"
+   },
+   {
+    "text": "키즈메뉴",
+    "url": "https://t1.kakaocdn.net/localimg/place/2026/infoIcon/icon_kidsmenu_line.svg"
+   }
+  ]
+ },
+ "reward": {
+  "fiy": {
+   "basic_info": 0,
+   "contact": 200,
+   "menu": 200,
+   "open_hour": 200,
+   "delete_place": 200,
+   "add_info": 0,
+   "max_amount": 600
+  }
+ },
+ "ai_content_warning": {
+  "is_home_tab_display_enabled": true,
+  "is_info_tab_display_enabled": true
+ }
+}

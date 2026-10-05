@@ -86,11 +86,14 @@
 
 - `GET https://place-api.map.kakao.com/places/panel3/{id}`
 - 필수 헤더: `pf: PC`, `Origin: https://place.map.kakao.com`, `Referer: https://place.map.kakao.com/`, 브라우저 User-Agent, `Accept: application/json`. 헤더가 없으면 406이 반환된다(2026-10-05 로컬에서 확인).
+- **Cloudflare 엣지에서 호출 가능 확인 (2026-10-05, `wrangler dev --remote`, 3건 모두 200).** 응답 크기는 가게당 50~120KB다.
 - 사용하는 필드 (2026-10-05 id 27531028 "중앙해장" 응답으로 확인):
   - 평점: `kakaomap_review.score_set.average_score`, `kakaomap_review.score_set.review_count`
   - 강점: `kakaomap_review.score_set.strength_counts[{id,count}]` + `kakaomap_review.strength_description[{id,name}]`
   - 메뉴: `menu.menus.items[{name, price}]`
-  - 영업시간: `open_hours.week_from_today.week_periods[].days[]` (정확한 구조는 마일스톤 1에서 픽스처로 확정)
+  - 영업시간: `open_hours.week_from_today.week_periods[].days[]`. 각 day는 `day_of_the_week_desc`("월(10/5)")와 함께 `on_days.start_end_time_desc`("11:30 ~ 22:00", 자정을 넘기면 "16:00 ~ 02:00"), `on_days.break_times_desc`(["14:30 ~ 18:00 브레이크타임"]) 또는 `off_days_desc`("휴무일")를 가진다.
+  - 예약/태그: `place_add_info.ai_mate.store_facility_icons[].text`와 `place_add_info.store_facility_icons[].text`(예: "예약가능"), `place_add_info.full_detail_infos[].items[].contents[].label`(예: "혼밥", "단체석", "회식장소", "점심특선")
+  - 메뉴 가격은 -1이나 0일 수 있다(가격 미표기).
   - 카테고리 보조: `summary.category.{name2, name3}`
 - 형식이 바뀌거나 막힐 수 있으므로 **모든 필드는 optional로 파싱**하고, 하나가 실패해도 나머지는 살린다.
 - **차단 시 대안:** Worker IP에서 호출이 막히면, 로컬 Node 스크립트로 수집해서 `wrangler d1 execute --remote`로 D1에 적재한다. 이 경우 Cron 상세 수집은 끈다.
@@ -121,6 +124,7 @@ CREATE TABLE place_details (
   menus_json TEXT,                -- [{name, price}] 최대 20개
   hours_json TEXT,                -- R8 정규화 결과
   strengths_json TEXT,            -- ["맛","친절"] 상위 2개
+  tags_json TEXT,                 -- ["혼밥","단체석",...] 최대 30개
   bookable INTEGER,               -- 1 | 0 | NULL(판정 불가)
   fail_reason TEXT,
   fetched_at INTEGER NOT NULL
@@ -164,17 +168,19 @@ CREATE TABLE tiles (
 - **R6 상세 파싱.** §3.2의 응답을 zod 스키마(모든 필드 optional)로 검증하고 `PlaceDetail`로 변환한다.
   - `rating`: `average_score`. 리뷰가 0개면 null
   - `strengths`: `strength_counts`를 count 내림차순으로 정렬해 상위 2개 id를 `strength_description`의 이름으로 바꾼 것
-  - `bookable`: 마일스톤 1에서 픽스처 여러 개를 비교해 예약 가능 여부를 나타내는 필드를 찾는다. 찾으면 그 필드로 판정하고, 못 찾으면 항상 null로 두고 R19의 예약 가중치는 적용하지 않는다.
+  - `bookable`: `place_add_info`가 없으면 null이다. 있으면 두 `store_facility_icons` 목록 중 하나라도 text가 "예약가능"이면 true, 아니면 false다.
+  - `tags`: `full_detail_infos[].items[].contents[].label`을 순서대로 중복 없이 모은다(최대 30개).
+  - `menus`: 가격이 1 이상인 메뉴만, 최대 20개
   - JSON이 아니거나 최상위 구조가 다르면 `status='failed'`, `fail_reason='schema'`
 - **R7 대표 가격.** 메뉴 가격 중 `5,000 ≤ price ≤ 30,000`인 값들의 중앙값을 100원 단위로 반올림한다. 해당 값이 없으면 null이다. 값이 짝수 개면 가운데 두 값의 평균을 쓴다.
   - 예: [14000, 16000, 16000, 67000] → [14000, 16000, 16000] → 16000
-- **R8 영업시간 정규화.** 상세 응답의 주간 영업시간을 `{ [요일 0-6]: [{open:"HH:MM", close:"HH:MM"}] | "closed" }` 형태로 정규화한다. 브레이크타임은 구간을 나눠서 표현한다. 자정을 넘기면 `close`가 `"24:00"`보다 클 수 있다(예: `"26:00"`). 파싱할 수 없으면 null이다.
+- **R8 영업시간 정규화.** §3.2의 day 목록을 `Hours = { [요일 0(일)-6(토)]: Array<[openMin, closeMin]> | "closed" }`로 정규화한다. 분 단위이고, 자정을 넘기면 close가 1440보다 크다(예: "16:00 ~ 02:00" → [960, 1560]). 브레이크타임은 구간에서 빼서 나눈다(예: "11:30 ~ 22:00" + "14:30 ~ 18:00" → [[690, 870], [1080, 1320]]). `off_days_desc`가 있으면 "closed"다. 요일은 `day_of_the_week_desc`의 첫 글자(일월화수목금토)로 정한다. 하나라도 파싱할 수 없으면 전체를 null로 한다.
 - **R9 상세 TTL과 재시도.** `status='ok'`이면 3일, `status='failed'`이면 6시간이 지나기 전에는 다시 가져오지 않는다. 호출마다 네트워크 오류나 5xx가 나면 지수 백오프(250ms, 1000ms)로 최대 2번 재시도한다. 4xx는 재시도하지 않는다.
-- **R10 배치 처리.** 한 번의 실행(요청 또는 Cron)에서 외부 호출 예산은 `SUBREQUEST_BUDGET`(기본 45)이다. 상세 보충은 이 예산 안에서 기준점에서 가까운 순으로, 동시성 5로 처리한다. 상세 정보가 없거나 만료된 가게가 대상이다. 배치 크기 기본값은 30이고 환경 변수로 조정한다. 무료 플랜의 CPU 한도(10ms)를 넘으면 배치 크기를 줄인다.
+- **R10 배치 처리.** 한 번의 실행(요청 또는 Cron)에서 외부 호출 예산은 `SUBREQUEST_BUDGET`(기본 40, 무료 플랜 한도 50)이다. 격자 수집이 예산을 먼저 쓰고, 상세 보충은 남은 예산 안에서 기준점에서 가까운 순으로 동시성 3으로 처리한다. 대상은 상세 정보가 없거나 만료된 가게다. 한 번에 보충하는 가게 수는 `DETAIL_BATCH_SIZE`(기본 10)다. 응답이 커서 무료 플랜 CPU 한도(10ms)를 지키기 위해 작게 잡았다.
 
 ### 5.3 사전 수집 (Cron)
 
-- **R11 ASEM 사전 수집.** Cron `*/15 21-23,0-1 * * *` (UTC, KST 06:00~10:45)에 실행한다. ASEM 기준 반경 1500m를 대상으로 (1) 만료된 격자를 수집하고 (2) 남은 예산으로 상세 정보를 보충한다. 한 번에 다 못 하면 다음 실행에서 이어서 한다.
+- **R11 ASEM 유지 수집.** Cron `*/10 * * * *`로 실행한다. ASEM 기준 반경 1500m를 대상으로 (1) 만료된 격자를 수집하고 (2) 남은 예산으로 상세 정보를 보충한다. 할 일이 없으면 D1 조회만 하고 끝난다. 최초 대량 수집은 R31로 한다.
 
 ### 5.4 API
 
@@ -212,8 +218,8 @@ CREATE TABLE tiles (
   - 최소 평점: 무관 / 3.5+ / 4.0+. "무관"이 아니면 rating이 null인 곳은 제외한다.
   - 반경: 거리 ≤ radius
 - **R19 인원 휴리스틱.** 인원 선택지는 1 / 2 / 3 / 4+이고 기본값은 2다.
-  - 1명: 혼밥 업종(`category_name`에 국밥, 해장국, 라멘, 라면, 분식, 덮밥, 돈까스, 우동, 국수, 김밥, 패스트푸드 중 하나라도 포함)의 가중치를 ×1.5
-  - 4명 이상: `snack` 그룹 제외, `bookable === true`이면 가중치 ×1.3
+  - 1명: 혼밥 친화(`category_name`에 국밥, 해장국, 라멘, 라면, 분식, 덮밥, 돈까스, 우동, 국수, 김밥, 패스트푸드 중 하나라도 포함하거나, tags에 "혼밥"이 있음)면 가중치 ×1.5
+  - 4명 이상: `snack` 그룹 제외. tags에 "단체석", "회식장소", "모임맛집" 중 하나라도 있으면 ×1.3, `bookable === true`면 추가로 ×1.3
   - 2~3명: 보정 없음
 - **R20 정렬.** 거리순(기본) / 평점순(null은 맨 뒤) / 가격순(오름차순, null은 맨 뒤).
 - **R21 뽑기.** 필터를 통과한 후보에서 가중 랜덤으로 하나를 뽑는다.
@@ -230,12 +236,17 @@ CREATE TABLE tiles (
   https://mmj.itmz.me/?p={id}&lat={lat}&lng={lng}&r={radius}
   ```
   평점이 null이면 `⭐` 부분을 생략한다. 인원이 4+이면 "4명+"로 쓰고, 점심시간 버튼 선택이 없으면 `{점심시간}분 → ` 대신 `반경 {radius}m → `를 쓴다. 공유 URL을 열면 해당 기준점과 반경으로 로드한 뒤 가게 `p`를 포커스하고 결과 카드를 연다. 반경 밖이거나 목록에 없으면 R13으로 가져와서 보여준다.
-- **R24 기준점.** 기본값은 ASEM 타워(마일스톤 1에서 카카오 키워드 검색 "ASEM타워"의 좌표로 확정, 참고값 37.5126, 127.0584). 기준점 칩 메뉴에 세 가지가 있다.
+- **R24 기준점.** 기본값은 ASEM 타워 (37.513059, 127.059826; 카카오 키워드 검색 "ASEM타워" id 17807534, 2026-10-05 확인). 기준점 칩 메뉴에 세 가지가 있다.
   - "내 위치": Geolocation API를 쓴다. 거부되거나 실패하면 ASEM을 유지하고 "위치를 가져오지 못해서 ASEM 타워 기준으로 보여드려요" 토스트를 띄운다.
   - "지도에서 찍기": 다음 지도 클릭 위치를 기준점으로 한다.
   - "ASEM 타워로": 기본값으로 되돌린다.
 - **R25 설정 기억.** 필터(점심시간, 인원, 카테고리, 예산, 평점, 영업 중, 술집 포함, 정렬)와 기준점을 localStorage에 저장한다. 읽기/쓰기는 try/catch로 감싸고, 실패하면 기본값을 쓴다. 공유 URL 파라미터가 있으면 저장값보다 우선한다(저장값을 덮어쓰지는 않음).
 - **R26 도보 시간.** `walkMinutes = ceil(직선거리 × 1.3 / 70)` (우회 계수 1.3, 분속 70m)
+
+### 5.5.1 관리 기능
+
+- **R31 워밍 엔드포인트.** `POST /api/admin/warm?lat&lng&radius`는 `Authorization: Bearer {ADMIN_TOKEN}`이 맞을 때만 동작하고, 틀리면 401이다. R10 예산 안에서 격자 수집과 상세 보충을 한 번 수행하고 `{incompleteTiles, pending, enriched, failed}`를 반환한다. `scripts/warm.mjs`는 이 엔드포인트를 `incompleteTiles === 0 && pending === 0`이 될 때까지(최대 300회, 호출 간 1초) 반복 호출한다. 요청이 매번 새 실행이라 무료 플랜 한도 안에서 빠르게 채울 수 있다.
+- **R32 감사 엔드포인트.** `GET /api/admin/audit?lat&lng&radius`(같은 인증)는 §7의 Q1~Q4 수치를 JSON으로 반환한다. `scripts/audit.mjs`는 이를 표로 출력하고, Q1 또는 Q2를 통과하지 못하면 종료 코드 1로 끝난다.
 
 ### 5.6 UI
 
@@ -285,19 +296,16 @@ Q1, Q2, Q5를 통과해야 UI 마일스톤으로 넘어간다.
 ## 9. 배포와 설정
 
 - Worker 이름 `momeokjo`, 정적 에셋은 `@cloudflare/vite-plugin`으로 빌드한다.
-- 바인딩: D1 `DB`, Rate Limiting `RATE_LIMITER`, 시크릿 `KAKAO_REST_KEY`, 변수 `SUBREQUEST_BUDGET`, `DETAIL_BATCH_SIZE`
+- 바인딩: D1 `DB`, Rate Limiting `RATE_LIMITER`, 시크릿 `KAKAO_REST_KEY`·`ADMIN_TOKEN`, 변수 `SUBREQUEST_BUDGET`, `DETAIL_BATCH_SIZE`
+- `compatibility_date`는 `2026-08-01`(로컬 workerd가 지원하는 최신 날짜 이하)
 - 프론트엔드 환경 변수: `VITE_KAKAO_JS_KEY` (공개 키)
 - Custom Domain: `mmj.itmz.me`
-- **카카오 개발자 콘솔 준비 (사용자 작업):**
-  1. 새 앱 "모먹죠" 생성
-  2. REST API 키와 JavaScript 키 확인
-  3. 플랫폼 > Web에 `http://localhost:5173`, `https://mmj.itmz.me` 등록
-  4. 카카오맵 사용 설정 활성화
+- **카카오 개발자 콘솔 (2026-10-05 완료):** 앱 "모먹죠"(ID 1597800) 생성, JavaScript SDK 도메인에 `http://localhost:5173`·`https://mmj.itmz.me` 등록, 카카오맵 활성화(계정의 무료 쿼터가 이 앱에 귀속됨). 키는 `.dev.vars`(REST)와 `.env.local`(JS)에 있고 git에서 제외된다.
 
 ## 10. 마일스톤 (하루)
 
-1. **리스크 제거:** 프로젝트 스캐폴딩, 픽스처 녹화, **배포된 Worker에서 비공식 API 호출이 되는지 확인**, ASEM 좌표와 R6 예약 필드 확정
-2. **데이터 파이프라인 (TDD):** geo, category, price, hours, 파서 → TileCollector, DetailEnricher → Cron → 원격 D1에 ASEM 데이터 수집 → **Q1~Q5 통과**
+1. **리스크 제거:** ~~픽스처 녹화~~, ~~엣지에서 비공식 API 호출 확인~~, ~~ASEM 좌표와 R6 예약 필드 확정~~ (2026-10-05 완료) → 프로젝트 스캐폴딩
+2. **데이터 파이프라인 (TDD):** geo, category, price, hours, 파서 → TileCollector, DetailEnricher → Cron, R31, R32 → 배포 후 `warm`으로 원격 D1에 ASEM 데이터 수집 → **Q1~Q5 통과**
 3. **API + 추천 로직 (TDD):** R12~R15, R16~R21, R23, R26
 4. **UI:** 레이아웃, 지도, 필터, 리스트, 뽑기, 공유, 기준점
 5. **배포:** `mmj.itmz.me` 연결, 실제 데이터로 점검

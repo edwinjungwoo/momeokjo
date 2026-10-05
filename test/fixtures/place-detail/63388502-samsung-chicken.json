@@ -1,0 +1,1607 @@
+{
+ "menu": {
+  "menus": {
+   "photos": [
+    {
+     "confirm_id": "63388502",
+     "url": "https://postfiles.pstatic.net/MjAyNTA5MjRfMjcg/MDAxNzU4NzExNzk0OTAz.3D_J-zAMb1Zl8ia9CPgWIXKradv1pUJB8wTtoMkR3Vwg.XNyi17KR8ovIWAkn05O2Y6SE-MUfdaYCpFHH199PQxUg.JPEG/SE-B572E07D-3F4D-4517-9A27-3986DA32D5F2.jpg?type=w966",
+     "type": "BLOG",
+     "photo_id": 1502222350,
+     "review_id": 99275557,
+     "registered_at": "2025-11-22 17:39:45",
+     "updated_at": "2025-11-22 18:00:28",
+     "title": "서울 봉은사, 코엑스, 삼성동치킨, 후라이드 치킨 인기 맛집",
+     "blog_link_url": "http://blog.naver.com/bsh0756/224083980159",
+     "media_type": "PHOTO",
+     "ui_type": "POST"
+    },
+    {
+     "confirm_id": "63388502",
+     "url": "https://postfiles.pstatic.net/MjAyNDEyMTFfMjU3/MDAxNzMzODk4NzY5OTI2.RMPtKt464Q-jeI2QuSL9j8rghrXeZWXsfqp7r4j4OmEg.18HTNoYHoqzmsxTlIWR8pPLHWQK_4Xe13PPd6fQu2AMg.JPEG/IMG_6799.jpg?type=w966",
+     "type": "BLOG",
+     "photo_id": 1502222236,
+     "review_id": 99275557,
+     "registered_at": "2025-11-22 17:39:33",
+     "updated_at": "2025-11-22 18:00:28",
+     "title": "서울 봉은사, 코엑스, 삼성동치킨, 후라이드 치킨 인기 맛집",
+     "blog_link_url": "http://blog.naver.com/bsh0756/224083980159",
+     "media_type": "PHOTO",
+     "ui_type": "POST"
+    },
+    {
+     "confirm_id": "63388502",
+     "url": "https://postfiles.pstatic.net/MjAyNDExMTZfMTgg/MDAxNzMxNzIzMjE1NDAy.45O3nMaI-yRe7KbmkV24PLNROR5gPQlHUpIFOTw-sEwg.myac1I4YjlmmJeIBIyWbVUBLd1lFf4aLveiLAydDh6Qg.JPEG/IMG_1760.JPG?type=w773",
+     "type": "BLOG",
+     "photo_id": 1163639077,
+     "review_id": 73402912,
+     "registered_at": "2024-11-19 18:48:13",
+     "updated_at": "2025-05-16 08:04:08",
+     "title": "[서울/맛집] 봉은사역 삼성역 코엑스 근처 회식장소로 좋은 <삼성동치킨 삼성점>",
+     "blog_link_url": "http://blog.naver.com/bbangglee_/223662748728",
+     "media_type": "PHOTO",
+     "ui_type": "POST"
+    },
+    {
+     "confirm_id": "63388502",
+     "url": "https://postfiles.pstatic.net/MjAyNDA2MjlfNzMg/MDAxNzE5NjcyMzg0NDQx.0IOPJ9AVc3ZW4sMtJRJCewLcwHaj3QuyJa5lzDbAO-0g.fs6MXVbeGw0_vHY4b_QHc0uiodivKo1nkeKWdHz4aZQg.JPEG/79612%EF%BC%BF1%EF%BC%BF%EC%8A%A4%ED%83%80%EB%9F%AD%EC%8A%A4%EC%99%B8%EC%8B%9D%EC%82%AC%EC%97%85%EB%B6%80%EF%BC%88%EB%B3%B8%EC%82%AC%EF%BC%89%EF%BC%BF%EB%A9%94%EB%89%B4%ED%8C%90%EC%86%8D%EC%A7%80%EF%BC%88%EC%B9%98%ED%82%A8%EF%BC%8D%EC%95%88%EC%A3%BC.jpg?type=w966",
+     "type": "BLOG",
+     "photo_id": 1036759893,
+     "review_id": 64961928,
+     "registered_at": "2024-06-30 03:22:10",
+     "updated_at": "2024-06-30 03:33:25",
+     "title": "코엑스 근처 치킨 맛집 삼성동치킨, 옛날 치킨 스타일의 로컬 맛집",
+     "blog_link_url": "http://blog.naver.com/all-daylog/223495742855",
+     "media_type": "PHOTO",
+     "ui_type": "POST"
+    }
+   ],
+   "items": [
+    {
+     "product_id": 6,
+     "name": "삼성동골뱅이",
+     "price": 30000,
+     "is_recommend": false,
+     "is_ai_mate": false,
+     "mod_at": "2025-11-26 09:48:31"
+    },
+    {
+     "product_id": 7,
+     "name": "로제떡볶이",
+     "price": 21000,
+     "is_recommend": false,
+     "is_ai_mate": false,
+     "mod_at": "2025-11-26 09:48:31"
+    },
+    {
+     "product_id": 8,
+     "name": "치즈떡볶이",
+     "price": 20000,
+     "is_recommend": false,
+     "is_ai_mate": false,
+     "mod_at": "2025-11-26 09:48:31"
+    },
+    {
+     "product_id": 9,
+     "name": "국물떡볶이",
+     "price": 18000,
+     "is_recommend": false,
+     "is_ai_mate": false,
+     "mod_at": "2025-11-26 09:48:31"
+    },
+    {
+     "product_id": 10,
+     "name": "스팸계란후라이",
+     "price": 18000,
+     "is_recommend": false,
+     "is_ai_mate": false,
+     "mod_at": "2025-11-26 23:56:16"
+    },
+    {
+     "product_id": 11,
+     "name": "감자튀김",
+     "price": 15000,
+     "is_recommend": false,
+     "is_ai_mate": false,
+     "mod_at": "2025-11-26 09:48:31"
+    },
+    {
+     "product_id": 12,
+     "name": "황도",
+     "price": 15000,
+     "is_recommend": false,
+     "is_ai_mate": false,
+     "mod_at": "2025-11-26 09:48:31"
+    },
+    {
+     "product_id": 13,
+     "name": "어묵탕",
+     "price": 19000,
+     "is_recommend": false,
+     "is_ai_mate": false,
+     "mod_at": "2025-11-26 09:48:31"
+    },
+    {
+     "product_id": 14,
+     "name": "뻔데기탕",
+     "price": 15000,
+     "is_recommend": false,
+     "is_ai_mate": false,
+     "mod_at": "2025-11-26 09:48:31"
+    },
+    {
+     "product_id": 15,
+     "name": "먹태",
+     "price": 18000,
+     "is_recommend": false,
+     "is_ai_mate": false,
+     "mod_at": "2025-11-26 09:48:31"
+    },
+    {
+     "product_id": 16,
+     "name": "반건조노가리",
+     "price": 18000,
+     "is_recommend": false,
+     "is_ai_mate": false,
+     "mod_at": "2025-11-26 22:53:01"
+    },
+    {
+     "product_id": 17,
+     "name": "반건조오징어",
+     "price": 17000,
+     "is_recommend": false,
+     "is_ai_mate": false,
+     "mod_at": "2025-11-26 09:48:31"
+    },
+    {
+     "product_id": 18,
+     "name": "쫄면",
+     "price": 8000,
+     "is_recommend": false,
+     "is_ai_mate": false,
+     "mod_at": "2025-11-26 09:48:31"
+    },
+    {
+     "product_id": 19,
+     "name": "라면",
+     "price": 5000,
+     "is_recommend": false,
+     "is_ai_mate": false,
+     "mod_at": "2025-11-26 09:48:31"
+    }
+   ],
+   "items_updated_at": "2025-11-26 23:56:16",
+   "menu_type": "FOOD"
+  },
+  "default_menu_icon_url": "https://t1.kakaocdn.net/localimg/place/2026/menu/icon_fried_chicken_solid.svg"
+ },
+ "place_badge_for_panel3": [
+  {
+   "text": "강남구 치킨 인기 맛집",
+   "style": {
+    "text_color": "#206DEF",
+    "background_color": "#EFF3FF",
+    "bold": false
+   },
+   "landing_url": "kakaomap://open?page=placerank&catetype=food&sort=favorite&internal_keepstate=true&category=menu_chicken&regionid=I10000400",
+   "left_icons": [
+    "https://t1.kakaocdn.net/localimg/place/2026/certifications/icon_ranknum_top_left.svg",
+    "https://t1.kakaocdn.net/localimg/place/2026/certifications/icon_place_solid.svg"
+   ],
+   "right_icons": [
+    "https://t1.kakaocdn.net/localimg/place/2026/certifications/icon_ranknum_top_right.svg"
+   ]
+  }
+ ],
+ "ai_mate": {
+  "summary": {
+   "title": "기본에 충실한 바삭한 치킨",
+   "contents": [
+    "테라스"
+   ]
+  },
+  "bottom_sheet": {
+   "title": "기본에 충실한 바삭한 치킨",
+   "summary": "기본에 충실한 클래식 치킨을 제공하며, 깨끗한 기름으로 튀겨낸 바삭한 튀김옷이 특징입니다. 다양한 생맥주와 함께 편안한 분위기에서 즐길 수 있는 회식 및 모임 장소로 인기가 높습니다.",
+   "sheets": [
+    {
+     "title": "제공 서비스",
+     "list": [
+      {
+       "title": "좌석 옵션",
+       "keywords": [
+        "테라스"
+       ]
+      }
+     ],
+     "ui_type": "LIST"
+    }
+   ],
+   "landing_url": "https://kanana.kakao.com/place/redirect?entry=kakaomap&cid=63388502"
+  },
+  "blog_summaries": [
+   {
+    "title": "분위기",
+    "keywords": [
+     "편안한 분위기",
+     "소규모 공간",
+     "정겨운 감성"
+    ]
+   },
+   {
+    "title": "방문 목적",
+    "keywords": [
+     "치맥"
+    ]
+   },
+   {
+    "title": "맛",
+    "keywords": [
+     "바삭한",
+     "고소한",
+     "달콤한",
+     "매콤한"
+    ]
+   },
+   {
+    "title": "동반인",
+    "keywords": [
+     "친구·지인",
+     "가족",
+     "비즈니스·직장 모임"
+    ]
+   }
+  ],
+  "price_level": {
+   "symbol": "₩₩₩"
+  },
+  "ai_questions": [
+   "편안한 회식 장소인가요?",
+   "다양한 맥주 종류가 있나요?",
+   "내부 인터리어와 분위기 어때?",
+   "무료 주차인가요?"
+  ],
+  "suggested_questions": [
+   {
+    "text": "편안한 회식 장소인가요?",
+    "landing_url": "https://kanana.kakao.com/place/redirect?entry=kakaomap&t_src=kakaomap&t_ch=pw_place&q=%ED%8E%B8%EC%95%88%ED%95%9C+%ED%9A%8C%EC%8B%9D+%EC%9E%A5%EC%86%8C%EC%9D%B8%EA%B0%80%EC%9A%94%3F&cid=63388502"
+   },
+   {
+    "text": "다양한 맥주 종류가 있나요?",
+    "landing_url": "https://kanana.kakao.com/place/redirect?entry=kakaomap&t_src=kakaomap&t_ch=pw_place&q=%EB%8B%A4%EC%96%91%ED%95%9C+%EB%A7%A5%EC%A3%BC+%EC%A2%85%EB%A5%98%EA%B0%80+%EC%9E%88%EB%82%98%EC%9A%94%3F&cid=63388502"
+   },
+   {
+    "text": "내부 인터리어와 분위기 어때?",
+    "landing_url": "https://kanana.kakao.com/place/redirect?entry=kakaomap&t_src=kakaomap&t_ch=pw_place&q=%EB%82%B4%EB%B6%80+%EC%9D%B8%ED%84%B0%EB%A6%AC%EC%96%B4%EC%99%80+%EB%B6%84%EC%9C%84%EA%B8%B0+%EC%96%B4%EB%95%8C%3F&cid=63388502"
+   },
+   {
+    "text": "무료 주차인가요?",
+    "landing_url": "https://kanana.kakao.com/place/redirect?entry=kakaomap&t_src=kakaomap&t_ch=pw_place&q=%EB%AC%B4%EB%A3%8C+%EC%A3%BC%EC%B0%A8%EC%9D%B8%EA%B0%80%EC%9A%94%3F&cid=63388502"
+   }
+  ]
+ },
+ "panel_card_tags": [
+  "TITLE",
+  "PHOTO",
+  "BIZ",
+  "NEWS",
+  "AI_MATE",
+  "SUMMARY",
+  "INFO",
+  "EVENT_KEYWORD",
+  "PRODUCT",
+  "AI_QUESTION",
+  "BOOKING",
+  "SPECIAL",
+  "RELATION",
+  "VISITOR",
+  "REVIEW",
+  "RANKING",
+  "BLOG"
+ ],
+ "panel_tab_tags": [
+  "PRODUCT",
+  "RELATION",
+  "PHOTO",
+  "REVIEW",
+  "BOOKING",
+  "SPECIAL",
+  "NEWS",
+  "BLOG",
+  "RANKING"
+ ],
+ "restrict": {
+  "fiy": {
+   "is_restrict": false
+  },
+  "blog": {
+   "is_restrict": false
+  },
+  "review_read": {
+   "is_restrict": false
+  },
+  "photo": {
+   "is_restrict": false
+  },
+  "fiy_add_info": {
+   "is_restrict": false
+  },
+  "ranking": {
+   "is_restrict": false
+  }
+ },
+ "summary": {
+  "meta": {
+   "updated_at": "2026-09-01 11:28:12"
+  },
+  "confirm_id": "63388502",
+  "name": "삼성동치킨 삼성점",
+  "status": "Y",
+  "category": {
+   "name": "치킨",
+   "id1": "9",
+   "id2": "158",
+   "name1": "음식점",
+   "name2": "치킨"
+  },
+  "point": {
+   "lon": 127.05900823110395,
+   "lat": 37.51478946191159
+  },
+  "address": {
+   "disp": "서울 강남구 영동대로115길 9 1층 (삼성동)",
+   "jibun": "삼성동 77-7",
+   "road": "서울 강남구 영동대로115길 9 1층",
+   "base_zone_no": "06087",
+   "road_part": "영동대로115길 9 1층",
+   "jibun_part": "삼성동 77-7",
+   "address_detail_part": "1층"
+  },
+  "road_view": {
+   "pano_id": "1212302615",
+   "pan": 323.0,
+   "tilt": 2.0,
+   "point": {
+    "lon": 127.05906247936008,
+    "lat": 37.51473177055839
+   },
+   "level": 0,
+   "url": "https://map.kakaocdn.net/map_roadview/2026/06/9152730/2_100670_9152730_20260623023547_cube/left_800.jpg"
+  },
+  "regions": [
+   {
+    "depth": 1,
+    "id": "I",
+    "name": "서울",
+    "simple_name": "서울"
+   },
+   {
+    "depth": 2,
+    "id": "I1000",
+    "name": "강남구",
+    "simple_name": "강남구"
+   },
+   {
+    "depth": 3,
+    "id": "I10000400",
+    "name": "삼성동",
+    "simple_name": "삼성동"
+   }
+  ],
+  "homepages": [
+   "https://www.instagram.com/ssdchicken"
+  ],
+  "related_links": {
+   "primary_links": [
+    {
+     "url": "https://www.instagram.com/ssdchicken",
+     "display_text": "인스타그램"
+    }
+   ]
+  },
+  "phone_numbers": [
+   {
+    "tel": "02-543-9252"
+   }
+  ],
+  "payments": [],
+  "main_photo_url": "https://postfiles.pstatic.net/MjAyNjA5MTRfMTE4/MDAxNzg5MzkwNDg5OTA0.7whha09_XTJE9zFCOG9q68EOWEsXwhuV9SdmiMYQoCMg.LlDvz0tixZPjAYn1_0lyzPD_ujBiKjkB7VBmk4ofLvMg.JPEG/2026_08_31_19_00_IMG_8792.JPG?type=w773",
+  "display_info": {
+   "display_name1": "삼성동치킨"
+  }
+ },
+ "my_store_notice": {
+  "status": "READY_TO_REGISTER",
+  "notice_count": 0,
+  "is_available_booking": false
+ },
+ "open_hours": {
+  "headline": {
+   "code": "BEFORE_OPEN",
+   "display_text": "영업 전",
+   "display_text_info": "17:00 오픈"
+  },
+  "week_from_today": {
+   "week_periods": [
+    {
+     "days": [
+      {
+       "day_of_the_week_desc": "월(10/5)",
+       "on_days": {
+        "start_end_time_desc": "17:00 ~ 24:00"
+       },
+       "is_highlight": true
+      },
+      {
+       "day_of_the_week_desc": "화(10/6)",
+       "on_days": {
+        "start_end_time_desc": "17:00 ~ 24:00"
+       },
+       "is_highlight": false
+      },
+      {
+       "day_of_the_week_desc": "수(10/7)",
+       "on_days": {
+        "start_end_time_desc": "17:00 ~ 24:00"
+       },
+       "is_highlight": false
+      },
+      {
+       "day_of_the_week_desc": "목(10/8)",
+       "on_days": {
+        "start_end_time_desc": "17:00 ~ 24:00"
+       },
+       "is_highlight": false
+      },
+      {
+       "day_of_the_week_desc": "금(10/9)",
+       "on_days": {
+        "start_end_time_desc": "17:00 ~ 24:00"
+       },
+       "is_highlight": false
+      },
+      {
+       "day_of_the_week_desc": "토(10/10)",
+       "on_days": {
+        "start_end_time_desc": "17:00 ~ 24:00"
+       },
+       "is_highlight": false
+      }
+     ]
+    },
+    {
+     "days": [
+      {
+       "day_of_the_week_desc": "일(10/11)",
+       "off_days_desc": "휴무일",
+       "is_highlight": false
+      }
+     ]
+    }
+   ]
+  }
+ },
+ "photos": {
+  "counts": {
+   "total": 189,
+   "mystore": 0,
+   "vendor": 0,
+   "vod": 0,
+   "kakaomap_review": 2,
+   "food": 37,
+   "indoor": 4,
+   "outdoor": 14,
+   "menu": 4
+  },
+  "photos": [
+   {
+    "confirm_id": "63388502",
+    "url": "https://postfiles.pstatic.net/MjAyNjA5MTRfMTE4/MDAxNzg5MzkwNDg5OTA0.7whha09_XTJE9zFCOG9q68EOWEsXwhuV9SdmiMYQoCMg.LlDvz0tixZPjAYn1_0lyzPD_ujBiKjkB7VBmk4ofLvMg.JPEG/2026_08_31_19_00_IMG_8792.JPG?type=w773",
+    "type": "BLOG",
+    "photo_id": 1720884724,
+    "review_id": 117418800,
+    "registered_at": "2026-09-25 19:27:39",
+    "updated_at": "2026-09-25 19:47:28",
+    "title": "[서울/강남·삼성] 삼성동치킨｜코엑스 봉은사역 치킨호프 맛집 두번째 방문기",
+    "blog_link_url": "http://blog.naver.com/puyopiyo/224411731836",
+    "media_type": "PHOTO",
+    "ui_type": "POST"
+   },
+   {
+    "confirm_id": "63388502",
+    "url": "https://postfiles.pstatic.net/MjAyNjA5MTRfMjA1/MDAxNzg5Mzg5NDA5MzI4.PyuL-ZW3cDTBS0OObP-UWYWh0gSLFSojPhHZgsVsVMIg.q1Yd2dcR9HKCO-SmbQHCpbjjbrBwuGFoXh_p6412nTog.JPEG/SE-b7168989-952b-47e0-9f24-8bb57cedfcf2.jpg?type=w773",
+    "type": "BLOG",
+    "photo_id": 1720884894,
+    "review_id": 117418800,
+    "registered_at": "2026-09-25 19:27:52",
+    "updated_at": "2026-09-25 19:47:28",
+    "title": "[서울/강남·삼성] 삼성동치킨｜코엑스 봉은사역 치킨호프 맛집 두번째 방문기",
+    "blog_link_url": "http://blog.naver.com/puyopiyo/224411731836",
+    "media_type": "PHOTO",
+    "ui_type": "POST"
+   },
+   {
+    "confirm_id": "63388502",
+    "url": "https://postfiles.pstatic.net/MjAyNjA5MTRfMjI2/MDAxNzg5MzkxMTY3NjI1.lNep3S8_Yt-GoG3pozjJQjqkmbiHR4JVUjVAYvyvRw4g.c0PgU7urgxAZ6m1bJALZbc16Q3rjkrt6J_2jU_fNpWIg.JPEG/2026_08_31_19_01_IMG_8796.JPG?type=w773",
+    "type": "BLOG",
+    "photo_id": 1720885056,
+    "review_id": 117418800,
+    "registered_at": "2026-09-25 19:28:02",
+    "updated_at": "2026-09-25 19:47:28",
+    "title": "[서울/강남·삼성] 삼성동치킨｜코엑스 봉은사역 치킨호프 맛집 두번째 방문기",
+    "blog_link_url": "http://blog.naver.com/puyopiyo/224411731836",
+    "media_type": "PHOTO",
+    "ui_type": "POST"
+   },
+   {
+    "confirm_id": "63388502",
+    "url": "https://postfiles.pstatic.net/MjAyNjA5MTRfNTMg/MDAxNzg5Mzg5NDgxODI3.ZGYr6im5rRskVCr6VZRoDa7itZYGt2DNPj6R1ayKJOsg.0WGecr6KRDo2r0-AfQoXVtijH9Iw2rXPatcFGIhaGuYg.JPEG/2026_08_31_18_35_IMG_8779.JPG?type=w386",
+    "type": "BLOG",
+    "photo_id": 1720884859,
+    "review_id": 117418800,
+    "registered_at": "2026-09-25 19:27:49",
+    "updated_at": "2026-09-25 19:47:28",
+    "title": "[서울/강남·삼성] 삼성동치킨｜코엑스 봉은사역 치킨호프 맛집 두번째 방문기",
+    "blog_link_url": "http://blog.naver.com/puyopiyo/224411731836",
+    "media_type": "PHOTO",
+    "ui_type": "POST"
+   },
+   {
+    "confirm_id": "63388502",
+    "url": "https://postfiles.pstatic.net/MjAyNjA5MTRfMTIg/MDAxNzg5Mzg5NTE3NDky.pBPLzIBoeIYUSM6iqc_y63OhC6mu2EhughPk5flTj08g.3rb8naAC3j-MwXrvn0Np_XcwEw1vSe9PC3yHvaS9Eakg.JPEG/SE-630c62cd-6704-438a-ac4f-01d04645e813.jpg?type=w773",
+    "type": "BLOG",
+    "photo_id": 1720884842,
+    "review_id": 117418800,
+    "registered_at": "2026-09-25 19:27:48",
+    "updated_at": "2026-09-25 19:47:28",
+    "title": "[서울/강남·삼성] 삼성동치킨｜코엑스 봉은사역 치킨호프 맛집 두번째 방문기",
+    "blog_link_url": "http://blog.naver.com/puyopiyo/224411731836",
+    "media_type": "PHOTO",
+    "ui_type": "POST"
+   },
+   {
+    "confirm_id": "63388502",
+    "url": "https://postfiles.pstatic.net/MjAyNjA4MTNfODMg/MDAxNzg2NjMyOTM3NTQ5.wz-mFSOiK9auNlBWRTWKaOxLGV10u_rDN80jhyjj_00g.8q1nexYn4WkTK5tai2C_uvUs-qHLiAvnDYOzuRvJq0cg.JPEG/900_20260807_212208.jpg?type=w966",
+    "type": "BLOG",
+    "photo_id": 1704230197,
+    "review_id": 116083288,
+    "registered_at": "2026-08-30 12:16:21",
+    "updated_at": "2026-08-30 12:40:51",
+    "title": "내돈내산 삼성동 또간집｜봉은사역 원탑 치킨집, 말복 & 회식 & 청첩장 모임으로 좋은 <삼성동치킨>",
+    "blog_link_url": "http://blog.naver.com/yoluu/224377958207",
+    "media_type": "PHOTO",
+    "ui_type": "POST"
+   },
+   {
+    "confirm_id": "63388502",
+    "url": "https://postfiles.pstatic.net/MjAyNjA4MTNfMjYw/MDAxNzg2NjMzMTc3NzA1.knyDb59lyxnMwn3NI5r6PtAtG4YNO1BUVicOU3aBfykg.g3MrJUDlJfYVXNq5YEyIOSQ4_V3UQH8uHiYxiTVfI44g.JPEG/900_1786633176907.jpg?type=w966",
+    "type": "BLOG",
+    "photo_id": 1704230199,
+    "review_id": 116083288,
+    "registered_at": "2026-08-30 12:16:21",
+    "updated_at": "2026-08-30 12:40:51",
+    "title": "내돈내산 삼성동 또간집｜봉은사역 원탑 치킨집, 말복 & 회식 & 청첩장 모임으로 좋은 <삼성동치킨>",
+    "blog_link_url": "http://blog.naver.com/yoluu/224377958207",
+    "media_type": "PHOTO",
+    "ui_type": "POST"
+   },
+   {
+    "confirm_id": "63388502",
+    "url": "https://postfiles.pstatic.net/MjAyNjA4MTNfNDUg/MDAxNzg2NjMyOTUxNDYy.piVXsLU-q2K5i_n-lgBpWdH3e8Bba6DTNAgEMR6k3gYg.i877HjqpOQW3bCvDy212SP8-6kOHJKwDDyhmBeRLX-wg.JPEG/900_20260807_212241.jpg?type=w966",
+    "type": "BLOG",
+    "photo_id": 1704230215,
+    "review_id": 116083288,
+    "registered_at": "2026-08-30 12:16:23",
+    "updated_at": "2026-08-30 12:40:51",
+    "title": "내돈내산 삼성동 또간집｜봉은사역 원탑 치킨집, 말복 & 회식 & 청첩장 모임으로 좋은 <삼성동치킨>",
+    "blog_link_url": "http://blog.naver.com/yoluu/224377958207",
+    "media_type": "PHOTO",
+    "ui_type": "POST"
+   },
+   {
+    "confirm_id": "63388502",
+    "url": "https://postfiles.pstatic.net/MjAyNjA4MjNfMjA4/MDAxNzg3NDkzMTg3MDU5.AIRnozSU6lhBWxsnNAb-vTb1byHuEv3IbWs45EsJjXog.Y3ZHYoA-NIPporgWvw64pQvimOmg4xmdDjFI2aIFP5Ig.JPEG/SE-DB6594FA-EBB7-4BB3-90FC-F5C035F5A43B.jpg?type=w386",
+    "type": "BLOG",
+    "photo_id": 1702115009,
+    "review_id": 115919325,
+    "registered_at": "2026-08-26 14:57:38",
+    "updated_at": "2026-08-26 15:12:27",
+    "title": "[삼성동 현지인 맛집] 부담 없는 클래식 후라이드와 다양한 맥주 라인업! 사장님 친절에 감동받는 '삼성동 치킨'",
+    "blog_link_url": "http://blog.naver.com/lalalla7777/224387827563",
+    "media_type": "PHOTO",
+    "ui_type": "POST"
+   },
+   {
+    "confirm_id": "63388502",
+    "url": "https://postfiles.pstatic.net/MjAyNjA4MjNfMjQ4/MDAxNzg3NDkzMjU3NjM4.Rp0PqC2BlfsdqywwJnlU1g-4iCTQ5jC60RHKEUcXU0Mg.-nELU5BqhWzGEgr14XjKvyyki_b-p7UukVtmYMlHNAwg.JPEG/IMG%EF%BC%BF0248.JPG?type=w773",
+    "type": "BLOG",
+    "photo_id": 1702115030,
+    "review_id": 115919325,
+    "registered_at": "2026-08-26 14:57:39",
+    "updated_at": "2026-08-26 15:12:27",
+    "title": "[삼성동 현지인 맛집] 부담 없는 클래식 후라이드와 다양한 맥주 라인업! 사장님 친절에 감동받는 '삼성동 치킨'",
+    "blog_link_url": "http://blog.naver.com/lalalla7777/224387827563",
+    "media_type": "PHOTO",
+    "ui_type": "POST"
+   },
+   {
+    "confirm_id": "63388502",
+    "url": "https://postfiles.pstatic.net/MjAyNjA4MjNfMSAg/MDAxNzg3NDkzMTg2MTY5.2qJKgpFkDRGu00iKQ9z9fOc9-qLz3XWWKoY6cf1Y91Ug.hLVIeGp1dHZ3j9zcGfBOfRUyFLMxz9LH2iipzDYgXI8g.JPEG/SE-70084FD1-149B-4C40-8D8D-56618192508C.jpg?type=w386",
+    "type": "BLOG",
+    "photo_id": 1702115036,
+    "review_id": 115919325,
+    "registered_at": "2026-08-26 14:57:40",
+    "updated_at": "2026-08-26 15:12:27",
+    "title": "[삼성동 현지인 맛집] 부담 없는 클래식 후라이드와 다양한 맥주 라인업! 사장님 친절에 감동받는 '삼성동 치킨'",
+    "blog_link_url": "http://blog.naver.com/lalalla7777/224387827563",
+    "media_type": "PHOTO",
+    "ui_type": "POST"
+   },
+   {
+    "confirm_id": "63388502",
+    "url": "https://postfiles.pstatic.net/MjAyNjA4MjNfMTk2/MDAxNzg3NDkzMjU3NjYx.ZTmLpG2VCKTpV6BX5XI0lyzjvmcGRkfh-MxiKM8fD44g.oNNwr0pmn0nGvf3WB9oACxCqdUp2LBXBIv7EBUZaxv0g.JPEG/IMG%EF%BC%BF0247.JPG?type=w773",
+    "type": "BLOG",
+    "photo_id": 1702115037,
+    "review_id": 115919325,
+    "registered_at": "2026-08-26 14:57:40",
+    "updated_at": "2026-08-26 15:12:27",
+    "title": "[삼성동 현지인 맛집] 부담 없는 클래식 후라이드와 다양한 맥주 라인업! 사장님 친절에 감동받는 '삼성동 치킨'",
+    "blog_link_url": "http://blog.naver.com/lalalla7777/224387827563",
+    "media_type": "PHOTO",
+    "ui_type": "POST"
+   },
+   {
+    "confirm_id": "63388502",
+    "url": "https://postfiles.pstatic.net/MjAyNjA4MjNfMTUz/MDAxNzg3NDkzMjU3Njky.iIc3zGzaHnnfViBja_ILvpq_Ekpvzdw25VIFTpBSkYcg.TTCewTZ7h8wOO7Vc5H2Cyr96GOLykG4emGdref44164g.JPEG/IMG%EF%BC%BF0246.JPG?type=w773",
+    "type": "BLOG",
+    "photo_id": 1702115039,
+    "review_id": 115919325,
+    "registered_at": "2026-08-26 14:57:40",
+    "updated_at": "2026-08-26 15:12:27",
+    "title": "[삼성동 현지인 맛집] 부담 없는 클래식 후라이드와 다양한 맥주 라인업! 사장님 친절에 감동받는 '삼성동 치킨'",
+    "blog_link_url": "http://blog.naver.com/lalalla7777/224387827563",
+    "media_type": "PHOTO",
+    "ui_type": "POST"
+   },
+   {
+    "confirm_id": "63388502",
+    "url": "https://postfiles.pstatic.net/MjAyNjA4MjNfMjUg/MDAxNzg3NDkzMjU3Njg1.Z78GID0_CigHcK8SBSKvJTKf9Sk0mxCMJkm77RGS9L8g.fUWjuBxRMLL2EISbQoKU-tW6rA0Jb2-FJg9uCo3ZGysg.JPEG/IMG%EF%BC%BF0245.JPG?type=w773",
+    "type": "BLOG",
+    "photo_id": 1702114987,
+    "review_id": 115919325,
+    "registered_at": "2026-08-26 14:57:37",
+    "updated_at": "2026-08-26 15:12:27",
+    "title": "[삼성동 현지인 맛집] 부담 없는 클래식 후라이드와 다양한 맥주 라인업! 사장님 친절에 감동받는 '삼성동 치킨'",
+    "blog_link_url": "http://blog.naver.com/lalalla7777/224387827563",
+    "media_type": "PHOTO",
+    "ui_type": "POST"
+   },
+   {
+    "confirm_id": "63388502",
+    "url": "https://postfiles.pstatic.net/MjAyNjA2MDlfODYg/MDAxNzgwOTkyNDQ0ODIy.9weoe-b1TuTIf3s6u9F7HVZIYHUc9rh_KsuqJOhsJGUg.CLm8oVlFSTD-Uov81Jqak3XnpXPn7O6vO8A11V_yVt0g.JPEG/SE-bc11e4c8-1699-4d47-8e49-ba3f57ae3032.jpg?type=w773",
+    "type": "BLOG",
+    "photo_id": 1649751283,
+    "review_id": 111681063,
+    "registered_at": "2026-06-10 12:05:19",
+    "updated_at": "2026-06-10 12:26:58",
+    "title": "편안한 분위기의 강남 봉은사역 치맥집 : 삼성동 치킨 삼성점",
+    "blog_link_url": "http://blog.naver.com/malangpeach_87/224310879973",
+    "media_type": "PHOTO",
+    "ui_type": "POST"
+   },
+   {
+    "confirm_id": "63388502",
+    "url": "https://postfiles.pstatic.net/MjAyNjA2MDlfMTQ1/MDAxNzgwOTkyNDM1NjEw.3dqMeyXq-g41tBTjUN79jV63MItmw2Yt6ITo2JiAEqMg.bN8EWFkxxHPbfoyelMg_z-gosqTsGXO5kTxhSqiRamMg.JPEG/SE-0812939c-b6a2-4786-8a68-b9907f8fe7b5.jpg?type=w773",
+    "type": "BLOG",
+    "photo_id": 1649751219,
+    "review_id": 111681063,
+    "registered_at": "2026-06-10 12:05:14",
+    "updated_at": "2026-06-10 12:26:58",
+    "title": "편안한 분위기의 강남 봉은사역 치맥집 : 삼성동 치킨 삼성점",
+    "blog_link_url": "http://blog.naver.com/malangpeach_87/224310879973",
+    "media_type": "PHOTO",
+    "ui_type": "POST"
+   },
+   {
+    "confirm_id": "63388502",
+    "url": "https://postfiles.pstatic.net/MjAyNjA2MDlfMjU3/MDAxNzgwOTkyNDI5Mjg1.-gYYx3X86oygQVXYxybVpxyfa5YUWNm5vkYhqXJ03hQg.SEPr7YolKoDa6sJHG9w_nws2eIZxz4ZfSb9ltEI6mukg.JPEG/SE-ce7f1692-69f1-40bd-9df6-2b6f5efac180.jpg?type=w773",
+    "type": "BLOG",
+    "photo_id": 1649751202,
+    "review_id": 111681063,
+    "registered_at": "2026-06-10 12:05:13",
+    "updated_at": "2026-06-10 12:26:58",
+    "title": "편안한 분위기의 강남 봉은사역 치맥집 : 삼성동 치킨 삼성점",
+    "blog_link_url": "http://blog.naver.com/malangpeach_87/224310879973",
+    "media_type": "PHOTO",
+    "ui_type": "POST"
+   },
+   {
+    "confirm_id": "63388502",
+    "url": "https://postfiles.pstatic.net/MjAyNjA2MDlfMjkz/MDAxNzgwOTkyNDQwNzY0.jOXC1Dfpr71m5d-deMzWojviKPlnDiIaERWrAvdz62sg.e_DA99SA9tbM43IdMELx3i1MQxLwuPUivzLnrQdTTgAg.JPEG/SE-f085d6d7-dab1-4eaf-9807-4942c192ce7a.jpg?type=w773",
+    "type": "BLOG",
+    "photo_id": 1649751221,
+    "review_id": 111681063,
+    "registered_at": "2026-06-10 12:05:14",
+    "updated_at": "2026-06-10 12:26:58",
+    "title": "편안한 분위기의 강남 봉은사역 치맥집 : 삼성동 치킨 삼성점",
+    "blog_link_url": "http://blog.naver.com/malangpeach_87/224310879973",
+    "media_type": "PHOTO",
+    "ui_type": "POST"
+   },
+   {
+    "confirm_id": "63388502",
+    "url": "https://postfiles.pstatic.net/MjAyNjA2MDlfMjkx/MDAxNzgwOTkxNzA0NDg5.2cuGtC1innypSGzMw_90k83ES9H3rx_JkxF0u9lsZi4g.ly6qTvFD_kwjwhTFn0gzj-aVif2QmlD2C6GFWy-t-4Ig.JPEG/%EC%82%BC%EC%84%B1%EB%8F%99%EC%B9%98%ED%82%A8_%EC%82%BC%EC%84%B1%EC%A0%90_%EB%B0%98%EB%B0%98%EC%B9%98%ED%82%A8.jpg?type=w773",
+    "type": "BLOG",
+    "photo_id": 1649751248,
+    "review_id": 111681063,
+    "registered_at": "2026-06-10 12:05:17",
+    "updated_at": "2026-06-10 12:26:58",
+    "title": "편안한 분위기의 강남 봉은사역 치맥집 : 삼성동 치킨 삼성점",
+    "blog_link_url": "http://blog.naver.com/malangpeach_87/224310879973",
+    "media_type": "PHOTO",
+    "ui_type": "POST"
+   },
+   {
+    "confirm_id": "63388502",
+    "url": "https://postfiles.pstatic.net/MjAyNjA2MDlfMjM5/MDAxNzgwOTkyNDQyNzY3.IMbHteptNU76kGJmyfdocR3k9u8u0k9ACqSP0M-7czMg.RsE5KcqvD5fX4jSyuoyiaSxD719teEQt6GsLvpB5NVcg.JPEG/SE-135554e0-b221-43f8-a71b-d24ebb2b13b8.jpg?type=w773",
+    "type": "BLOG",
+    "photo_id": 1649751214,
+    "review_id": 111681063,
+    "registered_at": "2026-06-10 12:05:14",
+    "updated_at": "2026-06-10 12:26:58",
+    "title": "편안한 분위기의 강남 봉은사역 치맥집 : 삼성동 치킨 삼성점",
+    "blog_link_url": "http://blog.naver.com/malangpeach_87/224310879973",
+    "media_type": "PHOTO",
+    "ui_type": "POST"
+   },
+   {
+    "confirm_id": "63388502",
+    "url": "https://postfiles.pstatic.net/MjAyNjA2MDlfMTAg/MDAxNzgwOTkyNDQ4NTgy.AfZJWPE2jfRIDQv00-j0X3ogSwskQN3iZZuDIuB0k4Yg.ZYhrPsQ91AX_peRK0JQHRShnbY_hyGIIVQIlW159GmEg.JPEG/SE-53b8fe78-656a-477c-8aae-9ef207dfc3ce.jpg?type=w773",
+    "type": "BLOG",
+    "photo_id": 1649751287,
+    "review_id": 111681063,
+    "registered_at": "2026-06-10 12:05:20",
+    "updated_at": "2026-06-10 12:26:58",
+    "title": "편안한 분위기의 강남 봉은사역 치맥집 : 삼성동 치킨 삼성점",
+    "blog_link_url": "http://blog.naver.com/malangpeach_87/224310879973",
+    "media_type": "PHOTO",
+    "ui_type": "POST"
+   },
+   {
+    "confirm_id": "63388502",
+    "url": "https://postfiles.pstatic.net/MjAyNjA1MjZfMjE4/MDAxNzc5NzczNjA1OTgw.hMD_rJktYL1fWRVqpTM9bFb1ls4gcSge9gF25R6ZX3Ug.pH7y_9uiD1FUvkEDkkqSL9ysyJg9y8IkU86bVp2ZWIMg.JPEG/IMG%EF%BC%BF5859.jpg?type=w966",
+    "type": "BLOG",
+    "photo_id": 1643737389,
+    "review_id": 111192027,
+    "registered_at": "2026-06-03 18:10:54",
+    "updated_at": "2026-06-03 18:27:09",
+    "title": "삼성동치킨 삼성점 / 코엑스 봉은사 치킨맥주 (+야장)",
+    "blog_link_url": "http://blog.naver.com/ljhaha00/224302619615",
+    "media_type": "PHOTO",
+    "ui_type": "POST"
+   },
+   {
+    "confirm_id": "63388502",
+    "url": "https://postfiles.pstatic.net/MjAyNjA1MjdfNDMg/MDAxNzc5ODM1OTM1NDUy.5CsgSw5G87c8sOe6O3KMGJ02oQ-7pvn1X7yv_icsQkQg.7xpCY0MXZvKCRN3Nnx4F3KN4Q00MiUzazYKdk9ZJXtsg.JPEG/SE-F86DC7BF-369B-478A-AB49-F6B20256EA96.jpg?type=w966",
+    "type": "BLOG",
+    "photo_id": 1643737495,
+    "review_id": 111192027,
+    "registered_at": "2026-06-03 18:11:05",
+    "updated_at": "2026-06-03 18:27:09",
+    "title": "삼성동치킨 삼성점 / 코엑스 봉은사 치킨맥주 (+야장)",
+    "blog_link_url": "http://blog.naver.com/ljhaha00/224302619615",
+    "media_type": "PHOTO",
+    "ui_type": "POST"
+   },
+   {
+    "confirm_id": "63388502",
+    "url": "https://postfiles.pstatic.net/MjAyNjA1MjZfMTgg/MDAxNzc5NzczNjA2MjAy.XG6LHXVMxiWRHDB-ZCjpYA0YfcBb8nAvmNc9JiSMC5cg.9Ch44JEuKtqjMw7mIxMgCJhU4LTsVP2-_z2o0KhCznYg.JPEG/IMG%EF%BC%BF5858.jpg?type=w466",
+    "type": "BLOG",
+    "photo_id": 1643737383,
+    "review_id": 111192027,
+    "registered_at": "2026-06-03 18:10:54",
+    "updated_at": "2026-06-03 18:27:09",
+    "title": "삼성동치킨 삼성점 / 코엑스 봉은사 치킨맥주 (+야장)",
+    "blog_link_url": "http://blog.naver.com/ljhaha00/224302619615",
+    "media_type": "PHOTO",
+    "ui_type": "POST"
+   },
+   {
+    "confirm_id": "63388502",
+    "url": "https://postfiles.pstatic.net/MjAyNjA1MjZfMTU4/MDAxNzc5NzczNjA3MDAz.qXITMZ3rfY3GAcFLL4QQiUJU_xyksB0kJriw8J8mcKsg.6UbzN5NH9l4J5uec-Ox5dOyxUVwJlN6uk4eO_2bzVwMg.JPEG/IMG%EF%BC%BF5854.jpg?type=w966",
+    "type": "BLOG",
+    "photo_id": 1643737428,
+    "review_id": 111192027,
+    "registered_at": "2026-06-03 18:10:59",
+    "updated_at": "2026-06-03 18:27:09",
+    "title": "삼성동치킨 삼성점 / 코엑스 봉은사 치킨맥주 (+야장)",
+    "blog_link_url": "http://blog.naver.com/ljhaha00/224302619615",
+    "media_type": "PHOTO",
+    "ui_type": "POST"
+   },
+   {
+    "confirm_id": "63388502",
+    "url": "https://postfiles.pstatic.net/MjAyNjA1MjZfMjQw/MDAxNzc5NzczNjA1NjY5.P3Ua058XwyLKikUGviyJZ_p2DeOBsJZGgg1oOpcwdokg.BQANTxv69GYUncFRzb__V9cqMxIerIZo5zmjg9_lwMUg.JPEG/IMG%EF%BC%BF5845.jpg?type=w966",
+    "type": "BLOG",
+    "photo_id": 1643737412,
+    "review_id": 111192027,
+    "registered_at": "2026-06-03 18:10:56",
+    "updated_at": "2026-06-03 18:27:09",
+    "title": "삼성동치킨 삼성점 / 코엑스 봉은사 치킨맥주 (+야장)",
+    "blog_link_url": "http://blog.naver.com/ljhaha00/224302619615",
+    "media_type": "PHOTO",
+    "ui_type": "POST"
+   },
+   {
+    "confirm_id": "63388502",
+    "url": "https://postfiles.pstatic.net/MjAyNjA0MTdfMTc0/MDAxNzc2MzgzMzUwNDYw.qkiy2r8T0fFFZjzcCy-lPgWoyMsEWZbyY6y8CFBNIeAg.IvbZ55TzQPOkKeyZvU1ShJ1KVFMe3P4nBZjXtxQTPa8g.JPEG/IMG%EF%BC%BF8873.JPG?type=w773",
+    "type": "BLOG",
+    "photo_id": 1613120543,
+    "review_id": 108625240,
+    "registered_at": "2026-04-21 08:39:03",
+    "updated_at": "2026-04-21 09:00:21",
+    "title": "삼성역치맥 삼성동치킨 배달없는치킨집",
+    "blog_link_url": "http://blog.naver.com/weiss2015/224258430955",
+    "media_type": "PHOTO",
+    "ui_type": "POST"
+   },
+   {
+    "confirm_id": "63388502",
+    "url": "https://postfiles.pstatic.net/MjAyNjA0MTdfNyAg/MDAxNzc2MzgzMzQ5Mjg2.kSqXuRv0R1jUgkWiOkuGS9y-pU3hqYHdqFRM3F8d96Ug.bhcmSUfbyfZa5xuwOdiL8T7OaGOmn7dg26uNJWjwkP0g.JPEG/IMG%EF%BC%BF8871.JPG?type=w773",
+    "type": "BLOG",
+    "photo_id": 1613120512,
+    "review_id": 108625240,
+    "registered_at": "2026-04-21 08:39:01",
+    "updated_at": "2026-04-21 09:00:21",
+    "title": "삼성역치맥 삼성동치킨 배달없는치킨집",
+    "blog_link_url": "http://blog.naver.com/weiss2015/224258430955",
+    "media_type": "PHOTO",
+    "ui_type": "POST"
+   },
+   {
+    "confirm_id": "63388502",
+    "url": "https://postfiles.pstatic.net/MjAyNjA0MTdfNTcg/MDAxNzc2MzgzMzQ5NDY2._CpLrEiTjSQhDk-IBXmCTdVFGpnmfbfRK3wTwqBTLegg.sTn8Y9hKSVFTihLG_97jG3AxkA0eF64epJrFT0HF0vkg.JPEG/IMG%EF%BC%BF8864.JPG?type=w773",
+    "type": "BLOG",
+    "photo_id": 1613120596,
+    "review_id": 108625240,
+    "registered_at": "2026-04-21 08:39:07",
+    "updated_at": "2026-04-21 09:00:21",
+    "title": "삼성역치맥 삼성동치킨 배달없는치킨집",
+    "blog_link_url": "http://blog.naver.com/weiss2015/224258430955",
+    "media_type": "PHOTO",
+    "ui_type": "POST"
+   },
+   {
+    "confirm_id": "63388502",
+    "url": "https://postfiles.pstatic.net/MjAyNTEyMjFfNDQg/MDAxNzY2MjgxNjExNjIy.JYcAod6dMd7pL5n1a6xJht36D427shH5D6p6LvIwTkEg.KYFePbWAYSYYOrQt7I12CY8OE8fqUn02ok8mCCW8lhAg.JPEG/IMG%EF%BC%BF6869.JPG?type=w773",
+    "type": "BLOG",
+    "photo_id": 1524748053,
+    "review_id": 101125256,
+    "registered_at": "2025-12-24 19:44:06",
+    "updated_at": "2025-12-24 20:08:45",
+    "title": "삼성동 맛집 삼성동치킨 삼성점｜구남친(현남편)과 회사 후배랑 저녁 내돈내산 후기 🍗",
+    "blog_link_url": "http://blog.naver.com/ungeeon/224117265695",
+    "media_type": "PHOTO",
+    "ui_type": "POST"
+   }
+  ]
+ },
+ "blog_review": {
+  "review_count": 17,
+  "reviews": [
+   {
+    "confirm_id": "63388502",
+    "review_id": "117418800",
+    "title": "[서울/강남·삼성] 삼성동치킨｜코엑스 봉은사역 치킨호프 맛집 두번째 방문기",
+    "contents": "Copyright 2026 뿌요삐요 All Rights Reserved. 삼성동치킨 삼성점 📍위치 서울 강남구 영동대로115길 9 1층 (봉은사역 2번 출구에서 88m) ⏰영업시간 17:00 - 24:00 *매주 일 휴무 📞연락처 0507-1356-9252 🚗 주차 불가 🗓️예약 방법 전화 예약 삐요의 오늘의 맛집 🐤❣️ 코엑스 봉은사역 치킨 호프 맛집 '",
+    "registered_at": "2026-09-24 15:00:00",
+    "author": "막입이의 먹방일기",
+    "origin_url": "https://blog.naver.com/puyopiyo/224411731836",
+    "photo_count": 15,
+    "photos": [
+     {
+      "url": "https://dthumb-phinf.pstatic.net/?src=%22https%3A%2F%2Fblogthumb.pstatic.net%2FMjAyNTA3MjVfMzEg%2FMDAxNzUzNDI3MjAyMzY4.tqaBhNNJygutkDUkryw99Gen-y4ecJQafeto9apeplgg.riCkkzwwpeA7gOTtrdGmPBlzhnGRcD3EioA7OHhlS3kg.JPEG%2F2025_07_23_19_35_IMG_6253.JPG%3Ftype%3Dw2%22&type=ff500_300",
+      "photo_id": 1720884890
+     },
+     {
+      "url": "https://postfiles.pstatic.net/MjAyNjA5MTRfMTIg/MDAxNzg5Mzg5NTE3NDky.pBPLzIBoeIYUSM6iqc_y63OhC6mu2EhughPk5flTj08g.3rb8naAC3j-MwXrvn0Np_XcwEw1vSe9PC3yHvaS9Eakg.JPEG/SE-630c62cd-6704-438a-ac4f-01d04645e813.jpg?type=w773",
+      "photo_id": 1720884842
+     },
+     {
+      "url": "https://postfiles.pstatic.net/MjAyNjA5MTRfMTQ5/MDAxNzg5MzkwNTY0NjY4.wVnMT4khcchsTfQThGnVJ2Yhn9aI57942ONatMPKVdsg.UKLe8HhsYk-sx3osDIOMGEK1h5_XZ-EftfwrSJ9nNgMg.JPEG/2026_08_31_18_59_IMG_8789.JPG?type=w386",
+      "photo_id": 1720884628
+     },
+     {
+      "url": "https://postfiles.pstatic.net/MjAyNjA5MTRfNTMg/MDAxNzg5Mzg5NDgxODI3.ZGYr6im5rRskVCr6VZRoDa7itZYGt2DNPj6R1ayKJOsg.0WGecr6KRDo2r0-AfQoXVtijH9Iw2rXPatcFGIhaGuYg.JPEG/2026_08_31_18_35_IMG_8779.JPG?type=w386",
+      "photo_id": 1720884859
+     },
+     {
+      "url": "https://postfiles.pstatic.net/MjAyNjA5MTRfMTMz/MDAxNzg5MzkwMzU2Nzgw.qqULmzaV04jCO4vFB9uugCR0zvpzNKvqH6VTQg7ohugg.B6twFXTXmuzQn4EvLLdw5W5mlAwQjT962fre2OlLfHog.JPEG/2026_08_31_19_01_IMG_8799.JPG?type=w386",
+      "photo_id": 1720884907
+     },
+     {
+      "url": "https://postfiles.pstatic.net/MjAyNjA5MTRfMjMx/MDAxNzg5MzkwMzU2NzY3.fkFhPPWdNimxlSGnPh7z2HSbMutnJE_vgu9h0V6g_wwg.zhSBSsB1h0wiWW7rgYlqMcmPQDNEqSYaxzwrfvGwnjUg.JPEG/2026_08_31_19_01_IMG_8798.JPG?type=w386",
+      "photo_id": 1720884991
+     },
+     {
+      "url": "https://postfiles.pstatic.net/MjAyNjA5MTRfMTA0/MDAxNzg5MzkwMzU2ODQ4.Dz-LS6oJ5L9PC0I8gOZh8LIDQapLv7aFKzWjTS_ITgYg.zgSzzsfVoxUshP7-zwy5CgHOh6KTpni7aFmmjs7yPuwg.JPEG/2026_08_31_19_01_IMG_8800.JPG?type=w386",
+      "photo_id": 1720885061
+     },
+     {
+      "url": "https://postfiles.pstatic.net/MjAyNjA5MTRfMTM2/MDAxNzg5MzkwNTY0Njkx._U-EacDoVn6pPxHQIjzOAhcOEMaQ2Zu0PG3siSLy5GIg.6Lc1p0Z2HMMvXjmYLZXGkWbfezhzG_w53RL6PLS3RLQg.JPEG/2026_08_31_19_02_IMG_8801.JPG?type=w386",
+      "photo_id": 1720884694
+     },
+     {
+      "url": "https://postfiles.pstatic.net/MjAyNjA5MTRfMjc2/MDAxNzg5MzkwODA1ODA1.zU8nFuuIQ1XCNX7_8FQgwjctHEzltLwdTPoHbVWNGbEg.7Jaegrr-ljLOxFmyWGk7tgpI1t82KPoRHq37NrT9DQcg.JPEG/2026_08_31_18_59_IMG_8787.JPG?type=w386",
+      "photo_id": 1720885205
+     },
+     {
+      "url": "https://postfiles.pstatic.net/MjAyNjA5MTRfMjI2/MDAxNzg5MzkxMTY3NjI1.lNep3S8_Yt-GoG3pozjJQjqkmbiHR4JVUjVAYvyvRw4g.c0PgU7urgxAZ6m1bJALZbc16Q3rjkrt6J_2jU_fNpWIg.JPEG/2026_08_31_19_01_IMG_8796.JPG?type=w773",
+      "photo_id": 1720885056
+     }
+    ]
+   },
+   {
+    "confirm_id": "63388502",
+    "review_id": "115919325",
+    "title": "[삼성동 현지인 맛집] 부담 없는 클래식 후라이드와 다양한 맥주 라인업! 사장님 친절에 감동받는 '삼성동 치킨'",
+    "contents": "(삼성동 회식, 치맥하기 딱좋은, 기본에 충실한 치킨집) 안녕하세요! 도서/미디어/맛집 리뷰 블로거 라라랄라에요. 요즘 치킨 시장을 보면 온갖 화려한 시즈닝에 각종 이색 소스가 넘쳐나곤 하죠. 물론 그런 기교 넘치는 치킨들도 맛있어서 자주 사 먹게 되지만, 문득 뇌리에서 \"아, 오늘은 기교 싹 뺀 진짜 제대로 된 클래식 치킨이 땡긴다!\" 하는 순간이 꼭 찾",
+    "registered_at": "2026-08-25 17:54:00",
+    "author": "라라랄라의 생각읽기",
+    "origin_url": "https://blog.naver.com/lalalla7777/224387827563",
+    "photo_count": 13,
+    "photos": [
+     {
+      "url": "https://postfiles.pstatic.net/MjAyNjA4MjNfMjUg/MDAxNzg3NDkzMjU3Njg1.Z78GID0_CigHcK8SBSKvJTKf9Sk0mxCMJkm77RGS9L8g.fUWjuBxRMLL2EISbQoKU-tW6rA0Jb2-FJg9uCo3ZGysg.JPEG/IMG%EF%BC%BF0245.JPG?type=w773",
+      "photo_id": 1702114987
+     },
+     {
+      "url": "https://postfiles.pstatic.net/MjAyNjA4MjNfMTUz/MDAxNzg3NDkzMjU3Njky.iIc3zGzaHnnfViBja_ILvpq_Ekpvzdw25VIFTpBSkYcg.TTCewTZ7h8wOO7Vc5H2Cyr96GOLykG4emGdref44164g.JPEG/IMG%EF%BC%BF0246.JPG?type=w773",
+      "photo_id": 1702115039
+     },
+     {
+      "url": "https://postfiles.pstatic.net/MjAyNjA4MjNfMTcy/MDAxNzg3NDkzMTg4MDQz.eT4WEvqloZ28IWpS2JXLnbWZZyooqiGRT8z6Fzmlqjwg.XKT6oKXUbtVkNj9ZEWibvRsEQsUkwfTzGvF2NXhMOQsg.JPEG/SE-6A48889A-0956-4415-A032-3030FC333D1E.jpg?type=w773",
+      "photo_id": 1702115038
+     },
+     {
+      "url": "https://postfiles.pstatic.net/MjAyNjA4MjNfMjYy/MDAxNzg3NDkzMDExMDI2.GRfsTPbFsKGtpJRNMoFFnTD3CWPlIkatTXqyRwLplYQg.O7Ad0flafioyNlPey8jMPd_74WtcnNGHQ7A67ODyQW4g.JPEG/IMG%EF%BC%BF0252.JPG?type=w386",
+      "photo_id": 1702114999
+     },
+     {
+      "url": "https://postfiles.pstatic.net/MjAyNjA4MjNfMTk2/MDAxNzg3NDkzMjU3NjYx.ZTmLpG2VCKTpV6BX5XI0lyzjvmcGRkfh-MxiKM8fD44g.oNNwr0pmn0nGvf3WB9oACxCqdUp2LBXBIv7EBUZaxv0g.JPEG/IMG%EF%BC%BF0247.JPG?type=w773",
+      "photo_id": 1702115037
+     },
+     {
+      "url": "https://postfiles.pstatic.net/MjAyNjA4MjNfMSAg/MDAxNzg3NDkzMTg2MTY5.2qJKgpFkDRGu00iKQ9z9fOc9-qLz3XWWKoY6cf1Y91Ug.hLVIeGp1dHZ3j9zcGfBOfRUyFLMxz9LH2iipzDYgXI8g.JPEG/SE-70084FD1-149B-4C40-8D8D-56618192508C.jpg?type=w386",
+      "photo_id": 1702115036
+     },
+     {
+      "url": "https://postfiles.pstatic.net/MjAyNjA4MjNfMTcw/MDAxNzg3NDkzMDUwMDg4.7_SnPy0gnLt-tK3wuyvoaT338y3ENbakExfEvzKFAwgg.eEFjvmUqjq-50S9m4lXXtYaiGf1RT99ZQJ0Zgf5bpzog.JPEG/IMG%EF%BC%BF0244.JPG?type=w386",
+      "photo_id": 1702115027
+     },
+     {
+      "url": "https://postfiles.pstatic.net/MjAyNjA4MjNfMjA1/MDAxNzg3NDkzMDUwMTAw.JYB3KwFIWPY8zqBLUYo4TzGyUd90XvU286CYgGShetAg.M1S2d1A4dg4rJI94dqBk2W4JZ81YvScmreKxAdTyZckg.JPEG/IMG%EF%BC%BF0240.JPG?type=w386",
+      "photo_id": 1702115023
+     },
+     {
+      "url": "https://postfiles.pstatic.net/MjAyNjA4MjNfMjQ4/MDAxNzg3NDkzMjU3NjM4.Rp0PqC2BlfsdqywwJnlU1g-4iCTQ5jC60RHKEUcXU0Mg.-nELU5BqhWzGEgr14XjKvyyki_b-p7UukVtmYMlHNAwg.JPEG/IMG%EF%BC%BF0248.JPG?type=w773",
+      "photo_id": 1702115030
+     },
+     {
+      "url": "https://postfiles.pstatic.net/MjAyNjA4MjNfMjcy/MDAxNzg3NDkzMDUwMTIz.jNZz5PSAsU5hRmLIbogqo2iKusIC-Ocnx4pckN8a2Igg.ZleOpTGBCLvG2qvPJ0JkjBaO-IBTCgGRZhFFbH1MAX8g.JPEG/IMG%EF%BC%BF0241.JPG?type=w386",
+      "photo_id": 1702115024
+     }
+    ]
+   },
+   {
+    "confirm_id": "63388502",
+    "review_id": "116083288",
+    "title": "내돈내산 삼성동 또간집｜봉은사역 원탑 치킨집, 말복 & 회식 & 청첩장 모임으로 좋은 <삼성동치킨>",
+    "contents": "봉은사역 원탑 치킨집 말복·회식·청첩장 모임으로 좋은 \"삼성동치킨\" 여름만 되면 이상하게 맥주가 그렇게 당기더라고요. 이번 여름에만 맥주 마신 포스팅을 몇 번째 쓰는지 모르겠는데요. 😂 그런데 오늘은 그냥 치킨집이 아니라, 제가 꽤 애정해서 또 방문한 삼성동 치킨을 소개해보려고 합니다. 삼성동과 봉은사역 주변에 치킨집이 꽤 많은데, 개인적으로 제가 정착한 ",
+    "registered_at": "2026-08-14 00:09:00",
+    "author": "수박수",
+    "origin_url": "https://blog.naver.com/yoluu/224377958207",
+    "photo_count": 13,
+    "photos": [
+     {
+      "url": "https://postfiles.pstatic.net/MjAyNjA4MTNfMTY3/MDAxNzg2NjMzMDMyMzU0.yzQZO19KmVRrI8bDHQoTd48HfNRRsB5MbgZfDWBYgoIg.TXR-K07t0v-h9_hsSn2WGxOHrVcpSUCdlyKF-cKglFIg.JPEG/900_20260807_221333.jpg?type=w466",
+      "photo_id": 1704230192
+     },
+     {
+      "url": "https://postfiles.pstatic.net/MjAyNjA4MTNfMTU1/MDAxNzg2NjMyOTc1MjA2.wRKe5qyR5pm74SHeel1c9hWL06Jcr-nqDpCrcAVqVx0g._q1H2agfqq--1aVM9E_kJEpNZRrYDYcauAMP2xVOsS0g.JPEG/900_20260807_210258.jpg?type=w966",
+      "photo_id": 1704230201
+     },
+     {
+      "url": "https://postfiles.pstatic.net/MjAyNjA4MTNfMTEw/MDAxNzg2NjMzMDMzMjI3.ws8VskqlkYTTenTFRHt_Nd25Yj2XtSfwqYCQvEEWyBYg.vOLM9S4J5Zwnh3adFAsqqqJJsnSCPsp59RSgLINPrUkg.JPEG/900_20260807_222035.jpg?type=w466",
+      "photo_id": 1704230191
+     },
+     {
+      "url": "https://postfiles.pstatic.net/MjAyNjA4MTNfOTEg/MDAxNzg2NjMyOTEwMDY2.5PN346UYPYM6EltqykKNVj_zp2tFPHa4FH6yImypC5Ag.lFCtmoLfYOMf0GbzhAo71QR4-kFSrCRJvK2PUGeE_X0g.JPEG/900_20260807_210108.jpg?type=w966",
+      "photo_id": 1704230209
+     },
+     {
+      "url": "https://postfiles.pstatic.net/MjAyNjA4MTNfMTYw/MDAxNzg2NjMzMDAwMjQz.17w3tuLwrvSUZ8FSwYn-OK9gd57H0_sESVOVTFyqwIMg.18WzSSLjL781BdpMgAtcitf4H-zHa6uhImbZ1GJS9TQg.JPEG/900_20260807_210831.jpg?type=w966",
+      "photo_id": 1704230193
+     },
+     {
+      "url": "https://postfiles.pstatic.net/MjAyNjA4MTNfNDUg/MDAxNzg2NjMyOTUxNDYy.piVXsLU-q2K5i_n-lgBpWdH3e8Bba6DTNAgEMR6k3gYg.i877HjqpOQW3bCvDy212SP8-6kOHJKwDDyhmBeRLX-wg.JPEG/900_20260807_212241.jpg?type=w966",
+      "photo_id": 1704230215
+     },
+     {
+      "url": "https://postfiles.pstatic.net/MjAyNjA4MTNfMjk5/MDAxNzg2NjMzMDMxNzE2.DN5Z7VylYOQ6kCJt0JoE2p_t7EgRS0n_j6XIaLGK8dcg.fc5VZX1Pd7KXtmr5YO6jB2cDx2sbwc3m6KgvFhDfScYg.JPEG/900_20260807_221316.jpg?type=w466",
+      "photo_id": 1704230196
+     },
+     {
+      "url": "https://postfiles.pstatic.net/MjAyNjA4MTNfMTQy/MDAxNzg2NjMzMTEwMzI3.VVNB9-MFiM5yUlAf3pxWLb87uc-FDryqu54JzcKYhSsg.-9GmKmEn3h0zZzEvGXdQhJQ4FPrhMlaFZUQS1IRwJFQg.JPEG/900_20260807_214539.jpg?type=w966",
+      "photo_id": 1704230194
+     },
+     {
+      "url": "https://postfiles.pstatic.net/MjAyNjA4MTNfMjYw/MDAxNzg2NjMzMTc3NzA1.knyDb59lyxnMwn3NI5r6PtAtG4YNO1BUVicOU3aBfykg.g3MrJUDlJfYVXNq5YEyIOSQ4_V3UQH8uHiYxiTVfI44g.JPEG/900_1786633176907.jpg?type=w966",
+      "photo_id": 1704230199
+     },
+     {
+      "url": "https://postfiles.pstatic.net/MjAyNjA4MTNfMjI2/MDAxNzg2NjMzMTE5NDM2.P13VNYPwg0Ltntbf13BsUDfPoLuaUNepxtq3vyTnWHAg.VtKtLs-1rqV-D25TTgA_BSWztgGpcFmfezKtt1JdVXwg.JPEG/900_20260807_221200.jpg?type=w966",
+      "photo_id": 1704230198
+     }
+    ]
+   },
+   {
+    "confirm_id": "63388502",
+    "review_id": "111681063",
+    "title": "편안한 분위기의 강남 봉은사역 치맥집 : 삼성동 치킨 삼성점",
+    "contents": "편안한 분위기의 강남 봉은사역 치맥집 : 삼성동 치킨 삼성점 Previous image Next image 봉은사역 치킨집 추천! '삼성동치킨 삼성점' '삼성동치킨 삼성점' 정보 주소 서울 강남구 영동대로115길 9 1층 찾아가는 길 봉은사역 2번 출구에서 88m 영업시간 월 ~ 토 17:00 ~ 24:00 / 매주 일요일 정기휴무 전화 0507 - 135",
+    "registered_at": "2026-06-09 18:42:00",
+    "author": "M.M.P",
+    "origin_url": "https://blog.naver.com/malangpeach_87/224310879973",
+    "photo_count": 12,
+    "photos": [
+     {
+      "url": "https://postfiles.pstatic.net/MjAyNjA2MDlfMTAg/MDAxNzgwOTkyNDQ4NTgy.AfZJWPE2jfRIDQv00-j0X3ogSwskQN3iZZuDIuB0k4Yg.ZYhrPsQ91AX_peRK0JQHRShnbY_hyGIIVQIlW159GmEg.JPEG/SE-53b8fe78-656a-477c-8aae-9ef207dfc3ce.jpg?type=w773",
+      "photo_id": 1649751287
+     },
+     {
+      "url": "https://postfiles.pstatic.net/MjAyNjA2MDlfNDEg/MDAxNzgwOTkyNDUwNDI1.ALaDXVXrljfqcyLoAl-mhFjd8evTFPIvn1u-sj4N-3wg.RMRqZpaiKy5Q7ipvKbXTQh-8vmJlw9_HOTrZsrM74-Mg.JPEG/SE-ad7cdfde-d630-416d-ae5d-47e96062c3a0.jpg?type=w773",
+      "photo_id": 1649751272
+     },
+     {
+      "url": "https://postfiles.pstatic.net/MjAyNjA2MDlfMTY0/MDAxNzgwOTkyNDIwNDQ4.mGsNr-Balqdo7-05JX6YsrUhIM06wKHiS-T3yYZF0vog.BJ2itXi8Iip6n-YJnRYZ_N9CvO9KvGZfvMwn5WbTk2kg.JPEG/SE-144792be-6791-4e0e-9213-ec62a176ca4a.jpg?type=w773",
+      "photo_id": 1649751261
+     },
+     {
+      "url": "https://postfiles.pstatic.net/MjAyNjA2MDlfMjM5/MDAxNzgwOTkyNDQyNzY3.IMbHteptNU76kGJmyfdocR3k9u8u0k9ACqSP0M-7czMg.RsE5KcqvD5fX4jSyuoyiaSxD719teEQt6GsLvpB5NVcg.JPEG/SE-135554e0-b221-43f8-a71b-d24ebb2b13b8.jpg?type=w773",
+      "photo_id": 1649751214
+     },
+     {
+      "url": "https://postfiles.pstatic.net/MjAyNjA2MDlfMjkx/MDAxNzgwOTkxNzA0NDg5.2cuGtC1innypSGzMw_90k83ES9H3rx_JkxF0u9lsZi4g.ly6qTvFD_kwjwhTFn0gzj-aVif2QmlD2C6GFWy-t-4Ig.JPEG/%EC%82%BC%EC%84%B1%EB%8F%99%EC%B9%98%ED%82%A8_%EC%82%BC%EC%84%B1%EC%A0%90_%EB%B0%98%EB%B0%98%EC%B9%98%ED%82%A8.jpg?type=w773",
+      "photo_id": 1649751248
+     },
+     {
+      "url": "https://postfiles.pstatic.net/MjAyNjA2MDlfMTY5/MDAxNzgwOTkyNDQ2NzQw.VBDgluzImFtvsUYtZLO3FtWn7gbHvDihMnfyFjhOwGMg.5qIJVgE62PfmGXYg-4n1FQHhPxFpVT7IY510B_E9kBgg.JPEG/SE-0b69a37d-3119-448b-8e15-ec513b9e9449.jpg?type=w773",
+      "photo_id": 1649751247
+     },
+     {
+      "url": "https://postfiles.pstatic.net/MjAyNjA2MDlfMjkz/MDAxNzgwOTkyNDQwNzY0.jOXC1Dfpr71m5d-deMzWojviKPlnDiIaERWrAvdz62sg.e_DA99SA9tbM43IdMELx3i1MQxLwuPUivzLnrQdTTgAg.JPEG/SE-f085d6d7-dab1-4eaf-9807-4942c192ce7a.jpg?type=w773",
+      "photo_id": 1649751221
+     },
+     {
+      "url": "https://postfiles.pstatic.net/MjAyNjA2MDlfMjU3/MDAxNzgwOTkyNDI5Mjg1.-gYYx3X86oygQVXYxybVpxyfa5YUWNm5vkYhqXJ03hQg.SEPr7YolKoDa6sJHG9w_nws2eIZxz4ZfSb9ltEI6mukg.JPEG/SE-ce7f1692-69f1-40bd-9df6-2b6f5efac180.jpg?type=w773",
+      "photo_id": 1649751202
+     },
+     {
+      "url": "https://postfiles.pstatic.net/MjAyNjA2MDlfMTQ1/MDAxNzgwOTkyNDM1NjEw.3dqMeyXq-g41tBTjUN79jV63MItmw2Yt6ITo2JiAEqMg.bN8EWFkxxHPbfoyelMg_z-gosqTsGXO5kTxhSqiRamMg.JPEG/SE-0812939c-b6a2-4786-8a68-b9907f8fe7b5.jpg?type=w773",
+      "photo_id": 1649751219
+     },
+     {
+      "url": "https://postfiles.pstatic.net/MjAyNjA2MDlfNDcg/MDAxNzgwOTkyNDM3OTQ0.nPAuskrQgNgPmCYq5k42BVHpJHwTSPcV5QNPR19njycg.NPlahPTtsKRkgEhjclqLJKj_JC2uCwcXd3bqhoM_efIg.JPEG/SE-e50c726f-deb3-47ce-a1b6-581ad13c00d4.jpg?type=w773",
+      "photo_id": 1649751252
+     }
+    ]
+   }
+  ],
+  "current_review_count": 4,
+  "last_review_id": "111681063",
+  "last_registered_at": "2026-06-09 18:42:00",
+  "requested_page_size": 4,
+  "requested_page": 1
+ },
+ "kakaomap_review": {
+  "score_set": {
+   "review_count": 7,
+   "total_score": 31,
+   "average_score": 4.4,
+   "photo_count": 2,
+   "strength_counts": [
+    {
+     "id": 5,
+     "count": 1
+    },
+    {
+     "id": 1,
+     "count": 1
+    }
+   ],
+   "strength_uv": 2
+  },
+  "strength_description": [
+   {
+    "id": 5,
+    "name": "맛",
+    "icon_url": "https://t1.kakaocdn.net/kakaomap_mobile/android/icon_review_delicious.png"
+   },
+   {
+    "id": 1,
+    "name": "가성비",
+    "icon_url": "https://t1.kakaocdn.net/kakaomap_mobile/android/icon_review_money.png"
+   },
+   {
+    "id": 2,
+    "name": "친절",
+    "icon_url": "https://t1.kakaocdn.net/kakaomap_mobile/android/icon_review_kind.png"
+   },
+   {
+    "id": 3,
+    "name": "분위기",
+    "icon_url": "https://t1.kakaocdn.net/kakaomap_mobile/android/icon_review_mood.png"
+   },
+   {
+    "id": 4,
+    "name": "주차",
+    "icon_url": "https://t1.kakaocdn.net/kakaomap_mobile/android/icon_review_parking.png"
+   }
+  ],
+  "reviews": [
+   {
+    "review_id": 13361700,
+    "star_rating": 4,
+    "contents": "War ganz okay. Nicht herausragend, das Huhn war etwas zu trocken, die Pommes etwas geschmacklos, das Bier etwas zu teuer. 4 Sterne max.",
+    "photo_count": 1,
+    "photos": [
+     {
+      "url": "http://t1.kakaocdn.net/local/kakaomapPhoto/review/1038b0975d71ad7deec7f2c719b2c46c984cea8f?original",
+      "photo_id": 6877563,
+      "media_type": "PHOTO",
+      "status": "S",
+      "ui_type": "PROFILE",
+      "duration": 0,
+      "review_id": 13361700,
+      "updated_at": "2025-08-01 23:24:57",
+      "meta": {
+       "owner": {
+        "map_user_id": "4369855183",
+        "nickname": "iKotik",
+        "image_url": "https://p.kakaocdn.net/th/talkp/wpV2Wb9UmF/hfbT9UJ1TjDgtCrutUbtak/r2bml3_640x640_s.jpg",
+        "timeline_level": {
+         "badge": "01",
+         "now_level": 4,
+         "show_other": true
+        },
+        "review_count": 3,
+        "follower_count": 0,
+        "profile_links": [],
+        "average_score": 4.7,
+        "profile_status": "S"
+       },
+       "is_liked_by_me": false,
+       "view_count": 48,
+       "like_count": 0,
+       "near": false,
+       "place": {
+        "confirm_id": "63388502",
+        "place_name": "삼성동치킨 삼성점"
+       }
+      }
+     }
+    ],
+    "status": "S",
+    "registered_at": "2025-08-01 23:24:57",
+    "updated_at": "2025-08-01 23:24:57",
+    "meta": {
+     "owner": {
+      "map_user_id": "4369855183",
+      "nickname": "iKotik",
+      "profile_image_url": "https://p.kakaocdn.net/th/talkp/wpV2Wb9UmF/hfbT9UJ1TjDgtCrutUbtak/r2bml3_640x640_s.jpg",
+      "timeline_level": {
+       "badge": "01",
+       "now_level": 4
+      },
+      "review_count": 3,
+      "follower_count": 0,
+      "average_score": 4.7,
+      "profile_status": "S",
+      "is_following": false
+     },
+     "is_liked_by_me": false,
+     "is_owner_me": false,
+     "like_count": 0,
+     "like_user_profile_image_list": [],
+     "is_place_owner_pick": false,
+     "place": {
+      "confirm_id": "63388502",
+      "place_name": "삼성동치킨 삼성점"
+     }
+    }
+   },
+   {
+    "review_id": 2219333,
+    "star_rating": 2,
+    "contents": "생맥주는 아주 맛있어요. 후라이드 맛은 있는데 닭냄새 조금 났고 윙모듬 매콤한맛 시켰는데 너무 매웠고 골뱅이는 소면이아니라 쫄면인데 이것도 넘 매웠어요. 감튀는 맛있어요. ",
+    "photo_count": 2,
+    "photos": [
+     {
+      "url": "http://t1.kakaocdn.net/local/kakaomapPhoto/review/f216069ed938fef68a49ea35000c3f406c8eddf6?original",
+      "photo_id": 674420,
+      "media_type": "PHOTO",
+      "status": "S",
+      "ui_type": "PROFILE",
+      "review_id": 2219333,
+      "updated_at": "2020-08-07 22:00:06",
+      "meta": {
+       "owner": {
+        "map_user_id": "478130575",
+        "nickname": "Jungmin",
+        "image_url": "http://th-p.talk.kakao.co.kr/th/talkp/wkluFL7XYd/ny6Z6fV6EgzUAhe3tGtPL1/wvzvrn.jpg",
+        "timeline_level": {
+         "badge": "02",
+         "now_level": 22,
+         "show_other": true
+        },
+        "review_count": 44,
+        "follower_count": 1,
+        "profile_links": [],
+        "average_score": 4.0,
+        "profile_status": "S"
+       },
+       "is_liked_by_me": false,
+       "view_count": 464,
+       "like_count": 0,
+       "near": false,
+       "place": {
+        "confirm_id": "63388502",
+        "place_name": "삼성동치킨 삼성점"
+       }
+      }
+     },
+     {
+      "url": "http://t1.kakaocdn.net/local/kakaomapPhoto/review/b644ab4d2a329817fe831a1cf492e16086e656e9?original",
+      "photo_id": 674421,
+      "media_type": "PHOTO",
+      "status": "S",
+      "ui_type": "PROFILE",
+      "review_id": 2219333,
+      "updated_at": "2020-08-07 22:00:06",
+      "meta": {
+       "owner": {
+        "map_user_id": "478130575",
+        "nickname": "Jungmin",
+        "image_url": "http://th-p.talk.kakao.co.kr/th/talkp/wkluFL7XYd/ny6Z6fV6EgzUAhe3tGtPL1/wvzvrn.jpg",
+        "timeline_level": {
+         "badge": "02",
+         "now_level": 22,
+         "show_other": true
+        },
+        "review_count": 44,
+        "follower_count": 1,
+        "profile_links": [],
+        "average_score": 4.0,
+        "profile_status": "S"
+       },
+       "is_liked_by_me": false,
+       "view_count": 405,
+       "like_count": 0,
+       "near": false,
+       "place": {
+        "confirm_id": "63388502",
+        "place_name": "삼성동치킨 삼성점"
+       }
+      }
+     }
+    ],
+    "status": "S",
+    "registered_at": "2020-08-07 22:00:06",
+    "updated_at": "2020-08-07 22:00:06",
+    "meta": {
+     "owner": {
+      "map_user_id": "478130575",
+      "nickname": "Jungmin",
+      "profile_image_url": "http://th-p.talk.kakao.co.kr/th/talkp/wkluFL7XYd/ny6Z6fV6EgzUAhe3tGtPL1/wvzvrn.jpg",
+      "timeline_level": {
+       "badge": "02",
+       "now_level": 22
+      },
+      "review_count": 44,
+      "follower_count": 1,
+      "average_score": 4.0,
+      "profile_status": "S",
+      "is_following": false
+     },
+     "is_liked_by_me": false,
+     "is_owner_me": false,
+     "like_count": 0,
+     "like_user_profile_image_list": [],
+     "is_place_owner_pick": false,
+     "place": {
+      "confirm_id": "63388502",
+      "place_name": "삼성동치킨 삼성점"
+     }
+    }
+   },
+   {
+    "review_id": 15054451,
+    "star_rating": 5,
+    "contents": "모든 음식들이 맛있어요",
+    "photo_count": 0,
+    "status": "S",
+    "registered_at": "2026-03-17 16:43:04",
+    "updated_at": "2026-03-24 15:45:45",
+    "meta": {
+     "owner": {
+      "map_user_id": "4442787082",
+      "nickname": "청담식객",
+      "profile_image_url": "http://k.kakaocdn.net/dn/cgq9zf/btsOV14lU7f/XpKUynSXaou3aiw1l7JmgK/img_640x640.jpg",
+      "timeline_level": {
+       "badge": "02",
+       "now_level": 22
+      },
+      "review_count": 85,
+      "follower_count": 1,
+      "average_score": 3.9,
+      "profile_status": "S",
+      "is_following": false
+     },
+     "is_liked_by_me": false,
+     "is_owner_me": false,
+     "like_count": 1,
+     "like_user_profile_image_list": [
+      "https://t1.kakaocdn.net/local/default_profile/profile_noimg.png"
+     ],
+     "is_place_owner_pick": false,
+     "place": {
+      "confirm_id": "63388502",
+      "place_name": "삼성동치킨 삼성점"
+     }
+    }
+   }
+  ],
+  "photos": [
+   {
+    "url": "http://t1.kakaocdn.net/local/kakaomapPhoto/review/f216069ed938fef68a49ea35000c3f406c8eddf6?original",
+    "photo_id": 674420,
+    "media_type": "PHOTO",
+    "status": "S",
+    "ui_type": "PROFILE",
+    "review_id": 2219333,
+    "updated_at": "2026-09-28 16:16:09",
+    "meta": {
+     "owner": {
+      "map_user_id": "478130575",
+      "nickname": "Jungmin",
+      "image_url": "http://th-p.talk.kakao.co.kr/th/talkp/wkluFL7XYd/ny6Z6fV6EgzUAhe3tGtPL1/wvzvrn.jpg",
+      "timeline_level": {
+       "badge": "02",
+       "now_level": 22,
+       "show_other": true
+      },
+      "review_count": 44,
+      "follower_count": 1,
+      "profile_links": [],
+      "average_score": 4.0,
+      "profile_status": "S"
+     },
+     "is_liked_by_me": false,
+     "near": false,
+     "place": {
+      "confirm_id": "63388502",
+      "place_name": "삼성동치킨 삼성점"
+     }
+    }
+   },
+   {
+    "url": "http://t1.kakaocdn.net/local/kakaomapPhoto/review/b644ab4d2a329817fe831a1cf492e16086e656e9?original",
+    "photo_id": 674421,
+    "media_type": "PHOTO",
+    "status": "S",
+    "ui_type": "PROFILE",
+    "review_id": 2219333,
+    "updated_at": "2026-09-28 16:16:09",
+    "meta": {
+     "owner": {
+      "map_user_id": "478130575",
+      "nickname": "Jungmin",
+      "image_url": "http://th-p.talk.kakao.co.kr/th/talkp/wkluFL7XYd/ny6Z6fV6EgzUAhe3tGtPL1/wvzvrn.jpg",
+      "timeline_level": {
+       "badge": "02",
+       "now_level": 22,
+       "show_other": true
+      },
+      "review_count": 44,
+      "follower_count": 1,
+      "profile_links": [],
+      "average_score": 4.0,
+      "profile_status": "S"
+     },
+     "is_liked_by_me": false,
+     "near": false,
+     "place": {
+      "confirm_id": "63388502",
+      "place_name": "삼성동치킨 삼성점"
+     }
+    }
+   }
+  ],
+  "timeline_score_table": {
+   "act_review": {
+    "event": 0,
+    "place_banner": [
+     {
+      "title": "사진/영상 등록",
+      "score": 3
+     },
+     {
+      "title": "글 작성",
+      "score": 2
+     }
+    ]
+   }
+  },
+  "has_next": false,
+  "has_my_review": false
+ },
+ "find_way": {
+  "subway": {
+   "station_simple_name": "봉은사역",
+   "exit_num": "2",
+   "to_exit_distance": 117,
+   "subway_list": [
+    {
+     "subway_line_id": "SES9",
+     "subway_line_icon_name": "9"
+    }
+   ],
+   "to_exit_minute": 2
+  }
+ },
+ "trend_rank": {
+  "show_ranking_card": true,
+  "menu_rank": {
+   "menu": "menu_chicken",
+   "name": "치킨",
+   "rank": 18
+  },
+  "display_text": "강남구 치킨 인기 맛집",
+  "category_value": "menu_chicken"
+ },
+ "place_badge": [
+  {
+   "text": "강남구 치킨 인기 맛집",
+   "style": {
+    "text_color": "#206DEF",
+    "background_color": "#EFF3FF",
+    "bold": false
+   },
+   "landing_url": "kakaomap://open?page=placerank&catetype=food&sort=favorite&internal_keepstate=true&category=menu_chicken&regionid=I10000400",
+   "left_icons": [
+    "https://t1.kakaocdn.net/localimg/place/2026/certifications/icon_ranknum_top_left.svg",
+    "https://t1.kakaocdn.net/localimg/place/2026/certifications/icon_place_solid.svg"
+   ],
+   "right_icons": [
+    "https://t1.kakaocdn.net/localimg/place/2026/certifications/icon_ranknum_top_right.svg"
+   ]
+  }
+ ],
+ "place_add_info": {
+  "tags": [
+   "데이트코스",
+   "야외식당",
+   "회식장소"
+  ],
+  "ai_mate": {
+   "store_facility_icons": [
+    {
+     "text": "주차장없음",
+     "url": "https://t1.kakaocdn.net/localimg/2025_AIMATE/parking_off_line.png"
+    },
+    {
+     "text": "예약가능",
+     "url": "https://t1.kakaocdn.net/localimg/2025_AIMATE/reservation_line.png"
+    },
+    {
+     "text": "포장가능",
+     "url": "https://t1.kakaocdn.net/localimg/2025_AIMATE/takeout_line.png"
+    }
+   ],
+   "store_infos": [
+    {
+     "title": "주차",
+     "summary": "주차장 없음"
+    }
+   ]
+  },
+  "simple_parking_infos": {
+   "texts": [
+    "주차장 없음"
+   ],
+   "has_ai_mate_data": true
+  },
+  "full_detail_infos": [
+   {
+    "title": "상세 정보",
+    "items": [
+     {
+      "icon": {
+       "text": "장소키워드",
+       "url": "https://t1.kakaocdn.net/localimg/place/2026/infoIcon/icon_tag_line.svg"
+      },
+      "contents": [
+       {
+        "label": "데이트코스",
+        "landing_url": "https://map.kakao.com/?q=데이트코스"
+       },
+       {
+        "label": "야외식당",
+        "landing_url": "https://map.kakao.com/?q=야외식당"
+       },
+       {
+        "label": "회식장소",
+        "landing_url": "https://map.kakao.com/?q=회식장소"
+       }
+      ]
+     },
+     {
+      "icon": {
+       "text": "주차장 없음",
+       "url": "https://t1.kakaocdn.net/localimg/place/2026/infoIcon/icon_parkingsquare_off_line.svg"
+      },
+      "contents": [
+       {
+        "label": "주차장 없음"
+       }
+      ]
+     },
+     {
+      "icon": {
+       "text": "테라스",
+       "url": "https://t1.kakaocdn.net/localimg/place/2026/infoIcon/icon_terrace_line.svg"
+      },
+      "contents": [
+       {
+        "label": "테라스"
+       }
+      ]
+     }
+    ]
+   }
+  ],
+  "add_info_summaries": [
+   {
+    "texts": [
+     "주차장 없음"
+    ],
+    "icon": {
+     "text": "주차정보",
+     "url": "https://t1.kakaocdn.net/localimg/place/2026/infoIconMini/parkingicon.svg"
+    },
+    "has_ai_mate_data": true
+   }
+  ],
+  "simple_detail_infos": [
+   {
+    "text": "테라스",
+    "url": "https://t1.kakaocdn.net/localimg/place/2026/infoIcon/icon_terrace_line.svg"
+   }
+  ]
+ },
+ "reward": {
+  "fiy": {
+   "basic_info": 0,
+   "contact": 200,
+   "menu": 200,
+   "open_hour": 200,
+   "delete_place": 200,
+   "add_info": 0,
+   "max_amount": 600
+  }
+ },
+ "ai_content_warning": {
+  "is_home_tab_display_enabled": true,
+  "is_info_tab_display_enabled": true
+ }
+}
