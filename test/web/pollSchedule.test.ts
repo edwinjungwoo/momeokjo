@@ -2,17 +2,20 @@ import { describe, expect, it } from "vitest";
 import type { PlacesResponse } from "../../shared/types";
 import { MAX_POLLS, pollDelayMs, shouldPoll } from "../../web/pollSchedule";
 
+/** worker/app.ts PLACES_PENDING_CACHE_MS (화면 tsconfig는 worker 타입을 모른다 — 값만 맞춘다, api.test.ts가 서버 쪽 값을 고정) */
+const PLACES_PENDING_CACHE_MS = 10_000;
 const base: PlacesResponse = {
   center: { lat: 37.5, lng: 127 }, radius: 1000, places: [], pending: 0, incompleteTiles: 0, stale: false,
   detailsPaused: false, detailsFrozenSince: null, detailsNewestAt: null,
 };
 
 describe("R29 목록 폴링 간격", () => {
-  it("R29: 3초 → 6초 → 12초로 늘리고 12초에서 멈추며, 최대 6번까지만 다시 부른다", () => {
-    expect(MAX_POLLS).toBe(6);
-    expect([0, 1, 2, 3, 4, 5].map(pollDelayMs)).toEqual([3000, 6000, 12_000, 12_000, 12_000, 12_000]);
-    expect(pollDelayMs(6)).toBeNull();
+  it("R29: 10초 → 12초 → 15초(이후 15초), 최대 5번까지만 다시 부른다 — 첫 폴링이 10초 엣지 캐시(PLACES_PENDING_CACHE_MS)보다 이르지 않게", () => {
+    expect(MAX_POLLS).toBe(5);
+    expect([0, 1, 2, 3, 4].map(pollDelayMs)).toEqual([10_000, 12_000, 15_000, 15_000, 15_000]);
+    expect(pollDelayMs(5)).toBeNull();
     expect(pollDelayMs(10)).toBeNull();
+    expect(pollDelayMs(0)).toBeGreaterThanOrEqual(PLACES_PENDING_CACHE_MS);
   });
 
   it("R29: pending이나 수집 중 격자가 남으면 다시 부르고, 다 찼으면 멈춘다", () => {
