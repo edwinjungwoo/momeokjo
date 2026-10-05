@@ -4,10 +4,12 @@ import { PICK_BADGE, PICK_LABEL, hiddenLabels, pickBadgeBox, pickLabelBox, type 
 const box = (id: string, x: number, y: number, w = 80, h = 26): LabelBox => ({ id, x, y, w, h });
 
 describe("R22′ 지도 이름표 겹침", () => {
-  it("R22′: 이름표는 핀 중심 위쪽 가운데에 놓이고, 너비는 글자 + 좌우 여백(최대 180 + 여백)", () => {
-    expect(PICK_LABEL).toEqual({ padX: 10, height: 26, maxText: 180, gapAbovePin: 18 });
+  it("R22′: 이름표는 핀 중심 위쪽 가운데에 놓이고, 너비는 min(글자 + 좌우 여백 20, 180) (border-box)", () => {
+    expect(PICK_LABEL).toEqual({ padX: 10, height: 26, maxWidth: 180, gapAbovePin: 18 });
     expect(pickLabelBox("a", { x: 100, y: 200 }, 60)).toEqual({ id: "a", x: 60, y: 156, w: 80, h: 26 });
-    expect(pickLabelBox("b", { x: 100, y: 200 }, 400).w).toBe(200);
+    expect(pickLabelBox("b", { x: 100, y: 200 }, 400).w).toBe(180);
+    expect(pickLabelBox("c", { x: 100, y: 200 }, 165).w).toBe(180);
+    expect(pickLabelBox("d", { x: 100, y: 200 }, 159).w).toBe(179);
   });
 
   it("R22′: 겹치지 않으면 모두 보인다", () => {

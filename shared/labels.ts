@@ -4,12 +4,15 @@
  */
 export type LabelBox = { id: string; x: number; y: number; w: number; h: number };
 
-/** styles.css의 .pin--pick::after와 같은 값: 좌우 여백 10, 높이 26(12px × 1.5 + 위아래 4), 글자 최대 180, 핀 중심에서 위로 18(핀 32의 절반 + 2) */
-export const PICK_LABEL = { padX: 10, height: 26, maxText: 180, gapAbovePin: 18 } as const;
+/**
+ * styles.css의 .pin--pick::after와 같은 값: 좌우 여백 10, 높이 26(12px × 1.5 + 위아래 4),
+ * 여백 포함 최대 너비 180(box-sizing: border-box), 핀 중심에서 위로 18(핀 32의 절반 + 2)
+ */
+export const PICK_LABEL = { padX: 10, height: 26, maxWidth: 180, gapAbovePin: 18 } as const;
 
 /** 핀 중심(컨테이너 px)과 글자 너비로 이름표 상자를 만든다 */
 export function pickLabelBox(id: string, pin: { x: number; y: number }, textWidth: number): LabelBox {
-  const w = Math.min(textWidth, PICK_LABEL.maxText) + PICK_LABEL.padX * 2;
+  const w = Math.min(textWidth + PICK_LABEL.padX * 2, PICK_LABEL.maxWidth);
   const h = PICK_LABEL.height;
   return { id, x: pin.x - w / 2, y: pin.y - PICK_LABEL.gapAbovePin - h, w, h };
 }
