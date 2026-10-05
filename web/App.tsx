@@ -9,6 +9,7 @@ import {
 } from "../shared/recommend";
 import { urlAfterHubChange } from "../shared/settings";
 import { shareText } from "../shared/share";
+import { createTapGate } from "../shared/tapGate";
 import type { ApiDetail, ApiPlace, LatLng } from "../shared/types";
 import { filterProps, setTrackingHub, startTracking, track, trackFilters } from "./analytics";
 import { fetchPlace } from "./api";
@@ -73,6 +74,8 @@ export default function App() {
   const drawnIds = useRef(new Set<string>());
   const shareCtrl = useRef<AbortController | null>(null);
   const shuffle = useSlotShuffle();
+  /** R22: 뽑기 연타는 600ms에 한 번만 받는다 (셔플이 없는 경우 — 움직임 줄이기, 후보 1곳 — 에도 이벤트가 쏟아지지 않게) */
+  const drawGate = useRef(createTapGate());
   const toast = useToast();
   const tip = useFirstTip();
   // R39: 재방문자 = 처음 열 때 첫 방문 안내가 닫혀 있었거나 개인화 신호가 있음
@@ -242,6 +245,7 @@ export default function App() {
   // R39 자동 뽑기(auto)는 shown 신호를 남기지 않고 첫 방문 안내도 닫지 않는다
   const onDraw = ({ auto = false }: { auto?: boolean } = {}) => {
     if (shuffle.running) return;
+    if (!auto && !drawGate.current(performance.now())) return;
     if (tip.open && !auto) tip.dismiss();
     // 아직 오는 중인 공유 링크 결과가 방금 뽑은 결과를 덮어쓰지 않게 한다
     shareCtrl.current?.abort();
