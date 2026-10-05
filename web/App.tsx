@@ -160,7 +160,7 @@ export default function App() {
     <div className="app">
       <header className="topbar">
         <h1 className="logo">
-          모먹<span>죠</span>
+          <img src="/brand/logo.png" alt="모먹죠" width={60} height={26} draggable={false} />
         </h1>
         <CenterChip center={center} onCenter={setCenter} onPickStart={() => setPickMode(true)} onToast={toast.show} />
       </header>

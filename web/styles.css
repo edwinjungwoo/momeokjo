@@ -6,9 +6,9 @@
   --text: #191f28;
   --text-2: #4e5968;
   --text-3: #8b95a1;
-  --line: #e5e8eb;
+  --line: #eadfd6;
   --bg: #ffffff;
-  --bg-2: #f2f4f6;
+  --bg-2: #fff4ed;
   --shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
   --topbar-h: 52px;
   /* 하단 뽑기 바: 테두리 1 + 위 여백 12 + 버튼 56 + 아래 여백 12 + 홈 인디케이터 */
@@ -52,8 +52,8 @@ a { -webkit-tap-highlight-color: transparent; }
   background: var(--bg);
   border-bottom: 1px solid var(--line);
 }
-.logo { font-size: 20px; font-weight: 800; letter-spacing: -0.03em; white-space: nowrap; }
-.logo span { color: var(--accent); }
+.logo { display: flex; align-items: center; font-size: 0; line-height: 0; }
+.logo img { display: block; width: 60px; height: 26px; user-select: none; -webkit-user-drag: none; }
 .main { flex: 1; min-height: 0; display: flex; flex-direction: column; }
 .map-wrap { position: relative; flex: none; height: 40dvh; min-height: 220px; background: var(--bg-2); }
 .map { position: absolute; inset: 0; z-index: 0; }
@@ -193,12 +193,21 @@ input[type="range"] { width: 100%; height: 44px; margin: 0; accent-color: var(--
 .closed { color: var(--accent-strong); font-weight: 700; }
 
 .skeleton { display: grid; gap: 8px; }
-.skeleton-label { font-size: 14px; color: var(--text-3); }
+.skeleton-head { display: flex; align-items: center; gap: 10px; }
+.skeleton-label { font-size: 14px; color: var(--text-2); }
+.mascot { display: block; flex: none; width: auto; object-fit: contain; user-select: none; -webkit-user-drag: none; pointer-events: none; }
+.skeleton .mascot { height: 64px; }
+.empty .mascot { height: 96px; }
+.card-head { display: flex; align-items: flex-end; gap: 8px; }
+.card-head-text { flex: 1; min-width: 0; }
+.card-head .mascot { height: 48px; }
+.card-head .mascot-bob { height: 56px; animation: bob 0.5s ease-in-out infinite alternate; }
+.card-head:has(.mascot) .card-name { padding-right: 0; }
 .skeleton i {
   display: block;
   height: 64px;
   border-radius: 12px;
-  background: linear-gradient(90deg, #f2f4f6 25%, #e9ecef 37%, #f2f4f6 63%);
+  background: linear-gradient(90deg, #fff4ed 25%, #f6e9df 37%, #fff4ed 63%);
   background-size: 400% 100%;
   animation: shimmer 1.2s ease infinite;
 }
@@ -426,6 +435,7 @@ input[type="range"] { width: 100%; height: 44px; margin: 0; accent-color: var(--
 
 /* ── 애니메이션 ───────────────────────────────── */
 @keyframes sheet-in { from { transform: translateY(16px); opacity: 0; } }
+@keyframes bob { to { transform: translateY(-4px) rotate(-3deg); } }
 @keyframes roll { from { transform: translateY(-35%); opacity: 0.3; } }
 @keyframes pin-pulse {
   from { box-shadow: 0 0 0 0 rgba(255, 107, 61, 0.55); }
@@ -435,6 +445,7 @@ input[type="range"] { width: 100%; height: 44px; margin: 0; accent-color: var(--
 @keyframes blink { 50% { opacity: 0.3; } }
 @keyframes toast-in { from { transform: translate(-50%, -8px); opacity: 0; } }
 @media (prefers-reduced-motion: reduce) {
+  .mascot-bob { animation: none !important; }
   *, *::before, *::after {
     animation-duration: 0.001ms !important;
     animation-iteration-count: 1 !important;

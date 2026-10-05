@@ -20,6 +20,16 @@ export function EmptyState({ filters, onChange }: { filters: Filters; onChange: 
   const options = relaxOptions(filters);
   return (
     <div className="empty" id="empty" role="status">
+      <img
+        className="mascot"
+        src="/brand/pose-find.png"
+        alt=""
+        aria-hidden="true"
+        width={98}
+        height={96}
+        loading="lazy"
+        draggable={false}
+      />
       <p className="empty-title">점심시간이 코앞인데 후보가 없네요</p>
       <p className="empty-desc">{options.length > 0 ? "조건을 하나만 풀어볼까요?" : "기준점을 옮겨보세요"}</p>
       {options.length > 0 && (
