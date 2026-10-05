@@ -170,6 +170,7 @@ export default function App() {
   const clearTrio = () => {
     shuffle.cancel();
     shareCtrl.current?.abort();
+    drawnIds.current.clear();
     setTrio(null);
     setFocusId(null);
   };
@@ -181,7 +182,6 @@ export default function App() {
     clearTrio();
     update((s) => ({ ...s, hubId }));
     setSelected(null);
-    drawnIds.current.clear();
   };
   const closeTrio = () => {
     if (shuffle.running) return;
@@ -194,6 +194,8 @@ export default function App() {
   const onDraw = () => {
     if (shuffle.running) return;
     if (tip.open) tip.dismiss();
+    // 아직 오는 중인 공유 링크 결과가 방금 뽑은 결과를 덮어쓰지 않게 한다
+    shareCtrl.current?.abort();
     if (!data) {
       toast.show("가게 정보를 불러오는 중이에요");
       return;
@@ -215,13 +217,13 @@ export default function App() {
         candidates.length <= TRIO_SIZE ? `조건에 맞는 곳이 ${candidates.length}곳뿐이에요` : "후보를 다 돌아서 처음부터 다시 뽑아요",
       );
     }
-    for (const p of r.places) drawnIds.current.add(p.id);
     setSelected(null);
     setTrio(null);
     setFocusId(null);
     shuffle.run(
       candidates.map((c) => c.name),
       () => {
+        for (const p of r.places) drawnIds.current.add(p.id);
         setTrio({ ids: r.places.map((p) => p.id), source: "drawn", fallback: byId(r.places) });
         record("shown", r.places);
         navigator.vibrate?.(15);
@@ -253,8 +255,9 @@ export default function App() {
   const onExclude = (p: ApiPlace) => {
     personal.exclude(p.id);
     setFocusId(null);
-    toast.show("다음부터 빼고 골라요", undefined, {
-      ms: 5000,
+    // 받은 후보는 친구가 고른 곳이라 카드는 그대로 두고, 다음 뽑기부터만 뺀다
+    toast.show(trio?.source === "received" ? "다음 뽑기부터 빼둘게요" : "다음부터 빼고 골라요", undefined, {
+      ms: 8000,
       action: { label: "되돌리기", onClick: () => personal.include(p.id) },
     });
   };
@@ -334,7 +337,6 @@ export default function App() {
               now={now}
               onFocus={setFocusId}
               onClose={closeTrio}
-              onRedraw={onDraw}
               onShare={onShare}
               onKakao={onKakao}
               onExclude={onExclude}
@@ -359,7 +361,7 @@ export default function App() {
           </div>
         </aside>
       </main>
-      <Toast msg={toast.msg} onAction={toast.hide} />
+      <Toast msg={toast.msg} onAction={toast.hide} onPause={toast.pause} onResume={toast.resume} />
     </div>
   );
 }

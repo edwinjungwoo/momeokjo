@@ -23,7 +23,6 @@ type Props = {
   now: Date;
   onFocus: (id: string | null) => void;
   onClose: () => void;
-  onRedraw: () => void;
   onShare: (places: ApiPlace[]) => void;
   onKakao: (p: ApiPlace) => void;
   onExclude: (p: ApiPlace) => void;
@@ -71,10 +70,17 @@ function TrioCard(props: {
 
   return (
     <li ref={li} className={`trio-card${open ? " is-open" : ""}`}>
-      <button type="button" className="trio-row" aria-expanded={open} aria-controls={detailId} onClick={onToggle}>
+      <button type="button" className="trio-row" id={`trio-row-${p.id}`}
+        aria-expanded={open}
+        aria-controls={open ? detailId : undefined}
+        onClick={onToggle}
+      >
         <Thumb url={p.photoUrl} rank={rank} />
         <span className="trio-text">
-          <span className="trio-name">{p.name}</span>
+          <span className="trio-name">
+            <span className="sr-only">{rank}번째 후보 </span>
+            {p.name}
+          </span>
           <span className="trio-facts">
             {p.walkMinutes !== undefined && <b>도보 {p.walkMinutes}분</b>}
             {rating !== null && (
@@ -131,7 +137,7 @@ function TrioCard(props: {
  */
 export function TrioSheet(props: Props) {
   const { slotName, places, received, focusId, detailLoading, ranks, now } = props;
-  const { onFocus, onClose, onRedraw, onShare, onKakao, onExclude } = props;
+  const { onFocus, onClose, onShare, onKakao } = props;
   const shuffling = slotName !== null;
   const swipe = useSwipeDown(onClose);
   const closeBtn = useRef<HTMLButtonElement>(null);
@@ -150,6 +156,20 @@ export function TrioSheet(props: Props) {
   useEffect(() => {
     if (!shuffling && firstId) closeBtn.current?.focus({ preventScroll: true });
   }, [shuffling, firstId]);
+
+  // "여긴 빼줘" 뒤: 눌렀던 버튼이 사라지므로 다음 카드(없으면 제목)로 포커스를 옮긴다
+  const afterExclude = useRef<string | null>(null);
+  const onExclude = (p: ApiPlace) => {
+    const next = places[places.findIndex((x) => x.id === p.id) + 1];
+    afterExclude.current = next ? `trio-row-${next.id}` : "trio-title";
+    props.onExclude(p);
+  };
+  useEffect(() => {
+    const target = afterExclude.current;
+    if (!target || shuffling) return;
+    afterExclude.current = null;
+    document.getElementById(target)?.focus({ preventScroll: false });
+  });
 
   if (shuffling) {
     return (
@@ -181,7 +201,7 @@ export function TrioSheet(props: Props) {
       <div className="trio-head">
         <Mascot pose="thumbsup" height={44} eager />
         <div className="trio-head-text">
-          <h2 className="trio-title" id="trio-title">
+          <h2 className="trio-title" id="trio-title" tabIndex={-1}>
             {title}
           </h2>
           <p className="trio-hint">눌러서 메뉴와 영업시간을 볼 수 있어요</p>
@@ -207,9 +227,6 @@ export function TrioSheet(props: Props) {
         <div className="actions">
           <button type="button" className="primary" onClick={() => onShare(places)}>
             공유
-          </button>
-          <button type="button" className="redraw" onClick={onRedraw}>
-            다시 뽑기
           </button>
         </div>
         <p className="source">정보 출처: 카카오맵</p>

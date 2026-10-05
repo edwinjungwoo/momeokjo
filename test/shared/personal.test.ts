@@ -55,7 +55,7 @@ describe("R37 개인화 (기기 안에서만)", () => {
   });
 
   it("R37: 최종 배수 = 최근 신호 배수 × 그룹 가산, '여긴 빼줘'면 0", () => {
-    const s = state(sig("kakao_open", 0, "1"), sig("shared", 0, "2"));
+    const s = state(sig("kakao_open", 0, "1"), sig("shared", H, "2")); // 서로 다른 때 = 취향 신호 2번
     // 1번: 0.15 × (1 + 0.15 × 2)
     expect(personalMultiplier(s, place("1"), NOW)).toBeCloseTo(0.15 * 1.3, 9);
     expect(personalMultiplier(s, place("3"), NOW)).toBeCloseTo(1.3, 9);
@@ -82,6 +82,36 @@ describe("R37 개인화 (기기 안에서만)", () => {
     expect(capped.signals).toHaveLength(MAX_SIGNALS);
     expect(capped.signals[0].id).toBe("s5");
     expect(capped.signals.at(-1)!.id).toBe(`s${MAX_SIGNALS + 4}`);
+  });
+
+  it("R37: 300개를 채우는 약한 신호(보여줌)가 오래된 취향 신호(카카오맵)를 밀어내지 않는다", () => {
+    const shown = Array.from({ length: MAX_SIGNALS }, (_, i) => sig("shown", i * 1000, `s${i}`));
+    const s = addSignals(state(sig("kakao_open", 10 * D, "k")), shown, NOW);
+    expect(s.signals).toHaveLength(MAX_SIGNALS);
+    expect(s.signals.some((x) => x.id === "k")).toBe(true);
+    // 정리할 때 취향 신호를 먼저 남기고, 약한 신호 중 오래된 것부터 줄인다
+    expect(s.signals.some((x) => x.id === `s${MAX_SIGNALS - 1}`)).toBe(false);
+    expect(s.signals.some((x) => x.id === "s0")).toBe(true);
+  });
+
+  it("R37: 효과가 끝난 신호는 버린다 — 보여줌 1일, 받음 3일, 취향 신호 30일", () => {
+    const s = addSignals(
+      EMPTY_PERSONAL,
+      [
+        sig("shown", 2 * D, "shown-old"), sig("shown", 12 * H, "shown-ok"),
+        sig("received", 4 * D, "recv-old"), sig("received", 2 * D, "recv-ok"),
+        sig("shared", 10 * D, "shared-ok"), sig("kakao_open", 29 * D, "kakao-ok"), sig("kakao_open", 31 * D, "kakao-old"),
+      ],
+      NOW,
+    );
+    expect(s.signals.map((x) => x.id).sort()).toEqual(["kakao-ok", "recv-ok", "shared-ok", "shown-ok"]);
+  });
+
+  it("R37: 공유 1번(3곳)은 그룹 가산 1번으로 센다", () => {
+    const trio = ["1", "2", "3"].map((id) => sig("shared", D, id));
+    expect(groupBoost(state(...trio), "korean", NOW)).toBeCloseTo(1.15, 9);
+    const twice = [...trio, ...["4", "5", "6"].map((id) => sig("shared", 2 * D, id))];
+    expect(groupBoost(state(...twice), "korean", NOW)).toBeCloseTo(1.3, 9);
   });
 
   it("R37: 저장값 파싱 — 깨졌거나 모르는 값은 버린다", () => {

@@ -35,12 +35,16 @@ export function recencyFactor(s: PersonalState, id: string, now: number): number
   return Math.max(RECENCY_FLOOR, f);
 }
 
-/** 최근 30일에 카카오맵을 열었거나 공유한 그룹은 1번마다 +0.15, 최대 ×1.45 */
+/**
+ * 최근 30일에 카카오맵을 열었거나 공유한 그룹은 1번마다 +0.15, 최대 ×1.45.
+ * 공유 1번이 3곳을 한꺼번에 기록해도 같은 시각이므로 그룹당 1번으로 센다.
+ */
 export function groupBoost(s: PersonalState, group: CategoryGroup, now: number): number {
-  const n = s.signals.filter(
-    (x) => x.group === group && PREFERENCE_KINDS.has(x.kind) && now - x.at <= SIGNAL_TTL_MS,
-  ).length;
-  return Math.min(BOOST_MAX, 1 + BOOST_STEP * n);
+  const events = new Set<number>();
+  for (const x of s.signals) {
+    if (x.group === group && PREFERENCE_KINDS.has(x.kind) && now - x.at <= SIGNAL_TTL_MS) events.add(x.at);
+  }
+  return Math.min(BOOST_MAX, 1 + BOOST_STEP * events.size);
 }
 
 export function personalMultiplier(s: PersonalState, p: { id: string; group: CategoryGroup }, now: number): number {
@@ -48,13 +52,18 @@ export function personalMultiplier(s: PersonalState, p: { id: string; group: Cat
   return recencyFactor(s, p.id, now) * groupBoost(s, p.group, now);
 }
 
-/** 30일 지난 신호는 버리고 최근 MAX_SIGNALS개만 남긴다 */
+/** 신호가 아직 효과가 있는 동안만 남긴다: 취향 신호는 30일, 나머지는 감쇠 창이 끝날 때까지 */
+function isLive(x: Signal, now: number): boolean {
+  return now - x.at <= (PREFERENCE_KINDS.has(x.kind) ? SIGNAL_TTL_MS : DECAY_MS[x.kind]);
+}
+
+/** 효과가 끝난 신호는 버리고, 최대 MAX_SIGNALS개만 남긴다 (넘치면 취향 신호를 먼저 남기고 오래된 약한 신호부터 버린다) */
 export function addSignals(s: PersonalState, add: Signal[], now: number): PersonalState {
-  const signals = [...s.signals, ...add]
-    .filter((x) => now - x.at <= SIGNAL_TTL_MS)
-    .sort((a, b) => a.at - b.at)
-    .slice(-MAX_SIGNALS);
-  return { ...s, signals };
+  const live = [...s.signals, ...add].filter((x) => isLive(x, now)).sort((a, b) => a.at - b.at);
+  if (live.length <= MAX_SIGNALS) return { ...s, signals: live };
+  const prefs = live.filter((x) => PREFERENCE_KINDS.has(x.kind)).slice(-MAX_SIGNALS);
+  const weak = live.filter((x) => !PREFERENCE_KINDS.has(x.kind)).slice(-(MAX_SIGNALS - prefs.length));
+  return { ...s, signals: [...prefs, ...weak].sort((a, b) => a.at - b.at) };
 }
 
 export function excludePlace(s: PersonalState, id: string, now: number): PersonalState {
