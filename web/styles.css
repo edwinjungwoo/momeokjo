@@ -554,6 +554,8 @@ input[type="range"] { width: 100%; height: 44px; margin: 0; accent-color: var(--
 .trio-rating { font-weight: 700; color: var(--accent-ink); font-variant-numeric: tabular-nums; }
 .trio-rating .star { margin-right: 2px; color: var(--accent); font-size: 0.9em; font-weight: 400; }
 .trio-sub { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; color: var(--text-3); }
+/* R41: 완화로 들어온 곳 — 옅은 채움의 작은 표시 */
+.trio-outside { display: inline-block; margin-right: 6px; padding: 0 6px; border-radius: 999px; background: var(--fill); color: var(--text-3); font-size: 12px; line-height: 18px; vertical-align: 1px; }
 .trio-chev { color: var(--text-3); transition: transform 0.2s; }
 .trio-card.is-open .trio-chev { transform: rotate(180deg); }
 .trio-detail { padding: 0 12px 4px; animation: fade-up 0.2s ease-out; }

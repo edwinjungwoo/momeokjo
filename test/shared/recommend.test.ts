@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
-  DEFAULT_FILTERS, drawTrio, filterPlaces, sortPlaces, weightOf, type Filters,
+  DEFAULT_FILTERS, drawTrio, filterPlaces, relaxNotice, relaxToFill, sortPlaces, weightOf, type Filters,
 } from "../../shared/recommend";
 import type { ApiPlace, CategoryGroup } from "../../shared/types";
 import { apiPlace } from "../helpers/apiPlace";
@@ -203,5 +203,134 @@ describe("R21′ 3곳 뽑기", () => {
     const hideA = { multiplier: (p: ApiPlace) => (p.id === "a" ? 0 : 1) };
     expect(ids(drawTrio([a, b], 2, none, seq(0), hideA)!.places)).toEqual(["b"]);
     expect(drawTrio([a], 2, none, seq(0), hideA)).toBeNull();
+  });
+});
+
+describe("R41 부족하면 알아서 완화", () => {
+  // 월요일 12시. CLOSED는 지금 닫힌 영업시간(월 18:00~22:00)
+  const CLOSED = { 1: [[1080, 1320]] as [number, number][] };
+  const seqR = (...xs: number[]) => {
+    let i = 0;
+    return () => xs[i++ % xs.length];
+  };
+  const none = new Set<string>();
+
+  it("R41: 후보가 3곳 이상이면 아무것도 풀지 않는다", () => {
+    const ps = ["a", "b", "c"].map((id) => apiPlace(id));
+    const r = relaxToFill(ps, f(), NOON_MON);
+    expect(ids(r.candidates)).toEqual(["a", "b", "c"]);
+    expect(r.extra).toEqual([]);
+    expect(r.relaxed).toEqual([]);
+  });
+
+  it("R41: 후보 1곳이면 평점→예산 순으로 풀어 3곳을 채운다", () => {
+    const ps = [
+      apiPlace("ok", {}, { rating: 4.5, price: 9000 }),
+      apiPlace("lowRating", {}, { rating: 3.0, price: 9000 }),
+      apiPlace("pricey", {}, { rating: 4.5, price: 18000 }),
+      apiPlace("both", {}, { rating: 3.0, price: 18000 }),
+    ];
+    const r = relaxToFill(ps, f({ minRating: 4, priceCap: 10000 }), NOON_MON);
+    expect(ids(r.candidates)).toEqual(["ok"]);
+    // 평점만 풀면 2곳 → 예산까지 풀면 4곳
+    expect(ids(r.extra).sort()).toEqual(["both", "lowRating", "pricey"]);
+    expect(r.relaxed).toEqual(["minRating", "priceCap"]);
+    expect(r.addedRadius).toBe(0);
+  });
+
+  it("R41: 앞 단계로 3곳이 차면 뒤 조건은 풀지 않는다", () => {
+    const ps = [
+      apiPlace("ok", {}, { rating: 4.5, price: 9000 }),
+      apiPlace("r1", {}, { rating: 3.0, price: 9000 }),
+      apiPlace("r2", {}, { rating: 3.2, price: 9000 }),
+      apiPlace("pricey", {}, { rating: 4.5, price: 18000 }),
+    ];
+    const r = relaxToFill(ps, f({ minRating: 4, priceCap: 10000 }), NOON_MON);
+    expect(ids(r.extra).sort()).toEqual(["r1", "r2"]);
+    expect(r.relaxed).toEqual(["minRating"]);
+  });
+
+  it("R41: 영업 중 조건은 풀지 않는다", () => {
+    const ps = [apiPlace("open"), apiPlace("closed1", {}, { hours: CLOSED }), apiPlace("closed2", { distance: 900 }, { hours: CLOSED })];
+    const r = relaxToFill(ps, f({ minRating: 4, groups: ["chinese"], radius: 300 }), NOON_MON);
+    expect(ids(r.candidates)).toEqual([]);
+    expect(ids(r.extra)).toEqual(["open"]);
+    expect([...r.extra, ...r.candidates].some((p) => p.id.startsWith("closed"))).toBe(false);
+  });
+
+  it("R41: 4명+ 분식 제외·술집·디저트 제외는 풀지 않는다", () => {
+    const ps = [
+      apiPlace("k"), apiPlace("s", { group: "snack" }), apiPlace("b", { group: "bar" }), apiPlace("d", { group: "dessert" }),
+    ];
+    const r = relaxToFill(ps, f({ party: 4, groups: ["chinese"] }), NOON_MON);
+    expect(ids(r.extra)).toEqual(["k"]);
+    expect(r.relaxed).toEqual(["groups"]);
+  });
+
+  it("R41: 마지막으로 반경을 +300m(최대 1000m) 넓힌다", () => {
+    const ps = [apiPlace("in", { distance: 400 }), apiPlace("near", { distance: 650 }), apiPlace("far", { distance: 750 })];
+    const r = relaxToFill(ps, f({ radius: 400 }), NOON_MON);
+    expect(ids(r.extra)).toEqual(["near"]);
+    expect(r.relaxed).toEqual(["radius"]);
+    expect(r.addedRadius).toBe(300);
+    const edge = relaxToFill([apiPlace("x", { distance: 1000 })], f({ radius: 900 }), NOON_MON);
+    expect(ids(edge.extra)).toEqual(["x"]);
+    expect(edge.addedRadius).toBe(100);
+    expect(relaxToFill([apiPlace("x", { distance: 990 })], f({ radius: 1000 }), NOON_MON).relaxed).toEqual([]);
+  });
+
+  it("R41: 실제로 들어온 곳이 어긴 조건만 알린다", () => {
+    // 평점을 풀어도 아무도 안 들어오고, 예산을 풀어야 들어온다
+    const ps = [apiPlace("ok", {}, { rating: 4.5, price: 9000 }), apiPlace("pricey", {}, { rating: 4.5, price: 18000 })];
+    const r = relaxToFill(ps, f({ minRating: 4, priceCap: 10000 }), NOON_MON);
+    expect(ids(r.extra)).toEqual(["pricey"]);
+    expect(r.relaxed).toEqual(["priceCap"]);
+  });
+
+  it("R41: 빼둔 곳(keep=false)은 원래 후보로도 완화로도 들어오지 않는다", () => {
+    const ps = [apiPlace("a"), apiPlace("b", { group: "chinese" }), apiPlace("c", { group: "chinese" })];
+    const r = relaxToFill(ps, f({ groups: ["korean"] }), NOON_MON, { keep: (p) => p.id !== "c" });
+    expect(ids(r.candidates)).toEqual(["a"]);
+    expect(ids(r.extra)).toEqual(["b"]);
+  });
+
+  it("R41: 풀어도 0곳이면 빈 결과", () => {
+    const r = relaxToFill([apiPlace("closed", {}, { hours: CLOSED })], f({ minRating: 4 }), NOON_MON);
+    expect(r.candidates).toEqual([]);
+    expect(r.extra).toEqual([]);
+    expect(r.relaxed).toEqual([]);
+  });
+
+  it("R41: 토스트 문구는 푼 조건을 한 줄로", () => {
+    expect(relaxNotice([], 0)).toBeNull();
+    expect(relaxNotice(["minRating"], 0)).toBe("조건에 맞는 곳이 적어서 평점 조건을 풀었어요");
+    expect(relaxNotice(["minRating", "priceCap", "groups"], 0)).toBe("조건에 맞는 곳이 적어서 평점·예산·카테고리 조건을 풀었어요");
+    expect(relaxNotice(["radius"], 300)).toBe("조건에 맞는 곳이 적어서 반경을 300m 넓혔어요");
+    expect(relaxNotice(["priceCap", "radius"], 300)).toBe("조건에 맞는 곳이 적어서 예산 조건을 풀고 반경을 300m 넓혔어요");
+  });
+
+  it("R41: 뽑기는 원래 후보를 먼저 넣고 모자란 만큼 완화로 들어온 곳에서 채운다", () => {
+    const base = [apiPlace("a")];
+    const extra = ["x", "y", "z", "w"].map((id) => apiPlace(id, { group: "chinese" }));
+    for (const x of [0, 0.5, 0.9999]) {
+      const r = drawTrio(base, 2, none, seqR(x), { extra })!;
+      expect(r.places[0].id).toBe("a");
+      expect(r.places).toHaveLength(3);
+      expect(r.reset).toBe(false);
+    }
+    // 원래 후보가 0곳이어도 완화로 들어온 곳에서 뽑는다
+    expect(drawTrio([], 2, none, seqR(0), { extra })!.places).toHaveLength(3);
+  });
+
+  it("R41: 다시 뽑기는 이미 보여준 곳을 빼고, 완화 후보까지 다 돌면 초기화한다", () => {
+    const base = [apiPlace("a")];
+    const extra = ["x", "y", "z"].map((id) => apiPlace(id, { group: "chinese" }));
+    const r = drawTrio(base, 2, new Set(["a"]), seqR(0), { extra })!;
+    expect(ids(r.places).sort()).toEqual(["x", "y", "z"]);
+    expect(r.reset).toBe(false);
+    const r2 = drawTrio(base, 2, new Set(["a", "x", "y", "z"]), seqR(0), { extra })!;
+    expect(r2.reset).toBe(true);
+    expect(r2.places[0].id).toBe("a");
+    expect(r2.places).toHaveLength(3);
   });
 });

@@ -1,4 +1,4 @@
-import { DEFAULT_RADIUS } from "./constants";
+import { DEFAULT_RADIUS, MAX_RADIUS } from "./constants";
 import { isOpenDuring } from "./hours";
 import type { ApiPlace, CategoryGroup } from "./types";
 
@@ -91,6 +91,8 @@ export type TrioResult = { places: ApiPlace[]; reset: boolean };
 export type DrawOptions = {
   /** R37 개인화 배수. 0이면 후보에서 뺀다 ("여긴 빼줘") */
   multiplier?: (p: ApiPlace) => number;
+  /** R41 완화로 들어온 곳. 원래 후보를 먼저 넣고 모자란 만큼만 여기서 채운다 */
+  extra?: ApiPlace[];
 };
 
 /** 가중 비복원 추출. 이미 뽑힌 그룹은 SAME_GROUP_FACTOR로 낮춘다 (강제 아님) */
@@ -116,22 +118,109 @@ function sampleInto(
  * R21′: 서로 다른 후보 최대 3곳을 가중 랜덤으로 뽑는다 (0곳이면 null).
  * exclude(이번 세션에 이미 보여준 곳)는 빼고 뽑는다. 남은 곳이 3곳보다 적으면
  * 남은 곳을 먼저 넣고 제외를 풀어 나머지를 채운다(reset: true) — 한 결과 안에서는 중복이 없다.
+ * R41: opts.extra(완화로 들어온 곳)가 있으면 각 단계에서 원래 후보를 먼저, 모자란 만큼 extra에서 채운다.
  */
 export function drawTrio(
   candidates: ApiPlace[], party: Party, exclude: ReadonlySet<string>, rng: () => number, opts: DrawOptions = {},
 ): TrioResult | null {
   const mult = opts.multiplier ?? (() => 1);
-  const eligible = candidates.filter((p) => mult(p) > 0);
-  if (eligible.length === 0) return null;
+  const base = candidates.filter((p) => mult(p) > 0);
+  const extra = (opts.extra ?? []).filter((p) => mult(p) > 0 && !base.includes(p));
+  const tiers = extra.length > 0 ? [base, extra] : [base];
+  const total = base.length + extra.length;
+  if (total === 0) return null;
   const weight = (p: ApiPlace) => weightOf(p, party) * mult(p);
-  const n = Math.min(TRIO_SIZE, eligible.length);
-  const fresh = eligible.filter((p) => !exclude.has(p.id));
+  const n = Math.min(TRIO_SIZE, total);
   const out: ApiPlace[] = [];
-  if (fresh.length >= n) {
-    sampleInto(out, fresh, n, weight, rng);
-    return { places: out, reset: false };
-  }
-  sampleInto(out, fresh, fresh.length, weight, rng);
-  sampleInto(out, eligible.filter((p) => !out.includes(p)), n, weight, rng);
+  for (const tier of tiers) sampleInto(out, tier.filter((p) => !exclude.has(p.id)), n, weight, rng);
+  if (out.length >= n) return { places: out, reset: false };
+  for (const tier of tiers) sampleInto(out, tier.filter((p) => !out.includes(p)), n, weight, rng);
   return { places: out, reset: true };
+}
+
+/** R41 완화 순서: 최소 평점 → 예산 → 카테고리 → 반경 +300m. 영업 중·인원·술집·디저트 제외는 풀지 않는다 */
+export type RelaxStep = "minRating" | "priceCap" | "groups" | "radius";
+export const RELAX_ORDER: RelaxStep[] = ["minRating", "priceCap", "groups", "radius"];
+export const RELAX_RADIUS_STEP = 300;
+
+/** 켜져 있는 조건만 푼다 (꺼져 있으면 null) */
+function relaxOnce(f: Filters, step: RelaxStep): Filters | null {
+  switch (step) {
+    case "minRating":
+      return f.minRating > 0 ? { ...f, minRating: 0 } : null;
+    case "priceCap":
+      return f.priceCap !== "all" ? { ...f, priceCap: "all" } : null;
+    case "groups":
+      return f.groups.length > 0 ? { ...f, groups: [] } : null;
+    case "radius":
+      return f.radius < MAX_RADIUS ? { ...f, radius: Math.min(MAX_RADIUS, f.radius + RELAX_RADIUS_STEP) } : null;
+  }
+}
+
+/** p가 원래 조건 f의 그 단계를 어기는가 (완화로 들어온 곳이 실제로 어긴 조건만 알리려고) */
+function violates(p: ApiPlace, f: Filters, step: RelaxStep): boolean {
+  switch (step) {
+    case "minRating": {
+      const rating = p.detail?.rating ?? null;
+      return f.minRating > 0 && (rating === null || rating < f.minRating);
+    }
+    case "priceCap": {
+      const price = p.detail?.price ?? null;
+      return f.priceCap !== "all" && (price === null || price > f.priceCap);
+    }
+    case "groups":
+      return f.groups.length > 0 && p.group !== "bar" && !f.groups.includes(p.group);
+    case "radius":
+      return (p.distance ?? Infinity) > f.radius;
+  }
+}
+
+export type Relaxed = {
+  /** 원래 조건을 통과한 곳 (keep 적용) */
+  candidates: ApiPlace[];
+  /** 완화로 새로 들어온 곳 */
+  extra: ApiPlace[];
+  /** extra가 실제로 어긴 조건 (RELAX_ORDER 순) */
+  relaxed: RelaxStep[];
+  /** 반경을 넓혔으면 넓힌 m (아니면 0) */
+  addedRadius: number;
+};
+
+/**
+ * R41: 후보가 min(기본 3)곳보다 적으면 RELAX_ORDER대로 켜진 조건을 하나씩 풀어 min곳이 될 때까지 채운다.
+ * keep: 원래 후보·완화 후보 모두에 거는 조건 (R37 빼둔 곳 제외).
+ */
+export function relaxToFill(
+  places: ApiPlace[], f: Filters, now: Date, opts: { min?: number; keep?: (p: ApiPlace) => boolean } = {},
+): Relaxed {
+  const min = opts.min ?? TRIO_SIZE;
+  const keep = opts.keep ?? (() => true);
+  const pass = (g: Filters) => filterPlaces(places, g, now).filter(keep);
+  const candidates = pass(f);
+  if (candidates.length >= min) return { candidates, extra: [], relaxed: [], addedRadius: 0 };
+  let g = f;
+  let pool = candidates;
+  for (const step of RELAX_ORDER) {
+    if (pool.length >= min) break;
+    const next = relaxOnce(g, step);
+    if (!next) continue;
+    g = next;
+    pool = pass(g);
+  }
+  const inBase = new Set(candidates.map((p) => p.id));
+  const extra = pool.filter((p) => !inBase.has(p.id));
+  const relaxed = RELAX_ORDER.filter((step) => extra.some((p) => violates(p, f, step)));
+  return { candidates, extra, relaxed, addedRadius: relaxed.includes("radius") ? g.radius - f.radius : 0 };
+}
+
+const RELAX_LABEL: Record<Exclude<RelaxStep, "radius">, string> = { minRating: "평점", priceCap: "예산", groups: "카테고리" };
+
+/** R41: 완화 토스트 한 줄 (푼 것이 없으면 null) */
+export function relaxNotice(relaxed: RelaxStep[], addedRadius: number): string | null {
+  const conds = relaxed.filter((s): s is Exclude<RelaxStep, "radius"> => s !== "radius").map((s) => RELAX_LABEL[s]).join("·");
+  const wider = relaxed.includes("radius") && addedRadius > 0 ? `반경을 ${addedRadius}m 넓혔어요` : "";
+  if (!conds && !wider) return null;
+  const head = "조건에 맞는 곳이 적어서";
+  if (conds && wider) return `${head} ${conds} 조건을 풀고 ${wider}`;
+  return conds ? `${head} ${conds} 조건을 풀었어요` : `${head} ${wider}`;
 }

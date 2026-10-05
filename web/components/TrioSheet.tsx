@@ -20,6 +20,8 @@ type Props = {
   /** 펼친 카드의 전체 상세를 받는 중 */
   detailLoading: boolean;
   ranks: ReadonlyMap<string, number>;
+  /** R41 완화로 들어온 곳 ("조건 밖" 표시) */
+  outside?: ReadonlySet<string>;
   now: Date;
   onFocus: (id: string | null) => void;
   onClose: () => void;
@@ -47,12 +49,13 @@ function TrioCard(props: {
   open: boolean;
   detailLoading: boolean;
   topPercent: number | undefined;
+  outside: boolean;
   now: Date;
   onToggle: () => void;
   onKakao: (p: ApiPlace) => void;
   onExclude: (p: ApiPlace) => void;
 }) {
-  const { place: p, rank, open, detailLoading, topPercent, now, onToggle, onKakao, onExclude } = props;
+  const { place: p, rank, open, detailLoading, topPercent, outside, now, onToggle, onKakao, onExclude } = props;
   const li = useRef<HTMLLIElement>(null);
   const d = p.detail;
   const rating = d?.rating ?? null;
@@ -92,7 +95,12 @@ function TrioCard(props: {
             {state.closed && <span className="closed">{state.text}</span>}
             <RankPill top={topPercent} />
           </span>
-          {sub && <span className="trio-sub">{sub}</span>}
+          {(sub || outside) && (
+            <span className="trio-sub">
+              {outside && <span className="trio-outside">조건 밖</span>}
+              {sub}
+            </span>
+          )}
         </span>
         <ChevronDown className="trio-chev" size={14} />
       </button>
@@ -136,7 +144,7 @@ function TrioCard(props: {
  * 아래 행동: 공유(3곳 모두, 주 행동) · 다시 뽑기(보조. 모바일은 바로 아래 뽑기 바가 대신한다)
  */
 export function TrioSheet(props: Props) {
-  const { slotName, places, received, focusId, detailLoading, ranks, now } = props;
+  const { slotName, places, received, focusId, detailLoading, ranks, outside, now } = props;
   const { onFocus, onClose, onShare, onKakao } = props;
   const shuffling = slotName !== null;
   const swipe = useSwipeDown(onClose);
@@ -216,6 +224,7 @@ export function TrioSheet(props: Props) {
             open={p.id === focusId}
             detailLoading={p.id === focusId && detailLoading}
             topPercent={ranks.get(p.id)}
+            outside={outside?.has(p.id) ?? false}
             now={now}
             onToggle={() => onFocus(p.id === focusId ? null : p.id)}
             onKakao={onKakao}

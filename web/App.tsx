@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import { haversine, walkMinutes } from "../shared/geo";
 import { hubById } from "../shared/hubs";
 import { topPercents } from "../shared/rank";
-import { TRIO_SIZE, drawTrio, filterPlaces, sortPlaces, type Filters } from "../shared/recommend";
+import { TRIO_SIZE, drawTrio, filterPlaces, relaxNotice, relaxToFill, sortPlaces, type Filters } from "../shared/recommend";
 import { shareText } from "../shared/share";
 import type { ApiDetail, ApiPlace, LatLng } from "../shared/types";
 import { filterProps, setTrackingHub, startTracking, track, trackFilters } from "./analytics";
@@ -42,8 +42,11 @@ function useNow() {
   return now;
 }
 
-/** R22′: 지금 보여주는 후보 3곳. 객체는 목록에 없을 때(공유받은 곳 등)를 위한 대비값이고, 화면은 최신 목록 객체를 우선한다 */
-type Trio = { ids: string[]; source: "drawn" | "received"; fallback: Record<string, ApiPlace> };
+/**
+ * R22′: 지금 보여주는 후보 3곳. 객체는 목록에 없을 때(공유받은 곳 등)를 위한 대비값이고, 화면은 최신 목록 객체를 우선한다.
+ * outside: R41 완화로 들어온 곳
+ */
+type Trio = { ids: string[]; source: "drawn" | "received"; fallback: Record<string, ApiPlace>; outside?: ReadonlySet<string> };
 
 const byId = (ps: ApiPlace[]) => Object.fromEntries(ps.map((p) => [p.id, p]));
 
@@ -80,6 +83,11 @@ export default function App() {
   const candidates = useMemo(
     () =>
       sortPlaces(filterPlaces(data?.places ?? [], filters, now), filters.sort).filter((p) => !isExcluded(p.id)),
+    [data, filters, now, isExcluded],
+  );
+  // R41: 후보가 3곳보다 적으면 덜 중요한 조건부터 풀어 뽑을 곳을 채운다 (목록은 원래 조건 그대로)
+  const relax = useMemo(
+    () => relaxToFill(data?.places ?? [], filters, now, { keep: (p) => !isExcluded(p.id) }),
     [data, filters, now, isExcluded],
   );
   // R34: 필터 전 전체 목록(지금 거점·반경) 기준 평점 상위 N%. R42: 1000m 목록 중 화면 반경 안에서 매긴다
@@ -223,9 +231,11 @@ export default function App() {
       return;
     }
     const kind = trio?.source === "drawn" ? "redraw" : "draw";
-    const pool = candidates.length;
+    const extra = relax.extra;
+    const pool = candidates.length + extra.length;
     const r = drawTrio(candidates, filters.party, drawnIds.current, Math.random, {
       multiplier: personal.multiplier(Date.now()),
+      extra,
     });
     if (!r) {
       setTrio(null);
@@ -235,12 +245,16 @@ export default function App() {
       document.getElementById("empty")?.scrollIntoView({ block: "center", behavior: "smooth" });
       return;
     }
+    // R41: 완화로 들어온 곳이 결과에 있으면 무엇을 풀었는지 한 줄로 알린다
+    const outside = new Set(r.places.filter((p) => extra.includes(p)).map((p) => p.id));
+    const notice = outside.size > 0 ? relaxNotice(relax.relaxed, relax.addedRadius) : null;
     if (r.reset) {
       drawnIds.current.clear();
-      toast.show(
-        candidates.length <= TRIO_SIZE ? `조건에 맞는 곳이 ${candidates.length}곳뿐이에요` : "후보를 다 돌아서 처음부터 다시 뽑아요",
-      );
+      if (!notice) {
+        toast.show(pool <= TRIO_SIZE ? `조건에 맞는 곳이 ${pool}곳뿐이에요` : "후보를 다 돌아서 처음부터 다시 뽑아요");
+      }
     }
+    if (notice) toast.show(notice);
     setSelected(null);
     setTrio(null);
     setFocusId(null);
@@ -248,7 +262,7 @@ export default function App() {
       candidates.map((c) => c.name),
       () => {
         for (const p of r.places) drawnIds.current.add(p.id);
-        setTrio({ ids: r.places.map((p) => p.id), source: "drawn", fallback: byId(r.places) });
+        setTrio({ ids: r.places.map((p) => p.id), source: "drawn", fallback: byId(r.places), outside });
         record("shown", r.places);
         track(kind, {
           props: { candidates: pool, picks: r.places.map((p) => p.id), radius: filters.radius, party: filters.party },
@@ -393,6 +407,7 @@ export default function App() {
               focusId={focusId}
               detailLoading={detailPending !== null && detailPending === focusId}
               ranks={ranks}
+              outside={trio?.outside}
               now={now}
               onFocus={onFocus}
               onClose={closeTrio}
