@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
-  DEFAULT_FILTERS, drawTrio, filterPlaces, relaxNotice, relaxToFill, relaxedBy, sortPlaces, weightOf, type Filters,
+  DEFAULT_FILTERS, drawTrio, filterPlaces, relaxNotice, relaxToFill, relaxedBy, sortPlaces, timeOfDayFactor, weightOf,
+  type Filters,
 } from "../../shared/recommend";
 import type { ApiPlace, CategoryGroup } from "../../shared/types";
 import { apiPlace } from "../helpers/apiPlace";
@@ -369,5 +370,63 @@ describe("R44 강등 모드에서도 뽑기", () => {
     expect(ids(r.places)).toEqual(["k1", "c1", "k2"]);
     // 필터도 상세 없는 곳을 통과시킨다 (평점·예산 조건이 꺼져 있으면)
     expect(filterPlaces(ps, f(), NOON_MON)).toHaveLength(3);
+  });
+});
+
+describe("R50 시간대 반영 (아주 약하게)", () => {
+  const at = (hhmm: string) => new Date(`2026-10-06T${hhmm}:00+09:00`);
+  const walk = (id: string, walkMinutes: number, rating: number | null = 4) =>
+    apiPlace(id, { walkMinutes, group: id === "a" ? "korean" : "chinese" }, { rating, reviewCount: 90 });
+  const seq = (...xs: number[]) => {
+    let i = 0;
+    return () => xs[i++ % xs.length];
+  };
+  const none = new Set<string>();
+
+  it("R50: 11:55~13:30(KST)에는 가까울수록 × (1 + 0.25 × (1 − 도보 / 후보 중 가장 먼 도보))", () => {
+    for (const t of ["11:55", "12:10", "13:29"]) {
+      expect(timeOfDayFactor(walk("a", 2), at(t), 10)).toBeCloseTo(1.2);
+      expect(timeOfDayFactor(walk("a", 10), at(t), 10)).toBe(1);
+      expect(timeOfDayFactor(walk("a", 0), at(t), 10)).toBeCloseTo(1.25);
+    }
+    // 도보 시간을 모르거나 가장 먼 도보가 0이면 그대로
+    expect(timeOfDayFactor(apiPlace("x", { walkMinutes: undefined }), at("12:10"), 10)).toBe(1);
+    expect(timeOfDayFactor(walk("a", 0), at("12:10"), 0)).toBe(1);
+  });
+
+  it("R50: 11:20 전에는 평점이 높을수록 × (1 + 0.15 × clamp(평점 − 3.5, 0, 1.5) / 1.5)", () => {
+    for (const t of ["00:00", "09:00", "11:19"]) {
+      expect(timeOfDayFactor(walk("a", 2, 5.0), at(t), 10)).toBeCloseTo(1.15);
+      expect(timeOfDayFactor(walk("a", 2, 4.25), at(t), 10)).toBeCloseTo(1.075);
+      expect(timeOfDayFactor(walk("a", 2, 3.5), at(t), 10)).toBe(1);
+      expect(timeOfDayFactor(walk("a", 2, 3.0), at(t), 10)).toBe(1);
+      expect(timeOfDayFactor(walk("a", 2, null), at(t), 10)).toBe(1);
+    }
+  });
+
+  it("R50: 그 밖의 시간(11:20~11:54, 13:30 이후)에는 배수 1", () => {
+    for (const t of ["11:20", "11:54", "13:30", "15:00", "23:59"]) {
+      expect(timeOfDayFactor(walk("a", 0, 5.0), at(t), 10)).toBe(1);
+    }
+  });
+
+  it("R50: drawTrio에 now를 주면 점심 한가운데에는 가까운 곳 쪽으로 기운다", () => {
+    // 기본 가중치는 같다(2). 12:10: a = 2 × (1 + 0.25 × 0.9) = 2.45, b = 2 × 1 = 2 → a의 몫 0.5506
+    const a = walk("a", 1), b = walk("b", 10);
+    expect(drawTrio([a, b], 2, none, seq(0.54, 0))!.places[0].id).toBe("b");
+    expect(drawTrio([a, b], 2, none, seq(0.54, 0), { now: at("12:10") })!.places[0].id).toBe("a");
+    expect(drawTrio([a, b], 2, none, seq(0.56, 0), { now: at("12:10") })!.places[0].id).toBe("b");
+  });
+
+  it("R50: 창 밖 시각을 주면 now 없이 뽑은 것과 결과가 같다", () => {
+    const ps = Array.from({ length: 9 }, (_, i) =>
+      apiPlace(`p${i}`, { walkMinutes: 1 + i, group: (["korean", "chinese", "japanese"] as const)[i % 3] }, { rating: 3 + i * 0.2, reviewCount: 10 * i }),
+    );
+    for (const x of [0, 0.13, 0.37, 0.5, 0.71, 0.99]) {
+      const plain = drawTrio(ps, 2, none, seq(x, 1 - x, x / 2))!;
+      for (const t of ["11:20", "14:00", "18:30"]) {
+        expect(ids(drawTrio(ps, 2, none, seq(x, 1 - x, x / 2), { now: at(t) })!.places)).toEqual(ids(plain.places));
+      }
+    }
   });
 });

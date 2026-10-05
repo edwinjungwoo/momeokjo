@@ -1,5 +1,5 @@
 import { DEFAULT_RADIUS, MAX_RADIUS } from "./constants";
-import { isOpenDuring } from "./hours";
+import { isOpenDuring, kstParts } from "./hours";
 import type { ApiPlace, CategoryGroup } from "./types";
 
 export type Party = 1 | 2 | 3 | 4;
@@ -83,6 +83,33 @@ export function weightOf(p: ApiPlace, party: Party): number {
   return w;
 }
 
+/** R50: KST 분(0~1439). 11:55 ≤ t < 13:30은 가까운 곳, t < 11:20은 평점 높은 곳을 아주 조금 더 */
+export const RUSH_START = 11 * 60 + 55;
+export const RUSH_END = 13 * 60 + 30;
+export const EARLY_END = 11 * 60 + 20;
+const RUSH_BOOST = 0.25;
+const EARLY_BOOST = 0.15;
+
+/**
+ * R50: 시간대 배수 (화면 문구 없음, 웨이팅을 안다고 하지 않는다).
+ * 점심 한가운데: 1 + 0.25 × (1 − 도보 / maxWalk) — maxWalk = 이번 뽑기 후보 중 가장 먼 도보 분.
+ * 이른 시간: 1 + 0.15 × clamp(평점 − 3.5, 0, 1.5) / 1.5. 그 밖의 시간, 도보·평점을 모르면 1.
+ */
+export function timeOfDayFactor(p: ApiPlace, now: Date, maxWalk: number): number {
+  const { minute } = kstParts(now);
+  if (minute >= RUSH_START && minute < RUSH_END) {
+    if (p.walkMinutes === undefined || !(maxWalk > 0)) return 1;
+    const closeness = Math.min(1, Math.max(0, 1 - p.walkMinutes / maxWalk));
+    return 1 + RUSH_BOOST * closeness;
+  }
+  if (minute < EARLY_END) {
+    const rating = p.detail?.rating ?? null;
+    if (rating === null) return 1;
+    return 1 + (EARLY_BOOST * Math.min(1.5, Math.max(0, rating - 3.5))) / 1.5;
+  }
+  return 1;
+}
+
 /** R21′: 같은 그룹이 이미 뽑혔으면 다음 뽑기에서 이만큼 곱한다 (하나 뽑힐 때마다 한 번씩) */
 export const SAME_GROUP_FACTOR = 0.35;
 export const TRIO_SIZE = 3;
@@ -93,6 +120,8 @@ export type DrawOptions = {
   multiplier?: (p: ApiPlace) => number;
   /** R41 완화로 들어온 곳. 원래 후보를 먼저 넣고 모자란 만큼만 여기서 채운다 */
   extra?: ApiPlace[];
+  /** R50 시간대 배수를 매길 시각 (없으면 시간대를 보지 않는다) */
+  now?: Date;
 };
 
 /** 가중 비복원 추출. 이미 뽑힌 그룹은 SAME_GROUP_FACTOR로 낮춘다 (강제 아님) */
@@ -119,6 +148,7 @@ function sampleInto(
  * exclude(이번 세션에 이미 보여준 곳)는 빼고 뽑는다. 남은 곳이 3곳보다 적으면
  * 남은 곳을 먼저 넣고 제외를 풀어 나머지를 채운다(reset: true) — 한 결과 안에서는 중복이 없다.
  * R41: opts.extra(완화로 들어온 곳)가 있으면 각 단계에서 원래 후보를 먼저, 모자란 만큼 extra에서 채운다.
+ * R50: opts.now가 있으면 가중치에 시간대 배수(timeOfDayFactor)를 곱한다.
  */
 export function drawTrio(
   candidates: ApiPlace[], party: Party, exclude: ReadonlySet<string>, rng: () => number, opts: DrawOptions = {},
@@ -129,7 +159,11 @@ export function drawTrio(
   const tiers = extra.length > 0 ? [base, extra] : [base];
   const total = base.length + extra.length;
   if (total === 0) return null;
-  const weight = (p: ApiPlace) => weightOf(p, party) * mult(p);
+  const now = opts.now;
+  const maxWalk = now ? Math.max(0, ...[...base, ...extra].map((p) => p.walkMinutes ?? 0)) : 0;
+  const weight = now
+    ? (p: ApiPlace) => weightOf(p, party) * mult(p) * timeOfDayFactor(p, now, maxWalk)
+    : (p: ApiPlace) => weightOf(p, party) * mult(p);
   const n = Math.min(TRIO_SIZE, total);
   const out: ApiPlace[] = [];
   for (const tier of tiers) sampleInto(out, tier.filter((p) => !exclude.has(p.id)), n, weight, rng);

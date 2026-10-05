@@ -259,6 +259,8 @@ export default function App() {
     const r = drawTrio(candidates, filters.party, drawnIds.current, Math.random, {
       multiplier: personal.multiplier(Date.now()),
       extra,
+      // R50: 점심 한가운데엔 가까운 곳, 이른 시간엔 평점 높은 곳을 아주 조금 더
+      now: new Date(),
     });
     if (!r) {
       setTrio(null);
