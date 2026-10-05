@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { parseHours, type RawDay } from "../shared/hours";
 import { representativePrice } from "../shared/price";
-import type { Menu, PlaceDetail } from "../shared/types";
+import type { Menu, PlaceDetail, PlaceSummary } from "../shared/types";
 
 const ReviewSchema = z.object({
   score_set: z
@@ -48,11 +48,23 @@ const AddInfoSchema = z.object({
     .nullish(),
 });
 
+const SummarySchema = z.object({
+  name: z.string().min(1),
+  category: z
+    .object({ name1: z.string().nullish(), name2: z.string().nullish(), name3: z.string().nullish() })
+    .nullish(),
+  point: z.object({ lat: z.number(), lon: z.number() }),
+  address: z.object({ road: z.string().nullish(), disp: z.string().nullish() }).nullish(),
+  phone_numbers: z.array(z.object({ tel: z.string().nullish() })).nullish(),
+});
+
 const KNOWN_KEYS = ["summary", "kakaomap_review", "menu", "open_hours", "place_add_info"];
 const MAX_MENUS = 20;
 const MAX_TAGS = 30;
 
-export type DetailParseResult = { ok: true; detail: PlaceDetail } | { ok: false; reason: "schema" };
+export type DetailParseResult =
+  | { ok: true; summary: PlaceSummary; detail: PlaceDetail }
+  | { ok: false; reason: "schema" };
 
 function section<S extends z.ZodType>(schema: S, value: unknown): z.output<S> | null {
   if (value === null || value === undefined) return null;
@@ -64,6 +76,16 @@ export function parseDetail(raw: unknown): DetailParseResult {
   if (typeof raw !== "object" || raw === null || Array.isArray(raw)) return { ok: false, reason: "schema" };
   const r = raw as Record<string, unknown>;
   if (!KNOWN_KEYS.some((k) => k in r)) return { ok: false, reason: "schema" };
+  const s = section(SummarySchema, r.summary);
+  if (!s) return { ok: false, reason: "schema" };
+  const summary: PlaceSummary = {
+    name: s.name,
+    categoryName: [s.category?.name1, s.category?.name2, s.category?.name3].filter((x): x is string => !!x).join(" > "),
+    lat: s.point.lat,
+    lng: s.point.lon,
+    address: s.address?.road || s.address?.disp || null,
+    phone: s.phone_numbers?.[0]?.tel || null,
+  };
 
   const review = section(ReviewSchema, r.kakaomap_review);
   const reviewCount = review?.score_set?.review_count ?? null;
@@ -113,6 +135,7 @@ export function parseDetail(raw: unknown): DetailParseResult {
 
   return {
     ok: true,
+    summary,
     detail: {
       rating,
       reviewCount,

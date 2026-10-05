@@ -6,7 +6,8 @@ describe("infra", () => {
   it("infra: D1 마이그레이션이 적용되어 있다", async () => {
     const r = await env.DB.prepare("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name").all<{ name: string }>();
     const names = r.results.map((x) => x.name);
-    expect(names).toEqual(expect.arrayContaining(["place_details", "places", "tiles"]));
+    expect(names).toEqual(expect.arrayContaining(["places", "tile_places", "tiles"]));
+    expect(names).not.toContain("place_details");
   });
 
   it("infra: 테스트 사이에 데이터가 격리된다 (1)", async () => {

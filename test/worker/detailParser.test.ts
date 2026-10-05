@@ -6,6 +6,8 @@ import hadongkwan from "../fixtures/place-detail/26428654-hadongkwan.json";
 import matsugaze from "../fixtures/place-detail/12101050-matsugaze.json";
 import outback from "../fixtures/place-detail/12445953-outback.json";
 
+const SUMMARY = { name: "x", point: { lat: 37.5, lon: 127.05 } };
+
 const ok = (raw: unknown) => {
   const r = parseDetail(raw);
   if (!r.ok) throw new Error("expected ok");
@@ -56,13 +58,13 @@ describe("parseDetail", () => {
   });
 
   it("R6: 리뷰가 0개면 rating null", () => {
-    const d = ok({ summary: { name: "x" }, kakaomap_review: { score_set: { review_count: 0, average_score: 0 } } });
+    const d = ok({ summary: SUMMARY, kakaomap_review: { score_set: { review_count: 0, average_score: 0 } } });
     expect(d.rating).toBeNull();
     expect(d.reviewCount).toBe(0);
   });
 
   it("R6: place_add_info가 없으면 bookable null, tags []", () => {
-    const d = ok({ summary: { name: "x" } });
+    const d = ok({ summary: SUMMARY });
     expect(d.bookable).toBeNull();
     expect(d.tags).toEqual([]);
     expect(d.hours).toBeNull();
@@ -82,5 +84,30 @@ describe("parseDetail", () => {
     expect(parseDetail("x")).toEqual({ ok: false, reason: "schema" });
     expect(parseDetail([])).toEqual({ ok: false, reason: "schema" });
     expect(parseDetail({ foo: 1 })).toEqual({ ok: false, reason: "schema" });
+  });
+
+  it("R6: 요약에서 이름, 카테고리 원문, 좌표, 주소, 전화를 가져온다 (중앙해장)", () => {
+    const r = parseDetail(jungang);
+    if (!r.ok) throw new Error("expected ok");
+    expect(r.summary).toEqual({
+      name: "중앙해장",
+      categoryName: "음식점 > 한식 > 해장국",
+      lat: 37.50827359718396,
+      lng: 127.06547254091939,
+      address: "서울 강남구 영동대로86길 17 육인빌딩 1층",
+      phone: "02-558-7905",
+    });
+  });
+
+  it("R6: 요약에 이름이나 좌표가 없으면 표시할 수 없으므로 schema 실패", () => {
+    expect(parseDetail({ summary: { name: "x" } })).toEqual({ ok: false, reason: "schema" });
+    expect(parseDetail({ summary: { point: { lat: 37.5, lon: 127 } } })).toEqual({ ok: false, reason: "schema" });
+    expect(parseDetail({ kakaomap_review: {} })).toEqual({ ok: false, reason: "schema" });
+  });
+
+  it("R6: 카테고리 3단계가 없으면 2단계까지만", async () => {
+    const bulia = (await import("../fixtures/place-detail/1528769880-bulia.json")).default;
+    const r = parseDetail(bulia);
+    expect(r.ok && r.summary.categoryName).toBe("음식점 > 중식");
   });
 });

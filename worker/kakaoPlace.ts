@@ -1,4 +1,4 @@
-import type { PlaceDetail } from "../shared/types";
+import type { PlaceDetail, PlaceSummary } from "../shared/types";
 import type { Budget } from "./budget";
 import { parseDetail } from "./detailParser";
 import { sleep as realSleep, type FetchFn } from "./fetchFn";
@@ -14,7 +14,9 @@ export const PLACE_DETAIL_HEADERS: Record<string, string> = {
 
 const RETRY_DELAYS = [250, 1000];
 
-export type PlaceFetchResult = { ok: true; detail: PlaceDetail } | { ok: false; reason: string };
+export type PlaceFetchResult =
+  | { ok: true; summary: PlaceSummary; detail: PlaceDetail }
+  | { ok: false; reason: string };
 
 export async function fetchPlaceDetail(
   fetcher: FetchFn,

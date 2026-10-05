@@ -23,6 +23,15 @@ export type PlaceDetail = {
   tags: string[];
 };
 
+export type PlaceSummary = {
+  name: string;
+  categoryName: string;
+  lat: number;
+  lng: number;
+  address: string | null;
+  phone: string | null;
+};
+
 export type Place = {
   id: string;
   name: string;
