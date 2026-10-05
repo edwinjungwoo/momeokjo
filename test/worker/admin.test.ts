@@ -1,4 +1,4 @@
-import { env } from "cloudflare:test";
+import { createExecutionContext, env, waitOnExecutionContext } from "cloudflare:test";
 import { describe, expect, it } from "vitest";
 import { ASEM, PREWARM_RADIUS } from "../../shared/constants";
 import { HUBS, type Hub } from "../../shared/hubs";
@@ -34,6 +34,28 @@ describe("admin", () => {
     expect((await callApp(app, `/api/admin/warm?${AREA}`, { method: "POST" })).status).toBe(401);
     expect((await callApp(app, `/api/admin/warm?${AREA}`, { method: "POST", headers: { Authorization: "Bearer nope" } })).status).toBe(401);
     expect((await callApp(app, `/api/admin/audit?${AREA}`)).status).toBe(401);
+  });
+
+  it("R36: 토큰을 쿼리스트링으로 보내도 인증되지 않는다 (헤더만 본다)", async () => {
+    const { app } = setup();
+    expect((await callApp(app, "/api/admin/stats?token=test-admin-token")).status).toBe(401);
+    expect((await callApp(app, `/api/admin/audit?${AREA}&token=test-admin-token`)).status).toBe(401);
+    expect((await callApp(app, "/api/admin/stats", { headers: { Authorization: "test-admin-token" } })).status).toBe(401);
+  });
+
+  it("R36: ADMIN_TOKEN이 비어 있으면 빈 Bearer를 포함해 모든 관리자 요청이 401", async () => {
+    const { app } = setup();
+    const call = async (path: string, init?: RequestInit) => {
+      const ctx = createExecutionContext();
+      const res = await app.fetch(new Request(`http://localhost${path}`, init), { ...env, ADMIN_TOKEN: "" }, ctx);
+      await waitOnExecutionContext(ctx);
+      return res.status;
+    };
+    for (const auth of [undefined, "Bearer ", "Bearer", "Bearer undefined"]) {
+      const headers = auth === undefined ? undefined : { Authorization: auth };
+      expect(await call("/api/admin/stats", { headers }), String(auth)).toBe(401);
+      expect(await call(`/api/admin/warm?${AREA}`, { method: "POST", headers }), String(auth)).toBe(401);
+    }
   });
 
   it("R31: warm은 격자 수집과 상세 보충을 한 번 수행하고, 반복하면 0으로 수렴한다", async () => {

@@ -76,6 +76,15 @@ describe("settings", () => {
     expect(applyShareParams(DEFAULT_SETTINGS, { placeIds: [], hubId: null, radius: null })).toEqual(DEFAULT_SETTINGS);
   });
 
+  it("R25: 공유 파라미터를 적용해도 저장값 객체는 바뀌지 않는다", () => {
+    const stored = parseSettings(JSON.stringify({ filters: { ...DEFAULT_FILTERS, party: 4, radius: 700 }, hubId: "pangyo" }));
+    const snapshot = structuredClone(stored);
+    const s = applyShareParams(stored, { placeIds: ["1"], hubId: "ddp", radius: 300 });
+    expect(s).toMatchObject({ hubId: "ddp", filters: { radius: 300, party: 4 } });
+    expect(stored).toEqual(snapshot);
+    expect(DEFAULT_SETTINGS.filters.radius).toBe(500);
+  });
+
   it("R43/R25: 거점 경로로 열면 그 거점을 쓰고 저장한다 (주소창은 그대로)", () => {
     const stored = JSON.stringify({ ...DEFAULT_SETTINGS, hubId: "ddp" });
     const r = resolveStart(stored, "/pangyo", "");

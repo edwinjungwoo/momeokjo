@@ -1,4 +1,6 @@
 import { describe, expect, it } from "vitest";
+import { PREWARM_RADIUS } from "../../shared/constants";
+import { tilesCoveringCircle } from "../../shared/geo";
 import { DEFAULT_HUB_ID, HUBS, hubById, isHubId } from "../../shared/hubs";
 
 describe("hubs", () => {
@@ -19,5 +21,17 @@ describe("hubs", () => {
     expect(hubById(null).id).toBe("bongeunsa");
     expect(isHubId("ddp")).toBe(true);
     expect(isHubId("gangnam")).toBe(false);
+  });
+
+  it("R24/R43: 거점 id는 URL 경로에 그대로 쓰는 소문자 영숫자(·하이픈)이고 서로 다르다", () => {
+    for (const h of HUBS) expect(h.id, h.id).toMatch(/^[a-z0-9-]+$/);
+    expect(new Set(HUBS.map((h) => h.id)).size).toBe(HUBS.length);
+  });
+
+  it("R24/R11: 모든 거점의 1000m 격자를 격자마다 3쪽씩 불러도 일주일 Cron 예산(5분마다 40회)의 10% 안이다", () => {
+    const tiles = new Set(HUBS.flatMap((h) => tilesCoveringCircle(h, PREWARM_RADIUS))).size;
+    const weeklyBudget = ((24 * 60) / 5) * 7 * 40;
+    expect(tiles).toBeGreaterThan(0);
+    expect(tiles * 3).toBeLessThan(weeklyBudget * 0.1);
   });
 });

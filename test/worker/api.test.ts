@@ -189,6 +189,24 @@ describe("GET /api/places — 응답 캐시와 목록 원소", () => {
     await cache.delete(new Request(placesCacheKey("bongeunsa", 300)));
   });
 
+  it("R12: 응답·목록 원소·detail에는 정해진 키만 싣는다 (목록 크기 회귀 방지)", async () => {
+    const s = setup();
+    await callApp(s.app, Q);
+    const body = (await (await callApp(s.app, Q)).json()) as PlacesResponse;
+    expect(Object.keys(body).sort()).toEqual(
+      ["center", "detailsFrozenSince", "detailsNewestAt", "incompleteTiles", "pending", "places", "radius", "stale"],
+    );
+    expect(body.places.length).toBeGreaterThan(0);
+    for (const p of body.places) {
+      expect(Object.keys(p).sort()).toEqual(
+        ["category", "detail", "distance", "group", "id", "lat", "lng", "name", "photoUrl", "url", "walkMinutes"],
+      );
+      expect(Object.keys(p.detail!).sort()).toEqual(
+        ["bookable", "groupFriendly", "hours", "menus", "price", "rating", "reviewCount", "soloFriendly", "strengths"],
+      );
+    }
+  });
+
   it("R12: 목록 원소에는 화면이 쓰지 않는 주소·전화번호를 싣지 않는다 (단건에는 있다)", async () => {
     const s = setup();
     await callApp(s.app, Q);
@@ -268,6 +286,15 @@ describe("GET /api/places/:id", () => {
     const { app, place } = setup();
     expect((await callApp(app, "/api/places/1234567890123456")).status).toBe(404);
     expect(place.calls).toHaveLength(0);
+  });
+
+  it("R13: id 경계 — 음수·소수·공백(SQL 같은 글자)·인코딩된 경로·전각 숫자는 외부 호출과 D1 쓰기 없이 404", async () => {
+    const { app, place } = setup();
+    for (const id of ["-1", "1.5", "1%20OR%201=1", "..%2Fadmin%2Faudit", "%EF%BC%91%EF%BC%92"]) {
+      expect((await callApp(app, `/api/places/${id}`)).status, id).toBe(404);
+    }
+    expect(place.calls).toHaveLength(0);
+    expect((await env.DB.prepare("SELECT count(*) AS c FROM places").first<{ c: number }>())?.c).toBe(0);
   });
 
   it("R12/R13: 격자에 없는 가게는 단건 조회로 저장돼도 /api/places 목록에 나오지 않는다", async () => {

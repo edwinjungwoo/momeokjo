@@ -116,6 +116,23 @@ describe("POST /api/events", () => {
     expect(await rows()).toHaveLength(0);
   });
 
+  it("R35: IP·User-Agent·Origin은 헤더에 있어도 어떤 열에도 저장하지 않는다", async () => {
+    const { app } = setup();
+    const res = await callApp(app, "/api/events", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json", "cf-connecting-ip": "203.0.113.77",
+        "user-agent": "QA-Agent/9.9", origin: "https://qa-origin.example",
+      },
+      body: JSON.stringify({ anon: ANON, session: SESSION, events: [ev({ t: "share", placeId: "13583324" })] }),
+    });
+    expect(res.status).toBe(204);
+    const all = (await env.DB.prepare("SELECT * FROM events").all()).results;
+    expect(all).toHaveLength(1);
+    expect(Object.keys(all[0]).sort()).toEqual(["anon", "day", "hour", "hub", "id", "place_id", "props", "session", "ts", "type"]);
+    expect(JSON.stringify(all)).not.toMatch(/203\.0\.113\.77|QA-Agent|qa-origin/);
+  });
+
   it("R35: 익명 id별 요청 제한(RATE_LIMITER)을 넘으면 저장하지 않고 204로 조용히 넘긴다", async () => {
     const { app } = setup({ allow: false });
     const res = await post(app, JSON.stringify({ anon: ANON, session: SESSION, events: [ev()] }));

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { isOpenDuring, kstParts, parseHours, type RawDay } from "../../shared/hours";
+import type { Hours } from "../../shared/types";
 import matsugaze from "../fixtures/place-detail/12101050-matsugaze.json";
 import ontable from "../fixtures/place-detail/2179756-ontable.json";
 import suda from "../fixtures/place-detail/14480921-suda-bar.json";
@@ -100,6 +101,19 @@ describe("isOpenDuring", () => {
 
   it("R17: 브레이크 시작 시각에 딱 맞춰 끝나면 영업 중 (마쯔가제 14:00)", () => {
     expect(isOpenDuring(matsu, kst("2026-10-05T14:00:00"))).toBe(true);
+  });
+
+  it("R17: 자정 넘김 — 목 16:00~02:00이고 금요일이 휴무여도 금 01:00은 영업 중, 01:45는 30분 안에 닫혀서 아님", () => {
+    const h: Hours = { 4: [[960, 1560]], 5: "closed" };
+    expect(isOpenDuring(h, kst("2026-10-09T01:00:00"))).toBe(true);
+    expect(isOpenDuring(h, kst("2026-10-09T01:45:00"))).toBe(false);
+    expect(isOpenDuring(h, kst("2026-10-09T12:00:00"))).toBe(false);
+  });
+
+  it("R17: 전날이 휴무여도 오늘 새벽 구간이 없으면 닫힘 (금 00:30), 오늘 구간은 그대로 (금 12:00)", () => {
+    const h: Hours = { 4: "closed", 5: [[690, 1320]] };
+    expect(isOpenDuring(h, kst("2026-10-09T00:30:00"))).toBe(false);
+    expect(isOpenDuring(h, kst("2026-10-09T12:00:00"))).toBe(true);
   });
 
   it("R17: 오늘 요일 정보가 없으면 null", () => {

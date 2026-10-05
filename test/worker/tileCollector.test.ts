@@ -1,7 +1,7 @@
 import { env } from "cloudflare:test";
 import { describe, expect, it } from "vitest";
 import { ASEM, TILE_TTL_MS } from "../../shared/constants";
-import { tileKeyOf, tileRect } from "../../shared/geo";
+import { tileKeyOf, tileRect, tilesCoveringCircle } from "../../shared/geo";
 import { Budget } from "../../worker/budget";
 import { getTiles, markTile, tilePlaceStates } from "../../worker/repo";
 import { collectTiles } from "../../worker/tileCollector";
@@ -77,6 +77,20 @@ describe("collectTiles", () => {
     expect(r).toEqual({ collected: [], incomplete: [KEY, "1:1"], failed: [] });
     expect((await getTiles(env.DB, [KEY])).has(KEY)).toBe(false);
     expect(kakao.calls.length).toBeLessThanOrEqual(2);
+  });
+
+  it("R10/F-4: 모든 사각형이 포화(46개)여도 외부 호출은 예산 40을 넘지 않고, 못 끝낸 격자는 incomplete로 남긴다", async () => {
+    let calls = 0;
+    const saturatedEverywhere = async () => {
+      calls += 1;
+      return Response.json({ meta: { total_count: 46, pageable_count: 45, is_end: false }, documents: [] });
+    };
+    const keys = tilesCoveringCircle(ASEM, 1000);
+    const r = await collectTiles(deps(saturatedEverywhere, 40), keys);
+    expect(calls).toBeLessThanOrEqual(40);
+    expect(r.incomplete.length).toBeGreaterThan(0);
+    expect(r.collected.length + r.incomplete.length + r.failed.length).toBe(keys.length);
+    expect((await getTiles(env.DB, r.incomplete)).size).toBe(0);
   });
 
   it("R14: 공식 API 오류가 난 격자는 failed, 기록하지 않는다", async () => {

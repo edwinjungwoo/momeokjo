@@ -80,6 +80,12 @@ describe("R23′ 3곳 공유", () => {
     expect(parseShareParams("")).toEqual({ placeIds: [], hubId: null, radius: null });
   });
 
+  it("R23: r은 Number로 읽어 100~1000m·50m 단위만 받는다 (1e3·0x1f4처럼 같은 값의 다른 표기는 허용, 빈 값·공백·음수는 버림)", () => {
+    expect(parseShareParams("?r=1e3").radius).toBe(1000);
+    expect(parseShareParams("?r=0x1f4").radius).toBe(500);
+    for (const r of ["", "%20", "-500", "abc", "Infinity", "1001"]) expect(parseShareParams(`?r=${r}`).radius, r).toBeNull();
+  });
+
   it("R43: 새 공유 링크는 경로의 거점을 읽고, 예전 h 링크도 계속 읽는다", () => {
     expect(parseShareParams("?t=1,2&r=700", "/ddp")).toEqual({ placeIds: ["1", "2"], hubId: "ddp", radius: 700 });
     expect(parseShareParams("?t=1&h=pangyo", "/")).toEqual({ placeIds: ["1"], hubId: "pangyo", radius: null });
