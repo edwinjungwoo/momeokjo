@@ -1,6 +1,5 @@
-import {
-  ANON_KEY, MAX_EVENTS_PER_REQUEST, SESSION_KEY, nextSession, type EventProps, type EventType, type TrackedEvent,
-} from "../shared/events";
+import { ANON_KEY, MAX_EVENTS_PER_REQUEST, SESSION_KEY, nextSession, type EventType } from "../shared/eventCore";
+import type { EventProps, TrackedEvent } from "../shared/events";
 import type { Filters } from "../shared/recommend";
 
 /**

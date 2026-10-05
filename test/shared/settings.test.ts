@@ -33,6 +33,31 @@ describe("settings", () => {
     expect(parseSettings(JSON.stringify({ filters: { radius: 825 } })).filters.radius).toBe(500);
   });
 
+  it("R25/R45: 손으로 검증해도 예전(zod) 규칙과 같다 — 모양이 틀린 값은 필드별로, 루트가 틀리면 전체 기본값", () => {
+    for (const raw of ["null", "[]", "5", '"x"', "{}"]) expect(parseSettings(raw)).toEqual(DEFAULT_SETTINGS);
+    expect(parseSettings(JSON.stringify({ filters: [], hubId: "ddp" }))).toEqual({ filters: DEFAULT_FILTERS, hubId: "ddp" });
+    expect(parseSettings(JSON.stringify({ filters: null, hubId: 3 }))).toEqual(DEFAULT_SETTINGS);
+    const s = parseSettings(
+      JSON.stringify({
+        filters: { radius: "500", party: "2", groups: ["korean", "pizza"], includeBar: 1, priceCap: "10000", minRating: 3, openOnly: "y", sort: 1 },
+      }),
+    );
+    expect(s.filters).toEqual(DEFAULT_FILTERS);
+    const ok = parseSettings(
+      JSON.stringify({
+        filters: { radius: 300, party: 1, groups: ["korean", "etc"], includeBar: true, priceCap: 20000, minRating: 3.5, openOnly: false, sort: "price", x: 1 },
+        hubId: "pangyo",
+        extra: true,
+      }),
+    );
+    expect(ok).toEqual({
+      filters: { radius: 300, party: 1, groups: ["korean", "etc"], includeBar: true, priceCap: 20000, minRating: 3.5, openOnly: false, sort: "price" },
+      hubId: "pangyo",
+    });
+    // 술집(bar)·디저트는 카테고리 칩에 없어서 저장값으로도 받지 않는다
+    expect(parseSettings(JSON.stringify({ filters: { groups: ["bar"] } })).filters.groups).toEqual(DEFAULT_FILTERS.groups);
+  });
+
   it("R25: 모르는 거점은 기본 거점으로, 예전 저장값(center, lunch)은 버린다", () => {
     expect(parseSettings(JSON.stringify({ hubId: "gangnam" })).hubId).toBe("bongeunsa");
     const old = parseSettings(JSON.stringify({ filters: { ...DEFAULT_FILTERS, lunch: 30 }, center: { lat: 37.5, lng: 127 } }));
