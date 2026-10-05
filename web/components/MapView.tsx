@@ -46,6 +46,12 @@ const FIT_PAD = 40;
 
 const hasSize = (node: HTMLElement) => node.clientWidth > 0 && node.clientHeight > 0;
 
+/** 지도 컨테이너 크기와 글꼴. 이름표·칩 배치가 핀 클래스·스타일을 쓰기 전에 한 번 읽어 둘 다에 넘긴다 (쓴 뒤에 읽으면 스타일·레이아웃을 다시 계산한다) */
+type Frame = { width: number; height: number; font: string };
+
+/** R28: 칩을 고를 때 화면 밖으로 더 보는 폭(px, 칩 하나 너비 넉넉히). 위경도로 먼저 거르고, 투영한 뒤 가로 ±80·세로 ±40으로 한 번 더 거른다 */
+const CHIP_MARGIN = 80;
+
 /** 이름표 글자 너비 (.pin--pick::after와 같은 12px 굵기 600). 캔버스 하나를 다시 쓴다 */
 let measureCtx: CanvasRenderingContext2D | null | undefined;
 function labelTextWidth(text: string, fontFamily: string): number {
@@ -91,8 +97,8 @@ export function MapView({ center, radius, places, selectedId, picks, focusId, on
   const pickObstacles = useRef<LabelBox[]>([]);
   /** 칩 대신 점으로 그리는 핀 id (.pin--nochip) */
   const noChip = useRef(new Set<string>());
-  const layoutChips = useRef(() => {});
-  const layoutLabels = useRef(() => {});
+  const layoutChips = useRef<(f?: Frame | null) => void>(() => {});
+  const layoutLabels = useRef<(f?: Frame | null) => void>(() => {});
   const [ready, setReady] = useState(false);
   const [failed, setFailed] = useState(false);
   const [attempt, setAttempt] = useState(0);
@@ -103,6 +109,17 @@ export function MapView({ center, radius, places, selectedId, picks, focusId, on
   useEffect(() => {
     handlers.current = { onSelect };
   });
+
+  const readFrame = (): Frame | null => {
+    const node = el.current;
+    return node ? { width: node.clientWidth, height: node.clientHeight, font: getComputedStyle(node).fontFamily } : null;
+  };
+  /** 이름표 → 칩 순서로 다시 배치한다. 크기·글꼴은 둘 다 쓰기 전에 한 번만 읽는다 (확대·이동 끝, 핀·결과 갱신) */
+  const relayoutPins = () => {
+    const f = readFrame();
+    layoutLabels.current(f);
+    layoutChips.current(f);
+  };
 
   // 반경 원이 화면에 들어오게 맞춘다. 컨테이너 크기가 0이면 ResizeObserver가 크기가 생길 때 다시 맞춘다.
   const fitCircle = () => {
@@ -146,10 +163,7 @@ export function MapView({ center, radius, places, selectedId, picks, focusId, on
         });
         // 확대·이동이 끝나면 이름표 겹침을 다시 본다 (확대하면 떨어져서 다시 보일 수 있다).
         // 칩 겹침은 핀 수백 개를 훑으므로 확대 중 매 프레임(zoom_changed)이 아니라 끝났을 때(idle)만 다시 계산한다
-        kakao.maps.event.addListener(m, "idle", () => {
-          layoutLabels.current();
-          layoutChips.current();
-        });
+        kakao.maps.event.addListener(m, "idle", relayoutPins);
         let lastWidth = node.clientWidth;
         const observer = new ResizeObserver(() => {
           if (!hasSize(node)) return;
@@ -204,12 +218,11 @@ export function MapView({ center, radius, places, selectedId, picks, focusId, on
   // - 화면 가장자리를 넘는 이름표는 --label-dx로 안쪽으로 민다
   // - 앞 번호의 이름표·배지와 겹치는 이름표는 숨긴다 (번호 배지는 남는다)
   // - 보이는 이름표가 뒤 번호의 배지를 덮으면 그 핀을 위로 올린다 (배지는 늘 보인다)
-  layoutLabels.current = () => {
+  layoutLabels.current = (f = readFrame()) => {
     const m = map.current;
-    const node = el.current;
-    if (!m || !node || typeof m.getProjection !== "function") return;
+    if (!m || !f || typeof m.getProjection !== "function") return;
     const proj = m.getProjection();
-    const font = getComputedStyle(node).fontFamily;
+    const font = f.font;
     const boxes = [];
     const badges = [];
     for (const id of picksRef.current) {
@@ -220,7 +233,7 @@ export function MapView({ center, radius, places, selectedId, picks, focusId, on
       boxes.push(pickLabelBox(id, { x: pt.x, y: pt.y }, labelTextWidth(name, font)));
       badges.push(pickBadgeBox(id, { x: pt.x, y: pt.y }));
     }
-    const { hidden: hide, shift, order } = layoutPicks(boxes, badges, { width: node.clientWidth, focusId: focusRef.current });
+    const { hidden: hide, shift, order } = layoutPicks(boxes, badges, { width: f.width, focusId: focusRef.current });
     for (const [id, ov] of overlays.current) {
       const pin = ov.getContent() as HTMLElement;
       const want = hide.has(id);
@@ -260,19 +273,29 @@ export function MapView({ center, radius, places, selectedId, picks, focusId, on
   };
 
   // R28: 가까이(near, mid는 평점 높은 곳·선택만) 본 지도에서 서로 덮는 평점 칩은 평점·리뷰 순으로 하나만 남기고 나머지는 점으로 그린다.
-  // 화면 안 핀만 보고(shared/labels.ts keptChips, 격자 칸), 바뀐 핀의 클래스만 건드린다. 걸린 시간은 performance 측정 "mmj:chips"
-  layoutChips.current = () => {
+  // 화면 안 핀만 보고(위경도로 먼저 거른 뒤 투영, shared/labels.ts keptChips, 격자 칸), 바뀐 핀의 클래스만 건드린다. 걸린 시간은 performance 측정 "mmj:chips"
+  layoutChips.current = (f = readFrame()) => {
     const m = map.current;
-    const node = el.current;
-    if (!m || !node || typeof m.getProjection !== "function") return;
+    if (!m || !f || typeof m.getProjection !== "function") return;
     const t0 = performance.now();
     const z = zoomOf(m.getLevel());
     const want = new Map<string, boolean>();
     if (z !== "far") {
       const proj = m.getProjection();
-      const W = node.clientWidth;
-      const H = node.clientHeight;
-      const font = getComputedStyle(node).fontFamily;
+      const { width: W, height: H, font } = f;
+      // 보이는 영역(+ CHIP_MARGIN)의 위경도로 먼저 걸러서 화면 밖 핀은 투영(containerPointFromCoords)하지 않는다
+      let south = -Infinity, north = Infinity, west = -Infinity, east = Infinity;
+      const bounds = typeof m.getBounds === "function" ? m.getBounds() : null;
+      if (bounds && W > 0 && H > 0) {
+        const sw = bounds.getSouthWest();
+        const ne = bounds.getNorthEast();
+        const dLat = ((ne.getLat() - sw.getLat()) / H) * CHIP_MARGIN;
+        const dLng = ((ne.getLng() - sw.getLng()) / W) * CHIP_MARGIN;
+        south = sw.getLat() - dLat;
+        north = ne.getLat() + dLat;
+        west = sw.getLng() - dLng;
+        east = ne.getLng() + dLng;
+      }
       const picked = new Set(picksRef.current);
       const sel = selectedRef.current;
       const chips: ChipBox[] = [];
@@ -283,8 +306,12 @@ export function MapView({ center, radius, places, selectedId, picks, focusId, on
         const rating = p.detail?.rating ?? null;
         const selected = id === sel;
         if (z === "mid" && !selected && (rating ?? 0) < TOP_RATING) continue;
-        const pt = proj.containerPointFromCoords(ov.getPosition());
-        if (pt.x < -80 || pt.x > W + 80 || pt.y < -40 || pt.y > H + 40) continue;
+        const pos = ov.getPosition();
+        const lat = pos.getLat();
+        const lng = pos.getLng();
+        if (lat < south || lat > north || lng < west || lng > east) continue;
+        const pt = proj.containerPointFromCoords(pos);
+        if (pt.x < -CHIP_MARGIN || pt.x > W + CHIP_MARGIN || pt.y < -40 || pt.y > H + 40) continue;
         // .pin-chip: 좌우 여백 7(선택 9) + 테두리 1, 높이 16 + 위아래 2(선택 3) + 테두리 1
         const w = chipTextWidth(chipText(p), selected ? 12 : 11, font) + (selected ? 20 : 16);
         const h = selected ? 24 : 22;
@@ -379,8 +406,7 @@ export function MapView({ center, radius, places, selectedId, picks, focusId, on
     focusRef.current = focusId;
     selectedRef.current = selectedId;
     placesRef.current = new Map(places.map((p) => [p.id, p]));
-    layoutLabels.current();
-    layoutChips.current();
+    relayoutPins();
   }, [ready, places, selectedId, picks, focusId]);
 
   // R22′: 새 후보가 뽑히면 먼저 3곳이 다 보이게 맞춘다
