@@ -18,6 +18,7 @@ export function toApiPlace(row: PlaceRow, center?: LatLng): ApiPlace {
     address: p.address,
     phone: p.phone,
     url: p.url,
+    photoUrl: p.photoUrl,
     detail: { ...row.detail, menus: row.detail.menus.slice(0, API_MENUS) },
   };
 }

@@ -22,6 +22,7 @@ describe("kakaoLocal", () => {
       lng: 127.05980400928702,
       address: "서울 강남구 영동대로 513",
       phone: "02-551-5959",
+      photoUrl: null,
       url: "http://place.map.kakao.com/26428654",
     });
   });

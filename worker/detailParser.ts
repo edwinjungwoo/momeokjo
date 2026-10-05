@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { kakaoPhotoUrl } from "../shared/photo";
 import { parseHours, type RawDay } from "../shared/hours";
 import { representativePrice } from "../shared/price";
 import type { Menu, PlaceDetail, PlaceSummary } from "../shared/types";
@@ -56,6 +57,7 @@ const SummarySchema = z.object({
   point: z.object({ lat: z.number(), lon: z.number() }),
   address: z.object({ road: z.string().nullish(), disp: z.string().nullish() }).nullish(),
   phone_numbers: z.array(z.object({ tel: z.string().nullish() })).nullish(),
+  main_photo_url: z.string().nullish(),
 });
 
 const KNOWN_KEYS = ["summary", "kakaomap_review", "menu", "open_hours", "place_add_info"];
@@ -85,6 +87,7 @@ export function parseDetail(raw: unknown): DetailParseResult {
     lng: s.point.lon,
     address: s.address?.road || s.address?.disp || null,
     phone: s.phone_numbers?.[0]?.tel || null,
+    photoUrl: kakaoPhotoUrl(s.main_photo_url),
   };
 
   const review = section(ReviewSchema, r.kakaomap_review);

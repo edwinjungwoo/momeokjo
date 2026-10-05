@@ -13,6 +13,7 @@ export function apiPlace(id: string, overrides: Partial<ApiPlace> = {}, detail: 
     address: null,
     phone: null,
     url: `http://place.map.kakao.com/${id}`,
+    photoUrl: null,
     detail:
       detail === null
         ? null

@@ -46,11 +46,13 @@ describe("repo", () => {
 
   it("R6: 상세 저장 후 조회하면 표시 정보와 JSON 필드가 복원된다", async () => {
     const detail = sampleDetail({ bookable: true, hours: { 1: [[660, 900], [1020, 1320]], 0: "closed" } });
-    await saveDetail(env.DB, "1001", makeSummary(ASEM.lat, ASEM.lng, { group: "chinese", name: "반점" }), detail, NOW);
+    const summary = { ...makeSummary(ASEM.lat, ASEM.lng, { group: "chinese", name: "반점" }), photoUrl: "https://t1.kakaocdn.net/p" };
+    await saveDetail(env.DB, "1001", summary, detail, NOW);
     const row = (await placeById(env.DB, "1001"))!;
     expect(row.place).toEqual({
       id: "1001", name: "반점", categoryName: "음식점 > 중식", group: "chinese",
       lat: ASEM.lat, lng: ASEM.lng, address: "서울 강남구 영동대로 1", phone: null,
+      photoUrl: "https://t1.kakaocdn.net/p",
       url: "https://place.map.kakao.com/1001",
     });
     expect(row.detail).toEqual({ ...detail, fetchedAt: NOW });

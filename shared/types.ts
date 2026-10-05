@@ -30,6 +30,7 @@ export type PlaceSummary = {
   lng: number;
   address: string | null;
   phone: string | null;
+  photoUrl: string | null;
 };
 
 export type Place = {
@@ -41,6 +42,7 @@ export type Place = {
   lng: number;
   address: string | null;
   phone: string | null;
+  photoUrl: string | null;
   url: string;
 };
 
@@ -58,6 +60,7 @@ export type ApiPlace = {
   address: string | null;
   phone: string | null;
   url: string;
+  photoUrl: string | null;
   detail: ApiDetail | null;
 };
 

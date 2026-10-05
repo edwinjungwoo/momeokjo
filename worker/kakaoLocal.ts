@@ -38,6 +38,7 @@ export function parseLocalResponse(json: unknown): LocalPage | null {
       lng: Number(d.x),
       address: d.road_address_name || d.address_name || null,
       phone: d.phone || null,
+      photoUrl: null,
       url: d.place_url,
     })),
   };

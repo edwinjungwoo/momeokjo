@@ -17,7 +17,7 @@ export const placeUrl = (id: string) => `https://place.map.kakao.com/${id}`;
 
 type DbRow = {
   id: string; status: string; name: string | null; category_name: string | null; category_group: string | null;
-  lat: number | null; lng: number | null; address: string | null; phone: string | null;
+  lat: number | null; lng: number | null; address: string | null; phone: string | null; photo_url: string | null;
   rating: number | null; review_count: number | null; price: number | null;
   menus_json: string | null; hours_json: string | null; strengths_json: string | null; tags_json: string | null;
   bookable: number | null; fail_reason: string | null; fetched_at: number;
@@ -39,6 +39,7 @@ function toRow(r: DbRow): PlaceRow {
       lng: r.lng as number,
       address: r.address,
       phone: r.phone,
+      photoUrl: r.photo_url ?? null,
       url: placeUrl(r.id),
     },
     detail: {
@@ -175,12 +176,12 @@ export async function saveDetail(
 ): Promise<void> {
   await db
     .prepare(
-      `INSERT OR REPLACE INTO places (id, status, name, category_name, category_group, lat, lng, address, phone,
+      `INSERT OR REPLACE INTO places (id, status, name, category_name, category_group, lat, lng, address, phone, photo_url,
          rating, review_count, price, menus_json, hours_json, strengths_json, tags_json, bookable, fail_reason, fetched_at)
-       VALUES (?, 'ok', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?)`,
+       VALUES (?, 'ok', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?)`,
     )
     .bind(
-      id, s.name, s.categoryName, categoryGroup(s.categoryName), s.lat, s.lng, s.address, s.phone,
+      id, s.name, s.categoryName, categoryGroup(s.categoryName), s.lat, s.lng, s.address, s.phone, s.photoUrl,
       d.rating, d.reviewCount, d.price, JSON.stringify(d.menus), d.hours ? JSON.stringify(d.hours) : null,
       JSON.stringify(d.strengths), JSON.stringify(d.tags), d.bookable === null ? null : d.bookable ? 1 : 0, now,
     )

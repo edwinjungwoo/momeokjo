@@ -75,6 +75,7 @@ describe("GET /api/places", () => {
     expect(body.places[0].detail?.rating).toBe(4.1);
     expect(body.places[0].detail?.menus.length).toBeLessThanOrEqual(5);
     expect(body.pending).toBe(0);
+    expect(body.places[0].photoUrl).toBe("https://t1.kakaocdn.net/fiy_reboot/place/B6D1BA174D394DEDB42B4411705FFDE7");
   });
 
   it("R14: 공식 API가 실패하고 캐시도 없으면 502", async () => {

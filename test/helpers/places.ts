@@ -22,6 +22,7 @@ export function makeSummary(lat: number, lng: number, opts: { group?: CategoryGr
     lng,
     address: "서울 강남구 영동대로 1",
     phone: null,
+    photoUrl: null,
   };
 }
 

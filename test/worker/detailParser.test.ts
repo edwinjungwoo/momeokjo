@@ -96,6 +96,7 @@ describe("parseDetail", () => {
       lng: 127.06547254091939,
       address: "서울 강남구 영동대로86길 17 육인빌딩 1층",
       phone: "02-558-7905",
+      photoUrl: "https://t1.kakaocdn.net/fiy_reboot/place/B6D1BA174D394DEDB42B4411705FFDE7",
     });
   });
 
@@ -109,5 +110,11 @@ describe("parseDetail", () => {
     const bulia = (await import("../fixtures/place-detail/1528769880-bulia.json")).default;
     const r = parseDetail(bulia);
     expect(r.ok && r.summary.categoryName).toBe("음식점 > 중식");
+  });
+
+  it("R33: 대표 사진이 외부 차단 호스트(네이버 블로그)면 photoUrl null", async () => {
+    const chicken = (await import("../fixtures/place-detail/63388502-samsung-chicken.json")).default;
+    const r = parseDetail(chicken);
+    expect(r.ok && r.summary.photoUrl).toBeNull();
   });
 });
