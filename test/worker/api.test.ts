@@ -506,6 +506,46 @@ describe("GET /api/places/:id", () => {
     for (const id of ["5555", "1001"]) await cache.delete(new Request(placeCacheKey(id)));
   });
 
+  it("R13/R38: 거점 격자 밖 id의 404(없음·상세 실패)도 id별로 60초 엣지 캐시해서, 죽은 공유 링크가 열 때마다 상세 API를 부르지 않는다", async () => {
+    const ids = ["998", "999", "777"];
+    const cache = caches.default;
+    for (const id of ids) await cache.delete(new Request(placeCacheKey(id)));
+    let now = NOW;
+    const s = setup({ details: { "777": 429 } });
+    const app = createApp({
+      fetcher: routeFetch(s.local.fetcher, s.place.fetcher), now: () => now, sleep: async () => {}, rateLimit: async () => true, cache,
+    });
+    const calls = (id: string) => s.place.calls.filter((c) => c.id === id).length;
+    // 격자 밖 id의 실패: 404, 브라우저에는 no-store, 엣지에 60초
+    const first = await callApp(app, "/api/places/998");
+    expect(first.status).toBe(404);
+    expect(first.headers.get("cache-control")).toBe("no-store");
+    expect(await first.json()).toEqual({ error: "not_found" });
+    expect((await cache.match(new Request(placeCacheKey("998"))))?.headers.get("cache-control")).toBe("public, max-age=60, s-maxage=60");
+    const callsAfterFirst = calls("998");
+    expect(callsAfterFirst).toBeGreaterThan(0);
+    now += PLACE_TRANSIENT_CACHE_MS - 1;
+    const again = await callApp(app, "/api/places/998");
+    expect(again.status).toBe(404);
+    expect(again.headers.get("cache-control")).toBe("no-store");
+    expect(await again.json()).toEqual({ error: "not_found" });
+    expect(calls("998")).toBe(callsAfterFirst);
+    expect(await getMeta(env.DB, "998")).toBeNull(); // 여전히 저장하지 않는다
+    // 60초가 지나면 다시 가져온다
+    now += 1;
+    expect((await callApp(app, "/api/places/998")).status).toBe(404);
+    expect(calls("998")).toBeGreaterThan(callsAfterFirst);
+    // 거점 격자 안의 id는 실패해도 엣지에 두지 않는다 (D1 실패 기록과 쿨다운이 따로 있다)
+    now = NOW;
+    await replaceTilePlaces(env.DB, tileKeyOf(HUB), ["999"], NOW, false);
+    expect((await callApp(app, "/api/places/999")).status).toBe(404);
+    expect(await cache.match(new Request(placeCacheKey("999")))).toBeUndefined();
+    // 차단 신호(429)는 일시적이라 엣지에 두지 않는다
+    expect((await callApp(app, "/api/places/777")).status).toBe(404);
+    expect(await cache.match(new Request(placeCacheKey("777")))).toBeUndefined();
+    for (const id of ids) await cache.delete(new Request(placeCacheKey(id)));
+  });
+
   it("R13: 거점 격자 밖 id의 실패는 기록하지 않는다", async () => {
     const far = tileKeyOf({ lat: HUB.lat + 0.03, lng: HUB.lng });
     await replaceTilePlaces(env.DB, far, ["999"], NOW, false);

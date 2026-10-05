@@ -80,6 +80,7 @@ export function placesCacheTtl(res: PlacesResponse | PlacesMeta): number | null 
 /** 응답 형식이 바뀌면 올린다 (예전 형식의 캐시를 쓰지 않게). 6: list_json 판(LIST_JSON_VERSION) 도입 */
 export const PLACES_CACHE_VERSION = "6";
 const EXPIRES_HEADER = "x-mmj-expires";
+const NEGATIVE_HEADER = "x-mmj-negative";
 /** R42: 거점마다 키 하나 (반경은 키에 넣지 않는다 — 본문은 언제나 1000m) */
 export const placesCacheKey = (hub: string) =>
   `https://cache.mmj/places?hub=${encodeURIComponent(hub)}&v=${PLACES_CACHE_VERSION}`;
@@ -189,26 +190,34 @@ export function createApp(deps: AppDeps) {
     c.header("Cache-Control", "no-store");
     const id = c.req.param("id");
     if (!PLACE_ID.test(id)) return c.json({ error: "not_found" }, 404);
-    // R13: 거점 격자 밖 id는 저장하지 않는 대신 엣지에 잠깐 둔 응답을 쓴다 (PLACE_TRANSIENT_CACHE_MS)
+    // R13: 거점 격자 밖 id는 저장하지 않는 대신 엣지에 잠깐 둔 응답을 쓴다 (PLACE_TRANSIENT_CACHE_MS) — 성공도, 없음(404)도
     const key = new Request(placeCacheKey(id));
     const hit = await deps.cache?.match(key);
     if (hit && Number(hit.headers.get(EXPIRES_HEADER)) > now()) {
+      if (hit.headers.get(NEGATIVE_HEADER)) return c.json({ error: "not_found" }, 404);
       return new Response(hit.body, { headers: { "content-type": "application/json", "cache-control": "no-store" } });
     }
     const r = await getPlace(serviceDeps(c), id);
-    if (!r) return c.json({ error: "not_found" }, 404);
-    const body = JSON.stringify(r.place);
-    if (!r.stored && deps.cache) {
+    const putTransient = (body: string, extra: Record<string, string> = {}) => {
+      if (!deps.cache) return;
       const ttl = PLACE_TRANSIENT_CACHE_MS / 1000;
       const stored = new Response(body, {
         headers: {
           "content-type": "application/json",
           "cache-control": `public, max-age=${ttl}, s-maxage=${ttl}`,
           [EXPIRES_HEADER]: String(now() + PLACE_TRANSIENT_CACHE_MS),
+          ...extra,
         },
       });
       c.executionCtx.waitUntil(deps.cache.put(key, stored).catch((e) => console.error("cache put failed", e)));
+    };
+    if (!r.place) {
+      // 거점 격자 밖 id의 실패(죽은 공유 링크)는 id별로 60초 둔다 — 열 때마다 비공식 상세 API를 부르지 않게
+      if (r.cacheable) putTransient(JSON.stringify({ error: "not_found" }), { [NEGATIVE_HEADER]: "1" });
+      return c.json({ error: "not_found" }, 404);
     }
+    const body = JSON.stringify(r.place);
+    if (!r.stored) putTransient(body);
     return c.body(body, 200, { "content-type": "application/json" });
   });
 

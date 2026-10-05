@@ -106,21 +106,26 @@ export async function getPlaces(
 
 /** R13 단건: stored=false면 거점 격자 밖 id라 D1에 저장하지 않고 보여주기만 한 응답 (app.ts가 엣지에 잠깐 둔다) */
 export type PlaceResult = { place: ApiPlace; stored: boolean };
+/**
+ * 없음(404). cacheable이면 거점 격자 밖 id의 상세를 실제로 받으려다 실패한 것이라(없음·http 오류·스키마) app.ts가
+ * 엣지에 잠깐 둔다. 쿨다운·요청 제한·호출 예산·차단 신호처럼 일시적인 이유나 거점 격자 안 id(D1에 실패를 기록한다)는 아니다.
+ */
+export type PlaceMiss = { place: null; cacheable: boolean };
 
-export async function getPlace(deps: ServiceDeps, id: string): Promise<PlaceResult | null> {
+export async function getPlace(deps: ServiceDeps, id: string): Promise<PlaceResult | PlaceMiss> {
   const row = await placeById(deps.db, id);
   if (row) return { place: toApiPlace(row, { full: true }), stored: true };
-  if (!isDetailDue(await getMeta(deps.db, id), deps.now, id)) return null;
-  if (!detailsAllowed(await detailGate(deps.db), deps.now)) return null;
-  if (!(await deps.rateLimit())) return null;
+  if (!isDetailDue(await getMeta(deps.db, id), deps.now, id)) return { place: null, cacheable: false };
+  if (!detailsAllowed(await detailGate(deps.db), deps.now)) return { place: null, cacheable: false };
+  if (!(await deps.rateLimit())) return { place: null, cacheable: false };
   const r = await fetchPlaceDetail(deps.fetcher, id, { budget: new Budget(3), sleep: deps.sleep });
   if (!r.ok) {
     // 거점 격자에 없는 ID의 실패는 기록하지 않는다 — 아무 숫자로 D1을 키울 수 없게
-    if (r.reason !== "budget" && (await isInTiles(deps.db, id, hubTileKeys()))) {
-      await saveDetailFailure(deps.db, id, r.reason, deps.now);
-    }
-    if (BLOCK_SIGNALS.has(r.reason)) await recordPlaceBlock(deps.db, deps.now);
-    return null;
+    const inTiles = r.reason !== "budget" && (await isInTiles(deps.db, id, hubTileKeys()));
+    if (inTiles) await saveDetailFailure(deps.db, id, r.reason, deps.now);
+    const blocked = BLOCK_SIGNALS.has(r.reason);
+    if (blocked) await recordPlaceBlock(deps.db, deps.now);
+    return { place: null, cacheable: r.reason !== "budget" && !blocked && !inTiles };
   }
   // R38: 거점 격자 밖 ID(공유 링크, 예전 고리 격자)는 보여주기만 하고 저장하지 않는다 — Cron이 갱신하지 않는 행이 쌓이지 않게
   if (!(await isInTiles(deps.db, id, hubTileKeys()))) {
@@ -128,5 +133,5 @@ export async function getPlace(deps: ServiceDeps, id: string): Promise<PlaceResu
   }
   await saveDetail(deps.db, id, r.summary, r.detail, deps.now);
   const fresh = await placeById(deps.db, id);
-  return fresh ? { place: toApiPlace(fresh, { full: true }), stored: true } : null;
+  return fresh ? { place: toApiPlace(fresh, { full: true }), stored: true } : { place: null, cacheable: false };
 }
