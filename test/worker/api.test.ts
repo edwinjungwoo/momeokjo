@@ -429,6 +429,29 @@ describe("GET /api/places/:id", () => {
     expect(r?.c).toBe(0);
   });
 
+  it("R13/R38: 거점 격자에 없는 id는 상세를 받아 보여주되 D1에 저장하지 않는다 (예전 고리 격자에만 있는 id 포함)", async () => {
+    const far = tileKeyOf({ lat: HUB.lat + 0.03, lng: HUB.lng }); // 약 3.3km 북쪽 — 어느 거점의 1000m 격자도 아니다
+    await replaceTilePlaces(env.DB, far, ["1004"], NOW, false);
+    const s = setup();
+    for (const id of ["5555", "1004"]) {
+      const res = await callApp(s.app, `/api/places/${id}`);
+      expect(res.status, id).toBe(200);
+      expect((await res.json<any>()).name).toBe(`가게${id}`);
+      expect(await getMeta(env.DB, id), id).toBeNull();
+    }
+    // 거점 격자에 있는 id는 저장한다
+    await replaceTilePlaces(env.DB, tileKeyOf(HUB), ["1001"], NOW, false);
+    expect((await callApp(s.app, "/api/places/1001")).status).toBe(200);
+    expect((await getMeta(env.DB, "1001"))?.status).toBe("ok");
+  });
+
+  it("R13: 거점 격자 밖 id의 실패는 기록하지 않는다", async () => {
+    const far = tileKeyOf({ lat: HUB.lat + 0.03, lng: HUB.lng });
+    await replaceTilePlaces(env.DB, far, ["999"], NOW, false);
+    expect((await callApp(setup().app, "/api/places/999")).status).toBe(404);
+    expect(await getMeta(env.DB, "999")).toBeNull();
+  });
+
   it("R13: 최근에 실패한 장소는 다시 시도하지 않는다", async () => {
     await replaceTilePlaces(env.DB, tileKeyOf(HUB), ["999"], NOW, false);
     const { app, place } = setup();

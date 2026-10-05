@@ -8,6 +8,7 @@ import {
   countNeedingDetail, countUnfetched, detailGate, detailJitterMs, expiredDetailStates, getMeta, recordPlaceBlock,
   tilesChangedAt, unfetchedStates, getTiles, idsNeedingDetail, isDetailDue, isTileDue, markTile,
   placeById, placesByIds, placesInBox, replaceTilePlaces, saveDetail, saveDetailFailure, tilePlaceStates,
+  EXPIRED_SCAN_LIMIT, EXPIRED_SCAN_SQL,
 } from "../../worker/repo";
 import { makeSummary, sampleDetail, seedPlace } from "../helpers/places";
 import { recordingDb } from "../helpers/recordDb";
@@ -16,6 +17,14 @@ const NOW = 1_800_000_000_000;
 const KA = tileKeyOf(ASEM);
 const [I, J] = KA.split(":").map(Number);
 const KB = `${I + 3}:${J}`; // 약 750m 북쪽 격자
+
+/** [id, fetched_at] 여러 개를 상세 ok로 한 문장에 넣는다 (좌표는 ASEM) */
+async function seedMany(rows: [string, number][]) {
+  await env.DB.prepare(
+    `INSERT INTO places (id, status, name, category_name, category_group, lat, lng, fetched_at)
+     SELECT json_extract(value, '$[0]'), 'ok', '가게', '음식점 > 한식', 'korean', ?, ?, json_extract(value, '$[1]') FROM json_each(?)`,
+  ).bind(ASEM.lat, ASEM.lng, JSON.stringify(rows)).run();
+}
 
 describe("repo", () => {
   it("R4: 격자의 ID 목록을 기록하고, 다시 기록하면 통째로 바뀐다 (중복은 하나로)", async () => {
@@ -110,6 +119,63 @@ describe("repo", () => {
       id: "old", tileKey: KA, meta: { status: "ok", fetchedAt: NOW - DETAIL_OK_TTL_MS, reason: null },
     });
     expect((await unfetchedStates(env.DB, [KA])).map((t) => [t.id, t.meta])).toEqual([["new", null]]);
+  });
+
+  it("R11/R38: 만료 후보는 상태별로 fetched_at이 오래된 순 300개까지만 고른다", async () => {
+    const ids = Array.from({ length: 310 }, (_, i) => `k${i}`);
+    await seedMany(ids.map((id, i) => [id, NOW - DETAIL_OK_TTL_MS - (310 - i)]));
+    await replaceTilePlaces(env.DB, KA, ids, NOW, false);
+    await saveDetailFailure(env.DB, "f1", "http_500", NOW - DETAIL_FAIL_TTL_MS);
+    await replaceTilePlaces(env.DB, KB, ["f1"], NOW, false);
+    const expired = await expiredDetailStates(env.DB, [KA, KB], NOW);
+    const ok = expired.filter((t) => t.meta?.status === "ok").map((t) => t.id);
+    expect(ok).toHaveLength(EXPIRED_SCAN_LIMIT);
+    expect(EXPIRED_SCAN_LIMIT).toBe(300);
+    expect(ok).toEqual(ids.slice(0, 300));
+    expect(expired.filter((t) => t.meta?.status === "failed").map((t) => t.id)).toEqual(["f1"]);
+  });
+
+  it("R11/R38: 만료 후보 조회는 (status, fetched_at) 인덱스를 범위로 읽고 places 전체 스캔·정렬용 임시 B-트리를 쓰지 않는다", async () => {
+    const r = await env.DB.prepare(`EXPLAIN QUERY PLAN ${EXPIRED_SCAN_SQL}`).bind("ok", 0, NOW, 300).all<{ detail: string }>();
+    const plan = r.results.map((x) => x.detail).join("\n");
+    expect(plan).toMatch(/SEARCH p USING INDEX idx_places_status_fetched_at \(status=\? AND fetched_at>\? AND fetched_at<\?\)/);
+    expect(plan).not.toMatch(/SCAN p\b/);
+    expect(plan).not.toMatch(/TEMP B-TREE/);
+  });
+
+  it("R11/R38: 거점 격자 밖 만료 행(갱신되지 않음)은 한 번 지나가면 다음 실행부터 읽지 않는다 — 격자 ID가 바뀌면 처음부터 다시", async () => {
+    const outside = Array.from({ length: 400 }, (_, i) => `o${i}`);
+    await seedMany(outside.map((id, i) => [id, NOW - 10 * DETAIL_OK_TTL_MS + i]));
+    await replaceTilePlaces(env.DB, KB, outside, NOW, false);
+    await seedMany([["h1", NOW - DETAIL_OK_TTL_MS - 3], ["h2", NOW - DETAIL_OK_TTL_MS - 2]]);
+    await replaceTilePlaces(env.DB, KA, ["h1", "h2"], NOW, false);
+    const run = async () => {
+      const { db, log } = recordingDb(env.DB);
+      const ids = (await expiredDetailStates(db, [KA], NOW)).map((t) => t.id);
+      return { ids, read: log.reduce((n, x) => n + x.read, 0) };
+    };
+    // 처음 두 번은 거점 밖 400행을 300행씩 지나간다
+    expect((await run()).ids).toEqual([]);
+    expect((await run()).ids).toEqual(["h1", "h2"]);
+    // 그다음부터는 첫 거점 행부터 읽는다
+    const steady = await run();
+    expect(steady.ids).toEqual(["h1", "h2"]);
+    expect(steady.read).toBeLessThan(30);
+    // 격자 ID가 바뀌면(거점 격자에 오래된 행이 새로 들어왔을 수 있다) 처음부터 다시 훑는다
+    await replaceTilePlaces(env.DB, KA, ["h1", "h2", "o0"], NOW + 1, false);
+    expect((await run()).ids).toEqual(["o0"]);
+  });
+
+  it("R11: 갱신한 상세의 다음 만료에도 id별 지터가 붙는다 (3일 파도가 다시 한꺼번에 오지 않게)", async () => {
+    const T2 = NOW + 5 * DETAIL_OK_TTL_MS;
+    for (const id of ["a", "b"]) {
+      await seedPlace(env.DB, id, ASEM.lat, ASEM.lng, { now: NOW });
+      await seedPlace(env.DB, id, ASEM.lat, ASEM.lng, { now: T2 }); // Cron 갱신
+      const due = T2 + DETAIL_OK_TTL_MS + detailJitterMs(id);
+      expect(isDetailDue(await getMeta(env.DB, id), due - 1, id)).toBe(false);
+      expect(isDetailDue(await getMeta(env.DB, id), due, id)).toBe(true);
+    }
+    expect(detailJitterMs("a")).not.toBe(detailJitterMs("b"));
   });
 
   it("R11: 격자 ID를 기록하면 tiles_changed_at이 그 시각으로 바뀐다 (Cron 미수집 확인 신호)", async () => {

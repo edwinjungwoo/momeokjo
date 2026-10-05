@@ -236,34 +236,75 @@ export async function countUnfetched(db: D1Database, keys: string[]): Promise<nu
 export const countUnfetchedIn = (states: TilePlaceState[]) =>
   new Set(states.filter((t) => t.meta === null).map((t) => t.id)).size;
 
+/** Cron 만료 후보를 상태(ok/failed)마다 이만큼까지만 읽는다 (한 실행이 갱신하는 건 DETAIL_BATCH_SIZE곳뿐) */
+export const EXPIRED_SCAN_LIMIT = 300;
 /**
- * Cron용: 주어진 격자의 장소 중 만료됐을 수 있는 것만 fetched_at 인덱스로 읽는다.
+ * (status, fetched_at) 인덱스를 오래된 순으로 범위만 읽는다. 격자는 행마다 place_id 인덱스로 붙인다.
+ * 바인드: status, from(포함), before(포함), limit
+ */
+export const EXPIRED_SCAN_SQL = `SELECT p.id AS id, p.status AS status, p.fetched_at AS fetched_at, p.fail_reason AS fail_reason,
+    tp.tile_key AS tile_key
+  FROM places p INDEXED BY idx_places_status_fetched_at LEFT JOIN tile_places tp ON tp.place_id = p.id
+  WHERE p.status = ? AND p.fetched_at >= ? AND p.fetched_at <= ?
+  ORDER BY p.fetched_at LIMIT ?`;
+const EXPIRED_FROM_PREFIX = "expired_from:";
+type ScanCursor = { from: number; at: number };
+
+function parseCursor(raw: string | undefined): ScanCursor | null {
+  if (!raw) return null;
+  try {
+    const o = JSON.parse(raw) as { from?: unknown; at?: unknown };
+    return typeof o.from === "number" && typeof o.at === "number" ? { from: o.from, at: o.at } : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Cron용(R11): 주어진 격자(= 모든 거점의 PREWARM_RADIUS 격자)의 장소 중 만료됐을 수 있는 것.
  * ok는 지터를 빼고(가장 이른 만료 시각) 고르므로 실제 만료 여부는 isDetailDue로 다시 확인한다.
+ *
+ * R38 읽기 예산: 상태마다 (status, fetched_at) 인덱스를 오래된 순으로 EXPIRED_SCAN_LIMIT행까지만 읽는다.
+ * 거점 밖 행(예전 warm의 ASEM 1500m 고리, 격자에 없는 단건 조회)은 갱신되지 않아 늘 인덱스 맨 앞에 남으므로,
+ * 상태마다 "여기부터 읽는다" 커서(meta expired_from:{status})를 둔다 — 첫 거점 행의 fetched_at,
+ * 거점 행이 없었으면 지나간 마지막 행(다 읽었으면 before). 그 앞에는 거점 행이 없으니 다음 실행은 건너뛴다.
+ * 거점 행은 갱신되면 fetched_at이 앞으로 가므로 커서 앞에 새로 생기지 않는다 — 격자 ID가 바뀌었을 때만
+ * (오래된 행이 거점 격자에 새로 들어왔을 수 있다) 처음부터 다시 읽는다. 격자 집합이 늘 같은 Cron만 부른다.
  */
 export async function expiredDetailStates(db: D1Database, keys: string[], now: number): Promise<TilePlaceState[]> {
-  const out: TilePlaceState[] = [];
-  const okBefore = now - DETAIL_OK_TTL_MS;
-  const failBefore = now - DETAIL_FAIL_TTL_MS;
-  const r = await db
-    .prepare(
-      `SELECT p.id AS id, p.status AS status, p.fetched_at AS fetched_at, p.fail_reason AS fail_reason
-       FROM places p
-       WHERE (p.status = 'ok' AND p.fetched_at <= ?) OR (p.status = 'failed' AND p.fetched_at <= ?)`,
-    )
-    .bind(okBefore, failBefore)
-    .all<{ id: string; status: string; fetched_at: number; fail_reason: string | null }>();
-  if (r.results.length === 0) return out;
-  const byId = new Map(r.results.map((x) => [x.id, metaOf(x.status, x.fetched_at, x.fail_reason)]));
   const wanted = new Set(keys);
-  for (const chunk of chunked([...byId.keys()])) {
-    const t = await db
-      .prepare(`SELECT place_id, tile_key FROM tile_places WHERE place_id IN (${marks(chunk.length)})`)
-      .bind(...chunk)
-      .all<{ place_id: string; tile_key: string }>();
-    for (const x of t.results) {
-      if (wanted.has(x.tile_key)) out.push({ id: x.place_id, tileKey: x.tile_key, meta: byId.get(x.place_id) ?? null });
+  const changedAt = await tilesChangedAt(db);
+  const statuses = [
+    ["ok", now - DETAIL_OK_TTL_MS],
+    ["failed", now - DETAIL_FAIL_TTL_MS],
+  ] as const;
+  const saved = await db
+    .prepare("SELECT key, value FROM meta WHERE key IN (?, ?)")
+    .bind(...statuses.map(([st]) => EXPIRED_FROM_PREFIX + st))
+    .all<{ key: string; value: string }>();
+  const out: TilePlaceState[] = [];
+  const writes: D1PreparedStatement[] = [];
+  for (const [status, before] of statuses) {
+    const key = EXPIRED_FROM_PREFIX + status;
+    const cursor = parseCursor(saved.results.find((x) => x.key === key)?.value);
+    const reset = cursor === null || changedAt > cursor.at;
+    const from = reset ? 0 : cursor.from;
+    const r = await db
+      .prepare(EXPIRED_SCAN_SQL)
+      .bind(status, from, before, EXPIRED_SCAN_LIMIT)
+      .all<{ id: string; status: string; fetched_at: number; fail_reason: string | null; tile_key: string | null }>();
+    let next: number | null = null;
+    for (const x of r.results) {
+      if (x.tile_key === null || !wanted.has(x.tile_key)) continue;
+      next ??= x.fetched_at;
+      out.push({ id: x.id, tileKey: x.tile_key, meta: metaOf(x.status, x.fetched_at, x.fail_reason) });
+    }
+    if (next === null) next = r.results.length >= EXPIRED_SCAN_LIMIT ? r.results[r.results.length - 1].fetched_at : Math.max(from, before);
+    if (reset || next !== cursor.from) {
+      writes.push(db.prepare(META_UPSERT).bind(key, JSON.stringify({ from: next, at: now })));
     }
   }
+  if (writes.length > 0) await db.batch(writes);
   return out;
 }
 
@@ -311,9 +352,10 @@ export async function placeById(db: D1Database, id: string): Promise<PlaceRow | 
   return r ? toRow(r) : null;
 }
 
-/** 어느 격자에든 기록된 ID인가 (R13: 격자에 없는 ID는 실패를 기록하지 않는다) */
-export async function isInAnyTile(db: D1Database, id: string): Promise<boolean> {
-  return (await db.prepare("SELECT 1 AS x FROM tile_places WHERE place_id = ? LIMIT 1").bind(id).first()) !== null;
+/** 주어진 격자(보통 거점 격자) 중 하나에 기록된 ID인가 (R13: 거점 격자 밖 ID는 저장하지 않는다) */
+export async function isInTiles(db: D1Database, id: string, keys: ReadonlySet<string>): Promise<boolean> {
+  const r = await db.prepare("SELECT tile_key FROM tile_places WHERE place_id = ?").bind(id).all<{ tile_key: string }>();
+  return r.results.some((x) => keys.has(x.tile_key));
 }
 
 export async function getMeta(db: D1Database, id: string): Promise<DetailMeta> {
@@ -339,6 +381,18 @@ export async function saveDetail(
       JSON.stringify(d.strengths), JSON.stringify(d.tags), d.bookable === null ? null : d.bookable ? 1 : 0, now,
     )
     .run();
+}
+
+/** saveDetail이 저장했다가 다시 읽은 것과 같은 행 (저장하지 않고 보여줄 때) */
+export function detailRow(id: string, s: PlaceSummary, d: PlaceDetail, now: number): PlaceRow {
+  return {
+    place: {
+      id, name: s.name, categoryName: s.categoryName, group: categoryGroup(s.categoryName), lat: s.lat, lng: s.lng,
+      address: s.address, phone: s.phone, photoUrl: s.photoUrl, url: placeUrl(id),
+    },
+    detail: { ...d, fetchedAt: now },
+    meta: { status: "ok", fetchedAt: now, reason: null },
+  };
 }
 
 export async function saveDetailFailure(db: D1Database, id: string, reason: string, now: number): Promise<void> {

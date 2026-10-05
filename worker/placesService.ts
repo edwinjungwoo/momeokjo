@@ -3,10 +3,11 @@ import type { ApiPlace, LatLng, PlacesResponse } from "../shared/types";
 import { Budget } from "./budget";
 import { BLOCK_SIGNALS, enrichDetails } from "./detailEnricher";
 import type { FetchFn } from "./fetchFn";
+import { hubTileKeys } from "./hubTiles";
 import { fetchPlaceDetail } from "./kakaoPlace";
 import { toApiPlace } from "./present";
 import {
-  countUnfetchedIn, detailGate, detailsAllowed, frozenSince, getMeta, isInAnyTile, getTiles, isDetailDue, isTileDue,
+  countUnfetchedIn, detailGate, detailRow, detailsAllowed, frozenSince, getMeta, isInTiles, getTiles, isDetailDue, isTileDue,
   placeById, placesInBox, recordPlaceBlock, saveDetail, saveDetailFailure, tilePlaceStates,
 } from "./repo";
 import { collectTiles } from "./tileCollector";
@@ -107,11 +108,15 @@ export async function getPlace(deps: ServiceDeps, id: string): Promise<ApiPlace 
   if (!(await deps.rateLimit())) return null;
   const r = await fetchPlaceDetail(deps.fetcher, id, { budget: new Budget(3), sleep: deps.sleep });
   if (!r.ok) {
-    // 격자에 없는 ID의 실패는 기록하지 않는다 — 아무 숫자로 D1을 키울 수 없게
-    if (r.reason !== "budget" && (await isInAnyTile(deps.db, id))) await saveDetailFailure(deps.db, id, r.reason, deps.now);
+    // 거점 격자에 없는 ID의 실패는 기록하지 않는다 — 아무 숫자로 D1을 키울 수 없게
+    if (r.reason !== "budget" && (await isInTiles(deps.db, id, hubTileKeys()))) {
+      await saveDetailFailure(deps.db, id, r.reason, deps.now);
+    }
     if (BLOCK_SIGNALS.has(r.reason)) await recordPlaceBlock(deps.db, deps.now);
     return null;
   }
+  // R38: 거점 격자 밖 ID(공유 링크, 예전 고리 격자)는 보여주기만 하고 저장하지 않는다 — Cron이 갱신하지 않는 행이 쌓이지 않게
+  if (!(await isInTiles(deps.db, id, hubTileKeys()))) return toApiPlace(detailRow(id, r.summary, r.detail, deps.now), { full: true });
   await saveDetail(deps.db, id, r.summary, r.detail, deps.now);
   const fresh = await placeById(deps.db, id);
   return fresh ? toApiPlace(fresh, { full: true }) : null;
