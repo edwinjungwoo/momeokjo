@@ -159,8 +159,9 @@ button, select, summary, label, .topbar, .draw-bar, .mascot, .logo img {
   font-weight: 500;
   transition: transform 0.12s, background-color 0.12s;
 }
-.chip:active { transform: scale(0.97); background: var(--fill-press); }
-.chip[aria-pressed="true"] { background: var(--text); color: #fff; font-weight: 600; }
+/* 상태 규칙은 background-color만 바꾼다 (background 줄임말은 background-clip을 border-box로 되돌려 알약이 44px로 커진다) */
+.chip:active { transform: scale(0.97); background-color: var(--fill-press); }
+.chip[aria-pressed="true"] { background-color: var(--text); color: #fff; font-weight: 600; }
 
 /* 상세 조건: 상자 대신 위아래 구분선만 */
 .more { border-top: 1px solid var(--divider); border-bottom: 1px solid var(--divider); }
@@ -253,8 +254,8 @@ input[type="range"] { width: 100%; height: 44px; margin: 0; accent-color: var(--
   border: 0;
   border-block: 4px solid transparent;
   border-radius: 10px / 14px;
-  background-clip: padding-box;
   background: var(--fill) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath d='M2.5 4.5 6 8l3.5-3.5' fill='none' stroke='%237a6758' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") right 10px center / 12px no-repeat;
+  background-clip: padding-box; /* 줄임말 뒤에 둬야 살아남는다 */
   font-size: 16px; /* iOS가 확대하지 않게 16px */
   font-weight: 500;
 }
@@ -837,7 +838,7 @@ input[type="range"] { width: 100%; height: 44px; margin: 0; accent-color: var(--
 }
 @media (hover: hover) {
   .row:hover:not([aria-current="true"]) { background: #fbf7f3; }
-  .chip:hover:not([aria-pressed="true"]) { background: var(--fill-press); }
+  .chip:hover:not([aria-pressed="true"]) { background-color: var(--fill-press); }
   .menu button:hover { background: var(--fill); }
   .draw:hover { background: var(--accent-press); }
   .draw.is-secondary:hover { background: var(--fill-press); }

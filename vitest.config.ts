@@ -19,6 +19,7 @@ export default defineConfig(async () => {
         },
       }),
     ],
-    test: { include: ["test/**/*.test.ts"], setupFiles: ["./test/setup.ts"] },
+    // css: 스타일 원문 검사(test/shared/styles.test.ts)가 ?raw로 읽을 수 있게 — 기본값이면 CSS는 빈 문자열이 된다
+    test: { include: ["test/**/*.test.ts"], setupFiles: ["./test/setup.ts"], css: { include: [/web\/styles\.css/] } },
   };
 });
