@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { STALE_DETAIL_DAYS, checkedText, detailAgeDays, freshnessText, sourceLine } from "../../shared/freshness";
+import { STALE_DETAIL_DAYS, checkedText, detailAgeDays, freshnessText } from "../../shared/freshness";
 
 const NOW = 1_800_000_000_000;
 const D = 24 * 3600_000;
@@ -33,10 +33,5 @@ describe("R48 정보 확인 시점", () => {
     expect(checkedText(NOW - 2.9 * D, NOW)).toBe("2일 전 확인");
     // 시계가 어긋나 미래 시각이면 오늘
     expect(checkedText(NOW + 3600_000, NOW)).toBe("오늘 확인");
-  });
-
-  it("R48: 펼친 카드 출처 줄", () => {
-    expect(sourceLine(NOW - 2 * D, NOW)).toBe("정보 출처: 카카오맵 · 2일 전 확인");
-    expect(sourceLine(NOW - 1000, NOW)).toBe("정보 출처: 카카오맵 · 오늘 확인");
   });
 });

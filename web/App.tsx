@@ -137,6 +137,11 @@ export default function App() {
       });
     return () => ctrl.abort();
   }, [detailId, haveFull]);
+  /** 결과 카드를 펼친다. 단건이 아직 없으면 같은 렌더에서 "받는 중"으로 둔다 — 첫 화면부터 R49 전화 자리를 잡아 두게 */
+  const expand = (id: string | null) => {
+    if (id !== null && !(id in fullDetails)) setDetailPending(id);
+    setFocusId(id);
+  };
 
   // 폴링으로 목록이 바뀌면 최신 객체를 쓰고, 받아 둔 전체 상세와 현재 거점 기준 도보 시간을 붙인다
   const latest = useMemo(() => new Map((data?.places ?? []).map((p) => [p.id, p])), [data]);
@@ -382,7 +387,7 @@ export default function App() {
     track("select_place", { placeId: p.id });
     if (picks.includes(p.id)) {
       setSelected(null);
-      setFocusId(p.id);
+      expand(p.id);
       return;
     }
     setSelected(p);
@@ -416,7 +421,7 @@ export default function App() {
   };
   const onFocus = (id: string | null) => {
     if (id !== null) track("expand_card", { placeId: id, props: rankOf(id) });
-    setFocusId(id);
+    expand(id);
   };
   // R37: "여긴 빼줘" → 되돌리기 5초
   const onExclude = (p: ApiPlace) => {

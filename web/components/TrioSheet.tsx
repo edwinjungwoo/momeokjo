@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { lastLevel } from "../../shared/category";
-import { sourceLine } from "../../shared/freshness";
+import { checkedText } from "../../shared/freshness";
 import { photoThumbUrl } from "../../shared/photo";
 import type { Reason } from "../../shared/reasons";
 import type { Party } from "../../shared/recommend";
@@ -126,12 +126,15 @@ function TrioCard(props: {
       </button>
       {open && (
         <div className="trio-detail" id={detailId}>
-          {/* R49: 4명+는 자리부터 확인하게 전화를 첫 행동으로 (전화번호는 R13 단건에만 있다) */}
-          {call && (
+          {/* R49: 4명+는 자리부터 확인하게 전화를 첫 행동으로 (전화번호는 R13 단건에만 있다).
+              단건을 받는 동안은 같은 높이 자리를 잡아 둬서 버튼이 들어올 때 아래 내용이 밀리지 않게 한다 (전화가 없으면 그 자리만 빠진다) */}
+          {call ? (
             <a className="trio-call" href={call}>
               전화로 자리 확인
             </a>
-          )}
+          ) : party >= 4 && detailLoading ? (
+            <span className="trio-call is-pending" aria-hidden="true" />
+          ) : null}
           <p className="trio-line">
             <span className={state.closed ? "closed" : undefined}>{state.text}</span>
             {hours && <span>{hours}</span>}
@@ -161,8 +164,8 @@ function TrioCard(props: {
               여긴 빼줘
             </button>
           </div>
-          {/* R48: 단건 응답을 받으면 그 정보를 언제 확인했는지 */}
-          {p.fetchedAt !== undefined && <p className="trio-source">{sourceLine(p.fetchedAt, now.getTime())}</p>}
+          {/* R48: 단건 응답을 받으면 그 정보를 언제 확인했는지. 출처("정보 출처: 카카오맵")는 시트 아래 줄에 이미 있어서 시점만 */}
+          {p.fetchedAt !== undefined && <p className="trio-source">{checkedText(p.fetchedAt, now.getTime())}</p>}
         </div>
       )}
     </li>
