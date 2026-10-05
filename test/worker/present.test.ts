@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { ASEM } from "../../shared/constants";
+import { haversine } from "../../shared/geo";
 import { LIST_MENUS, toApiPlace } from "../../worker/present";
 import type { PlaceRow } from "../../worker/repo";
 import { makeSummary, sampleDetail } from "../helpers/places";
@@ -30,5 +31,14 @@ describe("present", () => {
     expect(p.detail?.menus).toEqual(menus);
     expect(p.detail).toMatchObject({ soloFriendly: false, groupFriendly: false });
     expect(p.distance).toBeUndefined();
+  });
+  it("R45: 좌표는 소수 6자리(약 0.1m)로 줄여 싣는다 — 거리는 줄이기 전 좌표로 계산 (목록 gzip 약 10% 감소)", () => {
+    const r = row("음식점 > 한식", []);
+    r.place = { ...r.place, lat: 37.51453387676185, lng: 127.06050804655143 };
+    const p = toApiPlace(r, { center: ASEM });
+    expect([p.lat, p.lng]).toEqual([37.514534, 127.060508]);
+    const raw = toApiPlace(r, { center: ASEM, full: true });
+    expect([raw.lat, raw.lng]).toEqual([37.514534, 127.060508]);
+    expect(p.distance).toBe(Math.round(haversine(ASEM, { lat: 37.51453387676185, lng: 127.06050804655143 })));
   });
 });
