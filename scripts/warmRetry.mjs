@@ -1,0 +1,24 @@
+// warm.mjs가 429를 받았을 때 할 일 (R36, R38). node와 테스트(workerd) 둘 다에서 돌도록 의존성 없음
+export const RATE_LIMIT_WAIT_MS = 30_000;
+export const RATE_LIMIT_RETRIES = 3;
+
+/**
+ * @param {string} bodyText 429 응답 본문
+ * @param {number} retries 이번 요청에서 이미 rate_limited로 다시 한 횟수
+ * @returns {{ action: "retry", waitMs: number } | { action: "stop", reason: "rate_limited" | "read_budget" | "unknown" }}
+ */
+export function on429(bodyText, retries) {
+  let error;
+  try {
+    error = JSON.parse(bodyText)?.error;
+  } catch {
+    error = undefined;
+  }
+  // R36: 관리자 전용 제한(ADMIN_LIMITER, 분당 120회)에 걸렸다 — 창이 지나면 풀린다
+  if (error === "rate_limited") {
+    return retries < RATE_LIMIT_RETRIES ? { action: "retry", waitMs: RATE_LIMIT_WAIT_MS } : { action: "stop", reason: "rate_limited" };
+  }
+  // R38: 오늘 D1 읽기가 소프트 한도를 넘었다. 다시 두드리면 읽기만 더 쓴다
+  if (error === "read_budget") return { action: "stop", reason: "read_budget" };
+  return { action: "stop", reason: "unknown" };
+}

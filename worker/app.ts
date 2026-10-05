@@ -71,6 +71,8 @@ export type AppDeps = {
   now?: () => number;
   sleep?: (ms: number) => Promise<void>;
   rateLimit?: (env: Env, key: string) => Promise<boolean>;
+  /** R36: 관리자 API 전용 제한 (ADMIN_LIMITER, 분당 120회) */
+  adminRateLimit?: (env: Env, key: string) => Promise<boolean>;
 };
 
 type Vars = {
@@ -86,6 +88,8 @@ export function createApp(deps: AppDeps) {
   const app = new Hono<AppEnv>();
   const now = deps.now ?? (() => Date.now());
   const rateLimit = deps.rateLimit ?? (async (env: Env, key: string) => (await env.RATE_LIMITER.limit({ key })).success);
+  const adminRateLimit =
+    deps.adminRateLimit ?? (async (env: Env, key: string) => (await env.ADMIN_LIMITER.limit({ key })).success);
 
   // R38: 요청마다 D1 사용량을 모아서, 이어지는 작업(waitUntil)까지 끝난 뒤 한 번만 기록한다.
   // 이벤트 수집은 읽기가 거의 없어서 기록하지 않는다 (쓰기 추정치는 insertEvents가 같은 배치로 더한다)
@@ -194,14 +198,14 @@ export function createApp(deps: AppDeps) {
     return c.body(null, 204);
   });
 
-  // R36: 인증에 실패한 요청만 IP별 RATE_LIMITER(분당 10회)로 센다. 넘으면 401 대신 429.
-  // 맞는 토큰은 세지 않는다 — warm.mjs가 초당 1번 가까이 부르므로 모든 요청을 세면 수집이 멈춘다.
+  // R36: 모든 관리자 요청을 토큰 비교 전에 IP별 전용 제한 ADMIN_LIMITER(분당 120회)로 센다. 넘으면 맞는 토큰이어도 429 rate_limited.
+  // warm.mjs(초당 ~1회)가 걸리지 않게 화면용 RATE_LIMITER(분당 10회)와 따로 둔다. warm.mjs는 rate_limited면 30초 기다렸다 다시 한다.
   // IP는 제한 키로만 쓰고(메모리) 어디에도 저장하지 않는다
   app.use("/api/admin/*", async (c, next) => {
+    const ip = c.req.header("cf-connecting-ip") ?? "anonymous";
+    if (!(await adminRateLimit(c.env, `admin:${ip}`))) return c.json({ error: "rate_limited" }, 429);
     const token = c.env.ADMIN_TOKEN;
     if (token && c.req.header("authorization") === `Bearer ${token}`) return next();
-    const ip = c.req.header("cf-connecting-ip") ?? "anonymous";
-    if (!(await rateLimit(c.env, `admin:${ip}`))) return c.json({ error: "rate_limited" }, 429);
     return c.json({ error: "unauthorized" }, 401);
   });
 
