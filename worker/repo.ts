@@ -38,15 +38,20 @@ const SELECT_VISIBLE = `SELECT * FROM places WHERE name IS NOT NULL AND lat IS N
 const metaOf = (status: string | null, fetchedAt: number | null, reason: string | null): DetailMeta =>
   status === null || fetchedAt === null ? null : { status: status === "ok" ? "ok" : "failed", fetchedAt, reason };
 
-/** QA D-8: 저장된 JSON 열이 깨졌거나 모양이 틀려도 목록 전체가 500이 되지 않게 그 필드만 빈 값으로 읽는다 */
-function readJson<T>(raw: string | null, fallback: T, ok: (v: unknown) => boolean): T {
+/**
+ * QA D-8: 저장된 JSON 열이 깨졌거나 모양이 틀려도 목록 전체가 500이 되지 않게 그 필드만 빈 값으로 읽는다.
+ * 깨진 행은 Workers 로그에서 보이게 행 id와 열 이름만 남긴다 (멀쩡한 행은 아무것도 하지 않는다)
+ */
+function readJson<T>(id: string, col: string, raw: string | null, fallback: T, ok: (v: unknown) => boolean): T {
   if (!raw) return fallback;
   try {
     const v: unknown = JSON.parse(raw);
-    return ok(v) ? (v as T) : fallback;
+    if (ok(v)) return v as T;
   } catch {
-    return fallback;
+    /* 아래에서 남긴다 */
   }
+  console.warn("corrupt json column", { id, col });
+  return fallback;
 }
 const isPlainObject = (v: unknown) => typeof v === "object" && v !== null && !Array.isArray(v);
 
@@ -68,10 +73,10 @@ function toRow(r: DbRow): PlaceRow {
       rating: r.rating,
       reviewCount: r.review_count,
       price: r.price,
-      menus: readJson(r.menus_json, [], Array.isArray),
-      hours: readJson(r.hours_json, null, isPlainObject),
-      strengths: readJson(r.strengths_json, [], Array.isArray),
-      tags: readJson(r.tags_json, [], Array.isArray),
+      menus: readJson(r.id, "menus_json", r.menus_json, [], Array.isArray),
+      hours: readJson(r.id, "hours_json", r.hours_json, null, isPlainObject),
+      strengths: readJson(r.id, "strengths_json", r.strengths_json, [], Array.isArray),
+      tags: readJson(r.id, "tags_json", r.tags_json, [], Array.isArray),
       bookable: r.bookable === null ? null : r.bookable === 1,
       fetchedAt: r.fetched_at,
     },

@@ -35,8 +35,8 @@ export async function pruneOldEvents(db: D1Database, now: number): Promise<void>
 }
 
 const DRAWS = "('draw', 'redraw')";
-/** R39 자동 뽑기(props.auto = true)인가. t는 테이블 별칭 접두사 */
-const isAuto = (t = "") => `json_extract(${t}props, '$.auto') = 1`;
+/** R39 자동 뽑기(props.auto = true)인가 */
+const IS_AUTO = "json_extract(props, '$.auto') = 1";
 /** 사용자가 직접 한 뽑기: 뽑기·시간대·거점·많이 뽑힌 가게·전환율·세션당 뽑기는 이것만 센다 */
 const manualDraw = (t = "") => `(${t}type IN ${DRAWS} AND coalesce(json_extract(${t}props, '$.auto'), 0) = 0)`;
 /** 일별·거점별 행동 수 집계에 쓰는 타입 (filter_change 같은 잦은 이벤트는 읽지 않는다) */
@@ -69,7 +69,7 @@ export async function eventStats(
       .all<{ day: string; hub: string; anon: string; n: number }>(),
     db
       .prepare(
-        `SELECT day, hub, CASE WHEN type IN ${DRAWS} AND ${isAuto()} THEN 'auto_draw' ELSE type END AS kind,
+        `SELECT day, hub, CASE WHEN type IN ${DRAWS} AND ${IS_AUTO} THEN 'auto_draw' ELSE type END AS kind,
                 json_extract(props, '$.rank') AS rank, count(*) AS n FROM events
          WHERE type IN ${ACTION_TYPES} AND ${range} GROUP BY day, hub, kind, rank`,
       )

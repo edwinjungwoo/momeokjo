@@ -1,5 +1,5 @@
 import { env } from "cloudflare:test";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   DETAIL_JITTER_MS, DETAIL_OK_TTL_MS, PLACE_BLOCK_COOLDOWN_MS, TILE_TTL_MS,
 } from "../../shared/constants";
@@ -234,7 +234,28 @@ describe("GET /api/places — 저장값 방어 (QA 보강)", () => {
     }
     const one = await callApp(s.app, "/api/places/1001");
     expect(one.status).toBe(200);
-    expect((await one.json<any>()).detail.menus).toEqual([]);
+    const detail = (await one.json<any>()).detail;
+    expect(detail).toMatchObject({ menus: [], hours: null, strengths: [], rating: 4.1, groupFriendly: false });
+    // 태그는 응답에 싣지 않는다 (깨진 태그는 빈 배열로 읽혀 단체 판단이 거짓)
+    expect(detail).not.toHaveProperty("tags");
+  });
+
+  it("R12/D-8: 깨진 JSON 열은 행 id와 열 이름으로 console.warn에 남기고, 멀쩡한 행은 남기지 않는다", async () => {
+    const s = setup();
+    await callApp(s.app, Q);
+    await callApp(s.app, Q);
+    await env.DB.prepare("UPDATE places SET menus_json = '{', tags_json = '7' WHERE id = '1001'").run();
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    try {
+      expect((await callApp(s.app, Q)).status).toBe(200);
+      const calls = warn.mock.calls.filter((c) => c[0] === "corrupt json column");
+      expect(calls.map((c) => c[1])).toEqual([
+        { id: "1001", col: "menus_json" },
+        { id: "1001", col: "tags_json" },
+      ]);
+    } finally {
+      warn.mockRestore();
+    }
   });
 });
 
