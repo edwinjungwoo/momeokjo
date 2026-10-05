@@ -5,7 +5,8 @@ import {
 } from "../../shared/constants";
 import { boundingBox, tileKeyOf } from "../../shared/geo";
 import {
-  blockPlaceApi, countNeedingDetail, countUnfetched, detailJitterMs, getMeta, placeBlockedUntil, getTiles, idsNeedingDetail, isDetailDue, isTileDue, markTile,
+  blockPlaceApi, countNeedingDetail, countUnfetched, detailJitterMs, expiredDetailStates, getMeta, placeBlockedUntil,
+  tilesChangedAt, unfetchedStates, getTiles, idsNeedingDetail, isDetailDue, isTileDue, markTile,
   placeById, placesByIds, placesInBox, replaceTilePlaces, saveDetail, saveDetailFailure, tilePlaceStates,
 } from "../../worker/repo";
 import { makeSummary, sampleDetail, seedPlace } from "../helpers/places";
@@ -70,6 +71,32 @@ describe("repo", () => {
     await replaceTilePlaces(env.DB, KA, ["intile"], NOW, false);
     expect((await placesInBox(env.DB, boundingBox(ASEM, 100))).map((r) => r.place.id)).toEqual(["intile"]);
     expect((await placeById(env.DB, "orphan"))?.place.id).toBe("orphan");
+  });
+
+  it("R11: 만료 후보는 fetched_at 인덱스로 고르고(지터 전 기준), 미수집 ID는 따로 고른다 — 둘 다 주어진 격자만", async () => {
+    await replaceTilePlaces(env.DB, KA, ["new", "fresh", "old", "oldfail"], NOW, false);
+    await replaceTilePlaces(env.DB, KB, ["otherold", "othernew"], NOW, false);
+    await seedPlace(env.DB, "fresh", ASEM.lat, ASEM.lng, { now: NOW - 1000 });
+    await seedPlace(env.DB, "old", ASEM.lat, ASEM.lng, { now: NOW - DETAIL_OK_TTL_MS });
+    await saveDetailFailure(env.DB, "oldfail", "http_500", NOW - DETAIL_FAIL_TTL_MS);
+    await seedPlace(env.DB, "otherold", ASEM.lat, ASEM.lng, { now: NOW - DETAIL_OK_TTL_MS });
+    const expired = await expiredDetailStates(env.DB, [KA], NOW);
+    expect(expired.map((t) => t.id).sort()).toEqual(["old", "oldfail"]);
+    expect(expired.find((t) => t.id === "old")).toEqual({
+      id: "old", tileKey: KA, meta: { status: "ok", fetchedAt: NOW - DETAIL_OK_TTL_MS, reason: null },
+    });
+    expect((await unfetchedStates(env.DB, [KA])).map((t) => [t.id, t.meta])).toEqual([["new", null]]);
+  });
+
+  it("R11: 격자 ID를 기록하면 tiles_changed_at이 그 시각으로 바뀐다 (Cron 미수집 확인 신호)", async () => {
+    expect(await tilesChangedAt(env.DB)).toBe(0);
+    await replaceTilePlaces(env.DB, KA, ["1"], NOW, false);
+    expect(await tilesChangedAt(env.DB)).toBe(NOW);
+  });
+
+  it("R11: 0003 마이그레이션은 places(status, fetched_at) 인덱스를 만든다", async () => {
+    const r = await env.DB.prepare("SELECT name FROM sqlite_master WHERE type = 'index' AND name = 'idx_places_status_fetched_at'").all();
+    expect(r.results).toHaveLength(1);
   });
 
   it("R9: 처음부터 실패한 장소는 표시 정보가 없다", async () => {

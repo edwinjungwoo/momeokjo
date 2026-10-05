@@ -1,5 +1,5 @@
 import { MAX_RADIUS } from "../../shared/constants";
-import { withRadius, type Filters } from "../../shared/recommend";
+import type { Filters } from "../../shared/recommend";
 import { Mascot } from "./Mascot";
 
 type Relax = { label: string; apply: (f: Filters) => Filters };
@@ -12,7 +12,7 @@ export function relaxOptions(f: Filters): Relax[] {
   if (f.priceCap !== "all") out.push({ label: "예산 전체", apply: (x) => ({ ...x, priceCap: "all" }) });
   if (f.groups.length > 0) out.push({ label: "카테고리 전체", apply: (x) => ({ ...x, groups: [] }) });
   if (f.radius < MAX_RADIUS) {
-    out.push({ label: "반경 +300m", apply: (x) => withRadius(x, Math.min(MAX_RADIUS, x.radius + 300)) });
+    out.push({ label: "반경 +300m", apply: (x) => ({ ...x, radius: Math.min(MAX_RADIUS, x.radius + 300) }) });
   }
   return out;
 }
@@ -24,7 +24,7 @@ export function EmptyState({ filters, onChange }: { filters: Filters; onChange: 
       <p className="bubble">앗… 조건에 맞는 맛집이 없어요</p>
       <Mascot pose="sad" height={96} />
       <p className="state-desc">
-        {options.length > 0 ? "다른 조건으로 다시 찾아볼까요?" : "기준점을 옮겨서 다시 찾아볼까요?"}
+        {options.length > 0 ? "다른 조건으로 다시 찾아볼까요?" : "다른 거점에서 찾아볼까요?"}
       </p>
       {options.length > 0 && (
         <div className="state-actions">

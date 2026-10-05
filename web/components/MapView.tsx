@@ -3,8 +3,6 @@ import type { ApiPlace, CategoryGroup, LatLng } from "../../shared/types";
 import { loadKakaoMaps } from "../kakaoLoader";
 
 const ACCENT = "#FF683D";
-/** 핀 탭 직후 지도 click이 새어 들어와도 기준점 찍기로 처리하지 않는 시간 */
-const PIN_TAP_GUARD_MS = 400;
 /** 줌 단계: 레벨 5 이상=far(전부 점), 4=mid(평점 높은 곳만 칩), 3 이하=near(전부 칩) */
 type Zoom = "far" | "mid" | "near";
 const zoomOf = (level: number): Zoom => (level >= 5 ? "far" : level === 4 ? "mid" : "near");
@@ -33,23 +31,20 @@ type Props = {
   radius: number;
   places: ApiPlace[];
   selectedId: string | null;
-  pickMode: boolean;
-  onPick: (c: LatLng) => void;
   onSelect: (id: string) => void;
 };
 
 const hasSize = (node: HTMLElement) => node.clientWidth > 0 && node.clientHeight > 0;
 
-/** R28: 기준점 핀, 반경 원(점선), 후보 핀(CustomOverlay 버튼). 선택된 핀은 커지고 한 번 퍼진다. */
-export function MapView({ center, radius, places, selectedId, pickMode, onPick, onSelect }: Props) {
+/** R28: 거점 핀, 반경 원(점선), 후보 핀(CustomOverlay 버튼). 선택된 핀은 커지고 한 번 퍼진다. */
+export function MapView({ center, radius, places, selectedId, onSelect }: Props) {
   const el = useRef<HTMLDivElement>(null);
   const map = useRef<any>(undefined);
   const circle = useRef<any>(undefined);
   const centerPin = useRef<any>(undefined);
   const overlays = useRef(new Map<string, any>());
-  const lastPinTap = useRef(0);
   const needsFit = useRef(true);
-  const handlers = useRef({ pickMode, onPick, onSelect });
+  const handlers = useRef({ onSelect });
   const [ready, setReady] = useState(false);
   const [failed, setFailed] = useState(false);
   const [attempt, setAttempt] = useState(0);
@@ -58,7 +53,7 @@ export function MapView({ center, radius, places, selectedId, pickMode, onPick, 
 
   // SDK 이벤트 리스너는 한 번만 등록하므로 최신 콜백은 ref로 읽는다
   useEffect(() => {
-    handlers.current = { pickMode, onPick, onSelect };
+    handlers.current = { onSelect };
   });
 
   // 반경 원이 화면에 들어오게 맞춘다. 컨테이너 크기가 0이면 ResizeObserver가 크기가 생길 때 다시 맞춘다.
@@ -98,10 +93,6 @@ export function MapView({ center, radius, places, selectedId, pickMode, onPick, 
         dot.className = "center-pin";
         const pin = new kakao.maps.CustomOverlay({ map: m, position: pos, content: dot, zIndex: 3 });
         kakao.maps.event.addListener(m, "zoom_changed", () => setZoom(zoomOf(m.getLevel())));
-        kakao.maps.event.addListener(m, "click", (e: any) => {
-          if (Date.now() - lastPinTap.current < PIN_TAP_GUARD_MS) return;
-          if (handlers.current.pickMode) handlers.current.onPick({ lat: e.latLng.getLat(), lng: e.latLng.getLng() });
-        });
         let lastWidth = node.clientWidth;
         const observer = new ResizeObserver(() => {
           if (!hasSize(node)) return;
@@ -142,7 +133,7 @@ export function MapView({ center, radius, places, selectedId, pickMode, onPick, 
     // 지도는 한 번만 만든다. center/radius 변경은 아래 effect가 반영한다.
   }, [attempt]);
 
-  // 기준점, 반경 변경
+  // 거점, 반경 변경
   useEffect(() => {
     if (!ready) return;
     const pos = new window.kakao.maps.LatLng(center.lat, center.lng);
@@ -170,6 +161,8 @@ export function MapView({ center, radius, places, selectedId, pickMode, onPick, 
         const btn = document.createElement("button");
         btn.type = "button";
         btn.className = "pin";
+        // 핀은 지도 위 보조 수단이라 탭 순서에서 뺀다 (같은 가게는 목록에서 키보드로 고를 수 있다)
+        btn.tabIndex = -1;
         btn.dataset.name = p.name;
         btn.setAttribute("aria-label", p.name);
         const chip = document.createElement("span");
@@ -178,7 +171,6 @@ export function MapView({ center, radius, places, selectedId, pickMode, onPick, 
         btn.appendChild(chip);
         btn.addEventListener("click", (ev) => {
           ev.stopPropagation();
-          lastPinTap.current = Date.now();
           handlers.current.onSelect(p.id);
         });
         ov = new kakao.maps.CustomOverlay({
@@ -210,10 +202,6 @@ export function MapView({ center, radius, places, selectedId, pickMode, onPick, 
     if (ov) map.current.panTo(ov.getPosition());
   }, [ready, selectedId]);
 
-  useEffect(() => {
-    if (ready) map.current.setCursor(pickMode ? "crosshair" : "");
-  }, [ready, pickMode]);
-
   return (
     <>
       {/* 지도 컨테이너의 class는 SDK 몫이라 건드리지 않고, 핀 모양 전환 data-zoom은 감싸는 요소에 둔다 */}
@@ -236,16 +224,5 @@ export function MapView({ center, radius, places, selectedId, pickMode, onPick, 
         </div>
       )}
     </>
-  );
-}
-
-export function PickHint({ onCancel }: { onCancel: () => void }) {
-  return (
-    <div className="pick-hint" role="status">
-      <span>지도에서 기준점을 눌러주세요</span>
-      <button type="button" onClick={onCancel}>
-        취소
-      </button>
-    </div>
   );
 }

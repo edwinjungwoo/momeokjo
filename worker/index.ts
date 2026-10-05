@@ -3,7 +3,8 @@ import type { FetchFn } from "./fetchFn";
 import { runScheduled } from "./maintenance";
 
 const realFetch: FetchFn = (input, init) => fetch(input, init);
-const app = createApp({ fetcher: realFetch });
+// 커스텀 도메인에서만 동작한다 (workers.dev에서는 캐시가 비어 있어 매번 새로 만든다)
+const app = createApp({ fetcher: realFetch, cache: caches.default });
 
 export default {
   fetch(request, env, ctx) {

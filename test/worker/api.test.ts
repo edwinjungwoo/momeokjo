@@ -1,32 +1,35 @@
 import { env } from "cloudflare:test";
 import { describe, expect, it } from "vitest";
 import {
-  ASEM, DETAIL_JITTER_MS, DETAIL_OK_TTL_MS, PLACE_BLOCK_COOLDOWN_MS, TILE_TTL_MS,
+  DETAIL_JITTER_MS, DETAIL_OK_TTL_MS, PLACE_BLOCK_COOLDOWN_MS, TILE_TTL_MS,
 } from "../../shared/constants";
+import { hubById } from "../../shared/hubs";
 import { tileKeyOf, tilesCoveringCircle, walkMinutes } from "../../shared/geo";
 import type { PlacesResponse } from "../../shared/types";
-import { createApp } from "../../worker/app";
+import { createApp, placesCacheKey } from "../../worker/app";
 import { blockPlaceApi, getMeta, markTile, placeBlockedUntil, replaceTilePlaces } from "../../worker/repo";
 import { callApp } from "../helpers/callApp";
 import { doc, fakeKakaoLocal, fakePlaceApi, routeFetch } from "../helpers/fakeKakao";
 import { placeJson, seedPlace } from "../helpers/places";
 
 const NOW = 1_800_000_000_000;
-const at = (dLat: number) => ASEM.lat + dLat;
+const HUB = hubById("bongeunsa");
+const HUB_CENTER = { lat: HUB.lat, lng: HUB.lng };
+const at = (dLat: number) => HUB.lat + dLat;
 const DOCS = [
-  doc("1001", at(0.0005), ASEM.lng),
-  doc("1002", at(0.001), ASEM.lng, "음식점 > 중식"),
-  doc("1003", at(0.0003), ASEM.lng, "음식점 > 간식 > 제과,베이커리"),
-  doc("1004", at(0.004), ASEM.lng),
+  doc("1001", at(0.0005), HUB.lng),
+  doc("1002", at(0.001), HUB.lng, "음식점 > 중식"),
+  doc("1003", at(0.0003), HUB.lng, "음식점 > 간식 > 제과,베이커리"),
+  doc("1004", at(0.004), HUB.lng),
 ];
 const DETAILS = {
-  "1001": placeJson({ name: "가게1001", lat: at(0.0005), lng: ASEM.lng }),
-  "1002": placeJson({ name: "가게1002", lat: at(0.001), lng: ASEM.lng, category: ["음식점", "중식", "중국요리"] }),
-  "1004": placeJson({ name: "가게1004", lat: at(0.004), lng: ASEM.lng }),
+  "1001": placeJson({ name: "가게1001", lat: at(0.0005), lng: HUB.lng }),
+  "1002": placeJson({ name: "가게1002", lat: at(0.001), lng: HUB.lng, category: ["음식점", "중식", "중국요리"] }),
+  "1004": placeJson({ name: "가게1004", lat: at(0.004), lng: HUB.lng }),
   // 어느 격자에도 기록되지 않은 가게 (공유 링크로만 들어온다)
-  "5555": placeJson({ name: "가게5555", lat: at(0.0002), lng: ASEM.lng }),
+  "5555": placeJson({ name: "가게5555", lat: at(0.0002), lng: HUB.lng }),
 };
-const Q = `/api/places?lat=${ASEM.lat}&lng=${ASEM.lng}&radius=300`;
+const Q = "/api/places?hub=bongeunsa&radius=300";
 
 function setup(opts: { localStatus?: number; allow?: boolean; details?: Record<string, unknown> } = {}) {
   const local = fakeKakaoLocal(DOCS, { status: opts.localStatus });
@@ -46,15 +49,25 @@ function setup(opts: { localStatus?: number; allow?: boolean; details?: Record<s
 
 describe("GET /api/places", () => {
   it.each([
-    ["lat=10&lng=127&radius=300"],
-    ["lat=37.5&lng=127&radius=50"],
-    ["lat=37.5&lng=127&radius=3000"],
-    ["lat=37.5&lng=127"],
-    ["lat=abc&lng=127&radius=300"],
+    ["hub=gangnam&radius=300"],
+    ["hub=bongeunsa&radius=50"],
+    ["hub=bongeunsa&radius=1050"],
+    ["hub=bongeunsa&radius=325"],
+    ["hub=bongeunsa&radius=abc"],
+    ["hub=bongeunsa"],
+    ["radius=300"],
+    ["lat=37.514255&lng=127.060234&radius=300"],
   ])("R12: 잘못된 파라미터는 400 (%s)", async (qs) => {
     const res = await callApp(setup().app, `/api/places?${qs}`);
     expect(res.status).toBe(400);
     expect(await res.json()).toEqual({ error: "invalid_params" });
+  });
+
+  it("R12: 거점 id와 50m 단위 반경(100~1000m)만 받는다", async () => {
+    for (const r of [100, 650, 1000]) {
+      const res = await callApp(setup({ allow: false }).app, `/api/places?hub=ddp&radius=${r}`);
+      expect(res.status).toBe(200);
+    }
   });
 
   it("R12: 처음 요청하면 격자를 수집해 ID만 기록하고, 상세가 아직 없으므로 pending으로 센다", async () => {
@@ -62,7 +75,8 @@ describe("GET /api/places", () => {
     expect(res.status).toBe(200);
     expect(res.headers.get("cache-control")).toBe("no-store");
     const body = (await res.json()) as PlacesResponse;
-    expect(body).toMatchObject({ center: ASEM, radius: 300, places: [], pending: 2, incompleteTiles: 0, stale: false });
+    // pending은 반경이 아니라 덮는 격자 기준: 1001, 1002와 반경 밖이지만 같은 격자 줄에 걸친 1004 (디저트 1003은 기록 안 함)
+    expect(body).toMatchObject({ center: HUB_CENTER, radius: 300, places: [], pending: 3, incompleteTiles: 0, stale: false });
   });
 
   it("R12: 응답 후 waitUntil로 상세를 보충해서, 다음 요청에는 반경 안 가게가 거리순으로 나오고 공식 API는 다시 부르지 않는다", async () => {
@@ -90,9 +104,9 @@ describe("GET /api/places", () => {
   });
 
   it("R14: 공식 API가 실패해도 만료된 캐시가 있으면 stale로 응답한다", async () => {
-    await seedPlace(env.DB, "2001", at(0.0005), ASEM.lng, { now: NOW });
-    for (const k of tilesCoveringCircle(ASEM, 300)) await markTile(env.DB, k, NOW - TILE_TTL_MS, 0, false);
-    await replaceTilePlaces(env.DB, tileKeyOf(ASEM), ["2001"], NOW - TILE_TTL_MS, false);
+    await seedPlace(env.DB, "2001", at(0.0005), HUB.lng, { now: NOW });
+    for (const k of tilesCoveringCircle(HUB, 300)) await markTile(env.DB, k, NOW - TILE_TTL_MS, 0, false);
+    await replaceTilePlaces(env.DB, tileKeyOf(HUB), ["2001"], NOW - TILE_TTL_MS, false);
     const body = (await (await callApp(setup({ localStatus: 500 }).app, Q)).json()) as PlacesResponse;
     expect(body.stale).toBe(true);
     expect(body.places.map((p) => p.id)).toEqual(["2001"]);
@@ -103,7 +117,7 @@ describe("GET /api/places", () => {
     const body = (await (await callApp(app, Q)).json()) as PlacesResponse;
     expect(local.calls).toHaveLength(0);
     expect(place.calls).toHaveLength(0);
-    expect(body).toMatchObject({ stale: true, places: [], incompleteTiles: tilesCoveringCircle(ASEM, 300).length });
+    expect(body).toMatchObject({ stale: true, places: [], incompleteTiles: tilesCoveringCircle(HUB, 300).length });
   });
 
   it("R15: 격자와 상세가 모두 신선하면 요청 제한을 확인하지 않는다", async () => {
@@ -113,6 +127,51 @@ describe("GET /api/places", () => {
     const before = s.limiterCalls();
     await callApp(s.app, Q);
     expect(s.limiterCalls()).toBe(before);
+  });
+});
+
+describe("GET /api/places — 응답 캐시와 목록 원소", () => {
+  it("R12: 다 채워진 응답은 Workers Cache API에 60초 캐시해서, 캐시 적중이면 D1을 읽지 않고 같은 본문을 준다", async () => {
+    const cache = caches.default;
+    await cache.delete(new Request(placesCacheKey("bongeunsa", 300)));
+    let now = NOW;
+    const local = fakeKakaoLocal(DOCS);
+    const place = fakePlaceApi({ ...DETAILS });
+    const app = createApp({
+      fetcher: routeFetch(local.fetcher, place.fetcher), now: () => now, sleep: async () => {}, rateLimit: async () => true, cache,
+    });
+    const first = await callApp(app, Q); // pending 2 → 캐시하지 않음
+    expect(first.headers.get("cache-control")).toBe("no-store");
+    expect(await cache.match(new Request(placesCacheKey("bongeunsa", 300)))).toBeUndefined();
+    const second = await callApp(app, Q);
+    const secondBody = await second.text();
+    expect(second.headers.get("cache-control")).toBe("no-store");
+    const stored = await cache.match(new Request(placesCacheKey("bongeunsa", 300)));
+    expect(stored?.headers.get("cache-control")).toBe("public, max-age=60, s-maxage=60");
+    // D1을 비워도 캐시 적중이면 같은 본문 (D1을 읽지 않는다)
+    await env.DB.prepare("DELETE FROM places").run();
+    await env.DB.prepare("DELETE FROM tile_places").run();
+    await env.DB.prepare("DELETE FROM tiles").run();
+    const callsBefore = local.calls.length + place.calls.length;
+    const hit = await callApp(app, Q);
+    expect(await hit.text()).toBe(secondBody);
+    expect(hit.headers.get("cache-control")).toBe("no-store");
+    expect(local.calls.length + place.calls.length).toBe(callsBefore);
+    // 60초가 지나면 다시 만든다
+    now += 60_000;
+    const fresh = (await (await callApp(app, Q)).json()) as PlacesResponse;
+    expect(fresh.places).toEqual([]);
+    await cache.delete(new Request(placesCacheKey("bongeunsa", 300)));
+  });
+
+  it("R12: 목록 원소에는 화면이 쓰지 않는 주소·전화번호를 싣지 않는다 (단건에는 있다)", async () => {
+    const s = setup();
+    await callApp(s.app, Q);
+    const body = (await (await callApp(s.app, Q)).json()) as PlacesResponse;
+    expect(body.places[0]).not.toHaveProperty("address");
+    expect(body.places[0]).not.toHaveProperty("phone");
+    const one = await (await callApp(s.app, "/api/places/1001")).json<any>();
+    expect(one).toHaveProperty("address");
   });
 });
 
@@ -149,6 +208,7 @@ describe("GET /api/places/:id", () => {
 
   it("R10/R13: 단건 조회에서 429가 나오면 쿨다운을 기록한다", async () => {
     const { app } = setup({ details: { "777": 429 } });
+    await replaceTilePlaces(env.DB, tileKeyOf(HUB), ["777"], NOW, false);
     expect((await callApp(app, "/api/places/777")).status).toBe(404);
     expect(await placeBlockedUntil(env.DB)).toBe(NOW + PLACE_BLOCK_COOLDOWN_MS);
   });
@@ -183,13 +243,23 @@ describe("GET /api/places/:id", () => {
     expect(p.distance).toBeUndefined();
   });
 
-  it("R13: 상세를 가져오지 못하면 404이고 실패를 기록한다", async () => {
+  it("R13: 격자에 있는 장소의 상세를 가져오지 못하면 404이고 실패를 기록한다", async () => {
+    await replaceTilePlaces(env.DB, tileKeyOf(HUB), ["999"], NOW, false);
     const res = await callApp(setup().app, "/api/places/999");
     expect(res.status).toBe(404);
     expect((await getMeta(env.DB, "999"))?.reason).toBe("http_404");
   });
 
+  it("R13: 격자에 없는 id는 실패해도 D1에 아무것도 쓰지 않는다 (아무 id로 D1을 키울 수 없게)", async () => {
+    const res = await callApp(setup().app, "/api/places/998");
+    expect(res.status).toBe(404);
+    expect(await getMeta(env.DB, "998")).toBeNull();
+    const r = await env.DB.prepare("SELECT count(*) AS c FROM places").first<{ c: number }>();
+    expect(r?.c).toBe(0);
+  });
+
   it("R13: 최근에 실패한 장소는 다시 시도하지 않는다", async () => {
+    await replaceTilePlaces(env.DB, tileKeyOf(HUB), ["999"], NOW, false);
     const { app, place } = setup();
     await callApp(app, "/api/places/999");
     await callApp(app, "/api/places/999");

@@ -1,6 +1,6 @@
-import { LUNCH_RADIUS } from "./constants";
+import { DEFAULT_RADIUS } from "./constants";
 import { isOpenDuring } from "./hours";
-import type { ApiPlace, CategoryGroup, LunchMinutes } from "./types";
+import type { ApiPlace, CategoryGroup } from "./types";
 
 export type Party = 1 | 2 | 3 | 4;
 export type PriceCap = "all" | 10000 | 15000 | 20000;
@@ -8,7 +8,6 @@ export type MinRating = 0 | 3.5 | 4;
 export type SortKey = "distance" | "rating" | "price";
 
 export type Filters = {
-  lunch: LunchMinutes | null;
   radius: number;
   party: Party;
   groups: CategoryGroup[];
@@ -20,8 +19,7 @@ export type Filters = {
 };
 
 export const DEFAULT_FILTERS: Filters = {
-  lunch: 60,
-  radius: LUNCH_RADIUS[60],
+  radius: DEFAULT_RADIUS,
   party: 2,
   groups: [],
   includeBar: false,
@@ -31,8 +29,6 @@ export const DEFAULT_FILTERS: Filters = {
   sort: "distance",
 };
 
-export const withLunch = (f: Filters, lunch: LunchMinutes): Filters => ({ ...f, lunch, radius: LUNCH_RADIUS[lunch] });
-export const withRadius = (f: Filters, radius: number): Filters => ({ ...f, radius, lunch: null });
 
 /** R19 판단은 서버가 shared/friendly 규칙으로 미리 계산해서 준다 */
 export const isSoloFriendly = (p: ApiPlace) => p.detail?.soloFriendly ?? false;

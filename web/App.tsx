@@ -1,14 +1,16 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { haversine, walkMinutes } from "../shared/geo";
+import { hubById } from "../shared/hubs";
+import { topPercents } from "../shared/rank";
 import { draw, filterPlaces, sortPlaces, type Filters } from "../shared/recommend";
 import { shareText } from "../shared/share";
 import type { ApiDetail, ApiPlace, LatLng } from "../shared/types";
 import { fetchPlace } from "./api";
-import { CenterChip } from "./components/CenterChip";
 import { EmptyState, ErrorState } from "./components/EmptyState";
 import { FilterPanel } from "./components/FilterPanel";
 import { FirstTip, useFirstTip } from "./components/FirstTip";
-import { MapView, PickHint } from "./components/MapView";
+import { HubChip } from "./components/HubChip";
+import { MapView } from "./components/MapView";
 import { warmPoses } from "./components/Mascot";
 import { PlaceCard } from "./components/PlaceCard";
 import { PlaceList } from "./components/PlaceList";
@@ -21,7 +23,7 @@ import { usePlaces } from "./usePlaces";
 import { useSettings } from "./useSettings";
 import { useSlotShuffle } from "./useSlotShuffle";
 
-/** R13 응답에는 거리가 없어서 현재 기준점으로 채운다 (R26) */
+/** R13 응답에는 거리가 없어서 현재 거점으로 채운다 (R26) */
 function withWalk(p: ApiPlace, c: LatLng): ApiPlace {
   if (p.walkMinutes !== undefined) return p;
   const distance = Math.round(haversine(c, p));
@@ -39,12 +41,13 @@ function useNow() {
 
 export default function App() {
   const { settings, share, update } = useSettings();
-  const { filters, center } = settings;
-  const { data, loading, error, polling, reload } = usePlaces(center, filters.radius);
+  const { filters } = settings;
+  const hub = hubById(settings.hubId);
+  const center = useMemo<LatLng>(() => ({ lat: hub.lat, lng: hub.lng }), [hub.lat, hub.lng]);
+  const { data, loading, error, polling, reload } = usePlaces(hub.id, filters.radius);
   const now = useNow();
   const [selected, setSelected] = useState<ApiPlace | null>(null);
   const [drawn, setDrawn] = useState(false);
-  const [pickMode, setPickMode] = useState(false);
   const drawnIds = useRef(new Set<string>());
   const shuffle = useSlotShuffle();
   const toast = useToast();
@@ -54,6 +57,11 @@ export default function App() {
     () => sortPlaces(filterPlaces(data?.places ?? [], filters, now), filters.sort),
     [data, filters, now],
   );
+  // R34: 필터 전 전체 목록(지금 거점·반경) 기준 평점 상위 N%
+  const ranks = useMemo(() => topPercents(data?.places ?? []), [data]);
+  // 셔플이 끝날 때 최신 목록에서 같은 가게를 다시 찾기 위해 (M2)
+  const latestData = useRef(data);
+  latestData.current = data;
   // 지도에는 후보만 찍되, 후보 밖에서 연 가게(공유 링크 등)도 보이게 한다
   const mapPlaces = useMemo(
     () => (selected && !candidates.some((c) => c.id === selected.id) ? [...candidates, selected] : candidates),
@@ -114,13 +122,15 @@ export default function App() {
   }, [data, share.placeId, center, showToast]);
 
   const setFilters = (f: Filters) => update((s) => ({ ...s, filters: f }));
-  const setCenter = (c: LatLng) => {
-    update((s) => ({ ...s, center: c }));
+  const setHub = (hubId: string) => {
+    if (shuffle.running) return;
+    update((s) => ({ ...s, hubId }));
     setSelected(null);
     setDrawn(false);
     drawnIds.current.clear();
   };
   const closeCard = () => {
+    if (shuffle.running) return;
     setSelected(null);
     setDrawn(false);
   };
@@ -150,20 +160,23 @@ export default function App() {
     shuffle.run(
       candidates.map((c) => c.name),
       () => {
-        setSelected(r.place);
+        // 셔플(0.8초) 동안 폴링으로 목록이 바뀌었을 수 있으니 최신 객체를 쓴다
+        setSelected(latestData.current?.places.find((p) => p.id === r.place.id) ?? r.place);
         navigator.vibrate?.(15);
       },
     );
   };
 
+  // 셔플 중에는 목록·핀 선택을 받지 않는다 (M2)
   const onSelect = (p: ApiPlace) => {
+    if (shuffle.running) return;
     setSelected(p);
     setDrawn(false);
   };
 
   // R23: 폰은 시스템 공유 시트, 아니면 클립보드 복사
   const onShare = async (p: ApiPlace) => {
-    const outcome = await shareOrCopy(shareText(p, filters, center, window.location.origin));
+    const outcome = await shareOrCopy(shareText(p, filters, hub.id, window.location.origin));
     if (outcome === "shared") toast.show("공유했어요", "love");
     else if (outcome === "copied") toast.show("복사했어요", "love");
     else if (outcome === "failed") toast.show("복사하지 못했어요");
@@ -189,6 +202,7 @@ export default function App() {
       <PlaceList
         places={candidates}
         selectedId={selected?.id ?? null}
+        ranks={ranks}
         sort={filters.sort}
         now={now}
         dim={loading}
@@ -204,7 +218,7 @@ export default function App() {
         <h1 className="logo">
           <img src="/brand/logo.png" alt="모먹죠" width={63} height={28} draggable={false} />
         </h1>
-        <CenterChip center={center} onCenter={setCenter} onPickStart={() => setPickMode(true)} onToast={toast.show} />
+        <HubChip hub={hub} onChange={setHub} />
       </header>
       <main className="main">
         <section className="map-wrap">
@@ -213,23 +227,18 @@ export default function App() {
             radius={filters.radius}
             places={mapPlaces}
             selectedId={selected?.id ?? null}
-            pickMode={pickMode}
-            onPick={(c) => {
-              setPickMode(false);
-              setCenter(c);
-            }}
             onSelect={(id) => {
               const p = mapPlaces.find((x) => x.id === id);
               if (p) onSelect(p);
             }}
           />
-          {pickMode && <PickHint onCancel={() => setPickMode(false)} />}
           {sheetOpen && (
             <PlaceCard
               key={shuffle.display !== null ? "slot" : (selected?.id ?? "none")}
               place={cardPlace}
               slotName={shuffle.display}
               drawn={drawn}
+              topPercent={cardPlace ? ranks.get(cardPlace.id) : undefined}
               now={now}
               onClose={closeCard}
               onRedraw={onDraw}
@@ -243,7 +252,7 @@ export default function App() {
           {status && <StatusLine status={status} onRetry={error ? reload : undefined} />}
           {list}
           <div className="draw-bar">
-            <button type="button" className="draw" aria-busy={shuffle.running} onClick={onDraw}>
+            <button type="button" className="draw" aria-busy={shuffle.running} disabled={shuffle.running} onClick={onDraw}>
               {drawLabel}
             </button>
           </div>

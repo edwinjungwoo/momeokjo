@@ -1,4 +1,5 @@
 import { readFileSync } from "node:fs";
+import { areasFromArgs } from "./area.mjs";
 
 const base = process.env.MMJ_BASE ?? "https://mmj.itmz.me";
 const fromDevVars = () => {
@@ -13,26 +14,32 @@ if (!token) {
   console.error("ADMIN_TOKEN이 없어요 (.dev.vars 또는 환경 변수)");
   process.exit(1);
 }
-const [lat = "37.513059", lng = "127.059826", radius = "1500"] = process.argv.slice(2);
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 
-for (let i = 1; i <= 300; i++) {
-  const res = await fetch(`${base}/api/admin/warm?lat=${lat}&lng=${lng}&radius=${radius}`, {
-    method: "POST",
-    headers: { Authorization: `Bearer ${token}` },
-  });
-  if (!res.ok) {
-    console.error(`#${i} HTTP ${res.status} ${await res.text()}`);
-    await wait(3000);
-    continue;
+async function warm({ label, lat, lng, radius }) {
+  console.log(`== ${label} · 반경 ${radius}m`);
+  for (let i = 1; i <= 300; i++) {
+    const res = await fetch(`${base}/api/admin/warm?lat=${lat}&lng=${lng}&radius=${radius}`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!res.ok) {
+      console.error(`#${i} HTTP ${res.status} ${await res.text()}`);
+      await wait(3000);
+      continue;
+    }
+    const r = await res.json();
+    console.log(`#${i} incompleteTiles=${r.incompleteTiles} pending=${r.pending} enriched=${r.enriched} failed=${r.failed}`);
+    if (r.incompleteTiles === 0 && r.pending === 0) {
+      console.log("완료");
+      return true;
+    }
+    await wait(1000);
   }
-  const r = await res.json();
-  console.log(`#${i} incompleteTiles=${r.incompleteTiles} pending=${r.pending} enriched=${r.enriched} failed=${r.failed}`);
-  if (r.incompleteTiles === 0 && r.pending === 0) {
-    console.log("완료");
-    process.exit(0);
-  }
-  await wait(1000);
+  console.error("300회 안에 끝나지 않았어요");
+  return false;
 }
-console.error("300회 안에 끝나지 않았어요");
-process.exit(1);
+
+let ok = true;
+for (const area of areasFromArgs(process.argv.slice(2))) ok = (await warm(area)) && ok;
+process.exit(ok ? 0 : 1);

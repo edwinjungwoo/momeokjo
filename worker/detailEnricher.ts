@@ -5,7 +5,8 @@ import type { FetchFn } from "./fetchFn";
 import { fetchPlaceDetail } from "./kakaoPlace";
 import { mapLimit } from "./pool";
 import {
-  blockPlaceApi, idsNeedingDetail, placeBlockedUntil, saveDetail, saveDetailFailure, type DetailScope,
+  blockPlaceApi, idsNeedingDetail, pickDetailIds, placeBlockedUntil, saveDetail, saveDetailFailure, type DetailScope,
+  type TilePlaceState,
 } from "./repo";
 
 const CONCURRENCY = 3;
@@ -21,14 +22,22 @@ export type EnrichDeps = {
   sleep?: (ms: number) => Promise<void>;
   /** 기본 due. 요청 시점 보충은 unfetched */
   scope?: DetailScope;
+  /** 이미 읽어 둔 격자-장소 상태가 있으면 D1을 다시 훑지 않고 여기서 고른다 */
+  candidates?: TilePlaceState[];
 };
 export type EnrichResult = { enriched: number; failed: number };
 
-export async function enrichDetails(deps: EnrichDeps, center: LatLng, radiusM: number): Promise<EnrichResult> {
+/** center: 기준점. candidates를 넘길 때는 여러 거점을 넘겨서 가장 가까운 거점 기준으로 줄 세울 수 있다 */
+export async function enrichDetails(
+  deps: EnrichDeps, center: LatLng | LatLng[], radiusM: number,
+): Promise<EnrichResult> {
   const result: EnrichResult = { enriched: 0, failed: 0 };
   if (deps.budget.left <= 0) return result;
   if (deps.now < (await placeBlockedUntil(deps.db))) return result;
-  const ids = await idsNeedingDetail(deps.db, center, radiusM, deps.now, deps.batchSize, deps.scope ?? "due");
+  const scope = deps.scope ?? "due";
+  const ids = deps.candidates
+    ? pickDetailIds(deps.candidates, center, deps.now, deps.batchSize, scope)
+    : await idsNeedingDetail(deps.db, Array.isArray(center) ? center[0] : center, radiusM, deps.now, deps.batchSize, scope);
   let blocked = false;
   await mapLimit(ids, CONCURRENCY, async (id) => {
     if (blocked) return;

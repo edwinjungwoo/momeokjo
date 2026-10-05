@@ -31,7 +31,6 @@ export function detailSummary(f: Filters): string {
     f.minRating === 0 ? "평점 무관" : `평점 ${f.minRating.toFixed(1)}+`,
     f.openOnly ? "영업 중만" : null,
     f.includeBar ? "술집 포함" : null,
-    f.lunch === null ? `반경 ${f.radius}m` : null,
   ]
     .filter(Boolean)
     .join(" · ");

@@ -5,12 +5,15 @@ import type { ApiPlace } from "../../shared/types";
 import { openState, priceText, walkText, won } from "../format";
 import { CloseIcon } from "./Icons";
 import { Mascot } from "./Mascot";
+import { RankPill } from "./RankPill";
 import { Rating } from "./Rating";
 
 type Props = {
   place: ApiPlace | null;
   slotName: string | null;
   drawn: boolean;
+  /** R34: 근처 상위 N% */
+  topPercent: number | undefined;
   now: Date;
   onClose: () => void;
   onRedraw: () => void;
@@ -58,18 +61,28 @@ function useSwipeDown(onClose: () => void) {
  * R22/R28 결과·상세 카드. 모바일은 뽑기 바 위 바텀 시트, 데스크톱은 지도 위 오버레이 (styles.css).
  * 위계: 이름 → 도보·평점·영업 → 카테고리·가격·강점 → 메뉴 → 행동 → 출처
  */
-export function PlaceCard({ place, slotName, drawn, now, onClose, onRedraw, onShare }: Props) {
+export function PlaceCard({ place, slotName, drawn, topPercent, now, onClose, onRedraw, onShare }: Props) {
   const [menusOpen, setMenusOpen] = useState(false);
   const [heroFailed, setHeroFailed] = useState(false);
   const swipe = useSwipeDown(onClose);
+  const closeBtn = useRef<HTMLButtonElement>(null);
+  const shuffling = slotName !== null;
+  const hasPlace = place !== null;
 
+  // 셔플 중에는 Esc로 닫지 않는다 (M2)
   useEffect(() => {
+    if (shuffling) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") onClose();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
+  }, [onClose, shuffling]);
+
+  // 카드가 열리면 닫기 버튼으로 초점을 옮긴다 (키보드·스크린리더가 카드부터 읽게)
+  useEffect(() => {
+    if (!shuffling && hasPlace) closeBtn.current?.focus({ preventScroll: true });
+  }, [shuffling, hasPlace]);
 
   if (slotName !== null) {
     return (
@@ -98,11 +111,11 @@ export function PlaceCard({ place, slotName, drawn, now, onClose, onRedraw, onSh
   const menus = d?.menus ?? [];
 
   return (
-    <div className="sheet" role="dialog" aria-labelledby="sheet-title" aria-live="polite" ref={swipe.sheet}>
+    <div className="sheet" role="dialog" aria-labelledby="sheet-title" ref={swipe.sheet}>
       <div className="sheet-grab" aria-hidden="true" {...swipe.grab}>
         <div className="sheet-handle" />
       </div>
-      <button type="button" className="sheet-close" aria-label="닫기" onClick={onClose}>
+      <button type="button" className="sheet-close" aria-label="닫기" ref={closeBtn} onClick={onClose}>
         <CloseIcon />
       </button>
       {place.photoUrl && !heroFailed && (
@@ -125,6 +138,7 @@ export function PlaceCard({ place, slotName, drawn, now, onClose, onRedraw, onSh
             {walk && <b>{walk}</b>}
             <Rating p={place} />
             <span className={open.closed ? "closed" : undefined}>{open.text}</span>
+            <RankPill top={topPercent} />
           </p>
         </div>
         {drawn && <Mascot pose="thumbsup" height={56} eager />}

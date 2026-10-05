@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
-  DEFAULT_FILTERS, draw, filterPlaces, sortPlaces, weightOf, withLunch, withRadius, type Filters,
+  DEFAULT_FILTERS, draw, filterPlaces, sortPlaces, weightOf, type Filters,
 } from "../../shared/recommend";
 import { apiPlace } from "../helpers/apiPlace";
 
@@ -8,18 +8,10 @@ const NOON_MON = new Date("2026-10-05T12:00:00+09:00");
 const f = (patch: Partial<Filters> = {}): Filters => ({ ...DEFAULT_FILTERS, ...patch });
 const ids = (ps: { id: string }[]) => ps.map((p) => p.id);
 
-describe("R16 점심시간 → 반경", () => {
-  it("R16: 30/60/90분은 300/700/1200m", () => {
-    expect(withLunch(f(), 30).radius).toBe(300);
-    expect(withLunch(f(), 60).radius).toBe(700);
-    expect(withLunch(f(), 90)).toMatchObject({ lunch: 90, radius: 1200 });
-  });
-  it("R16: 반경을 직접 바꾸면 점심시간 선택이 해제된다", () => {
-    expect(withRadius(f(), 850)).toMatchObject({ lunch: null, radius: 850 });
-  });
-  it("R16: 기본값은 60분 · 700m · 2명 · 영업 중만", () => {
+describe("R16 반경", () => {
+  it("R16: 기본값은 반경 500m · 2명 · 영업 중만 (점심시간 프리셋 없음)", () => {
     expect(DEFAULT_FILTERS).toEqual({
-      lunch: 60, radius: 700, party: 2, groups: [], includeBar: false,
+      radius: 500, party: 2, groups: [], includeBar: false,
       priceCap: "all", minRating: 0, openOnly: true, sort: "distance",
     });
   });
@@ -28,7 +20,7 @@ describe("R16 점심시간 → 반경", () => {
 describe("R18 필터", () => {
   it("R18: 반경 밖은 제외", () => {
     const ps = [apiPlace("in", { distance: 700 }), apiPlace("out", { distance: 701 })];
-    expect(ids(filterPlaces(ps, f({ openOnly: false }), NOON_MON))).toEqual(["in"]);
+    expect(ids(filterPlaces(ps, f({ openOnly: false, radius: 700 }), NOON_MON))).toEqual(["in"]);
   });
 
   it("R18: 카테고리를 고르지 않으면 전체(술집 제외), 고르면 해당 그룹만", () => {

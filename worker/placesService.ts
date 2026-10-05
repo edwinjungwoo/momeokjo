@@ -7,8 +7,8 @@ import type { FetchFn } from "./fetchFn";
 import { fetchPlaceDetail } from "./kakaoPlace";
 import { toApiPlace } from "./present";
 import {
-  blockPlaceApi, countUnfetched, getMeta, getTiles, isDetailDue, isTileDue, placeBlockedUntil, placeById,
-  placesInBox, saveDetail, saveDetailFailure,
+  blockPlaceApi, countUnfetchedIn, getMeta, isInAnyTile, getTiles, isDetailDue, isTileDue, placeBlockedUntil, placeById,
+  placesInBox, saveDetail, saveDetailFailure, tilePlaceStates,
 } from "./repo";
 import { collectTiles } from "./tileCollector";
 
@@ -41,7 +41,7 @@ export async function getPlaces(
   if (due.length > 0) {
     if (await allow()) {
       const r = await collectTiles(
-        { db: deps.db, fetcher: deps.fetcher, restKey: deps.restKey, budget, now: deps.now }, due,
+        { db: deps.db, fetcher: deps.fetcher, restKey: deps.restKey, budget, now: deps.now }, due, states,
       );
       incompleteTiles = r.incomplete.length;
       failedTiles = r.failed.length;
@@ -52,25 +52,27 @@ export async function getPlaces(
     }
   }
 
-  const rows = (await placesInBox(deps.db, boundingBox(center, radiusM)))
+  // 격자-장소 상태는 요청마다 한 번만 읽어서 목록 필터, pending, 보충 대상 고르기에 같이 쓴다
+  const tileStates = await tilePlaceStates(deps.db, keys);
+  const inTiles = new Set(tileStates.map((t) => t.id));
+  const rows = (await placesInBox(deps.db, boundingBox(center, radiusM), inTiles))
     .filter((r) => r.place.group !== "dessert")
     .map((row) => ({ row, d: haversine(center, row.place) }))
     .filter((x) => x.d <= radiusM)
-    .sort((a, b) => a.d - b.d)
-    .map((x) => x.row);
+    .sort((a, b) => a.d - b.d);
 
   if (failedTiles > 0 && rows.length === 0) return { error: "upstream" };
 
   // 보충(waitUntil)이 시작되기 전에 센다 — 응답과 보충이 섞이지 않게.
   // 요청 시점에는 한 번도 가져오지 않은 장소만 보충한다. 만료된 상세 갱신은 Cron(R11) 몫이다.
-  const pending = await countUnfetched(deps.db, keys);
+  const pending = countUnfetchedIn(tileStates);
   const needsDetail = pending > 0 && deps.now >= (await placeBlockedUntil(deps.db));
   if (needsDetail && budget.left > 0 && (await allow())) {
     deps.waitUntil(
       enrichDetails(
         {
           db: deps.db, fetcher: deps.fetcher, budget, now: deps.now, batchSize: deps.batchSize, sleep: deps.sleep,
-          scope: "unfetched",
+          scope: "unfetched", candidates: tileStates,
         },
         center,
         radiusM,
@@ -83,7 +85,7 @@ export async function getPlaces(
   return {
     center,
     radius: radiusM,
-    places: rows.map((r) => toApiPlace(r, { center })),
+    places: rows.map((x) => toApiPlace(x.row, { distance: x.d })),
     pending,
     incompleteTiles,
     stale,
@@ -98,7 +100,8 @@ export async function getPlace(deps: ServiceDeps, id: string): Promise<ApiPlace 
   if (!(await deps.rateLimit())) return null;
   const r = await fetchPlaceDetail(deps.fetcher, id, { budget: new Budget(3), sleep: deps.sleep });
   if (!r.ok) {
-    if (r.reason !== "budget") await saveDetailFailure(deps.db, id, r.reason, deps.now);
+    // 격자에 없는 ID의 실패는 기록하지 않는다 — 아무 숫자로 D1을 키울 수 없게
+    if (r.reason !== "budget" && (await isInAnyTile(deps.db, id))) await saveDetailFailure(deps.db, id, r.reason, deps.now);
     if (BLOCK_SIGNALS.has(r.reason)) await blockPlaceApi(deps.db, deps.now + PLACE_BLOCK_COOLDOWN_MS);
     return null;
   }

@@ -6,11 +6,17 @@ import type { PlaceRow } from "./repo";
 /** 목록 응답에 싣는 메뉴 수 (카드를 열면 단건 조회로 전부 받는다) */
 export const LIST_MENUS = 3;
 
-/** R12 목록 원소(center로 거리 계산, 메뉴 3개) / R13 단건(full: 메뉴 전부) */
-export function toApiPlace(row: PlaceRow, opts: { center?: LatLng; full?: boolean } = {}): ApiPlace {
+/**
+ * R12 목록 원소(거리, 메뉴 3개, 주소·전화 없음) / R13 단건(full: 메뉴 전부, 주소·전화 포함).
+ * distance를 이미 계산했으면 넘겨서 다시 계산하지 않는다.
+ */
+export function toApiPlace(
+  row: PlaceRow, opts: { center?: LatLng; distance?: number; full?: boolean } = {},
+): ApiPlace {
   const p = row.place;
   const d = row.detail;
-  const distance = opts.center ? Math.round(haversine(opts.center, p)) : undefined;
+  const distance =
+    opts.distance !== undefined ? Math.round(opts.distance) : opts.center ? Math.round(haversine(opts.center, p)) : undefined;
   return {
     id: p.id,
     name: p.name,
@@ -19,8 +25,7 @@ export function toApiPlace(row: PlaceRow, opts: { center?: LatLng; full?: boolea
     lat: p.lat,
     lng: p.lng,
     ...(distance === undefined ? {} : { distance, walkMinutes: walkMinutes(distance) }),
-    address: p.address,
-    phone: p.phone,
+    ...(opts.full ? { address: p.address, phone: p.phone } : {}),
     url: p.url,
     photoUrl: p.photoUrl,
     detail: {

@@ -9,6 +9,10 @@ export type TileState = { collectedAt: number; saturated: boolean };
 export type TilePlaceState = { id: string; tileKey: string; meta: DetailMeta };
 
 const CHUNK = 90;
+const META_UPSERT = "INSERT INTO meta (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value";
+const BLOCKED_KEY = "place_blocked_until";
+const TILES_CHANGED_KEY = "tiles_changed_at";
+const UNFETCHED_CLEARED_KEY = "unfetched_cleared_at";
 const chunked = <T>(items: T[]): T[][] =>
   Array.from({ length: Math.ceil(items.length / CHUNK) }, (_, i) => items.slice(i * CHUNK, (i + 1) * CHUNK));
 const marks = (n: number) => Array.from({ length: n }, () => "?").join(",");
@@ -75,6 +79,7 @@ export async function replaceTilePlaces(
     db.prepare("DELETE FROM tile_places WHERE tile_key = ?").bind(key),
     ...unique.map((id) => insert.bind(key, id)),
     db.prepare(TILE_UPSERT).bind(key, now, unique.length, saturated ? 1 : 0),
+    db.prepare(META_UPSERT).bind(TILES_CHANGED_KEY, String(now)),
   ]);
 }
 
@@ -133,11 +138,23 @@ export async function tilePlaceStates(db: D1Database, keys: string[]): Promise<T
 export async function idsNeedingDetail(
   db: D1Database, center: LatLng, radiusM: number, now: number, limit?: number, scope: DetailScope = "due",
 ): Promise<string[]> {
+  return pickDetailIds(await tilePlaceStates(db, tilesCoveringCircle(center, radiusM)), center, now, limit, scope);
+}
+
+/**
+ * 이미 읽어 둔 격자-장소 상태에서 보충할 ID를 고른다 (ID 중복 제거).
+ * 격자 중심이 가장 가까운 기준점(여러 거점이면 그중 가까운 곳)에 가까운 순, 같으면 id순.
+ */
+export function pickDetailIds(
+  states: TilePlaceState[], center: LatLng | LatLng[], now: number, limit?: number, scope: DetailScope = "due",
+): string[] {
+  const centers = Array.isArray(center) ? center : [center];
   const nearest = new Map<string, number>();
-  for (const t of await tilePlaceStates(db, tilesCoveringCircle(center, radiusM))) {
+  for (const t of states) {
     if (scope === "unfetched" ? t.meta !== null : !isDetailDue(t.meta, now, t.id)) continue;
     const r = tileRect(t.tileKey);
-    const d = haversine(center, { lat: (r.minLat + r.maxLat) / 2, lng: (r.minLng + r.maxLng) / 2 });
+    const mid = { lat: (r.minLat + r.maxLat) / 2, lng: (r.minLng + r.maxLng) / 2 };
+    const d = Math.min(...centers.map((c) => haversine(c, mid)));
     const prev = nearest.get(t.id);
     if (prev === undefined || d < prev) nearest.set(t.id, d);
   }
@@ -152,19 +169,71 @@ export async function countNeedingDetail(db: D1Database, center: LatLng, radiusM
 }
 
 export async function countUnfetched(db: D1Database, keys: string[]): Promise<number> {
-  return new Set((await tilePlaceStates(db, keys)).filter((t) => t.meta === null).map((t) => t.id)).size;
+  return countUnfetchedIn(await tilePlaceStates(db, keys));
 }
 
-/** 목록용: 격자에 기록된 가게만 (공유 링크 단건 조회로만 저장된 가게는 빠진다) */
-export async function placesInBox(db: D1Database, box: Rect): Promise<PlaceRow[]> {
+export const countUnfetchedIn = (states: TilePlaceState[]) =>
+  new Set(states.filter((t) => t.meta === null).map((t) => t.id)).size;
+
+/**
+ * Cron용: 주어진 격자의 장소 중 만료됐을 수 있는 것만 fetched_at 인덱스로 읽는다.
+ * ok는 지터를 빼고(가장 이른 만료 시각) 고르므로 실제 만료 여부는 isDetailDue로 다시 확인한다.
+ */
+export async function expiredDetailStates(db: D1Database, keys: string[], now: number): Promise<TilePlaceState[]> {
+  const out: TilePlaceState[] = [];
+  const okBefore = now - DETAIL_OK_TTL_MS;
+  const failBefore = now - DETAIL_FAIL_TTL_MS;
   const r = await db
     .prepare(
-      `${SELECT_VISIBLE} AND lat BETWEEN ? AND ? AND lng BETWEEN ? AND ?
-         AND EXISTS (SELECT 1 FROM tile_places tp WHERE tp.place_id = places.id)`,
+      `SELECT p.id AS id, p.status AS status, p.fetched_at AS fetched_at, p.fail_reason AS fail_reason
+       FROM places p
+       WHERE (p.status = 'ok' AND p.fetched_at <= ?) OR (p.status = 'failed' AND p.fetched_at <= ?)`,
     )
+    .bind(okBefore, failBefore)
+    .all<{ id: string; status: string; fetched_at: number; fail_reason: string | null }>();
+  if (r.results.length === 0) return out;
+  const byId = new Map(r.results.map((x) => [x.id, metaOf(x.status, x.fetched_at, x.fail_reason)]));
+  const wanted = new Set(keys);
+  for (const chunk of chunked([...byId.keys()])) {
+    const t = await db
+      .prepare(`SELECT place_id, tile_key FROM tile_places WHERE place_id IN (${marks(chunk.length)})`)
+      .bind(...chunk)
+      .all<{ place_id: string; tile_key: string }>();
+    for (const x of t.results) {
+      if (wanted.has(x.tile_key)) out.push({ id: x.place_id, tileKey: x.tile_key, meta: byId.get(x.place_id) ?? null });
+    }
+  }
+  return out;
+}
+
+/** 주어진 격자에 기록됐지만 상세를 한 번도 가져오지 않은 장소 */
+export async function unfetchedStates(db: D1Database, keys: string[]): Promise<TilePlaceState[]> {
+  const out: TilePlaceState[] = [];
+  for (const chunk of chunked(keys)) {
+    const r = await db
+      .prepare(
+        `SELECT tp.place_id AS id, tp.tile_key AS tile_key FROM tile_places tp
+         WHERE tp.tile_key IN (${marks(chunk.length)}) AND NOT EXISTS (SELECT 1 FROM places p WHERE p.id = tp.place_id)`,
+      )
+      .bind(...chunk)
+      .all<{ id: string; tile_key: string }>();
+    for (const x of r.results) out.push({ id: x.id, tileKey: x.tile_key, meta: null });
+  }
+  return out;
+}
+
+/**
+ * 목록용: 격자에 기록된 가게만 (공유 링크 단건 조회로만 저장된 가게는 빠진다).
+ * 격자 ID 집합(inTiles)을 이미 읽었으면 넘겨서 행마다 하는 EXISTS 조회를 아낀다.
+ */
+export async function placesInBox(db: D1Database, box: Rect, inTiles?: ReadonlySet<string>): Promise<PlaceRow[]> {
+  const exists = inTiles ? "" : " AND EXISTS (SELECT 1 FROM tile_places tp WHERE tp.place_id = places.id)";
+  const r = await db
+    .prepare(`${SELECT_VISIBLE} AND lat BETWEEN ? AND ? AND lng BETWEEN ? AND ?${exists}`)
     .bind(box.minLat, box.maxLat, box.minLng, box.maxLng)
     .all<DbRow>();
-  return r.results.map(toRow);
+  const rows = inTiles ? r.results.filter((x) => inTiles.has(x.id)) : r.results;
+  return rows.map(toRow);
 }
 
 export async function placesByIds(db: D1Database, ids: string[]): Promise<PlaceRow[]> {
@@ -179,6 +248,11 @@ export async function placesByIds(db: D1Database, ids: string[]): Promise<PlaceR
 export async function placeById(db: D1Database, id: string): Promise<PlaceRow | null> {
   const r = await db.prepare(`${SELECT_VISIBLE} AND id = ?`).bind(id).first<DbRow>();
   return r ? toRow(r) : null;
+}
+
+/** 어느 격자에든 기록된 ID인가 (R13: 격자에 없는 ID는 실패를 기록하지 않는다) */
+export async function isInAnyTile(db: D1Database, id: string): Promise<boolean> {
+  return (await db.prepare("SELECT 1 AS x FROM tile_places WHERE place_id = ? LIMIT 1").bind(id).first()) !== null;
 }
 
 export async function getMeta(db: D1Database, id: string): Promise<DetailMeta> {
@@ -216,18 +290,24 @@ export async function saveDetailFailure(db: D1Database, id: string, reason: stri
     .run();
 }
 
-const BLOCKED_KEY = "place_blocked_until";
-
-/** 상세 API 쿨다운이 끝나는 시각 (epoch ms). 기록이 없으면 0 */
-export async function placeBlockedUntil(db: D1Database): Promise<number> {
-  const r = await db.prepare("SELECT value FROM meta WHERE key = ?").bind(BLOCKED_KEY).first<{ value: string }>();
+async function metaNumber(db: D1Database, key: string): Promise<number> {
+  const r = await db.prepare("SELECT value FROM meta WHERE key = ?").bind(key).first<{ value: string }>();
   const v = Number(r?.value ?? 0);
   return Number.isFinite(v) ? v : 0;
 }
+const setMetaNumber = (db: D1Database, key: string, v: number) =>
+  db.prepare(META_UPSERT).bind(key, String(v)).run();
 
-export async function blockPlaceApi(db: D1Database, until: number): Promise<void> {
-  await db
-    .prepare("INSERT INTO meta (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value")
-    .bind(BLOCKED_KEY, String(until))
-    .run();
-}
+/** 상세 API 쿨다운이 끝나는 시각 (epoch ms). 기록이 없으면 0 */
+export const placeBlockedUntil = (db: D1Database) => metaNumber(db, BLOCKED_KEY);
+export const blockPlaceApi = async (db: D1Database, until: number) => {
+  await setMetaNumber(db, BLOCKED_KEY, until);
+};
+
+/** 마지막으로 격자 ID가 바뀐 시각. Cron은 이 값이 마지막 미수집 확인 뒤일 때만 미수집 ID를 훑는다 */
+export const tilesChangedAt = (db: D1Database) => metaNumber(db, TILES_CHANGED_KEY);
+/** Cron이 모든 거점의 미수집 ID를 다 채웠다고 확인한 시각 */
+export const unfetchedClearedAt = (db: D1Database) => metaNumber(db, UNFETCHED_CLEARED_KEY);
+export const markUnfetchedCleared = async (db: D1Database, at: number) => {
+  await setMetaNumber(db, UNFETCHED_CLEARED_KEY, at);
+};

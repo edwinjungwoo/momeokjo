@@ -1,11 +1,11 @@
 import type { CSSProperties } from "react";
 import { FILTER_GROUPS, GROUP_LABEL } from "../../shared/category";
-import { MAX_RADIUS, MIN_RADIUS } from "../../shared/constants";
-import { withLunch, withRadius, type Filters, type MinRating, type Party, type PriceCap } from "../../shared/recommend";
-import type { CategoryGroup, LunchMinutes } from "../../shared/types";
+import { MAX_RADIUS, MIN_RADIUS, RADIUS_STEP } from "../../shared/constants";
+import { walkMinutes } from "../../shared/geo";
+import type { Filters, MinRating, Party, PriceCap } from "../../shared/recommend";
+import type { CategoryGroup } from "../../shared/types";
 import { detailSummary } from "../format";
 
-const LUNCH: { v: LunchMinutes; label: string }[] = [30, 60, 90].map((v) => ({ v: v as LunchMinutes, label: `${v}분` }));
 const PARTY: { v: Party; label: string }[] = [1, 2, 3, 4].map((v) => ({ v: v as Party, label: v === 4 ? "4명+" : `${v}명` }));
 const PRICE: { v: PriceCap; label: string }[] = [
   { v: "all", label: "전체" },
@@ -23,7 +23,7 @@ type Props = { filters: Filters; onChange: (f: Filters) => void };
 
 type Option<T> = { v: T; label: string };
 
-/** iOS식 세그먼트: 트랙 하나 안에서 흰 선택 표시가 미끄러진다. 선택이 없으면(반경 직접 설정) 표시를 숨긴다 */
+/** iOS식 세그먼트: 트랙 하나 안에서 흰 선택 표시가 미끄러진다 */
 function Segmented<T extends string | number | null>({
   label,
   options,
@@ -49,7 +49,7 @@ function Segmented<T extends string | number | null>({
   );
 }
 
-/** 항상 보이는 것: 점심시간, 인원, 카테고리. 나머지는 "상세 조건"에 접는다. */
+/** 항상 보이는 것: 반경, 인원, 카테고리. 나머지는 "상세 조건"에 접는다. */
 export function FilterPanel({ filters: f, onChange }: Props) {
   const set = (patch: Partial<Filters>) => onChange({ ...f, ...patch });
   const toggleGroup = (g: CategoryGroup) =>
@@ -59,10 +59,21 @@ export function FilterPanel({ filters: f, onChange }: Props) {
     <div className="filters">
       <section className="field">
         <div className="field-head">
-          <span>점심시간</span>
-          <span className="hint">{f.lunch ? `도보 반경 ${f.radius}m` : `직접 설정 · 반경 ${f.radius}m`}</span>
+          <span>거리</span>
+          <span className="hint" aria-live="polite">
+            반경 {f.radius}m · 도보 약 {walkMinutes(f.radius)}분
+          </span>
         </div>
-        <Segmented label="점심시간" options={LUNCH} value={f.lunch} onPick={(l) => l !== null && onChange(withLunch(f, l))} />
+        <input
+          type="range"
+          min={MIN_RADIUS}
+          max={MAX_RADIUS}
+          step={RADIUS_STEP}
+          value={f.radius}
+          aria-label="반경"
+          aria-valuetext={`반경 ${f.radius}미터, 도보 약 ${walkMinutes(f.radius)}분`}
+          onChange={(e) => set({ radius: Number(e.target.value) })}
+        />
       </section>
 
       <section className="field">
@@ -106,21 +117,6 @@ export function FilterPanel({ filters: f, onChange }: Props) {
               <span>최소 평점</span>
             </div>
             <Segmented label="최소 평점" options={RATING} value={f.minRating} onPick={(v) => set({ minRating: v })} />
-          </section>
-          <section className="field">
-            <div className="field-head">
-              <span>반경 직접 정하기</span>
-              <span className="hint">{f.radius}m</span>
-            </div>
-            <input
-              type="range"
-              min={MIN_RADIUS}
-              max={MAX_RADIUS}
-              step={50}
-              value={f.radius}
-              aria-label="반경"
-              onChange={(e) => onChange(withRadius(f, Number(e.target.value)))}
-            />
           </section>
           <label className="switch">
             <span>지금 영업 중인 곳만</span>

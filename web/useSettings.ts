@@ -21,11 +21,11 @@ export function useSettings() {
   const [settings, setSettings] = useState<Settings>(init.settings);
   const touched = useRef(false);
 
-  // 공유 파라미터는 처음 한 번만 쓴다. 새로고침하면 저장값으로 돌아가도록 주소창에서 지운다.
+  // 공유 파라미터는 처음 한 번만 쓴다. 새로고침하면 저장값으로 돌아가도록 주소창에서 지운다 (예전 링크의 lat/lng 포함)
   useEffect(() => {
-    const { placeId, center, radius } = init.share;
-    if (placeId || center || radius !== null) window.history.replaceState(null, "", window.location.pathname);
-  }, [init.share]);
+    const q = new URLSearchParams(window.location.search);
+    if (["p", "h", "r", "lat", "lng"].some((k) => q.has(k))) window.history.replaceState(null, "", window.location.pathname);
+  }, []);
 
   useEffect(() => {
     if (!touched.current) return;

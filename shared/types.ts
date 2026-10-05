@@ -1,6 +1,5 @@
 export type LatLng = { lat: number; lng: number };
 export type Rect = { minLat: number; minLng: number; maxLat: number; maxLng: number };
-export type LunchMinutes = 30 | 60 | 90;
 
 export type CategoryGroup =
   | "korean" | "chinese" | "japanese" | "western" | "asian" | "snack" | "bar" | "dessert" | "etc";
@@ -61,8 +60,9 @@ export type ApiPlace = {
   lng: number;
   distance?: number;
   walkMinutes?: number;
-  address: string | null;
-  phone: string | null;
+  /** 단건(R13)에만 있다. 목록은 화면이 쓰지 않아서 싣지 않는다 */
+  address?: string | null;
+  phone?: string | null;
   url: string;
   photoUrl: string | null;
   detail: ApiDetail | null;

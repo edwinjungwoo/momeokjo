@@ -4,11 +4,14 @@ import { photoThumbUrl } from "../../shared/photo";
 import type { SortKey } from "../../shared/recommend";
 import type { ApiPlace } from "../../shared/types";
 import { openState, priceText } from "../format";
+import { RankPill } from "./RankPill";
 import { Rating } from "./Rating";
 
 type Props = {
   places: ApiPlace[];
   selectedId: string | null;
+  /** R34: id → 근처 상위 N% */
+  ranks: ReadonlyMap<string, number>;
   sort: SortKey;
   now: Date;
   dim: boolean;
@@ -38,6 +41,7 @@ function Thumb({ url }: { url: string | null }) {
 export function PlaceList({
   places,
   selectedId,
+  ranks,
   sort,
   now,
   dim,
@@ -79,6 +83,7 @@ export function PlaceList({
                     {open.closed && <span className="row-warn">{open.text}</span>}
                     <Rating p={p} />
                     {category && <span className="row-cat">{category}</span>}
+                    <RankPill top={ranks.get(p.id)} />
                   </span>
                 </span>
                 <span className="row-side">

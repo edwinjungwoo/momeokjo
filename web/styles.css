@@ -75,7 +75,7 @@ button, select, summary, label, .topbar, .draw-bar, .mascot, .logo img {
 .logo { display: flex; align-items: center; font-size: 0; line-height: 0; }
 .logo img { display: block; width: 63px; height: 28px; -webkit-user-drag: none; }
 .main { flex: 1; min-height: 0; display: flex; flex-direction: column; }
-.map-wrap { position: relative; flex: none; height: 40dvh; min-height: 220px; background: var(--bg-2); }
+.map-wrap { position: relative; flex: none; height: 40vh; height: 40dvh; min-height: 220px; background: var(--bg-2); }
 .map { position: absolute; inset: 0; z-index: 0; overflow: hidden; }
 .map-zoom { display: contents; }
 .panel {
@@ -276,6 +276,9 @@ input[type="range"] { width: 100%; height: 44px; margin: 0; accent-color: var(--
 .row-sub > * + *::before { content: "·"; margin-right: 6px; color: var(--text-3); }
 .row-warn { flex: none; font-weight: 600; color: var(--accent-ink); }
 .row-cat { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+/* R34 근처 상위 N%: 구분점 없이 옅은 포인트 알약 */
+.rank-pill { flex: none; align-self: center; padding: 0 8px; border-radius: 999px; background: var(--accent-wash); color: var(--accent-ink); font-size: 12px; font-weight: 600; line-height: 20px; white-space: nowrap; }
+.row-sub > .rank-pill::before, .facts > .rank-pill::before { content: none; }
 .row-side { flex: none; display: grid; justify-items: end; gap: 4px; text-align: right; white-space: nowrap; }
 .row-walk { font-size: 14px; font-weight: 600; }
 .row-price { font-size: 13px; color: var(--text-3); }
@@ -393,6 +396,7 @@ input[type="range"] { width: 100%; height: 44px; margin: 0; accent-color: var(--
   right: 0;
   bottom: var(--bar-h);
   z-index: 30;
+  max-height: min(60vh, calc(100vh - var(--bar-h) - var(--topbar-h) - 48px));
   max-height: min(60dvh, calc(100dvh - var(--bar-h) - var(--topbar-h) - 48px));
   overflow-y: auto;
   overscroll-behavior: contain;
@@ -405,8 +409,12 @@ input[type="range"] { width: 100%; height: 44px; margin: 0; accent-color: var(--
   box-shadow: 0 -6px 24px rgba(60, 47, 37, 0.1);
   animation: sheet-in 0.26s var(--spring);
 }
-/* 그래버: 위쪽 띠를 아래로 끌면 닫힌다 */
+/* 그래버: 위쪽 띠를 아래로 끌면 닫힌다. 시트를 스크롤해도 위에 붙어 있어서 언제든 끌어 닫을 수 있다 */
 .sheet-grab {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--bg);
   display: flex;
   justify-content: center;
   margin: 0 calc(-1 * var(--pr)) 4px calc(-1 * var(--pl));
@@ -433,6 +441,7 @@ input[type="range"] { width: 100%; height: 44px; margin: 0; accent-color: var(--
   display: block;
   width: 100%;
   aspect-ratio: 16 / 9;
+  max-height: 20vh;
   max-height: 20dvh;
   object-fit: cover;
   margin: 0 0 12px;
@@ -485,9 +494,9 @@ input[type="range"] { width: 100%; height: 44px; margin: 0; accent-color: var(--
 .sheet .redraw { display: none; }
 .source { margin-top: 8px; font-size: 12px; color: var(--text-3); text-align: right; }
 
-/* ── 기준점 칩 (R24) ──────────────────────────── */
-.center-chip { position: relative; min-width: 0; max-width: 62vw; }
-.center-chip > button {
+/* ── 거점 칩 (R24) ───────────────────────────── */
+.hub-chip { position: relative; min-width: 0; max-width: 62vw; }
+.hub-chip > button {
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -501,7 +510,7 @@ input[type="range"] { width: 100%; height: 44px; margin: 0; accent-color: var(--
   font-weight: 600;
   transition: transform 0.18s var(--spring);
 }
-.center-chip > button:active { transform: scale(0.97); transition-duration: 0.1s; }
+.hub-chip > button:active { transform: scale(0.97); transition-duration: 0.1s; }
 .chip-icon { color: var(--accent); }
 .chip-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .caret { color: var(--text-3); }
@@ -522,6 +531,9 @@ input[type="range"] { width: 100%; height: 44px; margin: 0; accent-color: var(--
 .menu-head { display: flex; align-items: center; gap: 8px; padding: 0 8px 8px; margin-bottom: 4px; border-bottom: 1px solid var(--divider); font-size: 13px; font-weight: 600; color: var(--text-2); }
 .menu button { min-height: 48px; padding: 0 12px; border: 0; border-radius: 10px; background: none; text-align: left; font-size: 16px; }
 .menu button:active { background: var(--fill); }
+.menu button[role="menuitemradio"] { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.menu button[aria-checked="true"] { font-weight: 700; }
+.menu-check { flex: none; color: var(--accent); }
 
 /* ── 지도 위 요소 (R28) ───────────────────────── */
 /* 터치 영역은 32px로 고정하고(오버레이 기준점이 흔들리지 않게), 보이는 모양만 바꾼다 */
@@ -613,26 +625,6 @@ input[type="range"] { width: 100%; height: 44px; margin: 0; accent-color: var(--
 }
 .center-pin { width: 18px; height: 18px; border: 3px solid #fff; border-radius: 50%; background: var(--text); box-shadow: 0 1px 6px rgba(60, 47, 37, 0.35); pointer-events: none; }
 .map-fallback { position: absolute; inset: 0; z-index: 1; display: grid; place-content: center; justify-items: center; gap: 12px; background: var(--bg-2); color: var(--text-2); font-size: 15px; }
-.pick-hint {
-  position: absolute;
-  top: 12px;
-  left: 50%;
-  z-index: 5;
-  transform: translateX(-50%);
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  max-width: calc(100% - 24px);
-  padding: 4px 4px 4px 16px;
-  border-radius: 999px;
-  background: var(--text);
-  color: #fff;
-  font-size: 14px;
-  white-space: nowrap;
-  box-shadow: var(--shadow-pop);
-}
-.pick-hint > span { overflow: hidden; text-overflow: ellipsis; }
-.pick-hint button { min-height: 44px; padding: 0 14px; border: 0; border-radius: 999px; background: rgba(255, 255, 255, 0.16); color: #fff; font-size: 14px; font-weight: 600; }
 
 /* ── 토스트: 하단 주 버튼 바로 위, 아이콘 하나 + 한 줄 ── */
 .toast {
@@ -684,7 +676,7 @@ input[type="range"] { width: 100%; height: 44px; margin: 0; accent-color: var(--
 }
 /* 가로 모드 폰: 지도가 화면을 다 먹지 않게 해서 패널이 140px 이상 보이게 한다 */
 @media (max-height: 500px) and (max-width: 899px) {
-  .map-wrap { height: 34dvh; min-height: 140px; }
+  .map-wrap { height: 34vh; height: 34dvh; min-height: 140px; }
 }
 @media (hover: hover) {
   .row:hover:not([aria-current="true"]) { background: #fbf7f3; }

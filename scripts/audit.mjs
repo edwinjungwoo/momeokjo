@@ -1,9 +1,10 @@
 import { readFileSync } from "node:fs";
+import { areasFromArgs } from "./area.mjs";
 
 const base = process.env.MMJ_BASE ?? "https://mmj.itmz.me";
 const token =
   process.env.ADMIN_TOKEN ?? readFileSync(".dev.vars", "utf8").match(/^ADMIN_TOKEN=(.+)$/m)?.[1]?.trim();
-const [lat = "37.513059", lng = "127.059826", radius = "1500"] = process.argv.slice(2);
+const [{ label, lat, lng, radius }] = areasFromArgs(process.argv.slice(2));
 
 const res = await fetch(`${base}/api/admin/audit?lat=${lat}&lng=${lng}&radius=${radius}`, {
   headers: { Authorization: `Bearer ${token}` },
@@ -13,7 +14,7 @@ if (!res.ok) {
   process.exit(1);
 }
 const r = await res.json();
-console.log(`기준점 ${lat}, ${lng} · 반경 ${radius}m · 덮는 격자의 장소 ID ${r.places}개`);
+console.log(`${label} (${lat}, ${lng}) · 반경 ${radius}m · 덮는 격자의 장소 ID ${r.places}개`);
 console.log("\n[Q1] 격자"); console.table(r.tiles);
 console.log("[Q2] 상세 커버리지"); console.table(r.detail);
 console.log("[Q3] 결측률 (ok 중)"); console.table(r.nullRates);
