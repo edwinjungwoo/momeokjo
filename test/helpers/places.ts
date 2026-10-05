@@ -57,7 +57,7 @@ export function placeJson(opts: { name: string; lat: number; lng: number; catego
     summary: {
       ...jungang.summary,
       name: opts.name,
-      point: { lat: opts.lat, lng: opts.lng },
+      point: { lat: opts.lat, lon: opts.lng },
       category: { ...jungang.summary.category, name1, name2, name3: name3 ?? null },
     },
   };
