@@ -38,6 +38,18 @@ const SELECT_VISIBLE = `SELECT * FROM places WHERE name IS NOT NULL AND lat IS N
 const metaOf = (status: string | null, fetchedAt: number | null, reason: string | null): DetailMeta =>
   status === null || fetchedAt === null ? null : { status: status === "ok" ? "ok" : "failed", fetchedAt, reason };
 
+/** QA D-8: 저장된 JSON 열이 깨졌거나 모양이 틀려도 목록 전체가 500이 되지 않게 그 필드만 빈 값으로 읽는다 */
+function readJson<T>(raw: string | null, fallback: T, ok: (v: unknown) => boolean): T {
+  if (!raw) return fallback;
+  try {
+    const v: unknown = JSON.parse(raw);
+    return ok(v) ? (v as T) : fallback;
+  } catch {
+    return fallback;
+  }
+}
+const isPlainObject = (v: unknown) => typeof v === "object" && v !== null && !Array.isArray(v);
+
 function toRow(r: DbRow): PlaceRow {
   return {
     place: {
@@ -56,10 +68,10 @@ function toRow(r: DbRow): PlaceRow {
       rating: r.rating,
       reviewCount: r.review_count,
       price: r.price,
-      menus: JSON.parse(r.menus_json ?? "[]"),
-      hours: r.hours_json ? JSON.parse(r.hours_json) : null,
-      strengths: JSON.parse(r.strengths_json ?? "[]"),
-      tags: JSON.parse(r.tags_json ?? "[]"),
+      menus: readJson(r.menus_json, [], Array.isArray),
+      hours: readJson(r.hours_json, null, isPlainObject),
+      strengths: readJson(r.strengths_json, [], Array.isArray),
+      tags: readJson(r.tags_json, [], Array.isArray),
       bookable: r.bookable === null ? null : r.bookable === 1,
       fetchedAt: r.fetched_at,
     },

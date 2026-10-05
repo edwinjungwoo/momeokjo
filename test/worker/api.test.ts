@@ -200,6 +200,26 @@ describe("GET /api/places — 응답 캐시와 목록 원소", () => {
   });
 });
 
+describe("GET /api/places — 저장값 방어 (QA 보강)", () => {
+  it("R12/D-8: 저장된 JSON 열(메뉴·영업시간·강점·태그)이 깨졌거나 모양이 틀린 행이 있어도 목록은 200이고 그 필드만 빈 값", async () => {
+    const s = setup();
+    await callApp(s.app, Q);
+    await callApp(s.app, Q);
+    await env.DB.prepare("UPDATE places SET menus_json = '{', hours_json = 'x', strengths_json = '[', tags_json = 'null}' WHERE id = '1001'").run();
+    await env.DB.prepare(`UPDATE places SET menus_json = '{}', hours_json = '[1]', strengths_json = '"맛"', tags_json = '7' WHERE id = '1002'`).run();
+    const res = await callApp(s.app, Q);
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as PlacesResponse;
+    expect(body.places.map((p) => p.id)).toEqual(["1001", "1002"]);
+    for (const p of body.places) {
+      expect(p.detail).toMatchObject({ menus: [], hours: null, strengths: [], rating: 4.1 });
+    }
+    const one = await callApp(s.app, "/api/places/1001");
+    expect(one.status).toBe(200);
+    expect((await one.json<any>()).detail.menus).toEqual([]);
+  });
+});
+
 describe("GET /api/places — 요청 시점 보충", () => {
   it("R12: 만료된 상세는 요청에서 갱신하지 않고(Cron 몫) 그대로 보여준다", async () => {
     const s = setup();
