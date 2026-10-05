@@ -1,3 +1,10 @@
+import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
+import App from "./App";
+import "./styles.css";
 
-createRoot(document.getElementById("root")!).render(<p>모먹죠 준비 중</p>);
+createRoot(document.getElementById("root")!).render(
+  <StrictMode>
+    <App />
+  </StrictMode>,
+);
