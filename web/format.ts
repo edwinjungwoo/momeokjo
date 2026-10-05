@@ -4,13 +4,6 @@ import type { ApiPlace, PlacesResponse } from "../shared/types";
 
 export const won = (n: number) => `${n.toLocaleString("ko-KR")}원`;
 
-/** 카드용: "⭐ 4.1 (812)" */
-export function ratingText(p: ApiPlace): string {
-  const r = p.detail?.rating ?? null;
-  if (r === null) return "평점 정보 없음";
-  return `⭐ ${r.toFixed(1)} (${(p.detail?.reviewCount ?? 0).toLocaleString("ko-KR")})`;
-}
-
 export function priceText(p: ApiPlace): string | null {
   const v = p.detail?.price ?? null;
   return v === null ? null : `${won(v)}대`;
@@ -35,7 +28,7 @@ export function openState(p: ApiPlace, now: Date): OpenState {
 export function detailSummary(f: Filters): string {
   return [
     f.priceCap === "all" ? "예산 전체" : `${f.priceCap / 10000}만 이하`,
-    f.minRating === 0 ? "평점 무관" : `⭐${f.minRating.toFixed(1)}+`,
+    f.minRating === 0 ? "평점 무관" : `평점 ${f.minRating.toFixed(1)}+`,
     f.openOnly ? "영업 중만" : null,
     f.includeBar ? "술집 포함" : null,
     f.lunch === null ? `반경 ${f.radius}m` : null,

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { ASEM } from "../../shared/constants";
 import type { LatLng } from "../../shared/types";
+import { ChevronDown, PinIcon } from "./Icons";
 import { Mascot } from "./Mascot";
 
 const GEO_FAIL = "위치를 가져오지 못해서 ASEM 타워 기준으로 보여드려요";
@@ -82,9 +83,9 @@ export function CenterChip({ center, onCenter, onPickStart, onToast }: Props) {
   return (
     <div className="center-chip" ref={root}>
       <button type="button" aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen((o) => !o)}>
-        <span aria-hidden="true">📍</span>
+        <PinIcon className="chip-icon" />
         <span className="chip-label">{label}</span>
-        <span className="caret" aria-hidden="true">▾</span>
+        <ChevronDown className="caret" />
       </button>
       {open && (
         <div className="menu" role="menu" aria-label="어디서 찾을까요?">

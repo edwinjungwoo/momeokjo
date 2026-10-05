@@ -3,7 +3,8 @@ import { lastLevel } from "../../shared/category";
 import { photoThumbUrl } from "../../shared/photo";
 import type { SortKey } from "../../shared/recommend";
 import type { ApiPlace } from "../../shared/types";
-import { openState, priceText, walkText, type OpenState } from "../format";
+import { openState, priceText } from "../format";
+import { Rating } from "./Rating";
 
 type Props = {
   places: ApiPlace[];
@@ -30,22 +31,6 @@ function Thumb({ url }: { url: string | null }) {
       decoding="async"
       onError={() => setFailed(true)}
     />
-  );
-}
-
-/** 영업 상태 알약. 정보가 없으면 줄을 비워 둔다 */
-function OpenPill({ open }: { open: OpenState }) {
-  if (open.kind === "unknown") return null;
-  return <span className={`pill${open.kind === "open" ? " is-open" : ""}`}>{open.text}</span>;
-}
-
-function Rating({ p }: { p: ApiPlace }) {
-  const r = p.detail?.rating ?? null;
-  if (r === null) return <span className="row-rating is-none">평점 정보 없음</span>;
-  return (
-    <span className="row-rating">
-      <span aria-hidden="true">⭐</span> <b>{r.toFixed(1)}</b> ({(p.detail?.reviewCount ?? 0).toLocaleString("ko-KR")})
-    </span>
   );
 }
 
@@ -81,18 +66,24 @@ export function PlaceList({
       <ul className={`list${dim ? " is-dim" : ""}`}>
         {places.map((p) => {
           const price = priceText(p);
-          const meta = [lastLevel(p.category), walkText(p), price && `1인 ${price}`].filter(Boolean).join(" · ");
+          const open = openState(p, now);
+          const category = lastLevel(p.category);
           return (
             <li key={p.id}>
               <button type="button" className="row" aria-current={p.id === selectedId} onClick={() => onSelect(p)}>
                 {anyPhoto && <Thumb url={p.photoUrl} />}
                 <span className="row-text">
-                  <span className="row-head">
-                    <span className="row-name">{p.name}</span>
-                    <OpenPill open={openState(p, now)} />
+                  <span className="row-name">{p.name}</span>
+                  <span className="row-sub">
+                    {/* "영업 중"은 기본값이라 생략하고, 곧 닫거나 닫힌 경우만 앞에 알린다 */}
+                    {open.closed && <span className="row-warn">{open.text}</span>}
+                    <Rating p={p} />
+                    {category && <span className="row-cat">{category}</span>}
                   </span>
-                  <Rating p={p} />
-                  {meta && <span className="row-meta">{meta}</span>}
+                </span>
+                <span className="row-side">
+                  {p.walkMinutes !== undefined && <span className="row-walk">도보 {p.walkMinutes}분</span>}
+                  {price && <span className="row-price">1인 {price}</span>}
                 </span>
               </button>
             </li>

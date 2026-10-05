@@ -17,6 +17,7 @@ export function SkeletonList({ title, desc, rows = 3 }: { title: string; desc: s
             <i />
             <i />
           </span>
+          <i />
         </span>
       ))}
     </div>

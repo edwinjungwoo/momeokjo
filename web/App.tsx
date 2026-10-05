@@ -147,7 +147,7 @@ export default function App() {
 
   const status = statusOf(data, polling, error);
   const sheetOpen = shuffle.display !== null || selected !== null;
-  const drawLabel = shuffle.running ? "고르는 중…" : drawn && selected ? "🎲 다시 뽑기" : "🎲 모먹죠?";
+  const drawLabel = shuffle.running ? "고르는 중…" : drawn && selected ? "다시 뽑기" : "모먹죠?";
 
   let list: ReactNode;
   if (!data) {
@@ -219,7 +219,7 @@ export default function App() {
           {status && <StatusLine status={status} onRetry={error ? reload : undefined} />}
           {list}
           <div className="draw-bar">
-            <button type="button" className="draw" disabled={shuffle.running} onClick={onDraw}>
+            <button type="button" className="draw" aria-busy={shuffle.running} onClick={onDraw}>
               {drawLabel}
             </button>
           </div>

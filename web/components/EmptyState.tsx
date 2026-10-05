@@ -29,7 +29,7 @@ export function EmptyState({ filters, onChange }: { filters: Filters; onChange: 
       {options.length > 0 && (
         <div className="state-actions">
           {options.map((o) => (
-            <button key={o.label} type="button" className="btn-outline" onClick={() => onChange(o.apply(filters))}>
+            <button key={o.label} type="button" className="chip" onClick={() => onChange(o.apply(filters))}>
               {o.label}
             </button>
           ))}
@@ -46,8 +46,8 @@ export function ErrorState({ onRetry }: { onRetry: () => void }) {
       <p className="state-title">앗! 일시적인 오류가 발생했어요.</p>
       <p className="state-desc">잠시 후 다시 시도해주세요.</p>
       <div className="state-actions">
-        <button type="button" className="btn-primary" onClick={onRetry}>
-          <span aria-hidden="true">↻</span> 다시 시도하기
+        <button type="button" className="btn-tint" onClick={onRetry}>
+          다시 시도하기
         </button>
       </div>
     </div>

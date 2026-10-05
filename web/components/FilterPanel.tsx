@@ -1,11 +1,12 @@
+import type { CSSProperties } from "react";
 import { FILTER_GROUPS, GROUP_LABEL } from "../../shared/category";
 import { MAX_RADIUS, MIN_RADIUS } from "../../shared/constants";
 import { withLunch, withRadius, type Filters, type MinRating, type Party, type PriceCap } from "../../shared/recommend";
 import type { CategoryGroup, LunchMinutes } from "../../shared/types";
 import { detailSummary } from "../format";
 
-const LUNCH: LunchMinutes[] = [30, 60, 90];
-const PARTY: Party[] = [1, 2, 3, 4];
+const LUNCH: { v: LunchMinutes; label: string }[] = [30, 60, 90].map((v) => ({ v: v as LunchMinutes, label: `${v}분` }));
+const PARTY: { v: Party; label: string }[] = [1, 2, 3, 4].map((v) => ({ v: v as Party, label: v === 4 ? "4명+" : `${v}명` }));
 const PRICE: { v: PriceCap; label: string }[] = [
   { v: "all", label: "전체" },
   { v: 10000, label: "1만 이하" },
@@ -20,6 +21,34 @@ const RATING: { v: MinRating; label: string }[] = [
 
 type Props = { filters: Filters; onChange: (f: Filters) => void };
 
+type Option<T> = { v: T; label: string };
+
+/** iOS식 세그먼트: 트랙 하나 안에서 흰 선택 표시가 미끄러진다. 선택이 없으면(반경 직접 설정) 표시를 숨긴다 */
+function Segmented<T extends string | number | null>({
+  label,
+  options,
+  value,
+  onPick,
+}: {
+  label: string;
+  options: Option<T>[];
+  value: T;
+  onPick: (v: T) => void;
+}) {
+  const index = options.findIndex((o) => o.v === value);
+  const style = { "--n": options.length, "--i": Math.max(index, 0) } as CSSProperties;
+  return (
+    <div className="seg" role="group" aria-label={label} style={style}>
+      {index >= 0 && <span className="seg-thumb" aria-hidden="true" />}
+      {options.map((o) => (
+        <button key={String(o.v)} type="button" aria-pressed={o.v === value} onClick={() => onPick(o.v)}>
+          {o.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 /** 항상 보이는 것: 점심시간, 인원, 카테고리. 나머지는 "상세 조건"에 접는다. */
 export function FilterPanel({ filters: f, onChange }: Props) {
   const set = (patch: Partial<Filters>) => onChange({ ...f, ...patch });
@@ -33,26 +62,14 @@ export function FilterPanel({ filters: f, onChange }: Props) {
           <span>점심시간</span>
           <span className="hint">{f.lunch ? `도보 반경 ${f.radius}m` : `직접 설정 · 반경 ${f.radius}m`}</span>
         </div>
-        <div className="seg" role="group" aria-label="점심시간">
-          {LUNCH.map((l) => (
-            <button key={l} type="button" aria-pressed={f.lunch === l} onClick={() => onChange(withLunch(f, l))}>
-              {l}분
-            </button>
-          ))}
-        </div>
+        <Segmented label="점심시간" options={LUNCH} value={f.lunch} onPick={(l) => l !== null && onChange(withLunch(f, l))} />
       </section>
 
       <section className="field">
         <div className="field-head">
           <span>인원</span>
         </div>
-        <div className="seg" role="group" aria-label="인원">
-          {PARTY.map((p) => (
-            <button key={p} type="button" aria-pressed={f.party === p} onClick={() => set({ party: p })}>
-              {p === 4 ? "4명+" : `${p}명`}
-            </button>
-          ))}
-        </div>
+        <Segmented label="인원" options={PARTY} value={f.party} onPick={(p) => set({ party: p })} />
       </section>
 
       <section className="field">
@@ -82,25 +99,13 @@ export function FilterPanel({ filters: f, onChange }: Props) {
             <div className="field-head">
               <span>1인 예산</span>
             </div>
-            <div className="seg" role="group" aria-label="1인 예산">
-              {PRICE.map((p) => (
-                <button key={String(p.v)} type="button" aria-pressed={f.priceCap === p.v} onClick={() => set({ priceCap: p.v })}>
-                  {p.label}
-                </button>
-              ))}
-            </div>
+            <Segmented label="1인 예산" options={PRICE} value={f.priceCap} onPick={(v) => set({ priceCap: v })} />
           </section>
           <section className="field">
             <div className="field-head">
               <span>최소 평점</span>
             </div>
-            <div className="seg" role="group" aria-label="최소 평점">
-              {RATING.map((r) => (
-                <button key={r.v} type="button" aria-pressed={f.minRating === r.v} onClick={() => set({ minRating: r.v })}>
-                  {r.label}
-                </button>
-              ))}
-            </div>
+            <Segmented label="최소 평점" options={RATING} value={f.minRating} onPick={(v) => set({ minRating: v })} />
           </section>
           <section className="field">
             <div className="field-head">

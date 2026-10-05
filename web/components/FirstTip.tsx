@@ -1,4 +1,5 @@
 import { useCallback, useState } from "react";
+import { CloseIcon } from "./Icons";
 import { Mascot } from "./Mascot";
 
 const KEY = "mmj:tip-draw:v1";
@@ -31,10 +32,10 @@ export function FirstTip({ onClose }: { onClose: () => void }) {
       <Mascot pose="conditions" height={56} eager />
       <p className="tip-bubble">
         <span>
-          조건을 고르고 <b>🎲 모먹죠?</b>를 눌러보세요!
+          조건을 고르고 <b>모먹죠?</b>를 눌러보세요!
         </span>
         <button type="button" className="tip-close" aria-label="안내 닫기" onClick={onClose}>
-          ×
+          <CloseIcon size={12} />
         </button>
       </p>
     </div>

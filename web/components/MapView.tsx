@@ -1,10 +1,31 @@
 import { useEffect, useRef, useState } from "react";
-import type { ApiPlace, LatLng } from "../../shared/types";
+import type { ApiPlace, CategoryGroup, LatLng } from "../../shared/types";
 import { loadKakaoMaps } from "../kakaoLoader";
 
 const ACCENT = "#FF683D";
 /** 핀 탭 직후 지도 click이 새어 들어와도 기준점 찍기로 처리하지 않는 시간 */
 const PIN_TAP_GUARD_MS = 400;
+/** 이 레벨 이하(더 확대)면 점 대신 카테고리·평점 칩을 보여준다 */
+const CHIP_MAX_LEVEL = 4;
+const TOP_RATING = 4;
+
+const GLYPH: Record<CategoryGroup, string> = {
+  korean: "🍚",
+  chinese: "🥟",
+  japanese: "🍣",
+  western: "🍝",
+  asian: "🍜",
+  snack: "🍔",
+  bar: "🍺",
+  dessert: "🍰",
+  etc: "🍴",
+};
+
+/** 확대했을 때 칩 글자: "🍚 4.3" (평점이 없으면 아이콘만) */
+function chipText(p: ApiPlace): string {
+  const r = p.detail?.rating ?? null;
+  return r === null ? GLYPH[p.group] : `${GLYPH[p.group]} ${r.toFixed(1)}`;
+}
 
 type Props = {
   center: LatLng;
@@ -31,6 +52,8 @@ export function MapView({ center, radius, places, selectedId, pickMode, onPick, 
   const [ready, setReady] = useState(false);
   const [failed, setFailed] = useState(false);
   const [attempt, setAttempt] = useState(0);
+  // 확대 수준에 따라 핀 모양만 CSS로 바꾼다 (오버레이는 다시 만들지 않는다)
+  const [near, setNear] = useState(false);
 
   // SDK 이벤트 리스너는 한 번만 등록하므로 최신 콜백은 ref로 읽는다
   useEffect(() => {
@@ -73,6 +96,7 @@ export function MapView({ center, radius, places, selectedId, pickMode, onPick, 
         const dot = document.createElement("div");
         dot.className = "center-pin";
         const pin = new kakao.maps.CustomOverlay({ map: m, position: pos, content: dot, zIndex: 3 });
+        kakao.maps.event.addListener(m, "zoom_changed", () => setNear(m.getLevel() <= CHIP_MAX_LEVEL));
         kakao.maps.event.addListener(m, "click", (e: any) => {
           if (Date.now() - lastPinTap.current < PIN_TAP_GUARD_MS) return;
           if (handlers.current.pickMode) handlers.current.onPick({ lat: e.latLng.getLat(), lng: e.latLng.getLng() });
@@ -95,6 +119,7 @@ export function MapView({ center, radius, places, selectedId, pickMode, onPick, 
         circle.current = c;
         centerPin.current = pin;
         fitCircle();
+        setNear(m.getLevel() <= CHIP_MAX_LEVEL);
         setReady(true);
       })
       .catch((e) => {
@@ -146,6 +171,10 @@ export function MapView({ center, radius, places, selectedId, pickMode, onPick, 
         btn.className = "pin";
         btn.dataset.name = p.name;
         btn.setAttribute("aria-label", p.name);
+        const chip = document.createElement("span");
+        chip.className = "pin-chip";
+        chip.setAttribute("aria-hidden", "true");
+        btn.appendChild(chip);
         btn.addEventListener("click", (ev) => {
           ev.stopPropagation();
           lastPinTap.current = Date.now();
@@ -161,10 +190,15 @@ export function MapView({ center, radius, places, selectedId, pickMode, onPick, 
         existing.set(p.id, ov);
       }
       const selected = p.id === selectedId;
+      const top = (p.detail?.rating ?? 0) >= TOP_RATING;
       const node = ov.getContent() as HTMLElement;
-      // 클래스가 새로 붙을 때만 펄스 애니메이션이 돈다
+      // 바뀐 것만 건드린다. 클래스가 새로 붙을 때만 펄스 애니메이션이 돈다
       if (node.classList.contains("pin--selected") !== selected) node.classList.toggle("pin--selected", selected);
-      ov.setZIndex(selected ? 10 : 1);
+      if (node.classList.contains("pin--top") !== top) node.classList.toggle("pin--top", top);
+      const text = chipText(p);
+      const chip = node.firstChild as HTMLElement;
+      if (chip.textContent !== text) chip.textContent = text;
+      ov.setZIndex(selected ? 10 : top ? 2 : 1);
     }
   }, [ready, places, selectedId]);
 
@@ -181,13 +215,16 @@ export function MapView({ center, radius, places, selectedId, pickMode, onPick, 
 
   return (
     <>
-      <div ref={el} className="map" />
+      {/* 지도 컨테이너의 class는 SDK 몫이라 건드리지 않고, 핀 모양 전환 class는 감싸는 요소에 둔다 */}
+      <div className={`map-zoom${near ? " is-near" : ""}`}>
+        <div ref={el} className="map" />
+      </div>
       {failed && (
         <div className="map-fallback">
           <p>지도를 불러오지 못했어요</p>
           <button
             type="button"
-            className="btn-ghost"
+            className="btn-tint neutral"
             onClick={() => {
               setFailed(false);
               setAttempt((a) => a + 1);
