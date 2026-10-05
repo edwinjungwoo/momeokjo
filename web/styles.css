@@ -747,6 +747,9 @@ input[type="range"] { width: 100%; height: 44px; margin: 0; accent-color: var(--
   animation: pin-pulse 0.7s ease-out 1;
 }
 [data-zoom] .pin--pick .pin-chip { display: none; }
+/* R28: 가까이서 평점 높은 칩과 겹치는 칩은 점으로 (MapView가 확대·이동이 끝날 때 다시 계산, shared/labels.ts keptChips) */
+[data-zoom] .pin--nochip:not(.pin--pick):not(.pin--selected) .pin-chip { display: none; }
+[data-zoom] .pin--nochip:not(.pin--pick):not(.pin--selected)::before { display: block; }
 .pin--focus::before,
 [data-zoom] .pin--focus::before { width: 30px; height: 30px; font-size: 14px; animation: pin-pulse-focus 0.7s ease-out 1; }
 /* R22′: 다른 번호의 이름표와 겹치는 낮은 번호 이름표는 숨긴다 (번호 배지는 남는다, MapView가 확대·이동 뒤 다시 계산) */

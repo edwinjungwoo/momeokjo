@@ -112,3 +112,54 @@ export function layoutPicks(
   }
   return { hidden, shift, order };
 }
+
+/** R28: 평점 칩 상자 (컨테이너 px) */
+export type ChipBox = LabelBox & {
+  rating: number | null;
+  reviews: number | null;
+  /** 선택한 핀 — 평점과 상관없이 먼저 놓는다 */
+  pinned?: boolean;
+};
+
+/** 겹침을 찾는 격자 한 칸(px). 칩(~50×22)보다 조금 커서 칩 하나가 보통 1~2칸에 든다 */
+const CELL = 64;
+
+/**
+ * R28: 가까이 본 지도에서 서로 덮지 않게 남길 칩 id (나머지는 점으로 그린다).
+ * 순서: 선택한 핀 → 평점 높은 순 → 리뷰 많은 순 → id. 앞에 놓인 칩이나 장애물(뽑힌 핀의 배지·이름표)과 겹치면 뺀다.
+ * 격자 칸에 놓인 상자만 비교해서 정렬(n log n) + 칸 조회로 끝난다
+ */
+export function keptChips(chips: ChipBox[], obstacles: LabelBox[]): Set<string> {
+  const grid = new Map<number, LabelBox[]>();
+  // 칸 번호 하나로: 화면 크기(수천 px)보다 넉넉한 폭으로 행·열을 섞는다
+  const key = (cx: number, cy: number) => cy * 100_003 + cx;
+  const cells = (b: LabelBox, f: (k: number) => boolean | void): boolean => {
+    const x0 = Math.floor(b.x / CELL), x1 = Math.floor((b.x + b.w) / CELL);
+    const y0 = Math.floor(b.y / CELL), y1 = Math.floor((b.y + b.h) / CELL);
+    for (let cy = y0; cy <= y1; cy++) for (let cx = x0; cx <= x1; cx++) if (f(key(cx, cy))) return true;
+    return false;
+  };
+  const put = (b: LabelBox) => {
+    cells(b, (k) => {
+      const list = grid.get(k);
+      if (list) list.push(b);
+      else grid.set(k, [b]);
+    });
+  };
+  const hits = (b: LabelBox) => cells(b, (k) => grid.get(k)?.some((o) => near(o, b, 0)));
+  for (const o of obstacles) put(o);
+  const sorted = [...chips].sort(
+    (a, b) =>
+      Number(!!b.pinned) - Number(!!a.pinned) ||
+      (b.rating ?? -1) - (a.rating ?? -1) ||
+      (b.reviews ?? -1) - (a.reviews ?? -1) ||
+      (a.id < b.id ? -1 : a.id > b.id ? 1 : 0),
+  );
+  const kept = new Set<string>();
+  for (const c of sorted) {
+    if (!c.pinned && hits(c)) continue;
+    put(c);
+    kept.add(c.id);
+  }
+  return kept;
+}

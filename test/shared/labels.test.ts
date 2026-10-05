@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
-  LABEL_EDGE, PICK_BADGE, PICK_LABEL, clampLabelX, hiddenLabels, layoutPicks, pickBadgeBox, pickLabelBox, type LabelBox,
+  LABEL_EDGE, PICK_BADGE, PICK_LABEL, clampLabelX, hiddenLabels, keptChips, layoutPicks, pickBadgeBox, pickLabelBox,
+  type ChipBox, type LabelBox,
 } from "../../shared/labels";
 
 const box = (id: string, x: number, y: number, w = 80, h = 26): LabelBox => ({ id, x, y, w, h });
@@ -103,5 +104,48 @@ describe("R22′ 지도 이름표 겹침", () => {
     const badges = [box("1", 150, 110, 28, 28), box("2", 166, 140, 28, 28)];
     const r = layoutPicks(labels, badges, { width: 600, focusId: "2" });
     expect(r.order).toEqual(["1", "2"]);
+  });
+});
+
+const chip = (id: string, x: number, y: number, rating: number | null, reviews: number | null = 0, w = 50, h = 22): ChipBox => ({
+  id, x, y, w, h, rating, reviews,
+});
+
+describe("R28 가까이 본 지도의 평점 칩 겹침", () => {
+  it("R28: 평점 높은 칩부터 놓고, 이미 놓인 칩과 겹치는 칩은 점으로 둔다", () => {
+    const kept = keptChips([chip("low", 10, 0, 3.9), chip("high", 0, 0, 4.6), chip("far", 200, 0, 3.0)], []);
+    expect(kept).toEqual(new Set(["high", "far"]));
+  });
+
+  it("R28: 평점이 같으면 리뷰 많은 칩이 남고, 평점 없는 칩은 맨 뒤", () => {
+    expect(keptChips([chip("a", 0, 0, 4.5, 10), chip("b", 20, 0, 4.5, 300)], [])).toEqual(new Set(["b"]));
+    expect(keptChips([chip("none", 0, 0, null, 999), chip("rated", 20, 0, 3.1, 1)], [])).toEqual(new Set(["rated"]));
+  });
+
+  it("R28: 뽑힌 핀의 배지·이름표와 겹치는 칩은 점으로 둔다", () => {
+    const obstacles = [box("1", 100, 100, 120, 26)];
+    expect(keptChips([chip("a", 150, 110, 4.9), chip("b", 0, 0, 3.0)], obstacles)).toEqual(new Set(["b"]));
+  });
+
+  it("R28: 선택한 핀(pinned)은 평점과 상관없이 먼저 놓는다", () => {
+    expect(keptChips([chip("top", 0, 0, 4.9), { ...chip("sel", 10, 0, 2.0), pinned: true }], [])).toEqual(new Set(["sel"]));
+  });
+
+  it("R28: 모서리만 닿는 칩은 겹친 것이 아니다, 칸(64px) 경계를 넘는 큰 칩도 겹침을 찾는다", () => {
+    expect(keptChips([chip("a", 0, 0, 4), chip("b", 50, 0, 3)], [])).toEqual(new Set(["a", "b"]));
+    expect(keptChips([chip("wide", 0, 0, 4, 0, 300, 22), chip("b", 250, 10, 3)], [])).toEqual(new Set(["wide"]));
+    // 음수 좌표(화면 왼쪽 위 밖)도 같은 칸 계산
+    expect(keptChips([chip("a", -70, -70, 4), chip("b", -60, -60, 3)], [])).toEqual(new Set(["a"]));
+  });
+
+  it("R28: 900곳도 결과가 결정적이다 (같은 입력이면 같은 결과)", () => {
+    let seed = 7;
+    const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+    const many = Array.from({ length: 900 }, (_, i) => chip(`p${i}`, rnd() * 400, rnd() * 800, Math.round(rnd() * 20 + 30) / 10, Math.floor(rnd() * 500)));
+    const a = keptChips(many, []);
+    const b = keptChips([...many].reverse(), []);
+    expect(a).toEqual(b);
+    expect(a.size).toBeGreaterThan(20);
+    expect(a.size).toBeLessThan(900);
   });
 });

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { layoutPicks, pickBadgeBox, pickLabelBox } from "../../shared/labels";
+import { keptChips, layoutPicks, pickBadgeBox, pickLabelBox, type ChipBox, type LabelBox } from "../../shared/labels";
 import type { ApiPlace, CategoryGroup, LatLng } from "../../shared/types";
 import { loadKakaoMaps } from "../kakaoLoader";
 
@@ -55,6 +55,22 @@ function labelTextWidth(text: string, fontFamily: string): number {
   return measureCtx.measureText(text).width;
 }
 
+/** R28: 칩 글자 너비 (.pin-chip 11px 굵기 700, 선택한 핀은 12px). 글자 종류가 적어서(아이콘 × 평점) 한 번 잰 값을 다시 쓴다 */
+const chipWidths = new Map<string, number>();
+function chipTextWidth(text: string, px: number, fontFamily: string): number {
+  const key = `${px}|${text}`;
+  let w = chipWidths.get(key);
+  if (w === undefined) {
+    measureCtx ??= document.createElement("canvas").getContext("2d");
+    if (measureCtx) {
+      measureCtx.font = `700 ${px}px ${fontFamily}`;
+      w = measureCtx.measureText(text).width;
+    } else w = text.length * px;
+    chipWidths.set(key, w);
+  }
+  return w;
+}
+
 /** R28: 거점 핀, 반경 원(점선), 후보 핀(CustomOverlay 버튼). 선택된 핀은 커지고 한 번 퍼진다. */
 export function MapView({ center, radius, places, selectedId, picks, focusId, onSelect }: Props) {
   const el = useRef<HTMLDivElement>(null);
@@ -69,6 +85,13 @@ export function MapView({ center, radius, places, selectedId, picks, focusId, on
   const focusRef = useRef<string | null>(focusId);
   /** 이름표를 가로로 민(--label-dx) 핀 id */
   const shifted = useRef(new Set<string>());
+  const placesRef = useRef(new Map<string, ApiPlace>());
+  const selectedRef = useRef<string | null>(selectedId);
+  /** 칩이 겹칠 때 피할 상자: 보이는 이름표(민 자리)와 번호 배지, 선택한 핀의 이름표 */
+  const pickObstacles = useRef<LabelBox[]>([]);
+  /** 칩 대신 점으로 그리는 핀 id (.pin--nochip) */
+  const noChip = useRef(new Set<string>());
+  const layoutChips = useRef(() => {});
   const layoutLabels = useRef(() => {});
   const [ready, setReady] = useState(false);
   const [failed, setFailed] = useState(false);
@@ -121,8 +144,12 @@ export function MapView({ center, radius, places, selectedId, picks, focusId, on
           setZoom(zoomOf(m.getLevel()));
           layoutLabels.current();
         });
-        // 확대·이동이 끝나면 이름표 겹침을 다시 본다 (확대하면 떨어져서 다시 보일 수 있다)
-        kakao.maps.event.addListener(m, "idle", () => layoutLabels.current());
+        // 확대·이동이 끝나면 이름표 겹침을 다시 본다 (확대하면 떨어져서 다시 보일 수 있다).
+        // 칩 겹침은 핀 수백 개를 훑으므로 확대 중 매 프레임(zoom_changed)이 아니라 끝났을 때(idle)만 다시 계산한다
+        kakao.maps.event.addListener(m, "idle", () => {
+          layoutLabels.current();
+          layoutChips.current();
+        });
         let lastWidth = node.clientWidth;
         const observer = new ResizeObserver(() => {
           if (!hasSize(node)) return;
@@ -214,6 +241,69 @@ export function MapView({ center, radius, places, selectedId, picks, focusId, on
     }
     // 쌓는 순서: 위부터 10, 9, 8 (펼친 후보가 맨 위면 12)
     order.forEach((id, i) => overlays.current.get(id)?.setZIndex(i === 0 && id === focusRef.current ? 12 : 10 - i));
+    // 칩이 피할 상자: 보이는 이름표(펼친 후보가 있으면 그것만, 민 자리)와 번호 배지
+    const focus = focusRef.current;
+    const obstacles: LabelBox[] = [...badges];
+    for (const b of boxes) {
+      const visible = focus ? b.id === focus : !hide.has(b.id);
+      if (visible) obstacles.push({ ...b, x: b.x + (shift.get(b.id) ?? 0) });
+    }
+    // 뽑히지 않은 선택 핀의 이름표 (.pin--selected::after)
+    const sel = selectedRef.current;
+    const selOv = sel && !picksRef.current.includes(sel) ? overlays.current.get(sel) : undefined;
+    if (selOv) {
+      const pt = proj.containerPointFromCoords(selOv.getPosition());
+      const name = (selOv.getContent() as HTMLElement).dataset.name ?? "";
+      obstacles.push(pickLabelBox(sel!, { x: pt.x, y: pt.y }, labelTextWidth(name, font)));
+    }
+    pickObstacles.current = obstacles;
+  };
+
+  // R28: 가까이(near, mid는 평점 높은 곳·선택만) 본 지도에서 서로 덮는 평점 칩은 평점·리뷰 순으로 하나만 남기고 나머지는 점으로 그린다.
+  // 화면 안 핀만 보고(shared/labels.ts keptChips, 격자 칸), 바뀐 핀의 클래스만 건드린다. 걸린 시간은 performance 측정 "mmj:chips"
+  layoutChips.current = () => {
+    const m = map.current;
+    const node = el.current;
+    if (!m || !node || typeof m.getProjection !== "function") return;
+    const t0 = performance.now();
+    const z = zoomOf(m.getLevel());
+    const want = new Map<string, boolean>();
+    if (z !== "far") {
+      const proj = m.getProjection();
+      const W = node.clientWidth;
+      const H = node.clientHeight;
+      const font = getComputedStyle(node).fontFamily;
+      const picked = new Set(picksRef.current);
+      const sel = selectedRef.current;
+      const chips: ChipBox[] = [];
+      for (const [id, ov] of overlays.current) {
+        if (picked.has(id)) continue;
+        const p = placesRef.current.get(id);
+        if (!p) continue;
+        const rating = p.detail?.rating ?? null;
+        const selected = id === sel;
+        if (z === "mid" && !selected && (rating ?? 0) < TOP_RATING) continue;
+        const pt = proj.containerPointFromCoords(ov.getPosition());
+        if (pt.x < -80 || pt.x > W + 80 || pt.y < -40 || pt.y > H + 40) continue;
+        // .pin-chip: 좌우 여백 7(선택 9) + 테두리 1, 높이 16 + 위아래 2(선택 3) + 테두리 1
+        const w = chipTextWidth(chipText(p), selected ? 12 : 11, font) + (selected ? 20 : 16);
+        const h = selected ? 24 : 22;
+        chips.push({ id, x: pt.x - w / 2, y: pt.y - h / 2, w, h, rating, reviews: p.detail?.reviewCount ?? null, pinned: selected });
+      }
+      const kept = keptChips(chips, pickObstacles.current);
+      for (const c of chips) want.set(c.id, !kept.has(c.id));
+    }
+    // 멀리서 보면 모두 점이라 표시를 지운다. 화면 밖 핀은 다음 계산까지 그대로 둔다
+    for (const id of noChip.current) if (!want.has(id) && (z === "far" || picksRef.current.includes(id))) want.set(id, false);
+    for (const [id, on] of want) {
+      if (noChip.current.has(id) === on) continue;
+      const pin = overlays.current.get(id)?.getContent() as HTMLElement | undefined;
+      pin?.classList.toggle("pin--nochip", on);
+      if (on) noChip.current.add(id);
+      else noChip.current.delete(id);
+    }
+    performance.clearMeasures?.("mmj:chips");
+    performance.measure?.("mmj:chips", { start: t0 });
   };
 
   // 후보 핀: 바뀐 것만 붙이고 뗀다
@@ -282,7 +372,10 @@ export function MapView({ center, radius, places, selectedId, picks, focusId, on
     }
     picksRef.current = picks;
     focusRef.current = focusId;
+    selectedRef.current = selectedId;
+    placesRef.current = new Map(places.map((p) => [p.id, p]));
     layoutLabels.current();
+    layoutChips.current();
   }, [ready, places, selectedId, picks, focusId]);
 
   // R22′: 새 후보가 뽑히면 먼저 3곳이 다 보이게 맞춘다
