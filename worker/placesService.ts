@@ -36,14 +36,20 @@ export type ListRead = { tileStates: TilePlaceState[]; rows: { row: ListRow; d: 
  */
 export async function readList(db: D1Database, center: LatLng, radiusM: number, keys: string[]): Promise<ListRead> {
   const tileStates = await tilePlaceStates(db, keys);
+  return { tileStates, rows: await readListRows(db, center, radiusM, tileStates) };
+}
+
+/** 이미 읽은 격자-장소 상태로 반경 안 목록 행만 읽는다 (R56 스냅샷은 pending을 먼저 보고 필요할 때만 부른다) */
+export async function readListRows(
+  db: D1Database, center: LatLng, radiusM: number, tileStates: TilePlaceState[],
+): Promise<ListRead["rows"]> {
   const inTiles = new Set(tileStates.map((t) => t.id));
   // 미리 만든 목록 원소 조각(list_json)을 쓴다 — 행마다 JSON 열 4개를 parse·stringify하지 않는다 (0005)
-  const rows = (await listRowsInBox(db, boundingBox(center, radiusM), inTiles))
+  return (await listRowsInBox(db, boundingBox(center, radiusM), inTiles))
     .filter((r) => r.group !== "dessert")
     .map((row) => ({ row, d: haversine(center, row) }))
     .filter((x) => x.d <= radiusM)
     .sort((a, b) => a.d - b.d || (a.row.id < b.row.id ? -1 : a.row.id > b.row.id ? 1 : 0));
-  return { tileStates, rows };
 }
 
 /** 응답 메타 중 실행마다 정하는 것 (나머지 center·radius·detailsNewestAt은 placesPayload가 채운다) */

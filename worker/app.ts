@@ -174,7 +174,9 @@ export function createApp(deps: AppDeps) {
     // R42: 어떤 반경이 와도 1000m 하나만 계산·캐시한다 (거점당 키 하나)
     const key = new Request(placesCacheKey(hub.id));
     const ifNoneMatch = c.req.header("if-none-match");
-    const gzipOk = acceptsGzip(c.req.header("accept-encoding"));
+    // 운영 Cloudflare는 Worker로 오는 Accept-Encoding을 바꿀 수 있다 — 바꿨으면 원래 값이 cf.clientAcceptEncoding에 있다
+    const cf = c.req.raw.cf as { clientAcceptEncoding?: string } | undefined;
+    const gzipOk = acceptsGzip(cf?.clientAcceptEncoding ?? c.req.header("accept-encoding"));
     const hit = await deps.cache?.match(key);
     if (hit && Number(hit.headers.get(EXPIRES_HEADER)) > now()) {
       const etag = hit.headers.get(SNAPSHOT_ETAG_HEADER);

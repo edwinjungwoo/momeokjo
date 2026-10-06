@@ -1,9 +1,9 @@
 import { MAX_RADIUS } from "../shared/constants";
 import { tilesCoveringCircle } from "../shared/geo";
-import type { Hub } from "../shared/hubs";
-import { placesPayload, readList } from "./placesService";
+import { HUBS, type Hub } from "../shared/hubs";
+import { placesPayload, readListRows } from "./placesService";
 import { placesBody } from "./present";
-import { countUnfetchedIn, detailGate, detailsAllowed, frozenSince, getTiles, isTileDue } from "./repo";
+import { countUnfetchedIn, detailGate, detailsAllowed, frozenSince, getTiles, isTileDue, tilePlaceStates } from "./repo";
 import { SNAPSHOT_DIRTY_PREFIX } from "./snapshotDirty";
 
 /**
@@ -27,6 +27,15 @@ export const SNAPSHOT_EDGE_CACHE_MS = 10 * MIN;
 /** 저장하는 본문(base64)의 최대 길이. D1 행 한도(2MB) 안에 넉넉히 (동대문 gzip ≈ 0.2MB) */
 export const SNAPSHOT_MAX_CHARS = 1_500_000;
 const ENCODING = "gzip";
+/**
+ * 만들 수 없었던 거점(pending·tiles·oversize)과 끝나지 못한 시도(CPU 초과로 죽은 실행)를 다시 보기까지 기다리는 시간.
+ * 그동안 Cron은 그 거점의 격자-장소(수천 행)를 다시 읽지 않는다
+ */
+export const SNAPSHOT_SKIP_BACKOFF_MS = 20 * MIN;
+/** meta snapshot_skip:{hub} = 이 시각 전에는 고르지 않는다 (만들기 시작할 때 써 두고, 끝나면 지우거나 그대로 둔다) */
+export const SNAPSHOT_SKIP_PREFIX = "snapshot_skip:";
+/** 기다려야 하는 건너뜀 — 데이터가 바뀌어야 풀리고 판단에 무거운 읽기가 드는 것 (paused·raced는 싸거나 곧 풀려서 기다리지 않는다) */
+const BACKOFF_REASONS: ReadonlySet<SnapshotSkip> = new Set(["pending", "tiles", "oversize"]);
 
 type Base64Bytes = { toBase64(): string };
 const fromBase64 = (s: string): Uint8Array => (Uint8Array as unknown as { fromBase64(s: string): Uint8Array }).fromBase64(s);
@@ -81,8 +90,10 @@ export async function buildHubSnapshot(db: D1Database, hub: Hub, now: number): P
   const keys = tilesCoveringCircle(center, MAX_RADIUS);
   const tiles = await getTiles(db, keys);
   if (keys.some((k) => isTileDue(tiles.get(k), now))) return skip("tiles");
-  const { tileStates, rows } = await readList(db, center, MAX_RADIUS, keys);
+  // pending은 목록(무거운 list_json)을 읽기 전에 본다
+  const tileStates = await tilePlaceStates(db, keys);
   if (countUnfetchedIn(tileStates) > 0) return skip("pending");
+  const rows = await readListRows(db, center, MAX_RADIUS, tileStates);
 
   const { items, ...meta } = placesPayload(center, MAX_RADIUS, rows, {
     pending: 0, incompleteTiles: 0, stale: false, detailsPaused: !detailsAllowed(gate, now), detailsFrozenSince: frozen,
@@ -117,16 +128,16 @@ export function etagMatches(header: string | undefined, etag: string): boolean {
 export async function readHubSnapshot(
   db: D1Database, hub: string, now: number, ifNoneMatch: string | undefined,
 ): Promise<Snapshot | null> {
+  // 판·인코딩·나이를 WHERE에서 걸러서 쓸 수 없는 행은 본문(base64)을 받지 않는다
   const r = await db
     .prepare(
-      `SELECT version, built_at, encoding, etag,
-         CASE WHEN ?2 = '*' OR instr(?2, etag) > 0 THEN NULL ELSE body END AS body
-       FROM hub_snapshots WHERE hub = ?1`,
+      `SELECT built_at, etag, CASE WHEN ?2 = '*' OR instr(?2, etag) > 0 THEN NULL ELSE body END AS body
+       FROM hub_snapshots
+       WHERE hub = ?1 AND version = ?3 AND encoding = '${ENCODING}' AND built_at BETWEEN ?4 AND ?5`,
     )
-    .bind(hub, ifNoneMatch?.trim() || "")
-    .first<{ version: number; built_at: number; encoding: string; etag: string; body: string | null }>();
-  if (!r || r.version !== HUB_SNAPSHOT_VERSION || r.encoding !== ENCODING) return null;
-  if (now < r.built_at || now - r.built_at >= SNAPSHOT_MAX_AGE_MS) return null;
+    .bind(hub, ifNoneMatch?.trim() || "", HUB_SNAPSHOT_VERSION, now - SNAPSHOT_MAX_AGE_MS + 1, now)
+    .first<{ built_at: number; etag: string; body: string | null }>();
+  if (!r) return null;
   if (r.body === null) return { etag: r.etag, builtAt: r.built_at, notModified: true, body: null };
   return { etag: r.etag, builtAt: r.built_at, notModified: false, body: fromBase64(r.body) };
 }
@@ -137,7 +148,10 @@ export function snapshotEdgeTtlMs(builtAt: number, now: number): number {
   return Math.max(1000, Math.floor(Math.min(SNAPSHOT_EDGE_CACHE_MS, left) / 1000) * 1000);
 }
 
-/** Accept-Encoding이 gzip을 받는가 (없으면 받지 않는 것으로 친다 — curl 등). q=0은 거절 */
+/**
+ * Accept-Encoding이 gzip을 받는가 (없으면 받지 않는 것으로 친다 — curl 등). q=0은 거절.
+ * 운영에서는 Cloudflare가 Worker로 오는 Accept-Encoding을 바꿀 수 있어서, 부르는 쪽이 원래 값(request.cf.clientAcceptEncoding)을 먼저 넘긴다
+ */
 export function acceptsGzip(header: string | undefined): boolean {
   let star = false;
   for (const part of (header ?? "").toLowerCase().split(",")) {
@@ -161,6 +175,8 @@ export function snapshotResponse(
 ): Response {
   const headers: Record<string, string> = {
     "content-type": "application/json", "cache-control": "no-store", etag: `W/${etag}`, "x-mmj-source": source,
+    // 같은 주소가 Accept-Encoding에 따라 gzip 바이트이거나 풀린 JSON이다
+    vary: "accept-encoding",
   };
   if (gzipOk) return new Response(body, { headers: { ...headers, "content-encoding": "gzip" }, encodeBody: "manual" });
   const stream = body instanceof Uint8Array ? new Blob([body]).stream() : body;
@@ -176,9 +192,17 @@ export type SnapshotRun = SnapshotBuild | { status: "idle" };
  * R56 Cron: 실행마다 거점 하나만 만든다 (CPU·D1 읽기를 실행마다 나눈다).
  * 고르는 순서: 스냅샷이 없거나 판이 다른 거점(넘겨받은 순서 = 실행마다 돌아가는 hubOrder) →
  * 만료 SNAPSHOT_REFRESH_BEFORE_MS 전이 된 것, 또는 더러운데(표시 ≠ source_at) 만든 지 SNAPSHOT_DIRTY_REBUILD_MS가 지난 것 중 가장 오래된 것.
- * 할 일이 없으면 idle (스냅샷 메타 ≤ 거점 수 행 + 표시 ≤ 거점 수 행만 읽는다).
+ * snapshot_skip:{hub}가 지금보다 뒤인 거점은 고르지 않는다 (SNAPSHOT_SKIP_BACKOFF_MS).
+ * 만들기 전에 그 표시를 지금 + SNAPSHOT_SKIP_BACKOFF_MS로 써 둔다 — 실행이 CPU 초과로 죽으면 표시가 남아 매 실행 다시 시도하지 않는다.
+ * 만들었거나 기다릴 필요가 없는 건너뜀(paused·raced)이면 지운다.
+ * 처음에 거점 목록(HUBS)에 없는 거점과 SNAPSHOT_MAX_AGE_MS가 지난(또는 미래 시각) 행을 지운다.
+ * 할 일이 없으면 idle (스냅샷 메타 ≤ 거점 수 행 + 표시 ≤ 2 × 거점 수 행만 읽는다).
  */
 export async function maintainSnapshots(db: D1Database, hubs: Hub[], now: number): Promise<SnapshotRun> {
+  await db
+    .prepare("DELETE FROM hub_snapshots WHERE built_at <= ? OR built_at > ? OR hub NOT IN (SELECT value FROM json_each(?))")
+    .bind(now - SNAPSHOT_MAX_AGE_MS, now, JSON.stringify(HUBS.map((h) => h.id)))
+    .run();
   if (hubs.length === 0) return { status: "idle" };
   const marks = hubs.map(() => "?").join(",");
   const metas = await db
@@ -186,13 +210,15 @@ export async function maintainSnapshots(db: D1Database, hubs: Hub[], now: number
     .bind(...hubs.map((h) => h.id))
     .all<{ hub: string; version: number; built_at: number; source_at: number }>();
   const stamps = await db
-    .prepare(`SELECT key, value FROM meta WHERE key IN (${marks})`)
-    .bind(...hubs.map((h) => SNAPSHOT_DIRTY_PREFIX + h.id))
+    .prepare(`SELECT key, value FROM meta WHERE key IN (${marks}, ${marks})`)
+    .bind(...hubs.map((h) => SNAPSHOT_DIRTY_PREFIX + h.id), ...hubs.map((h) => SNAPSHOT_SKIP_PREFIX + h.id))
     .all<{ key: string; value: string }>();
+  const metaNum = (key: string) => Number(stamps.results.find((x) => x.key === key)?.value ?? 0) || 0;
   let pick: { hub: Hub; rank: number; builtAt: number } | null = null;
   for (const hub of hubs) {
     const m = metas.results.find((x) => x.hub === hub.id);
-    const stamp = Number(stamps.results.find((x) => x.key === SNAPSHOT_DIRTY_PREFIX + hub.id)?.value ?? 0) || 0;
+    if (metaNum(SNAPSHOT_SKIP_PREFIX + hub.id) > now) continue;
+    const stamp = metaNum(SNAPSHOT_DIRTY_PREFIX + hub.id);
     let rank: number | null = null;
     if (!m || m.version !== HUB_SNAPSHOT_VERSION) rank = 0;
     else {
@@ -205,5 +231,14 @@ export async function maintainSnapshots(db: D1Database, hubs: Hub[], now: number
     const builtAt = m?.built_at ?? -Infinity;
     if (!pick || rank < pick.rank || (rank === pick.rank && builtAt < pick.builtAt)) pick = { hub, rank, builtAt };
   }
-  return pick ? buildHubSnapshot(db, pick.hub, now) : { status: "idle" };
+  if (!pick) return { status: "idle" };
+  const skipKey = SNAPSHOT_SKIP_PREFIX + pick.hub.id;
+  await db.prepare(META_SET).bind(skipKey, String(now + SNAPSHOT_SKIP_BACKOFF_MS)).run();
+  const r = await buildHubSnapshot(db, pick.hub, now);
+  if (r.status === "built" || !BACKOFF_REASONS.has(r.reason)) {
+    await db.prepare("DELETE FROM meta WHERE key = ?").bind(skipKey).run();
+  }
+  return r;
 }
+
+const META_SET = "INSERT INTO meta (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value";

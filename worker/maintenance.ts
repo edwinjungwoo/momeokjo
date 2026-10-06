@@ -75,8 +75,6 @@ export type CronResult = {
   listJsonFilled?: number;
   /** R38: 오늘 D1 읽기가 소프트 한도를 넘어 수집·보충을 건너뛰었다 */
   skipped?: "read_budget";
-  /** R56: 이번 실행이 만든(또는 건너뛴) 거점 스냅샷 하나 */
-  snapshot?: SnapshotRun | { status: "error" };
 };
 
 /**
@@ -94,17 +92,42 @@ export async function runScheduled(
   const usage: D1Usage = { read: 0, written: 0 };
   const db = meteredDb(env.DB, usage);
   try {
-    const result = await maintain(env, db, opts);
-    // R56: 수집·보충 뒤에 거점 스냅샷 하나를 만든다 (이번 실행의 보충까지 담기게). 읽기 예산을 넘은 날에도 만든다 —
-    // 스냅샷이 있으면 엣지 캐시 미스가 수천 행 대신 1행만 읽는다
-    result.snapshot = await maintainSnapshots(db, hubOrder(opts.hubs ?? HUBS, opts.now), opts.now).catch((e) => {
-      console.error("hub snapshot failed", e);
-      return { status: "error" as const };
-    });
-    return result;
+    return await maintain(env, db, opts);
   } finally {
     await recordD1Usage(env.DB, usage, opts.now).catch((e) => console.error("d1 usage record failed", e));
   }
+}
+
+/** wrangler.jsonc triggers.crons — 본 Cron(수집·보충)과 R56 스냅샷 Cron(2분 어긋나게). 바꾸면 둘 다 바꾼다 */
+export const MAIN_CRON = "*/5 * * * *";
+export const SNAPSHOT_CRON = "2-59/5 * * * *";
+
+export type SnapshotCronResult = SnapshotRun | { status: "read_budget" };
+
+/**
+ * R56: 거점 스냅샷 하나를 만드는 Cron (본 Cron과 다른 실행 — CPU 한도를 따로 쓰고, 만들다 CPU 초과로 죽어도
+ * 본 Cron의 사용량 기록은 잃지 않는다). 외부 호출은 없다. 이 실행의 D1 사용량도 따로 기록한다.
+ * R38: 오늘 읽기가 소프트 한도를 넘었으면 만들지 않는다 (스냅샷이 없으면 미스는 지금 경로로 답한다).
+ */
+export async function runSnapshotCron(env: Env, opts: { now: number; hubs?: Hub[] }): Promise<SnapshotCronResult> {
+  const usage: D1Usage = { read: 0, written: 0 };
+  const db = meteredDb(env.DB, usage);
+  try {
+    if (await overReadBudget(db, env, opts.now)) return { status: "read_budget" };
+    return await maintainSnapshots(db, hubOrder(opts.hubs ?? HUBS, opts.now), opts.now);
+  } finally {
+    await recordD1Usage(env.DB, usage, opts.now).catch((e) => console.error("d1 usage record failed", e));
+  }
+}
+
+export type CronRun = { cron: "maintain"; result: CronResult } | { cron: "snapshot"; result: SnapshotCronResult };
+
+/** scheduled 입구: controller.cron으로 나눈다. 모르는 값(로컬 /__scheduled 등)은 본 Cron */
+export async function runCron(
+  cron: string, env: Env, opts: { fetcher: FetchFn; now: number; sleep?: (ms: number) => Promise<void>; hubs?: Hub[] },
+): Promise<CronRun> {
+  if (cron === SNAPSHOT_CRON) return { cron: "snapshot", result: await runSnapshotCron(env, opts) };
+  return { cron: "maintain", result: await runScheduled(env, opts) };
 }
 
 async function maintain(

@@ -1,21 +1,25 @@
 import { applyD1Migrations, env } from "cloudflare:test";
 import { beforeEach, describe, expect, it } from "vitest";
-import { DETAIL_FREEZE_MS, LIST_JSON_VERSION, PLACE_BLOCK_COOLDOWN_MS, PREWARM_RADIUS, TILE_TTL_MS } from "../../shared/constants";
+import {
+  DETAIL_FREEZE_MS, LIST_JSON_VERSION, MAX_RADIUS, PLACE_BLOCK_COOLDOWN_MS, PREWARM_RADIUS, TILE_TTL_MS,
+} from "../../shared/constants";
 import { tileKeyOf, tilesCoveringCircle } from "../../shared/geo";
 import { HUBS, hubById, type Hub } from "../../shared/hubs";
 import { utcDay } from "../../shared/kst";
 import { PLACES_CACHE_MS, PLACES_CACHE_VERSION, createApp, placesCacheKey } from "../../worker/app";
 import {
   HUB_SNAPSHOT_VERSION, SNAPSHOT_DIRTY_REBUILD_MS, SNAPSHOT_EDGE_CACHE_MS, SNAPSHOT_MAX_AGE_MS, SNAPSHOT_REFRESH_BEFORE_MS,
-  acceptsGzip, buildHubSnapshot, etagMatches, maintainSnapshots, readHubSnapshot, snapshotEdgeTtlMs,
+  SNAPSHOT_SKIP_BACKOFF_MS, SNAPSHOT_SKIP_PREFIX, acceptsGzip, buildHubSnapshot, etagMatches, maintainSnapshots, readHubSnapshot, snapshotEdgeTtlMs,
 } from "../../worker/hubSnapshot";
 import { hubsOfTile } from "../../worker/hubTiles";
-import { runScheduled } from "../../worker/maintenance";
+import { MAIN_CRON, SNAPSHOT_CRON, runCron, runSnapshotCron } from "../../worker/maintenance";
 import { markTile, recordPlaceBlock, replaceTilePlaces, saveDetail, saveDetailFailure } from "../../worker/repo";
 import { SNAPSHOT_DIRTY_PREFIX, markHubsDirtyStmt } from "../../worker/snapshotDirty";
 import { callApp } from "../helpers/callApp";
+import { recordingDb } from "../helpers/recordDb";
 import { doc, fakeKakaoLocal, fakePlaceApi, routeFetch } from "../helpers/fakeKakao";
 import { makeSummary, markOuterTilesFresh, placeJson, sampleDetail } from "../helpers/places";
+import wranglerConfig from "../../wrangler.jsonc?raw";
 
 const NOW = 1_800_000_000_000;
 const HUB = hubById("bongeunsa");
@@ -433,15 +437,173 @@ describe("R56 거점 스냅샷 — Cron", () => {
     expect(await maintainSnapshots(env.DB, hubs, t + 5)).toMatchObject({ status: "built", hub: "bongeunsa" });
   });
 
-  it("R56: Cron 실행 결과에 스냅샷 한 거점의 결과가 실린다 (읽기 예산을 넘은 날에도 만든다)", async () => {
+  it("R56: 스냅샷 Cron은 따로 돈다 — 본 Cron(MAIN_CRON)은 수집·보충만, 스냅샷 Cron(SNAPSHOT_CRON)은 외부 호출 없이 한 거점만 만든다", async () => {
+    expect(wranglerConfig).toContain(`"${MAIN_CRON}"`);
+    expect(wranglerConfig).toContain(`"${SNAPSHOT_CRON}"`);
     for (const h of HUBS) for (const k of tilesCoveringCircle(h, PREWARM_RADIUS)) await markTile(env.DB, k, NOW, 0, false);
     const local = fakeKakaoLocal([]);
-    const r = await runScheduled(env, { fetcher: local.fetcher, now: NOW, sleep: async () => {} });
-    expect(r.snapshot).toMatchObject({ status: "built", hub: r.order[0] });
+    const opts = { fetcher: local.fetcher, now: NOW, sleep: async () => {} };
+    const main = await runCron(MAIN_CRON, env, opts);
+    expect(main.cron).toBe("maintain");
+    expect(main.result).toHaveProperty("order");
+    expect(await env.DB.prepare("SELECT count(*) AS c FROM hub_snapshots").first<{ c: number }>()).toEqual({ c: 0 });
+    // 모르는 cron 문자열(로컬 /__scheduled 등)은 본 Cron
+    expect((await runCron("* * * * *", env, opts)).cron).toBe("maintain");
+    const fetchedBefore = local.calls.length;
+    const snap = await runCron(SNAPSHOT_CRON, env, opts);
+    expect(snap).toMatchObject({ cron: "snapshot", result: { status: "built" } });
+    expect(local.calls.length).toBe(fetchedBefore);
+    expect(await env.DB.prepare("SELECT count(*) AS c FROM hub_snapshots").first<{ c: number }>()).toEqual({ c: 1 });
+  });
+
+  it("R38/R56: 스냅샷 Cron은 자기 D1 사용량을 따로 기록하고, 읽기 예산을 넘은 날에는 만들지 않는다", async () => {
+    for (const h of HUBS) for (const k of tilesCoveringCircle(h, PREWARM_RADIUS)) await markTile(env.DB, k, NOW, 0, false);
+    const read = async () =>
+      Number((await env.DB.prepare("SELECT value FROM meta WHERE key = ?").bind(`d1_read:${utcDay(NOW)}`).first<{ value: string }>())?.value ?? 0);
+    expect(await runSnapshotCron(env, { now: NOW })).toMatchObject({ status: "built" });
+    expect(await read()).toBeGreaterThan(0);
     await env.DB.prepare("INSERT OR REPLACE INTO meta (key, value) VALUES (?, '99999999')").bind(`d1_read:${utcDay(NOW)}`).run();
-    const r2 = await runScheduled(env, { fetcher: local.fetcher, now: NOW + 5 * 60_000, sleep: async () => {} });
-    expect(r2.skipped).toBe("read_budget");
-    expect(r2.snapshot).toMatchObject({ status: "built" });
+    await env.DB.prepare("DELETE FROM hub_snapshots").run();
+    expect(await runSnapshotCron(env, { now: NOW + 5 * 60_000 })).toEqual({ status: "read_budget" });
+    expect(await env.DB.prepare("SELECT count(*) AS c FROM hub_snapshots").first<{ c: number }>()).toEqual({ c: 0 });
+  });
+});
+
+describe("R56 Fix wave 11 — 만들 수 없는 거점의 비용 상한", () => {
+  const LIST_SQL = "CASE WHEN substr(list_json";
+  const TP_SQL = "FROM tile_places tp LEFT JOIN places";
+
+  it("R56: pending인 거점은 목록(list_json)을 읽기 전에 건너뛰고, SNAPSHOT_SKIP_BACKOFF_MS 동안 다시 고르지 않는다", async () => {
+    await seedHub();
+    await env.DB.prepare("DELETE FROM places WHERE id = '1002'").run();
+    const a = recordingDb(env.DB);
+    expect(await maintainSnapshots(a.db, [HUB], NOW)).toMatchObject({ status: "skipped", reason: "pending" });
+    expect(a.log.some((l) => l.sql.includes(TP_SQL))).toBe(true);
+    expect(a.log.some((l) => l.sql.includes(LIST_SQL))).toBe(false);
+    // 다음 실행(5분 뒤)은 격자-장소도 다시 읽지 않는다
+    const b = recordingDb(env.DB);
+    expect(await maintainSnapshots(b.db, [HUB], NOW + 5 * 60_000)).toEqual({ status: "idle" });
+    expect(b.log.some((l) => l.sql.includes(TP_SQL))).toBe(false);
+    expect(b.log.reduce((n, l) => n + l.read, 0)).toBeLessThan(50);
+    // 기다린 뒤에는 다시 본다
+    expect(await maintainSnapshots(env.DB, [HUB], NOW + SNAPSHOT_SKIP_BACKOFF_MS)).toMatchObject({ status: "skipped", reason: "pending" });
+  });
+
+  it("R56: 만료 격자로 건너뛴 거점도 기다렸다 다시 보고, 그사이 다른 거점은 만든다", async () => {
+    await seedHub();
+    await markTile(env.DB, tilesCoveringCircle(HUB, PREWARM_RADIUS)[0], NOW - TILE_TTL_MS, 0, false);
+    const ddp = hubById("ddp");
+    for (const k of tilesCoveringCircle(ddp, PREWARM_RADIUS)) await markTile(env.DB, k, NOW, 0, false);
+    expect(await maintainSnapshots(env.DB, [HUB, ddp], NOW)).toMatchObject({ status: "skipped", hub: "bongeunsa", reason: "tiles" });
+    expect(await maintainSnapshots(env.DB, [HUB, ddp], NOW + 1)).toMatchObject({ status: "built", hub: "ddp" });
+    expect(await maintainSnapshots(env.DB, [HUB, ddp], NOW + 2)).toEqual({ status: "idle" });
+  });
+
+  it("R56: 시작 표시를 남기고 만든다 — 끝나지 못한 시도(CPU 초과 등)는 SNAPSHOT_SKIP_BACKOFF_MS 동안 다시 하지 않고, 끝나면 표시를 지운다", async () => {
+    await seedHub();
+    const skipKey = SNAPSHOT_SKIP_PREFIX + "bongeunsa";
+    // 목록을 읽는 중에 죽는 실행
+    const dying = new Proxy(env.DB, {
+      get(target, prop) {
+        if (prop === "prepare") {
+          return (sql: string) => {
+            if (sql.includes(LIST_SQL)) throw new Error("exceeded CPU");
+            return target.prepare(sql);
+          };
+        }
+        const v = Reflect.get(target, prop);
+        return typeof v === "function" ? v.bind(target) : v;
+      },
+    });
+    await expect(maintainSnapshots(dying, [HUB], NOW)).rejects.toThrow("exceeded CPU");
+    const left = await env.DB.prepare("SELECT value FROM meta WHERE key = ?").bind(skipKey).first<{ value: string }>();
+    expect(Number(left?.value)).toBe(NOW + SNAPSHOT_SKIP_BACKOFF_MS);
+    expect(await maintainSnapshots(env.DB, [HUB], NOW + 5 * 60_000)).toEqual({ status: "idle" });
+    expect(await maintainSnapshots(env.DB, [HUB], NOW + SNAPSHOT_SKIP_BACKOFF_MS)).toMatchObject({ status: "built" });
+    expect(await env.DB.prepare("SELECT value FROM meta WHERE key = ?").bind(skipKey).first()).toBeNull();
+  });
+
+  it("R56: 쿨다운(paused)으로 건너뛴 것은 기다리지 않는다 (무거운 읽기 전에 판단해서 싸다)", async () => {
+    await seedHub();
+    await recordPlaceBlock(env.DB, NOW);
+    const a = recordingDb(env.DB);
+    expect(await maintainSnapshots(a.db, [HUB], NOW)).toMatchObject({ status: "skipped", reason: "paused" });
+    expect(a.log.some((l) => l.sql.includes(TP_SQL))).toBe(false);
+    expect(await env.DB.prepare("SELECT value FROM meta WHERE key = ?").bind(SNAPSHOT_SKIP_PREFIX + "bongeunsa").first()).toBeNull();
+  });
+
+  it("R56: 거점 목록에 없는 거점이나 SNAPSHOT_MAX_AGE_MS가 지난 스냅샷 행은 지운다", async () => {
+    await seedHub();
+    await buildHubSnapshot(env.DB, HUB, NOW);
+    await env.DB.prepare("INSERT INTO hub_snapshots SELECT 'gone', version, built_at, source_at, encoding, etag, body FROM hub_snapshots").run();
+    const t = NOW + SNAPSHOT_MAX_AGE_MS;
+    await maintainSnapshots(env.DB, [], t);
+    expect(await env.DB.prepare("SELECT count(*) AS c FROM hub_snapshots").first<{ c: number }>()).toEqual({ c: 0 });
+    await buildHubSnapshot(env.DB, HUB, t);
+    await env.DB.prepare("INSERT INTO hub_snapshots SELECT 'gone', version, built_at, source_at, encoding, etag, body FROM hub_snapshots").run();
+    await maintainSnapshots(env.DB, [], t + 1);
+    const left = await env.DB.prepare("SELECT hub FROM hub_snapshots").all<{ hub: string }>();
+    expect(left.results.map((r) => r.hub)).toEqual(["bongeunsa"]);
+  });
+
+  it("R56: 판이 다르거나 오래된 행은 SQL에서 걸러 본문(base64)을 받지 않는다", async () => {
+    await seedHub();
+    await buildHubSnapshot(env.DB, HUB, NOW);
+    const got: unknown[] = [];
+    const spy = {
+      prepare: (sql: string) => {
+        const s = env.DB.prepare(sql);
+        return {
+          bind: (...a: unknown[]) => {
+            const b = s.bind(...a);
+            return {
+              first: async () => {
+                const r = await b.first();
+                got.push(r);
+                return r;
+              },
+            };
+          },
+        };
+      },
+    } as unknown as D1Database;
+    expect(await readHubSnapshot(spy, "bongeunsa", NOW + SNAPSHOT_MAX_AGE_MS, undefined)).toBeNull();
+    expect(await readHubSnapshot(spy, "bongeunsa", NOW - 1, undefined)).toBeNull();
+    await env.DB.prepare("UPDATE hub_snapshots SET version = version + 1").run();
+    expect(await readHubSnapshot(spy, "bongeunsa", NOW, undefined)).toBeNull();
+    await env.DB.prepare("UPDATE hub_snapshots SET version = ?, encoding = 'br'").bind(HUB_SNAPSHOT_VERSION).run();
+    expect(await readHubSnapshot(spy, "bongeunsa", NOW, undefined)).toBeNull();
+    expect(got).toEqual([null, null, null, null]);
+  });
+
+  it("R56: gzip 판단은 Cloudflare가 바꾸기 전 원래 값(cf.clientAcceptEncoding)을 먼저 본다", async () => {
+    const live = await seedHub();
+    await buildHubSnapshot(env.DB, HUB, NOW);
+    const { app } = makeApp();
+    const plain = await callApp(app, Q, { headers: GZIP, cf: { clientAcceptEncoding: "identity" } } as RequestInit);
+    expect(plain.headers.get("content-encoding")).toBeNull();
+    expect(await plain.text()).toBe(live);
+    const gz = await callApp(app, Q, { headers: { "accept-encoding": "identity" }, cf: { clientAcceptEncoding: "gzip, br" } } as RequestInit);
+    expect(gz.headers.get("content-encoding")).toBe("gzip");
+    expect(await gunzip(gz)).toBe(live);
+  });
+
+  it("R56: 스냅샷 200 응답에는 Vary: Accept-Encoding (gzip이든 아니든, 엣지 적중도)", async () => {
+    await seedHub();
+    await buildHubSnapshot(env.DB, HUB, NOW);
+    const cache = caches.default;
+    await cache.delete(new Request(placesCacheKey("bongeunsa")));
+    const { app } = makeApp(() => NOW, cache);
+    for (const headers of [GZIP, {}, GZIP] as Record<string, string>[]) {
+      const res = await callApp(app, Q, { headers });
+      expect(res.headers.get("vary")?.toLowerCase()).toBe("accept-encoding");
+      await res.arrayBuffer();
+    }
+    await cache.delete(new Request(placesCacheKey("bongeunsa")));
+  });
+
+  it("R56: 스냅샷이 만드는 반경(MAX_RADIUS)과 더러움 표시·Cron이 쓰는 거점 반경(PREWARM_RADIUS)은 같다", () => {
+    expect(MAX_RADIUS).toBe(PREWARM_RADIUS);
   });
 });
 
