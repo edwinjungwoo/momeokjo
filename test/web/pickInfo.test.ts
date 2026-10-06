@@ -19,7 +19,8 @@ describe("R64 모먹죠는 이렇게 골라요", () => {
   it("R64: 기록은 이 기기에만 남는다는 말이 있고, 조건 밖 표시와 영업 중 조건을 말한다", () => {
     const all = PICK_INFO_LINES.join("\n");
     expect(all).toContain("이 기기에만");
-    expect(all).toContain("서버로 보내지 않아요");
+    expect(all).toContain("이 기기에만 남아요");
+    expect(all).toContain("익명 사용 통계");
     expect(all).toContain("'조건 밖'");
     expect(all).toContain("영업 중");
   });
