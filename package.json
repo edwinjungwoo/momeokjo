@@ -6,6 +6,7 @@
     "dev": "vite",
     "build": "vite build",
     "deploy": "vite build && wrangler deploy",
+    "release": "node scripts/deploy.mjs",
     "test": "vitest run",
     "typecheck": "tsc -p tsconfig.json && tsc -p tsconfig.worker.json",
     "cf-typegen": "wrangler types",
