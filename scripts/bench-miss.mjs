@@ -6,6 +6,8 @@
 //   snapshot: 같은 요청을 거점 스냅샷 한 행으로 답하는 경로 (worker/hubSnapshot.ts가 있을 때만)
 //   build: Cron이 스냅샷 한 거점을 만드는 시간 (목록 조회 + 본문 + gzip + 저장)
 // 실행: node scripts/bench-miss.mjs [곳 수=2000] [반복=20]
+// 의존성: miniflare·esbuild는 wrangler·vite가 설치한 것(node_modules 최상위)을 쓴다 — package.json에 따로 두지 않았다.
+//   없으면 `npm i --no-save miniflare esbuild`. 운영 D1에는 붙지 않는다 (Miniflare 로컬 D1만).
 import { build as esbuild } from "esbuild";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
