@@ -22,6 +22,8 @@ export type ServiceDeps = {
   rateLimit: () => Promise<boolean>;
   waitUntil: (p: Promise<unknown>) => void;
   sleep?: (ms: number) => Promise<void>;
+  /** R52: 읽기 전용(개발 서버가 운영 D1에 붙을 때) — 격자 수집·상세 보충·상세 저장을 하지 않는다 */
+  readOnly?: boolean;
 };
 
 /** R12 응답: 메타 필드 + 거리순 목록 원소 JSON 조각 (본문은 present.ts placesBody로 이어 붙인다) */
@@ -41,7 +43,8 @@ export async function getPlaces(
   let incompleteTiles = 0;
   let failedTiles = 0;
   let stale = false;
-  if (due.length > 0) {
+  // R52: 읽기 전용이면 만료된 격자도 저장된 그대로 쓴다 (수집은 운영 Cron 몫 — incompleteTiles로 세지 않아 화면이 다시 부르지 않는다)
+  if (due.length > 0 && !deps.readOnly) {
     if (await allow()) {
       const r = await collectTiles(
         { db: deps.db, fetcher: deps.fetcher, restKey: deps.restKey, budget, now: deps.now }, due, states,
@@ -72,7 +75,8 @@ export async function getPlaces(
   const pending = countUnfetchedIn(tileStates);
   // R10 쿨다운·R44 강등 모드 (meta 2행). frozen이면 응답에 시작 시각을 싣는다
   const gate = await detailGate(deps.db);
-  const detailsPaused = !detailsAllowed(gate, deps.now);
+  // R52: 읽기 전용이면 상세 보충도 멈춘 것으로 알린다 (pending이 줄지 않으니 화면이 폴링하지 않게)
+  const detailsPaused = deps.readOnly === true || !detailsAllowed(gate, deps.now);
   // 요청 제한에 걸리면 보충만 건너뛴다 (pending은 그대로, stale 아님)
   if (pending > 0 && !detailsPaused && budget.left > 0 && (await allow())) {
     deps.waitUntil(
@@ -119,6 +123,12 @@ export async function getPlace(deps: ServiceDeps, id: string): Promise<PlaceResu
   if (!detailsAllowed(await detailGate(deps.db), deps.now)) return { place: null, cacheable: false };
   if (!(await deps.rateLimit())) return { place: null, cacheable: false };
   const r = await fetchPlaceDetail(deps.fetcher, id, { budget: new Budget(3), sleep: deps.sleep });
+  // R52: 읽기 전용이면 성공은 보여주기만 하고(거점 격자 밖 id처럼), 실패·차단 신호도 기록하지 않는다
+  if (deps.readOnly) {
+    return r.ok
+      ? { place: toApiPlace(detailRow(id, r.summary, r.detail, deps.now), { full: true }), stored: false }
+      : { place: null, cacheable: false };
+  }
   if (!r.ok) {
     // 거점 격자에 없는 ID의 실패는 기록하지 않는다 — 아무 숫자로 D1을 키울 수 없게
     const inTiles = r.reason !== "budget" && (await isInTiles(deps.db, id, hubTileKeys()));

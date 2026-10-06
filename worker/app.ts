@@ -17,6 +17,7 @@ import { hubTileKeys } from "./hubTiles";
 import { warmOnce } from "./maintenance";
 import { getPlace, getPlaces, type ServiceDeps } from "./placesService";
 import { placesBody, type PlacesMeta } from "./present";
+import { isReadOnly } from "./readOnly";
 import { ADMIN_BACKFILL_DEFAULT, ADMIN_BACKFILL_MAX, backfillListJsonIn } from "./repo";
 
 /**
@@ -134,7 +135,8 @@ export function createApp(deps: AppDeps) {
     } finally {
       c.executionCtx.waitUntil(
         Promise.allSettled(later)
-          .then(() => recordD1Usage(c.env.DB, usage, now()))
+          // R52: 읽기 전용(개발 서버)이면 사용량을 기록하지 않는다 (운영 D1에 쓰지 않게)
+          .then(() => (isReadOnly(c.env) ? undefined : recordD1Usage(c.env.DB, usage, now())))
           .catch((e) => console.error("d1 usage record failed", e)),
       );
     }
@@ -151,6 +153,7 @@ export function createApp(deps: AppDeps) {
       rateLimit: () => rateLimit(c.env, key),
       waitUntil: (p) => c.var.defer(p),
       sleep: deps.sleep,
+      readOnly: isReadOnly(c.env),
     };
   };
 
@@ -223,6 +226,8 @@ export function createApp(deps: AppDeps) {
 
   // R35: 익명 사용 이벤트. 화면을 막지 않게 항상 본문 없이 답한다
   app.post("/api/events", async (c) => {
+    // R52: 읽기 전용(개발 서버)이면 읽지도 저장하지도 않는다
+    if (isReadOnly(c.env)) return c.body(null, 204);
     // 다른 사이트가 보낸 이벤트는 읽지도 저장하지도 않는다 (화면을 막지 않게 똑같이 204)
     if (!eventOriginAllowed(c.req.header("origin"))) return c.body(null, 204);
     if (Number(c.req.header("content-length") ?? 0) > MAX_EVENT_BODY_BYTES) return c.json({ error: "too_large" }, 400);
@@ -263,7 +268,12 @@ export function createApp(deps: AppDeps) {
     return c.json({ error: "unauthorized" }, 401);
   });
 
+  // R52: 읽기 전용(개발 서버)이면 관리자 쓰기(warm·backfill)는 인자를 보기 전에 403
+  const readOnlyRefusal = (c: Ctx) => (isReadOnly(c.env) ? c.json({ error: "read_only" }, 403) : null);
+
   app.post("/api/admin/warm", async (c) => {
+    const refused = readOnlyRefusal(c);
+    if (refused) return refused;
     const q = AreaQuery.safeParse(c.req.query());
     if (!q.success) return c.json({ error: "invalid_params" }, 400);
     // R38: 오늘 D1 읽기가 소프트 한도를 넘었으면 더 수집하지 않는다 (scripts/warm.mjs는 429에서 멈춘다)
@@ -280,6 +290,8 @@ export function createApp(deps: AppDeps) {
   // R12: 배포 직후 0005 전 행의 list_json을 빨리 채운다 (Cron은 실행마다 200행뿐이라 2~3.5시간 걸린다). scripts/backfill.mjs가 부른다.
   // 외부 호출은 없고, 한 번에 ADMIN_BACKFILL_MAX행까지만 직렬화해서 CPU 10ms 안에 든다.
   app.post("/api/admin/backfill", async (c) => {
+    const refused = readOnlyRefusal(c);
+    if (refused) return refused;
     const q = BackfillQuery.safeParse(c.req.query());
     if (!q.success) return c.json({ error: "invalid_params" }, 400);
     // 이 호출이 읽고 쓴 행 수 (요청 전체 사용량은 미들웨어가 따로 기록한다)
