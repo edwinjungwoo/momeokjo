@@ -75,7 +75,7 @@ describe("GET /api/admin/dashboard", () => {
   it("R60: 잘못된 탭·날짜·거점, 90일 넘는 기간, 미래·뒤집힌 기간은 400", async () => {
     const app = setup();
     for (const q of [
-      "tab=nope", "from=2027-1-1", "to=2027-02-30", "hub=gangnam", "from=2026-10-01&to=2027-01-15",
+      "tab=nope", "from=2027-1-1", "to=2027-02-30", "hub=atlantis", "from=2026-10-01&to=2027-01-15",
       "from=2027-01-10&to=2027-01-16", "from=2027-01-12&to=2027-01-10", "compare=yes",
     ]) {
       expect((await get(app, q)).status, q).toBe(400);

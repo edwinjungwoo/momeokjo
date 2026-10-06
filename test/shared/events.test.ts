@@ -39,7 +39,7 @@ describe("events", () => {
     ).toBe(true);
     const bad = [
       ev({ t: "purchase" }),
-      ev({ hub: "gangnam" }),
+      ev({ hub: "atlantis" }),
       ev({ placeId: "12a" }),
       ev({ placeId: "1234567890123456" }),
       ev({ ts: "now" }),

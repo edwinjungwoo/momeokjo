@@ -329,7 +329,7 @@ describe("GET /api/admin/stats", () => {
     expect((await callApp(app, "/api/admin/stats?days=7")).status).toBe(401);
     expect((await get(app, "?days=0")).status).toBe(400);
     expect((await get(app, "?days=31")).status).toBe(400);
-    expect((await get(app, "?days=7&hub=gangnam")).status).toBe(400);
+    expect((await get(app, "?days=7&hub=atlantis")).status).toBe(400);
   });
 
   it("R36: 최근 N일(오늘 포함, KST)의 일별 사용자·세션·행동, 시간대, 거점, 상위 가게, 전환율을 집계한다", async () => {

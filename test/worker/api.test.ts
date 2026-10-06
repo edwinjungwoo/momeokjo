@@ -54,7 +54,7 @@ function setup(opts: { localStatus?: number; allow?: boolean; details?: Record<s
 
 describe("GET /api/places", () => {
   it.each([
-    ["hub=gangnam&radius=300"],
+    ["hub=atlantis&radius=300"],
     ["hub=bongeunsa&radius=50"],
     ["hub=bongeunsa&radius=1050"],
     ["hub=bongeunsa&radius=325"],

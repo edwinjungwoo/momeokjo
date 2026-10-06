@@ -11,6 +11,10 @@ export const HUBS: Hub[] = [
   { id: "pangyo", name: "판교역", lat: 37.394777, lng: 127.11159 },
   { id: "naebang", name: "내방역", lat: 37.487659, lng: 126.9936 },
   { id: "gwacheon", name: "정부과천청사역", lat: 37.426505, lng: 126.989868 },
+  // 2026-10-06 추가 — 좌표는 카카오 로컬 키워드 검색(SW8 지하철역) 결과
+  { id: "gangnam", name: "강남역", lat: 37.498086, lng: 127.028001 },
+  { id: "yeouido", name: "여의도역", lat: 37.521775, lng: 126.924398 },
+  { id: "gwanghwamun", name: "광화문역", lat: 37.571649, lng: 126.976424 },
 ];
 
 export const DEFAULT_HUB_ID = "bongeunsa";

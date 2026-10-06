@@ -61,7 +61,7 @@ describe("settings", () => {
   });
 
   it("R25: 모르는 거점은 기본 거점으로, 예전 저장값(center, lunch)은 버린다", () => {
-    expect(parseSettings(JSON.stringify({ hubId: "gangnam" })).hubId).toBe("bongeunsa");
+    expect(parseSettings(JSON.stringify({ hubId: "atlantis" })).hubId).toBe("bongeunsa");
     const old = parseSettings(JSON.stringify({ filters: { ...DEFAULT_FILTERS, lunch: 30 }, center: { lat: 37.5, lng: 127 } }));
     expect(old).toEqual(DEFAULT_SETTINGS);
     expect(old).not.toHaveProperty("center");
@@ -134,8 +134,8 @@ describe("settings", () => {
     expect(needsHubPicker({ stored: null, path: "/", query: "?track=1" })).toBe(true);
     expect(needsHubPicker({ stored: null, path: "/", query: "?r=700" })).toBe(true);
     expect(needsHubPicker({ stored: null, path: "/brand", query: "" })).toBe(true);
-    expect(needsHubPicker({ stored: null, path: "/gangnam", query: "" })).toBe(true);
-    expect(needsHubPicker({ stored: null, path: "/", query: "?h=gangnam" })).toBe(true);
+    expect(needsHubPicker({ stored: null, path: "/atlantis", query: "" })).toBe(true);
+    expect(needsHubPicker({ stored: null, path: "/", query: "?h=atlantis" })).toBe(true);
     expect(needsHubPicker({ stored: null, path: "/", query: "?t=abc" })).toBe(true);
     // 거점이 없는 공유 링크(경로 거점·h 없는 t, 예전 p)도 거점을 정하지 않는다 — 받은 시트를 닫은 뒤 묻는다 (showHubPicker)
     expect(needsHubPicker({ stored: null, path: "/", query: "?t=1" })).toBe(true);

@@ -4,23 +4,26 @@ import { tilesCoveringCircle } from "../../shared/geo";
 import { DEFAULT_HUB_ID, HUBS, hubById, isHubId } from "../../shared/hubs";
 
 describe("hubs", () => {
-  it("R24: 거점은 봉은사역(기본), 동대문역사문화공원역, 판교역, 내방역, 정부과천청사역", () => {
+  it("R24: 거점은 봉은사역(기본), 동대문역사문화공원역, 판교역, 내방역, 정부과천청사역, 강남역, 여의도역, 광화문역", () => {
     expect(HUBS).toEqual([
       { id: "bongeunsa", name: "봉은사역", lat: 37.514255, lng: 127.060234 },
       { id: "ddp", name: "동대문역사문화공원역", lat: 37.5651, lng: 127.00749 },
       { id: "pangyo", name: "판교역", lat: 37.394777, lng: 127.11159 },
       { id: "naebang", name: "내방역", lat: 37.487659, lng: 126.9936 },
       { id: "gwacheon", name: "정부과천청사역", lat: 37.426505, lng: 126.989868 },
+      { id: "gangnam", name: "강남역", lat: 37.498086, lng: 127.028001 },
+      { id: "yeouido", name: "여의도역", lat: 37.521775, lng: 126.924398 },
+      { id: "gwanghwamun", name: "광화문역", lat: 37.571649, lng: 126.976424 },
     ]);
     expect(DEFAULT_HUB_ID).toBe("bongeunsa");
     expect(new Set(HUBS.map((h) => h.id)).size).toBe(HUBS.length);
   });
   it("R24: id로 찾고, 모르는 id나 빈 값이면 기본 거점", () => {
     expect(hubById("ddp").name).toBe("동대문역사문화공원역");
-    expect(hubById("gangnam").id).toBe("bongeunsa");
+    expect(hubById("atlantis").id).toBe("bongeunsa");
     expect(hubById(null).id).toBe("bongeunsa");
     expect(isHubId("ddp")).toBe(true);
-    expect(isHubId("gangnam")).toBe(false);
+    expect(isHubId("atlantis")).toBe(false);
   });
 
   it("R24/R43: 거점 id는 URL 경로에 그대로 쓰는 소문자 영숫자(·하이픈)이고 서로 다르다", () => {

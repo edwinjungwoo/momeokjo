@@ -70,7 +70,7 @@ describe("R23′ 3곳 공유", () => {
 
   it("R23: 공유 파라미터 파싱 — 유효한 값만 받는다 (거점은 목록에 있는 id만, lat/lng는 무시)", () => {
     expect(parseShareParams("?t=27531028&h=ddp&r=700")).toEqual({ placeIds: ["27531028"], hubId: "ddp", radius: 700 });
-    expect(parseShareParams("?t=abc&h=gangnam&r=5000")).toEqual({ placeIds: [], hubId: null, radius: null });
+    expect(parseShareParams("?t=abc&h=atlantis&r=5000")).toEqual({ placeIds: [], hubId: null, radius: null });
     expect(parseShareParams("?p=1&lat=37.5&lng=127.05&r=1000")).toEqual({ placeIds: ["1"], hubId: null, radius: 1000 });
     expect(parseShareParams("?h=__proto__").hubId).toBeNull();
     expect(parseShareParams("?r=1050").radius).toBeNull();
