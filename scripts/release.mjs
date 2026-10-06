@@ -247,8 +247,15 @@ export function shouldRollback({ code, summary, fails = [], baseline = [], hubId
   if (summary.fails !== fails.length) {
     return { action: "manual", reason: `스모크 FAIL 줄 ${fails.length}개가 요약(FAIL ${summary.fails})과 달라요`, newFails: [] };
   }
-  const base = new Set(baseline.map(smokeFailKey));
-  const fresh = fails.filter((l) => !base.has(smokeFailKey(l)));
+  // 비교 키에 분류도 넣는다: 같은 확인이라도 데이터 → 코드로 바뀌면(감사 200 미통과 → 감사 500) 새 FAIL
+  const classKeys = (lines) => {
+    const code = new Set(classifySmokeFails(lines, hubIds).code);
+    return (l) => `${code.has(l) ? "code" : "data"}|${smokeFailKey(l)}`;
+  };
+  const baseKey = classKeys(baseline);
+  const base = new Set(baseline.map(baseKey));
+  const failKey = classKeys(fails);
+  const fresh = fails.filter((l) => !base.has(failKey(l)));
   const codeClass = new Set(classifySmokeFails(fails, hubIds).code);
   const codeFails = fresh.filter((l) => codeClass.has(l));
   if (codeFails.length) return { action: "rollback", reason: `배포 전에 없던 FAIL ${codeFails.length}개`, newFails: codeFails };
@@ -443,7 +450,7 @@ export async function runRelease(opts, deps) {
     result: "",
     elapsedMs: 0,
   };
-  const state = { touchedProd: false, deployed: false, listed: false, applyFailed: false, hooksStarted: false };
+  const state = { touchedProd: false, deployed: false, listed: false, applyFailed: false, appliedUnknown: false, hooksStarted: false };
   /** 지난 실행에서 남은 후속 작업과 이번 계획의 후속 작업 */
   const pendingText = deps.readFile(PENDING_HOOKS_FILE);
   const pendingParsed = parsePendingHooks(pendingText);
@@ -452,9 +459,11 @@ export async function runRelease(opts, deps) {
     log(`⚠ ${PENDING_HOOKS_FILE}이(가) 깨졌거나 허용되지 않은 명령(node scripts/<이름>.mjs만 허용)이 있어요 — 맞는 항목 ${carriedHooks.length}개만 써요.`);
     if (!opts.dryRun) {
       try {
-        deps.writeFile(`${PENDING_HOOKS_FILE}.corrupt`, pendingText);
+        // 시작 시각(UTC)을 붙여 여러 번 깨져도 앞의 원본을 덮어쓰지 않는다
+        const corruptPath = `${PENDING_HOOKS_FILE}.corrupt-${new Date(startedAt).toISOString().replace(/[-:]/g, "").replace(/\.\d+Z$/, "Z")}`;
+        deps.writeFile(corruptPath, pendingText);
         deps.writeFile(PENDING_HOOKS_FILE, `${JSON.stringify(carriedHooks, null, 2)}\n`);
-        log(`  원본은 ${PENDING_HOOKS_FILE}.corrupt로 남겼어요. 확인한 뒤 지우세요.`);
+        log(`  원본은 ${corruptPath}로 남겼어요. 확인한 뒤 지우세요.`);
       } catch (e) {
         log(`  ⚠ 원본을 남기지 못했어요 (${e instanceof Error ? e.message : e})`);
       }
@@ -462,10 +471,14 @@ export async function runRelease(opts, deps) {
   }
   const hookKey = (h) => [h.cmd, ...h.args].join(" ");
   let plannedHooks = [];
-  /** 아직 돌리지 못한 후속 작업 중 남길 것: 지난 실행에서 온 것 + 이번에 실제로 적용된 마이그레이션의 것 */
+  /**
+   * 아직 돌리지 못한 후속 작업 중 남길 것: 지난 실행에서 온 것 + 이번에 실제로 적용된 마이그레이션의 것.
+   * 적용이 실패했는데 어디까지 적용됐는지 모르면 남은 마이그레이션 모두의 것 (백필은 여러 번 돌려도 같다)
+   */
   const hooksToKeep = () => {
     const carriedKeys = new Set(carriedHooks.map(hookKey));
-    return plannedHooks.filter((h) => carriedKeys.has(hookKey(h)) || summary.migrationsApplied.includes(h.migration));
+    const applied = state.appliedUnknown ? summary.migrationsPending : summary.migrationsApplied;
+    return plannedHooks.filter((h) => carriedKeys.has(hookKey(h)) || applied.includes(h.migration));
   };
   const saveHooks = (hooks) => {
     try {
@@ -620,7 +633,9 @@ export async function runRelease(opts, deps) {
           summary.migrationsApplied = pending.filter((n) => !left.includes(n));
           if (summary.migrationsApplied.length) log(`  적용 실패 전에 적용된 것: ${summary.migrationsApplied.join(", ")}`);
         } catch (e) {
+          state.appliedUnknown = true;
           log(`  ⚠ 적용 실패 뒤 목록을 다시 읽지 못해 어디까지 적용됐는지 몰라요 (${e instanceof Error ? e.message.split("\n")[0] : e}) — npx wrangler d1 migrations list ${DB_NAME} --remote로 확인하세요`);
+          log("    남은 마이그레이션 모두의 후속 작업을 남겨요 (백필은 여러 번 돌려도 같아요)");
         }
         throw d1Stop(r, "마이그레이션 적용 — 실패한 마이그레이션은 wrangler가 되돌리고 앞의 것은 남아요");
       }
@@ -727,7 +742,7 @@ export async function runRelease(opts, deps) {
     const after = await runSmoke();
     let verdict = shouldRollback({ code: after.code, summary: after.summary, fails: after.fails, baseline: base.fails, hubIds: deps.hubIds });
     summary.smoke = after.summary ? { ...after.summary, newFails: verdict.newFails } : null;
-    let transientNote = "";
+    let transient = 0;
     if (verdict.action === "rollback") {
       // 일시적인 FAIL 하나로 운영을 되돌리지 않게: 기다렸다 한 번 더 돌려 남아 있는 것만 본다
       const first = verdict.newFails;
@@ -736,13 +751,21 @@ export async function runRelease(opts, deps) {
       await deps.sleep(RECHECK_MS);
       const again = await runSmoke();
       verdict = confirmRollback({ first, rerun: again, baseline: base.fails, hubIds: deps.hubIds });
-      if (again.summary) summary.smoke = { ...again.summary, newFails: verdict.newFails };
-      if (verdict.action === "keep") transientNote = ` (일시 FAIL ${first.length}개 — 다시 돌리니 사라짐)`;
+      // 처음 본 새 FAIL은 다시 돌린 뒤에도 요약에 남긴다
+      summary.smoke = { ...(again.summary ?? after.summary), newFails: verdict.newFails, firstNewFails: first };
+      if (verdict.action === "keep") transient = first.length;
     }
     const hooksNote = failedHooks.length ? ` · 후속 작업 실패 ${failedHooks.length}` : "";
+    if (verdict.action === "keep" && transient) {
+      // 롤백하지 않지만 그냥 성공으로 넘기지 않는다 — 간헐적인 문제일 수 있어 사람이 본다
+      summary.result = `일시 FAIL — 확인 필요 (${transient}개, 다시 돌리니 사라짐)${hooksNote}`;
+      log(`  ⚠ ${verdict.reason} — 롤백하지 않지만 간헐적인 문제일 수 있어요. 위 FAIL을 확인하세요.`);
+      log(`    ${rollbackHint}`);
+      return 3;
+    }
     if (verdict.action === "keep") {
       log(`  ok ${verdict.reason}`);
-      const baseNote = `${base.fails.length ? ` (기준 FAIL ${base.fails.length} 그대로)` : ""}${transientNote}`;
+      const baseNote = base.fails.length ? ` (기준 FAIL ${base.fails.length} 그대로)` : "";
       if (failedHooks.length) {
         summary.result = `성공${baseNote} (후속 작업 실패 — 확인 필요)`;
         log(`  ⚠ 후속 작업 ${failedHooks.length}개가 실패했어요 — 위 출력을 보고 손으로 다시 돌리거나 다음 npm run release가 이어서 돌려요`);
@@ -760,7 +783,7 @@ export async function runRelease(opts, deps) {
       return 3;
     }
     if (verdict.action === "manual") {
-      summary.result = `확인 필요 (스모크 결과 불명)${hooksNote}`;
+      summary.result = `확인 필요 (${verdict.reason})${hooksNote}`;
       log(`  ✗ ${verdict.reason} — 자동 롤백은 하지 않아요.`);
       log(`    직접 확인: B=${PROD_URL} scripts/smoke.sh`);
       log(`    ${rollbackHint}`);
@@ -821,7 +844,9 @@ export async function runRelease(opts, deps) {
       commit: summary.commit,
       migrations: state.applyFailed || !summary.migrationsApplied.length ? summary.migrationsPending : summary.migrationsApplied,
       migrationsNote: state.applyFailed
-        ? summary.migrationsApplied.length
+        ? state.appliedUnknown
+          ? "적용 실패 — 적용 여부 불명"
+          : summary.migrationsApplied.length
           ? `적용 실패 — 적용됨: ${summary.migrationsApplied.map((n) => n.replace(/\.sql$/, "")).join(", ")}`
           : "적용 실패"
         : undefined,

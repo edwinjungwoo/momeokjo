@@ -266,6 +266,18 @@ describe("infra: 스모크 뒤 롤백 판단 (배포 전 기준과 비교)", () 
     expect(shouldRollback({ code: 0, summary: s([], 4), fails: [], baseline: [] })).toMatchObject({ action: "keep" });
   });
 
+  it("infra: 기준과 같은 확인이라도 분류가 데이터 → 코드로 바뀌면 새 FAIL (반대면 data)", () => {
+    // 배포 전: 감사가 200으로 답했지만 미통과 (데이터) → 배포 뒤: 감사 요청 자체가 500 (코드)
+    expect(shouldRollback({ code: 1, summary: s([FAIL_AUDIT_500]), fails: [FAIL_AUDIT_500], baseline: [FAIL_AUDIT], hubIds: HUBS })).toMatchObject({
+      action: "rollback",
+      newFails: [FAIL_AUDIT_500],
+    });
+    // 배포 전: 500 (코드) → 배포 뒤: 200 미통과 (데이터) — 새 줄이지만 데이터 신호
+    expect(shouldRollback({ code: 1, summary: s([FAIL_AUDIT]), fails: [FAIL_AUDIT], baseline: [FAIL_AUDIT_500], hubIds: HUBS })).toMatchObject({ action: "data" });
+    // 같은 분류로 그대로면 새 FAIL 아님
+    expect(shouldRollback({ code: 1, summary: s([FAIL_AUDIT]), fails: [FAIL_AUDIT], baseline: [FAIL_AUDIT], hubIds: HUBS })).toMatchObject({ action: "keep" });
+  });
+
   it("infra: 새 감사 HTTP 실패는 코드 수준이라 롤백, 모든 거점 '0곳'도 롤백", () => {
     expect(shouldRollback({ code: 1, summary: s([FAIL_AUDIT_500]), fails: [FAIL_AUDIT_500], baseline: [], hubIds: HUBS })).toMatchObject({
       action: "rollback",

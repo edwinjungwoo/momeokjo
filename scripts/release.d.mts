@@ -41,8 +41,8 @@ export type ReleaseSummary = {
   hooks: HookResult[];
   /** 배포 전 기준 스모크의 FAIL 줄 */
   smokeBaseline: string[] | null;
-  /** 배포 뒤 스모크 (newFails: 기준에 없던 FAIL 중 판단에 쓴 것) */
-  smoke: (SmokeSummary & { newFails: string[] }) | null;
+  /** 배포 뒤 스모크 (newFails: 기준에 없던 FAIL 중 판단에 쓴 것, firstNewFails: 다시 돌렸을 때 처음 본 새 FAIL) */
+  smoke: (SmokeSummary & { newFails: string[]; firstNewFails?: string[] }) | null;
   rolledBack: boolean;
   result: string;
   elapsedMs: number;
