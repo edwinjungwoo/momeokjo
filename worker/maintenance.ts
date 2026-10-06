@@ -10,9 +10,11 @@ import { isRetentionWindow, pruneOldEvents } from "./events";
 import { pruneRollups, runRollups } from "./rollup";
 import type { FetchFn } from "./fetchFn";
 import { maintainSnapshots, type SnapshotRun } from "./hubSnapshot";
+import { hubHasDue, readCronMeta, recordHubRefreshed } from "./hubRefresh";
+import { hubRefreshStart } from "./refreshSchedule";
 import {
   backfillListJson, countNeedingDetail, detailGate, detailsAllowed, EXPIRED_RESET_PAGES, expiredDetailStates,
-  nearestUnfetchedStates, tilesChangedAt, UNFETCHED_MAX_CHUNKS, type TilePlaceState,
+  nearestUnfetchedStates, pickCronIds, UNFETCHED_MAX_CHUNKS, type TilePlaceState,
 } from "./repo";
 import { collectTiles } from "./tileCollector";
 
@@ -107,6 +109,8 @@ const EXPIRED_D1_CALLS = 1 + 2 * EXPIRED_RESET_PAGES + 1;
 const FRONTIER_MIN_CALLS = 3;
 /** list_json 백필 최악: 커서 읽기 1 + 행 읽기 1 + 쓰기 batch 1 */
 const BACKFILL_D1_CALLS = 3;
+/** R63 거점 갱신 완료 확인: 남은 대상 확인 1 + 기록 batch 1 (보충 뒤 남았을 때만 — 집계 몫은 따로 남긴다) */
+export const REFRESH_CHECK_D1_CALLS = 2;
 /**
  * 격자 수집 뒤에 남겨 둘 D1 호출 (격자 하나 = 2번): 백필 + 게이트 1 + tiles_changed_at 1 + 미수집 최소 + 보충 최악 + 집계.
  * 격자 수집이 많은 실행에서도 미수집 보충은 언제나 한다. 만료 후보(최악 8번)는 남은 것이 넉넉할 때만 한다 (다음 실행)
@@ -162,6 +166,8 @@ export type CronResult = {
   calls?: number;
   /** R59: 이번 실행이 집계한 날 수 */
   rolled?: number;
+  /** R63: 이번 실행이 갱신 완료를 기록한 거점 */
+  refreshed?: string;
 };
 
 /**
@@ -300,14 +306,16 @@ async function maintain(
   };
   if (budget.left <= 0 || !detailsAllowed(await detailGate(db), opts.now)) return spent();
 
-  // tiles_changed_at은 한 번만 읽어 두 커서(만료·미수집)에 넘긴다 — 이 값을 본 뒤의 격자 변화는 다음 실행이 알아본다
-  const changedAt = await tilesChangedAt(db);
+  // tiles_changed_at은 한 번만 읽어 두 커서(만료·미수집)에 넘긴다 — 이 값을 본 뒤의 격자 변화는 다음 실행이 알아본다.
+  // R63 거점 완료 기록도 같은 질의로 읽는다 (D1 호출 수는 그대로)
+  const { changedAt, refreshed } = await readCronMeta(db, hubs.map((h) => h.id));
   const tail = enrichCallReserve(batchSize) + ROLLUP_D1_CALLS;
   const candidates: TilePlaceState[] = [];
-  if (calls.has(EXPIRED_D1_CALLS + FRONTIER_MIN_CALLS + tail)) {
-    candidates.push(...(await expiredDetailStates(db, keys, opts.now, changedAt)));
-  } else skip("expired");
   if (batchSize > 0) {
+    // 유효 배치가 0이면 고를 것도 없으니 만료 후보도 읽지 않는다 (Task 34 리뷰)
+    if (calls.has(EXPIRED_D1_CALLS + FRONTIER_MIN_CALLS + tail)) {
+      candidates.push(...(await expiredDetailStates(db, keys, opts.now, changedAt)));
+    } else skip("expired");
     // Task 34: 미수집은 앞선 커서부터 거점에 가까운 순 batchSize곳만 (만료 후보와 합쳐 고르는 결과는 전부 읽은 것과 같다).
     // 커서가 끝이고 tiles_changed_at·지문이 같으면 묶음 질의 없이 끝난다 (따로 "다 채움" 표시를 두지 않는다)
     const maxQueries = Math.min(2 + UNFETCHED_MAX_CHUNKS, calls.left - tail);
@@ -317,9 +325,11 @@ async function maintain(
     } else skip("unfetched");
   }
   if (candidates.length > 0 && batchSize > 0) {
+    // R63: 미수집 먼저, 그다음 갱신 시작이 오래된 거점부터, 거점 안에서는 가까운 순
+    const ids = pickCronIds(candidates, hubs, opts.now, batchSize);
     const e = await enrichDetails(
       {
-        db, fetcher: opts.fetcher, budget, now: opts.now, batchSize, sleep: opts.sleep, candidates, charBudget: detailCharBudget,
+        db, fetcher: opts.fetcher, budget, now: opts.now, batchSize, sleep: opts.sleep, ids, charBudget: detailCharBudget,
         d1: calls,
       },
       hubs,
@@ -335,5 +345,42 @@ async function maintain(
       result.enrichError = true;
     }
   }
+  if (batchSize > 0) {
+    const done = await completeHubRefresh(db, hubs, opts.now, refreshed, {
+      pendingTiles: new Set([...tiles.incomplete, ...tiles.failed]),
+      candidateTiles: new Set(candidates.map((c) => c.tileKey)),
+      canCheck: () => calls.has(REFRESH_CHECK_D1_CALLS + ROLLUP_D1_CALLS),
+    }).catch((e) => {
+      console.error("hub refresh check failed", e);
+      return null;
+    });
+    if (done) result.refreshed = done;
+  }
   return spent();
+}
+
+/**
+ * R63: 갱신을 다 끝낸 거점을 하나 기록한다 (실행마다 많아야 한 거점 — 남은 대상 확인 1 + 기록 1).
+ * 후보: 이번 시작으로 아직 기록하지 않았고, 거점 격자에 수집할 격자가 남지 않았고(이번 실행 뒤 incomplete·failed),
+ * 이번 실행의 보충 후보(만료·미수집)에 그 거점 격자가 없는 거점 — 후보가 있으면 아직 대상이 남은 것이 확실하니 질의하지 않는다.
+ * 그중 한 거점(갱신 시작 순으로 줄 세워 실행마다 하나씩 돌린다 — 아직 대상이 남은 거점이 다른 거점의 기록을 막지 않게)에
+ * 남은 대상(미수집, 시작 전에 가져온 ok — hubHasDue)이 없으면 {start, at: now}를 쓰고 그 거점 스냅샷 표시를 올린다.
+ * 기록한 거점 id, 아니면 null.
+ */
+export async function completeHubRefresh(
+  db: D1Database, hubs: Hub[], now: number, refreshed: ReadonlyMap<string, { start: number }>,
+  seen: { pendingTiles: ReadonlySet<string>; candidateTiles: ReadonlySet<string>; canCheck: () => boolean },
+): Promise<string | null> {
+  const open = hubs
+    .map((hub) => ({ hub, start: hubRefreshStart(hub, now) }))
+    .filter(({ hub, start }) => {
+      if (refreshed.get(hub.id)?.start === start) return false;
+      return !tilesCoveringCircle(hub, PREWARM_RADIUS).some((k) => seen.pendingTiles.has(k) || seen.candidateTiles.has(k));
+    })
+    .sort((a, b) => a.start - b.start);
+  const first = open[Math.floor(now / CRON_INTERVAL_MS) % Math.max(1, open.length)];
+  if (!first || !seen.canCheck()) return null;
+  if (await hubHasDue(db, first.hub, now)) return null;
+  await recordHubRefreshed(db, first.hub.id, first.start, now);
+  return first.hub.id;
 }

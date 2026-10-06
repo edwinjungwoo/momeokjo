@@ -1,11 +1,12 @@
 import { env } from "cloudflare:test";
 import { describe, expect, it, vi } from "vitest";
-import { ASEM, DETAIL_JITTER_MS, DETAIL_OK_TTL_MS, PLACE_BLOCK_COOLDOWN_MS } from "../../shared/constants";
+import { ASEM, PLACE_BLOCK_COOLDOWN_MS } from "../../shared/constants";
 import { tileKeyOf } from "../../shared/geo";
 import { Budget } from "../../worker/budget";
 import { DETAIL_CONCURRENCY, enrichDetails } from "../../worker/detailEnricher";
 import { detailGate, getMeta, placeById, recordPlaceBlock, replaceTilePlaces } from "../../worker/repo";
 import { fakePlaceApi } from "../helpers/fakeKakao";
+import { tileRefreshStart } from "../../worker/refreshSchedule";
 import { placeJson, seedPlace } from "../helpers/places";
 
 const NOW = 1_800_000_000_000;
@@ -80,9 +81,9 @@ describe("enrichDetails", () => {
     expect(await run(api.fetcher, { now: NOW + PLACE_BLOCK_COOLDOWN_MS })).toEqual(res(1, 0, 0));
   });
 
-  it("R12: scope=unfetched면 한 번도 가져오지 않은 ID만 보충한다 (만료된 행 갱신은 Cron 몫)", async () => {
+  it("R12/R63: scope=unfetched면 한 번도 가져오지 않은 ID만 보충한다 (갱신 시작 전에 가져온 행의 갱신은 Cron 몫)", async () => {
     await seedIds(["old", "new"]);
-    await seedPlace(env.DB, "old", ASEM.lat, ASEM.lng, { now: NOW - DETAIL_OK_TTL_MS - DETAIL_JITTER_MS });
+    await seedPlace(env.DB, "old", ASEM.lat, ASEM.lng, { now: (tileRefreshStart(tileKeyOf(ASEM), NOW) as number) - 1 });
     const api = fakePlaceApi({ old: json("old"), new: json("new") });
     expect(await run(api.fetcher, { scope: "unfetched" })).toEqual(res(1, 0, 0));
     expect(api.calls.map((c) => c.id)).toEqual(["new"]);

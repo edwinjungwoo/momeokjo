@@ -1,6 +1,6 @@
 import { env } from "cloudflare:test";
 import { describe, expect, it } from "vitest";
-import { DETAIL_FAIL_TTL_MS, DETAIL_JITTER_MS, DETAIL_OK_TTL_MS, PREWARM_RADIUS } from "../../shared/constants";
+import { DETAIL_FAIL_TTL_MS, DETAIL_OK_TTL_MS, PREWARM_RADIUS } from "../../shared/constants";
 import { tileKeyOf, tileRect, tilesCoveringCircle, haversine } from "../../shared/geo";
 import { HUBS } from "../../shared/hubs";
 import { kstDay } from "../../shared/kst";
@@ -13,6 +13,7 @@ import { callApp } from "../helpers/callApp";
 import { anonN, seedEvents, sessN } from "../helpers/events";
 import { fakeKakaoLocal, fakePlaceApi, routeFetch } from "../helpers/fakeKakao";
 import { placeJson } from "../helpers/places";
+import { hubRefreshStart } from "../../worker/refreshSchedule";
 
 const DAY = 24 * 3600_000;
 /** KST 2027-01-15 04:01 — R35 보관 정리 창 (본 Cron이 이벤트·집계 정리까지 하는 실행) */
@@ -95,7 +96,8 @@ describe("Task 34: 본 Cron의 D1 호출 예산", () => {
     await insertPlaces([
       ...Array.from({ length: 850 }, (_, i) => [`ook${i}`, "ok", NOW - 10 * DETAIL_OK_TTL_MS + i] as [string, string, number]),
       ...Array.from({ length: 850 }, (_, i) => [`ofail${i}`, "failed", NOW - 10 * DETAIL_FAIL_TTL_MS + i] as [string, string, number]),
-      ...["e1", "e2", "e3", "e4"].map((id) => [id, "ok", NOW - DETAIL_OK_TTL_MS - DETAIL_JITTER_MS - 1000] as [string, string, number]),
+      // R63: 봉은사 이번 갱신 시작 전에 가져온 상세 (갱신 대상)
+      ...["e1", "e2", "e3", "e4"].map((id) => [id, "ok", hubRefreshStart(HUBS[0], NOW) - 1000] as [string, string, number]),
     ]);
     await replaceTilePlaces(env.DB, home, ["e1", "e2", "e3", "e4"], NOW, false);
     await replaceTilePlaces(env.DB, far, ["farnew"], NOW, false);
@@ -209,7 +211,7 @@ describe("Task 34: 본 Cron의 D1 호출 예산", () => {
     await markFresh(KEYS.filter((k) => !due.includes(k)), steadyNow);
     await insertPlaces([
       ...Array.from({ length: 850 }, (_, i) => [`ook${i}`, "ok", steadyNow - 10 * DETAIL_OK_TTL_MS + i] as [string, string, number]),
-      ...["e1", "e2", "e3", "e4"].map((id) => [id, "ok", steadyNow - DETAIL_OK_TTL_MS - DETAIL_JITTER_MS - 1000] as [string, string, number]),
+      ...["e1", "e2", "e3", "e4"].map((id) => [id, "ok", hubRefreshStart(HUBS[0], steadyNow) - 1000] as [string, string, number]),
     ]);
     await replaceTilePlaces(env.DB, home, ["e1", "e2", "e3", "e4"], steadyNow, false);
     await replaceTilePlaces(env.DB, far, ["farnew"], steadyNow, false);
@@ -227,6 +229,14 @@ describe("Task 34: 본 Cron의 D1 호출 예산", () => {
     // 만료 후보(e1~e4)와 미수집(가장 먼 칸)을 모두 고르고 보충했다
     expect(place.calls.map((c) => c.id).sort()).toEqual(["e1", "e2", "e3", "e4", "farnew"]);
     expect(r).toMatchObject({ enriched: 5, failed: 0 });
+  });
+
+  it("R10/R38: 보관 정리 실행(KST 04:00~04:04)의 유효 배치는 천장 설정(8)에서 6이다 — docs/deploy.md·스펙에 적은 값 (보통 실행은 8)", async () => {
+    await markFresh(KEYS, NOW);
+    const ceiling = { ...env, DETAIL_BATCH_SIZE: String(MAX_DETAIL_BATCH_SIZE) } as unknown as Env;
+    const run = (now: number) => runScheduled(ceiling, { fetcher: fakePlaceApi({}).fetcher, now, sleep: async () => {} });
+    expect((await run(NOW)).batch).toBe(6);
+    expect((await run(NOW + 3 * 3600_000)).batch).toBe(MAX_DETAIL_BATCH_SIZE);
   });
 
   it("R31/R38: warm ?count=1(격자-장소 상태 전체 읽기)은 D1 호출 예산이 모자라면 세지 않고 pending more다", async () => {

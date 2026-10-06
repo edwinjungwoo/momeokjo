@@ -50,7 +50,7 @@ async function collectRect(deps: CollectDeps, rect: Rect, depth: number): Promis
 export async function collectTiles(
   deps: CollectDeps, keys: string[], known?: Map<string, TileState>,
 ): Promise<CollectResult> {
-  const due = known ? keys.filter((k) => isTileDue(known.get(k), deps.now)) : await dueTileKeys(deps.db, keys, deps.now);
+  const due = known ? keys.filter((k) => isTileDue(k, known.get(k), deps.now)) : await dueTileKeys(deps.db, keys, deps.now);
   const result: CollectResult = { collected: [], incomplete: [], failed: [] };
   for (let i = 0; i < due.length; i++) {
     const key = due[i];

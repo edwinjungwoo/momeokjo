@@ -82,7 +82,7 @@ export async function getPlaces(
 ): Promise<PlacesPayload | { error: "upstream" }> {
   const keys = tilesCoveringCircle(center, radiusM);
   const states = await getTiles(deps.db, keys);
-  const due = keys.filter((k) => isTileDue(states.get(k), deps.now));
+  const due = keys.filter((k) => isTileDue(k, states.get(k), deps.now));
   const budget = new Budget(deps.budgetSize);
 
   let allowed: boolean | null = null;

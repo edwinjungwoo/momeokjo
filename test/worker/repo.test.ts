@@ -21,11 +21,14 @@ import { LIST_JSON_PREFIX, placesBody, storedListJson } from "../../worker/prese
 import { MARK_PLACES_DIRTY_SQL, SNAPSHOT_DIRTY_PREFIX } from "../../worker/snapshotDirty";
 import { makeSummary, placeJson, sampleDetail, seedPlace } from "../helpers/places";
 import { recordingDb } from "../helpers/recordDb";
+import { tileRefreshStart } from "../../worker/refreshSchedule";
 
 const NOW = 1_800_000_000_000;
 const KA = tileKeyOf(ASEM);
 const [I, J] = KA.split(":").map(Number);
 const KB = `${I + 3}:${J}`; // 약 750m 북쪽 격자
+/** R63: KA(봉은사 격자)의 이번 갱신 시작 — 이 전에 가져온 ok가 갱신 대상 */
+const START = tileRefreshStart(KA, NOW) as number;
 
 /** [id, fetched_at] 여러 개를 상세 ok로 한 문장에 넣는다 (좌표는 ASEM) */
 async function seedMany(rows: [string, number][]) {
@@ -77,12 +80,13 @@ describe("repo", () => {
     expect(r?.c).toBe(0);
   });
 
-  it("R3: 격자 상태 7일 TTL", async () => {
-    await markTile(env.DB, KA, NOW, 30, false);
-    const s = (await getTiles(env.DB, [KA, "9:9"])).get(KA);
-    expect(isTileDue(undefined, NOW)).toBe(true);
-    expect(isTileDue(s, NOW + TILE_TTL_MS - 1)).toBe(false);
-    expect(isTileDue(s, NOW + TILE_TTL_MS)).toBe(true);
+  it("R3: 거점 밖 격자 상태는 7일 TTL (거점 격자는 R63 갱신 요일 — weeklyRefresh.test.ts)", async () => {
+    const OUT = "9:9";
+    await markTile(env.DB, OUT, NOW, 30, false);
+    const s = (await getTiles(env.DB, [KA, OUT])).get(OUT);
+    expect(isTileDue(OUT, undefined, NOW)).toBe(true);
+    expect(isTileDue(OUT, s, NOW + TILE_TTL_MS - 1)).toBe(false);
+    expect(isTileDue(OUT, s, NOW + TILE_TTL_MS)).toBe(true);
   });
 
   it("R3: 키가 많아도(150개) 한 번에 조회한다", async () => {
@@ -118,24 +122,26 @@ describe("repo", () => {
     expect((await placeById(env.DB, "orphan"))?.place.id).toBe("orphan");
   });
 
-  it("R11: 만료 후보는 fetched_at 인덱스로 고르고(지터 전 기준), 미수집 ID는 따로 고른다 — 둘 다 주어진 격자만", async () => {
-    await replaceTilePlaces(env.DB, KA, ["new", "fresh", "old", "oldfail"], NOW, false);
+  it("R11/R63: 만료 후보는 fetched_at 인덱스로 고르고(거점 격자 ok는 갱신 시작 전), 미수집 ID는 따로 고른다 — 둘 다 주어진 격자만", async () => {
+    expect(START).toBeGreaterThan(NOW - 7 * 24 * 3600_000);
+    await replaceTilePlaces(env.DB, KA, ["new", "fresh", "afterstart", "old", "oldfail"], NOW, false);
     await replaceTilePlaces(env.DB, KB, ["otherold", "othernew"], NOW, false);
     await seedPlace(env.DB, "fresh", ASEM.lat, ASEM.lng, { now: NOW - 1000 });
-    await seedPlace(env.DB, "old", ASEM.lat, ASEM.lng, { now: NOW - DETAIL_OK_TTL_MS });
+    await seedPlace(env.DB, "afterstart", ASEM.lat, ASEM.lng, { now: START });
+    await seedPlace(env.DB, "old", ASEM.lat, ASEM.lng, { now: START - 1 });
     await saveDetailFailure(env.DB, "oldfail", "http_500", NOW - DETAIL_FAIL_TTL_MS);
-    await seedPlace(env.DB, "otherold", ASEM.lat, ASEM.lng, { now: NOW - DETAIL_OK_TTL_MS });
+    await seedPlace(env.DB, "otherold", ASEM.lat, ASEM.lng, { now: START - 1 });
     const expired = await expiredDetailStates(env.DB, [KA], NOW);
     expect(expired.map((t) => t.id).sort()).toEqual(["old", "oldfail"]);
     expect(expired.find((t) => t.id === "old")).toEqual({
-      id: "old", tileKey: KA, meta: { status: "ok", fetchedAt: NOW - DETAIL_OK_TTL_MS, reason: null },
+      id: "old", tileKey: KA, meta: { status: "ok", fetchedAt: START - 1, reason: null },
     });
     expect((await unfetchedStates(env.DB, [KA])).map((t) => [t.id, t.meta])).toEqual([["new", null]]);
   });
 
   it("R11/R38: 만료 후보는 상태별로 fetched_at이 오래된 순 300개까지만 고른다", async () => {
     const ids = Array.from({ length: 310 }, (_, i) => `k${i}`);
-    await seedMany(ids.map((id, i) => [id, NOW - DETAIL_OK_TTL_MS - (310 - i)]));
+    await seedMany(ids.map((id, i) => [id, START - 1 - (310 - i)]));
     await replaceTilePlaces(env.DB, KA, ids, NOW, false);
     await saveDetailFailure(env.DB, "f1", "http_500", NOW - DETAIL_FAIL_TTL_MS);
     await replaceTilePlaces(env.DB, KB, ["f1"], NOW, false);
@@ -177,7 +183,7 @@ describe("repo", () => {
     const outside = Array.from({ length: n }, (_, i) => `o${i}`);
     await seedMany(outside.map((id, i) => [id, NOW - 10 * DETAIL_OK_TTL_MS + i]));
     await replaceTilePlaces(env.DB, KB, outside, NOW, false);
-    await seedMany([["h1", NOW - DETAIL_OK_TTL_MS - 3], ["h2", NOW - DETAIL_OK_TTL_MS - 2]]);
+    await seedMany([["h1", START - 3], ["h2", START - 2]]);
     await replaceTilePlaces(env.DB, KA, ["h1", "h2"], NOW, false);
   }
 
@@ -387,11 +393,12 @@ describe("repo", () => {
     expect((await detailGate(env.DB)).blockedUntil).toBe(NOW + 9 + PLACE_BLOCK_COOLDOWN_MS);
   });
 
-  it("R10: 상세가 필요한 ID를 격자 거리순(같으면 id순)으로, TTL을 지키며, limit만큼", async () => {
+  it("R10/R63: 상세가 필요한 ID를 격자 거리순(같으면 id순)으로, 갱신 기준을 지키며, limit만큼", async () => {
     await replaceTilePlaces(env.DB, KA, ["a1", "fresh", "oldok", "recentfail"], NOW, false);
     await replaceTilePlaces(env.DB, KB, ["b1"], NOW, false);
-    await seedPlace(env.DB, "fresh", ASEM.lat, ASEM.lng, { now: NOW - 1000 });
-    await seedPlace(env.DB, "oldok", ASEM.lat, ASEM.lng, { now: NOW - DETAIL_OK_TTL_MS - DETAIL_JITTER_MS });
+    // 3일(예전 TTL)이 지났어도 이번 갱신 시작 뒤에 가져왔으면 대상이 아니다
+    await seedPlace(env.DB, "fresh", ASEM.lat, ASEM.lng, { now: START });
+    await seedPlace(env.DB, "oldok", ASEM.lat, ASEM.lng, { now: START - 1 });
     await saveDetailFailure(env.DB, "recentfail", "http_500", NOW - 1000);
 
     expect(await idsNeedingDetail(env.DB, ASEM, 1000, NOW)).toEqual(["a1", "oldok", "b1"]);
@@ -430,6 +437,10 @@ describe("QA D-8: 깨진 JSON 열 경고", () => {
 
 describe("Task 34: 보충 후보를 SQL에서 가까운 순으로 고르기", () => {
   const KEYS = tilesCoveringCircle(ASEM, 1000);
+  /** 거점 밖 기준점 (관리자 warm의 임의 좌표) — ok는 예전 규칙(3일 + 지터)이라 SQL이 지터를 볼 수 없다 */
+  const OUTSIDE = { lat: ASEM.lat + 0.3, lng: ASEM.lng };
+  const KO = tileKeyOf(OUTSIDE);
+  const OUT_KEYS = tilesCoveringCircle(OUTSIDE, 1000);
   /** 칸 중심까지 거리 (repo의 순위와 같은 계산) */
   const tileDist = (k: string, c: LatLng = ASEM) => {
     const r = tileRect(k);
@@ -476,34 +487,54 @@ describe("Task 34: 보충 후보를 SQL에서 가까운 순으로 고르기", ()
     });
   }
 
-  it("R10: 보충 대상(limit 있음)을 SQL에서 가까운 순으로 고른 결과가 격자 상태를 다 읽어 고른 결과(pickDetailIds)와 같다 — due·unfetched, 여러 칸에 기록된 ID, 지터 경계", async () => {
-    await seedStates(mixedRows(400, lcg(11)));
-    const all = await tilePlaceStates(env.DB, KEYS);
-    for (const scope of ["due", "unfetched"] as const) {
-      for (const limit of [1, 3, 10, 37, 1000]) {
-        const want = pickDetailIds(all, ASEM, NOW, limit, scope);
-        expect(want.length, `${scope} ${limit}`).toBeGreaterThan(0);
-        expect(await idsNeedingDetail(env.DB, ASEM, 1000, NOW, limit, scope), `${scope} ${limit}`).toEqual(want);
+  it("R10/R63: 보충 대상(limit 있음)을 SQL에서 가까운 순으로 고른 결과가 격자 상태를 다 읽어 고른 결과(pickDetailIds)와 같다 — due·unfetched, 여러 칸에 기록된 ID, 지터 경계(거점 밖)·갱신 시작 경계(거점)", async () => {
+    for (const [center, keys, seed] of [[ASEM, KEYS, 11], [OUTSIDE, OUT_KEYS, 12]] as const) {
+      const rows = mixedRows(400, lcg(seed), keys);
+      // 거점 칸: 갱신 시작 바로 전·정각도 섞는다
+      rows.slice(0, 40).forEach((r, i) => Object.assign(r, { status: "ok", fetchedAt: i % 2 ? START - 1 : START }));
+      await seedStates(rows);
+      const all = await tilePlaceStates(env.DB, keys);
+      for (const scope of ["due", "unfetched"] as const) {
+        for (const limit of [1, 3, 10, 37, 1000]) {
+          const want = pickDetailIds(all, center, NOW, limit, scope);
+          expect(want.length, `${scope} ${limit}`).toBeGreaterThan(0);
+          expect(await idsNeedingDetail(env.DB, center, 1000, NOW, limit, scope), `${scope} ${limit}`).toEqual(want);
+        }
       }
     }
   });
 
-  it("R10/R38: 가까운 칸에 아직 만료되지 않은(지터 창 안) 행이 한 쪽보다 많아도 다음 쪽을 읽어 같은 ID를 고르고, 읽어 오는 행은 쪽 단위다", async () => {
-    // 가장 가까운 칸(KA)에 지터 창 안·아직 아닌 ok 행을 한 쪽보다 많이, 그 뒤 칸에 미수집 몇 곳
+  it("R10/R38: (거점 밖 칸) 가까운 칸에 아직 만료되지 않은(지터 창 안) 행이 한 쪽보다 많아도 다음 쪽을 읽어 같은 ID를 고르고, 읽어 오는 행은 쪽 단위다", async () => {
+    // 가장 가까운 칸(KO)에 지터 창 안·아직 아닌 ok 행을 한 쪽보다 많이, 그 뒤 칸에 미수집 몇 곳
     // 첫 두 쪽보다 많이 — 세 번째 쪽에서 찾는다
     const near = Array.from({ length: DETAIL_PICK_FIRST_PAGE * (1 + DETAIL_PICK_GROWTH) + 30 }, (_, i) => `n${String(i).padStart(4, "0")}`);
-    const far = tilesCoveringCircle(ASEM, 1000).find((k) => k !== KA)!;
+    const far = OUT_KEYS.find((k) => k !== KO)!;
     await seedStates([
-      ...near.map((id) => ({ id, tiles: [KA], status: "ok" as const, fetchedAt: NOW - DETAIL_OK_TTL_MS - detailJitterMs(id) + 1 })),
+      ...near.map((id) => ({ id, tiles: [KO], status: "ok" as const, fetchedAt: NOW - DETAIL_OK_TTL_MS - detailJitterMs(id) + 1 })),
       { id: "zfar1", tiles: [far] },
       { id: "zfar2", tiles: [far] },
-      { id: "nlate", tiles: [KA], status: "ok", fetchedAt: NOW - DETAIL_OK_TTL_MS - DETAIL_JITTER_MS },
+      { id: "nlate", tiles: [KO], status: "ok", fetchedAt: NOW - DETAIL_OK_TTL_MS - DETAIL_JITTER_MS },
     ]);
-    const want = pickDetailIds(await tilePlaceStates(env.DB, KEYS), ASEM, NOW, 3, "due");
+    const want = pickDetailIds(await tilePlaceStates(env.DB, OUT_KEYS), OUTSIDE, NOW, 3, "due");
     expect(want).toEqual(["nlate", "zfar1", "zfar2"]);
-    expect(await idsNeedingDetail(env.DB, ASEM, 1000, NOW, 3, "due")).toEqual(want);
+    expect(await idsNeedingDetail(env.DB, OUTSIDE, 1000, NOW, 3, "due")).toEqual(want);
     // 전체를 읽는 길(limit 없음, warm count=1)은 그대로다
-    expect(await idsNeedingDetail(env.DB, ASEM, 1000, NOW)).toEqual(want);
+    expect(await idsNeedingDetail(env.DB, OUTSIDE, 1000, NOW)).toEqual(want);
+  });
+
+  it("R63/R38: 거점 칸은 갱신 시작 뒤에 가져온 ok를 SQL이 거른다 — 그런 행이 아무리 많아도 한 쪽만 읽고, 고른 결과는 pickDetailIds와 같다", async () => {
+    const near = Array.from({ length: DETAIL_PICK_FIRST_PAGE * (1 + DETAIL_PICK_GROWTH) + 30 }, (_, i) => `n${String(i).padStart(4, "0")}`);
+    const far = KEYS.find((k) => k !== KA)!;
+    await seedStates([
+      ...near.map((id) => ({ id, tiles: [KA], status: "ok" as const, fetchedAt: START + 1 })),
+      { id: "zfar1", tiles: [far] },
+      { id: "nold", tiles: [KA], status: "ok", fetchedAt: START - 1 },
+    ]);
+    const { db, log } = recordingDb(env.DB);
+    const want = pickDetailIds(await tilePlaceStates(env.DB, KEYS), ASEM, NOW, 3, "due");
+    expect(want).toEqual(["nold", "zfar1"]);
+    expect(await idsNeedingDetail(db, ASEM, 1000, NOW, 3, "due")).toEqual(want);
+    expect(log.filter((x) => x.sql === NEAREST_DUE_SQL)).toHaveLength(1);
   });
 
   it("R10/R11: 한 가게가 여러 칸에 기록돼 한 쪽 안의 서로 다른 가게가 limit보다 적어도 다음 쪽을 읽어 같은 결과다 (가게마다 가장 가까운 칸)", async () => {
@@ -526,8 +557,8 @@ describe("Task 34: 보충 후보를 SQL에서 가까운 순으로 고르기", ()
   });
 
   it("R38: 가까운 순 후보 조회는 칸마다 tile_places 기본 키로, 가게는 places 기본 키로 찾는다 (표 전체 스캔 없음)", async () => {
-    for (const [sql, extra] of [[NEAREST_DUE_SQL, [NOW, NOW]], [NEAREST_UNFETCHED_SQL, []]] as const) {
-      const r = await env.DB.prepare(`EXPLAIN QUERY PLAN ${sql}`).bind('[["1:1",0]]', 10, 0, ...extra).all<{ detail: string }>();
+    for (const [sql, ranked, extra] of [[NEAREST_DUE_SQL, '[["1:1",0,0]]', [NOW]], [NEAREST_UNFETCHED_SQL, '[["1:1",0]]', []]] as const) {
+      const r = await env.DB.prepare(`EXPLAIN QUERY PLAN ${sql}`).bind(ranked, 10, 0, ...extra).all<{ detail: string }>();
       const plan = r.results.map((x) => x.detail).join("\n");
       expect(plan).toMatch(/SEARCH tp USING COVERING INDEX sqlite_autoindex_tile_places_1 \(tile_key=\?\)/);
       expect(plan).toMatch(/SEARCH p USING INDEX sqlite_autoindex_places_1 \(id=\?\)/);
@@ -580,20 +611,20 @@ describe("Task 34: 보충 후보를 SQL에서 가까운 순으로 고르기", ()
     expect(await nearestUnfetchedStates(env.DB, keys, centers, 10)).toEqual({ states: [], cleared: true });
   });
 
-  it("R10/R38: 후보 쪽은 커지며 많아야 DETAIL_PICK_MAX_PAGES쪽만 읽는다 — 못 채우면 truncated로 알리고 그때까지 고른 것을 돌려준다", async () => {
+  it("R10/R38: (거점 밖 칸) 후보 쪽은 커지며 많아야 DETAIL_PICK_MAX_PAGES쪽만 읽는다 — 못 채우면 truncated로 알리고 그때까지 고른 것을 돌려준다", async () => {
     let total = 0;
     for (let i = 0, page = Math.max(3, DETAIL_PICK_FIRST_PAGE); i < DETAIL_PICK_MAX_PAGES; i++, page *= DETAIL_PICK_GROWTH) total += page;
     const near = Array.from({ length: total + 5 }, (_, i) => `n${String(i).padStart(5, "0")}`);
-    const far = [...KEYS].sort((a, b) => tileDist(b) - tileDist(a))[0];
+    const far = [...OUT_KEYS].sort((a, b) => tileDist(b, OUTSIDE) - tileDist(a, OUTSIDE))[0];
     await seedStates([
-      ...near.map((id) => ({ id, tiles: [KA], status: "ok" as const, fetchedAt: NOW - DETAIL_OK_TTL_MS - detailJitterMs(id) + 1 })),
+      ...near.map((id) => ({ id, tiles: [KO], status: "ok" as const, fetchedAt: NOW - DETAIL_OK_TTL_MS - detailJitterMs(id) + 1 })),
       { id: "zfar", tiles: [far] },
     ]);
     const { db, log } = recordingDb(env.DB);
-    expect(await nearestDetailIds(db, ASEM, 1000, NOW, 3)).toEqual({ ids: [], truncated: true });
+    expect(await nearestDetailIds(db, OUTSIDE, 1000, NOW, 3)).toEqual({ ids: [], truncated: true });
     expect(log.filter((x) => x.sql === NEAREST_DUE_SQL)).toHaveLength(DETAIL_PICK_MAX_PAGES);
     // 전체를 읽는 길(warm count=1)은 상한이 없다
-    expect(await idsNeedingDetail(env.DB, ASEM, 1000, NOW)).toEqual(["zfar"]);
+    expect(await idsNeedingDetail(env.DB, OUTSIDE, 1000, NOW)).toEqual(["zfar"]);
   });
 
   it("R11: 수집할 격자(없음·만료)만 SQL로 고른 결과가 getTiles + isTileDue와 같고 keys 순서를 지킨다", async () => {
@@ -606,7 +637,7 @@ describe("Task 34: 보충 후보를 SQL에서 가까운 순으로 고르기", ()
       await markTile(env.DB, k, at, 0, false);
     }
     const states = await getTiles(env.DB, keys);
-    const want = keys.filter((k) => isTileDue(states.get(k), NOW));
+    const want = keys.filter((k) => isTileDue(k, states.get(k), NOW));
     expect(want.length).toBeGreaterThan(0);
     expect(want.length).toBeLessThan(keys.length);
     expect(await dueTileKeys(env.DB, keys, NOW)).toEqual(want);

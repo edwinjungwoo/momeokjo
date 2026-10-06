@@ -5,6 +5,7 @@ import { tileKeyOf, tileRect, tilesCoveringCircle } from "../../shared/geo";
 import { Budget } from "../../worker/budget";
 import { getTiles, markTile, tilePlaceStates } from "../../worker/repo";
 import { collectTiles } from "../../worker/tileCollector";
+import { tileFreshFrom } from "../../worker/refreshSchedule";
 import { doc, fakeKakaoLocal, gridDocs } from "../helpers/fakeKakao";
 
 const NOW = 1_800_000_000_000;
@@ -55,8 +56,9 @@ describe("collectTiles", () => {
     expect(ids.some((id) => id.startsWith("d"))).toBe(false);
   });
 
-  it("R3: 7일 이내에 수집한 격자는 건너뛴다", async () => {
-    await markTile(env.DB, KEY, NOW - TILE_TTL_MS + 1000, 0, false);
+  it("R3/R63: 이번 갱신 시작 뒤에 수집한 거점 격자는 건너뛴다 (거점 밖은 7일 — repo.test.ts)", async () => {
+    expect(tileFreshFrom(KEY, NOW)).toBeGreaterThan(NOW - TILE_TTL_MS);
+    await markTile(env.DB, KEY, tileFreshFrom(KEY, NOW), 0, false);
     const kakao = fakeKakaoLocal(gridDocs("c", 10, RECT));
     expect(await collectTiles(deps(kakao.fetcher), [KEY])).toEqual({ collected: [], incomplete: [], failed: [] });
     expect(kakao.calls).toHaveLength(0);

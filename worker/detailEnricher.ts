@@ -25,6 +25,8 @@ export type EnrichDeps = {
   scope?: DetailScope;
   /** 이미 읽어 둔 격자-장소 상태가 있으면 D1을 다시 훑지 않고 여기서 고른다 */
   candidates?: TilePlaceState[];
+  /** R63: 이미 순서대로 고른 ID (Cron — pickCronIds). 있으면 candidates·center로 다시 고르지 않는다 */
+  ids?: string[];
   /** 한 번에 풀 상세 JSON 글자 수 (없으면 DEFAULT_DETAIL_CHAR_BUDGET) — Task 34 */
   charBudget?: number;
   /** Task 34: 실행의 D1 호출 예산. 새 상세는 저장·차단 기록 몫이 남았을 때만 시작하고, 한 곳씩 다시 저장은 그만큼 남았을 때만 */
@@ -67,7 +69,8 @@ export async function enrichDetails(
   if (!detailsAllowed(await detailGate(deps.db), deps.now)) return result;
   const scope = deps.scope ?? "due";
   let ids: string[];
-  if (deps.candidates) ids = pickDetailIds(deps.candidates, center, deps.now, deps.batchSize, scope);
+  if (deps.ids) ids = deps.ids.slice(0, Math.max(0, deps.batchSize));
+  else if (deps.candidates) ids = pickDetailIds(deps.candidates, center, deps.now, deps.batchSize, scope);
   else {
     const picked = await nearestDetailIds(
       deps.db, Array.isArray(center) ? center[0] : center, radiusM, deps.now, deps.batchSize, scope,

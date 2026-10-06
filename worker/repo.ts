@@ -1,7 +1,7 @@
 import { categoryGroup } from "../shared/category";
 import {
   DETAIL_FAIL_TTL_MS, DETAIL_FREEZE_AFTER_BLOCKS, DETAIL_FREEZE_MS, DETAIL_JITTER_MS, DETAIL_OK_TTL_MS, LIST_JSON_VERSION,
-  PLACE_BLOCK_COOLDOWN_MS, TILE_TTL_MS,
+  PLACE_BLOCK_COOLDOWN_MS,
 } from "../shared/constants";
 import { kstDay } from "../shared/kst";
 import { haversine, tileRect, tilesCoveringCircle } from "../shared/geo";
@@ -9,6 +9,7 @@ import type { CategoryGroup, LatLng, Place, PlaceDetail, PlaceSummary, Rect, Sto
 import { HUBS } from "../shared/hubs";
 import { hubsOfTile } from "./hubTiles";
 import { listItemJson, storedListJson, usableListJson, usableListJsonSql } from "./present";
+import { dueSinceOf, okDueBefore, tileFreshFrom, tileRefreshStart } from "./refreshSchedule";
 import { deleteSnapshotsStmt, markHubsDirtyStmt, markPlaceHubsDirtyStmt, markPlacesHubsDirtyStmt } from "./snapshotDirty";
 
 export type DetailMeta = { status: "ok" | "failed"; fetchedAt: number; reason: string | null } | null;
@@ -19,7 +20,7 @@ export type TilePlaceState = { id: string; tileKey: string; meta: DetailMeta };
 const CHUNK = 90;
 const META_UPSERT = "INSERT INTO meta (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value";
 const BLOCKED_KEY = "place_blocked_until";
-const TILES_CHANGED_KEY = "tiles_changed_at";
+export const TILES_CHANGED_KEY = "tiles_changed_at";
 /** tiles_changed_at 올리기: MAX(이전 값 + 1, now) */
 const TILES_CHANGED_BUMP = `INSERT INTO meta (key, value) VALUES (?, ?)
   ON CONFLICT(key) DO UPDATE SET value = MAX(CAST(meta.value AS INTEGER) + 1, CAST(excluded.value AS INTEGER))`;
@@ -174,23 +175,26 @@ export async function getTiles(db: D1Database, keys: string[]): Promise<Map<stri
   return out;
 }
 
-export function isTileDue(state: TileState | undefined, now: number): boolean {
-  return !state || now - state.collectedAt >= TILE_TTL_MS;
+/**
+ * 수집할 격자인가: 없거나, tileFreshFrom 전에 수집했다 (R63 거점 격자는 그 거점들의 가장 늦은 갱신 시작, 밖은 7일 TTL — R3)
+ */
+export function isTileDue(key: string, state: TileState | undefined, now: number): boolean {
+  return !state || state.collectedAt < tileFreshFrom(key, now);
 }
 
 /**
  * keys 중 수집할 격자(없음·만료 — isTileDue)만 keys 순서대로. getTiles + isTileDue와 같지만 격자 상태 행을 받아 오지 않는다
- * (Task 34: Cron은 모든 거점의 격자 수백 개를 실행마다 확인한다)
+ * (Task 34: Cron은 모든 거점의 격자 수백 개를 실행마다 확인한다). 격자마다 기준 시각이 달라서 [key, freshFrom]을 넘긴다
  */
 export async function dueTileKeys(db: D1Database, keys: string[], now: number): Promise<string[]> {
   if (keys.length === 0) return [];
   const r = await db
     .prepare(
-      `SELECT k.value AS key FROM json_each(?) AS k
-       WHERE NOT EXISTS (SELECT 1 FROM tiles t WHERE t.key = k.value AND t.collected_at > ?)
+      `SELECT json_extract(k.value, '$[0]') AS key FROM json_each(?) AS k
+       WHERE NOT EXISTS (SELECT 1 FROM tiles t WHERE t.key = json_extract(k.value, '$[0]') AND t.collected_at >= json_extract(k.value, '$[1]'))
        ORDER BY k.key`,
     )
-    .bind(JSON.stringify(keys), now - TILE_TTL_MS)
+    .bind(JSON.stringify(keys.map((k) => [k, tileFreshFrom(k, now)])))
     .all<{ key: string }>();
   return r.results.map((x) => x.key);
 }
@@ -205,10 +209,21 @@ export function detailJitterMs(id: string): number {
   return Math.floor((h / 0x1_0000_0000) * DETAIL_JITTER_MS);
 }
 
+/** R9: 격자와 상관없는 만료 — ok 3일 + 지터, 실패 6시간 (거점 밖 격자, 단건 R13의 실패 재시도) */
 export function isDetailDue(meta: DetailMeta, now: number, id: string): boolean {
   if (!meta) return true;
   const ttl = meta.status === "ok" ? DETAIL_OK_TTL_MS + detailJitterMs(id) : DETAIL_FAIL_TTL_MS;
   return now - meta.fetchedAt >= ttl;
+}
+
+/**
+ * R63: tileKey 격자에 기록된 가게의 상세를 다시 가져올 때인가. 거점 격자의 ok는 그 격자의 갱신 기준 시각
+ * (덮는 거점들의 가장 늦은 시작) 전에 가져왔을 때, 거점 밖 격자는 isDetailDue(3일 + 지터). 미수집은 언제나, 실패는 6시간
+ */
+export function isPlaceDue(meta: DetailMeta, tileKey: string, now: number, id: string): boolean {
+  if (!meta || meta.status !== "ok") return isDetailDue(meta, now, id);
+  const start = tileRefreshStart(tileKey, now);
+  return start === null ? isDetailDue(meta, now, id) : meta.fetchedAt < start;
 }
 
 /** due: 상세가 없거나 만료된 ID (Cron, warm) / unfetched: 한 번도 가져오지 않은 ID만 (요청 시점 보충) */
@@ -266,8 +281,9 @@ function rankGroups(keys: string[], centers: LatLng[]): RankGroup[] {
   for (const [k, d] of dist) groups[rankOf.get(d) as number].keys.push(k);
   return groups;
 }
-/** SQL ?1: [key, rank] JSON */
-const rankedJson = (groups: RankGroup[]) => JSON.stringify(groups.flatMap((g) => g.keys.map((k) => [k, g.rank])));
+/** SQL ?1: [key, rank] JSON. now를 주면 [key, rank, okDueBefore] — 칸마다 ok 상세의 갱신 기준이 다르다 (R63) */
+const rankedJson = (groups: RankGroup[], now?: number) =>
+  JSON.stringify(groups.flatMap((g) => g.keys.map((k) => (now === undefined ? [k, g.rank] : [k, g.rank, okDueBefore(k, now)]))));
 
 /**
  * 후보를 SQL에서 줄 세워 쪽씩 읽는다: 첫 쪽 max(limit, DETAIL_PICK_FIRST_PAGE)행, 다음 쪽은 DETAIL_PICK_GROWTH배씩,
@@ -291,11 +307,11 @@ const nearestSql = (where: string) => `SELECT tp.place_id AS id, tp.tile_key AS 
   LIMIT ?2 OFFSET ?3`;
 export const NEAREST_UNFETCHED_SQL = nearestSql("p.id IS NULL");
 /**
- * due일 수 있는 행: 상세 없음, ok는 지터 전 TTL이 지남(실제 만료는 isDetailDue로 다시 본다), 실패는 TTL이 지남.
- * ?4 ok 기준(now − DETAIL_OK_TTL_MS), ?5 실패 기준(now − DETAIL_FAIL_TTL_MS)
+ * due일 수 있는 행: 상세 없음, ok는 칸의 기준(?1의 세 번째 값 okDueBefore — R63 거점 격자는 갱신 시작, 밖은 지터 전 3일) 전에
+ * 가져옴(밖의 지터는 isPlaceDue로 다시 본다), 실패는 TTL이 지남. ?4 실패 기준(now − DETAIL_FAIL_TTL_MS)
  */
 export const NEAREST_DUE_SQL = nearestSql(
-  "(p.id IS NULL OR (p.status = 'ok' AND p.fetched_at <= ?4) OR (p.status <> 'ok' AND p.fetched_at <= ?5))",
+  "(p.id IS NULL OR (p.status = 'ok' AND p.fetched_at < json_extract(k.value, '$[2]')) OR (p.status <> 'ok' AND p.fetched_at <= ?4))",
 );
 type NearestRow = {
   id: string; tile_key: string; r: number; status: string | null; fetched_at: number | null; fail_reason: string | null;
@@ -303,7 +319,7 @@ type NearestRow = {
 
 /**
  * ranked 격자의 후보를 (순위, id) 순서로 읽어 out을 want곳까지 채운다 (seen: 이미 본 id — 여러 칸에 기록된 가게는 처음 칸만).
- * ok 행의 지터는 SQL에서 볼 수 없어서 Worker가 isDetailDue로 거른다. firstRank: 처음 나온 행의 순위(없으면 null).
+ * 거점 밖 ok 행의 지터는 SQL에서 볼 수 없어서 Worker가 isPlaceDue로 거른다. firstRank: 처음 나온 행의 순위(없으면 null).
  * truncated: 쪽 상한까지 읽었는데 want곳을 못 채웠고 행이 더 있다.
  */
 async function readNearest(
@@ -317,7 +333,7 @@ async function readNearest(
   for (let i = 0; i < pages; i++) {
     const stmt = scope === "unfetched"
       ? db.prepare(NEAREST_UNFETCHED_SQL).bind(ranked, page, offset)
-      : db.prepare(NEAREST_DUE_SQL).bind(ranked, page, offset, now - DETAIL_OK_TTL_MS, now - DETAIL_FAIL_TTL_MS);
+      : db.prepare(NEAREST_DUE_SQL).bind(ranked, page, offset, now - DETAIL_FAIL_TTL_MS);
     const r = await stmt.all<NearestRow>();
     for (const x of r.results) {
       firstRank ??= x.r;
@@ -326,7 +342,7 @@ async function readNearest(
       if (seen.has(x.id)) continue;
       seen.add(x.id);
       const meta = metaOf(x.status, x.fetched_at, x.fail_reason);
-      if (scope === "unfetched" || isDetailDue(meta, now, x.id)) out.push({ id: x.id, tileKey: x.tile_key, meta });
+      if (scope === "unfetched" || isPlaceDue(meta, x.tile_key, now, x.id)) out.push({ id: x.id, tileKey: x.tile_key, meta });
     }
     if (out.length >= want || r.results.length < page) return { firstRank, truncated: false, pages: i + 1 };
     offset += page;
@@ -346,7 +362,9 @@ export async function nearestDetailIds(
   const keys = tilesCoveringCircle(center, radiusM);
   if (want === 0 || keys.length === 0) return { ids: [], truncated: false };
   const out: TilePlaceState[] = [];
-  const { truncated } = await readNearest(db, rankedJson(rankGroups(keys, [center])), now, want, scope, new Set(), out);
+  const groups = rankGroups(keys, [center]);
+  const ranked = scope === "unfetched" ? rankedJson(groups) : rankedJson(groups, now);
+  const { truncated } = await readNearest(db, ranked, now, want, scope, new Set(), out);
   return { ids: out.map((t) => t.id), truncated };
 }
 
@@ -453,7 +471,7 @@ export function pickDetailIds(
   const nearest = new Map<string, number>();
   const distOf = new Map<string, number>();
   for (const t of states) {
-    if (scope === "unfetched" ? t.meta !== null : !isDetailDue(t.meta, now, t.id)) continue;
+    if (scope === "unfetched" ? t.meta !== null : !isPlaceDue(t.meta, t.tileKey, now, t.id)) continue;
     let d = distOf.get(t.tileKey);
     if (d === undefined) distOf.set(t.tileKey, (d = tileDistance(t.tileKey, centers)));
     const prev = nearest.get(t.id);
@@ -463,6 +481,28 @@ export function pickDetailIds(
     .sort((a, b) => a[1] - b[1] || (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0))
     .map(([id]) => id);
   return limit === undefined ? ids : ids.slice(0, limit);
+}
+
+/**
+ * R63 Cron 순서: 미수집(새 가게)을 먼저 가까운 순으로, 그다음 갱신 대상이 된 시각(dueSinceOf — 거점 격자는 갱신 시작)이
+ * 오래된 것부터, 같으면 가장 가까운 거점까지 칸 거리 순, 같으면 id순. 한 가게가 여러 칸에 있으면 대상인 칸 중 (시각, 거리)가 가장 앞선 것.
+ * 그래서 시작이 오래된 거점의 갱신이 먼저 끝나고, 한 거점 안에서는 예전처럼 가까운 순이다.
+ */
+export function pickCronIds(states: TilePlaceState[], centers: LatLng[], now: number, limit: number): string[] {
+  const best = new Map<string, { since: number; d: number }>();
+  const distOf = new Map<string, number>();
+  for (const t of states) {
+    if (!isPlaceDue(t.meta, t.tileKey, now, t.id)) continue;
+    const since = t.meta === null ? Number.NEGATIVE_INFINITY : dueSinceOf(t.meta, t.tileKey, now, detailJitterMs(t.id));
+    let d = distOf.get(t.tileKey);
+    if (d === undefined) distOf.set(t.tileKey, (d = tileDistance(t.tileKey, centers)));
+    const prev = best.get(t.id);
+    if (!prev || since < prev.since || (since === prev.since && d < prev.d)) best.set(t.id, { since, d });
+  }
+  return [...best.entries()]
+    .sort(([a, x], [b, y]) => x.since - y.since || x.d - y.d || (a < b ? -1 : a > b ? 1 : 0))
+    .slice(0, Math.max(0, Math.floor(limit)))
+    .map(([id]) => id);
 }
 
 export async function countNeedingDetail(db: D1Database, center: LatLng, radiusM: number, now: number): Promise<number> {
@@ -497,7 +537,10 @@ ${EXPIRED_COLS}
   WHERE p.status = ?1 AND p.fetched_at > ?2 AND p.fetched_at <= ?4
 ORDER BY fetched_at, rid LIMIT ?5`;
 const EXPIRED_FROM_PREFIX = "expired_from:";
-/** from·rid: 다음 실행이 읽기 시작할 위치. changedAt·keys: 커서를 쓸 때 본 tiles_changed_at과 거점 격자 집합 지문 */
+/**
+ * from·rid: 다음 실행이 읽기 시작할 위치. changedAt·keys: 커서를 쓸 때 본 tiles_changed_at과 거점 격자 집합 지문
+ * (ok 커서의 지문에는 R63 칸마다의 갱신 시작도 들어간다 — 시작이 바뀌면 처음부터 다시 읽는다)
+ */
 type ScanCursor = { from: number; rid: number; changedAt: number; keys: string };
 
 function parseCursor(raw: string | undefined): ScanCursor | null {
@@ -527,37 +570,47 @@ export function tileSetFingerprint(keys: Iterable<string>): string {
 type ExpiredRow = { rid: number; id: string; status: string; fetched_at: number; fail_reason: string | null; tile_key: string | null };
 
 /**
- * Cron용(R11): 주어진 격자(= 모든 거점의 PREWARM_RADIUS 격자)의 장소 중 만료됐을 수 있는 것.
- * ok는 지터를 빼고(가장 이른 만료 시각) 고르므로 실제 만료 여부는 isDetailDue로 다시 확인한다.
+ * Cron용(R11): 주어진 격자(= 모든 거점의 PREWARM_RADIUS 격자)의 장소 중 갱신 대상일 수 있는 것.
+ * R63: ok는 칸마다 기준(okDueBefore)이 다르다 — 거점 격자는 그 칸 거점들의 가장 늦은 갱신 시작 전에 가져온 것(정확),
+ * 거점 밖 칸은 지터 전 3일(실제 만료는 isPlaceDue로 다시 확인). 실패는 6시간.
  *
  * R38 읽기 예산: 상태마다 (status, fetched_at) 인덱스를 오래된 순으로 EXPIRED_SCAN_LIMIT행까지만 읽는다.
- * 거점 밖 행(예전 warm의 ASEM 1500m 고리, 격자에 없는 단건 조회)은 갱신되지 않아 늘 인덱스 맨 앞에 남으므로,
- * 상태마다 "여기부터 읽는다" 커서(meta expired_from:{status} = (fetched_at, rowid))를 둔다 — 첫 거점 행의 위치,
- * 거점 행이 없었으면 지나간 마지막 행(다 읽었으면 before). 그 앞에는 거점 행이 없으니 다음 실행은 건너뛴다.
- * 거점 행은 갱신되면 fetched_at이 앞으로 가므로 커서 앞에 새로 생기지 않는다. 처음부터 다시 읽는(재설정) 때:
+ * ok의 범위 상한은 주어진 칸 기준 중 가장 늦은 것(가장 최근에 시작한 거점의 시작)이고, 행마다 붙인 칸의 기준으로 거른다.
+ * 대상이 아닌 행(거점 밖 행 — 예전 warm의 ASEM 1500m 고리, 격자에 없는 단건 조회 — 와 자기 거점 시작 뒤에 가져온 행)은
+ * 늘 인덱스 앞쪽에 남으므로, 상태마다 "여기부터 읽는다" 커서(meta expired_from:{status} = (fetched_at, rowid))를 둔다 —
+ * 첫 대상 행의 위치, 없었으면 지나간 마지막 행(다 읽었으면 상한). 그 앞에는 대상 행이 없으니 다음 실행은 건너뛴다.
+ * 대상 행은 갱신되면 fetched_at이 앞으로 가므로 커서 앞에 새로 생기지 않고, 대상이 아닌 행은 기준이 바뀌기 전에는 대상이
+ * 되지 않는다(거점 격자의 기준은 다음 갱신 요일까지 그대로다). 처음부터 다시 읽는(재설정) 때:
  * - 커서를 쓸 때 본 tiles_changed_at과 지금 값이 다르다 (오래된 행이 거점 격자에 새로 들어왔을 수 있다).
  *   크기가 아니라 같은지로 본다 — 요청이 Cron보다 이른 시각으로 늦게 기록해도 놓치지 않는다.
- * - 거점 격자 집합(keys)의 지문이 다르다 (거점 추가·변경).
- * 재설정이면 같은 실행에서 거점 행이 나올 때까지 EXPIRED_RESET_PAGES쪽까지 이어 읽는다 (다음 실행은 한 쪽씩).
+ * - 거점 격자 집합(keys)의 지문이 다르다 (거점 추가·변경). ok는 칸마다의 갱신 시작도 지문에 넣는다 — 어느 거점이든 새 갱신
+ *   요일이 되면(하루 한 번쯤) 커서 앞의 그 거점 행이 대상이 되므로 처음부터 다시 읽는다.
+ * 재설정이면 같은 실행에서 대상 행이 나올 때까지 EXPIRED_RESET_PAGES쪽까지 이어 읽는다 (다음 실행은 한 쪽씩).
  */
 export async function expiredDetailStates(
   db: D1Database, keys: string[], now: number, observedChangedAt?: number,
 ): Promise<TilePlaceState[]> {
-  const wanted = new Set(keys);
-  const fingerprint = tileSetFingerprint(wanted);
+  const unique = [...new Set(keys)];
+  if (unique.length === 0) return [];
+  // 칸 → ok 기준(이 시각 전에 가져온 것만 대상)
+  const okBefore = new Map(unique.map((k) => [k, okDueBefore(k, now)] as const));
+  const keysFingerprint = tileSetFingerprint(unique);
+  // 거점 격자의 기준(갱신 시작)은 다음 갱신 요일까지 그대로라 지문에 넣는다. 거점 밖 칸의 기준은 now를 따라 움직여서 넣지 않는다
+  const okFingerprint = tileSetFingerprint(unique.map((k) => (tileRefreshStart(k, now) === null ? k : `${k}@${okBefore.get(k)}`)));
   // Cron은 한 번 읽은 tiles_changed_at을 넘겨서 다시 읽지 않는다 (Task 34 D1 호출 예산)
   const changedAt = observedChangedAt ?? (await tilesChangedAt(db));
+  const failBefore = now - DETAIL_FAIL_TTL_MS;
   const statuses = [
-    ["ok", now - DETAIL_OK_TTL_MS],
-    ["failed", now - DETAIL_FAIL_TTL_MS],
+    { status: "ok", before: Math.max(...okBefore.values()) - 1, fingerprint: okFingerprint, due: (x: ExpiredRow, k: string) => x.fetched_at < (okBefore.get(k) as number) },
+    { status: "failed", before: failBefore, fingerprint: keysFingerprint, due: () => true },
   ] as const;
   const saved = await db
     .prepare("SELECT key, value FROM meta WHERE key IN (?, ?)")
-    .bind(...statuses.map(([st]) => EXPIRED_FROM_PREFIX + st))
+    .bind(...statuses.map((x) => EXPIRED_FROM_PREFIX + x.status))
     .all<{ key: string; value: string }>();
   const out: TilePlaceState[] = [];
   const writes: D1PreparedStatement[] = [];
-  for (const [status, before] of statuses) {
+  for (const { status, before, fingerprint, due } of statuses) {
     const key = EXPIRED_FROM_PREFIX + status;
     const cursor = parseCursor(saved.results.find((x) => x.key === key)?.value);
     const reset = cursor === null || cursor.changedAt !== changedAt || cursor.keys !== fingerprint;
@@ -569,7 +622,7 @@ export async function expiredDetailStates(
         .bind(status, pos.from, pos.rid, before, EXPIRED_SCAN_LIMIT)
         .all<ExpiredRow>();
       for (const x of r.results) {
-        if (x.tile_key === null || !wanted.has(x.tile_key)) continue;
+        if (x.tile_key === null || !okBefore.has(x.tile_key) || !due(x, x.tile_key)) continue;
         next ??= { from: x.fetched_at, rid: x.rid };
         out.push({ id: x.id, tileKey: x.tile_key, meta: metaOf(x.status, x.fetched_at, x.fail_reason) });
       }
@@ -579,7 +632,7 @@ export async function expiredDetailStates(
         pos = { from: Math.max(pos.from, before), rid: 0 };
         break;
       }
-      // 한 쪽을 다 읽었는데 거점 행이 없다 — 마지막 행부터 잇는다 (포함: 두 칸에 기록된 가게가 쪽 경계에서 잘려도 놓치지 않게)
+      // 한 쪽을 다 읽었는데 대상 행이 없다 — 마지막 행부터 잇는다 (포함: 두 칸에 기록된 가게가 쪽 경계에서 잘려도 놓치지 않게)
       const last = r.results[r.results.length - 1];
       pos = { from: last.fetched_at, rid: last.rid };
     }

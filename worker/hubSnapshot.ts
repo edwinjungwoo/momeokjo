@@ -117,7 +117,7 @@ export async function buildHubSnapshot(db: D1Database, hub: Hub, now: number): P
 
   const keys = tilesCoveringCircle(center, MAX_RADIUS);
   const tiles = await getTiles(db, keys);
-  if (keys.some((k) => isTileDue(tiles.get(k), now))) return skip("tiles");
+  if (keys.some((k) => isTileDue(k, tiles.get(k), now))) return skip("tiles");
   // pending은 목록(무거운 list_json)을 읽기 전에 본다
   const tileStates = await tilePlaceStates(db, keys);
   if (countUnfetchedIn(tileStates) > 0) return skip("pending");

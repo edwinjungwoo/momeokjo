@@ -7,7 +7,8 @@ import { createApp } from "../../worker/app";
 import { auditArea } from "../../worker/audit";
 import { MAX_DETAIL_BATCH_SIZE, limitsFrom } from "../../worker/config";
 import { hubOrder, runScheduled } from "../../worker/maintenance";
-import { DETAIL_JITTER_MS, DETAIL_OK_TTL_MS } from "../../shared/constants";
+import { DETAIL_OK_TTL_MS } from "../../shared/constants";
+import { hubRefreshStart } from "../../worker/refreshSchedule";
 import {
   NEAREST_UNFETCHED_SQL, detailJitterMs, getMeta, getTiles, markTile, recordPlaceBlock, replaceTilePlaces, saveDetailFailure,
 } from "../../worker/repo";
@@ -200,8 +201,10 @@ describe("admin", () => {
     expect(place.calls).toHaveLength(1);
   });
 
-  it("R31/R38: warm 후보 고르기가 쪽 상한에서 멈추면(truncated) 고른 곳이 배치보다 적어도 pending은 more", async () => {
-    const keys = tilesCoveringCircle(ASEM, 300);
+  it("R31/R38: (거점 밖 좌표) warm 후보 고르기가 쪽 상한에서 멈추면(truncated) 고른 곳이 배치보다 적어도 pending은 more", async () => {
+    // R63: 거점 격자는 갱신 시작 뒤에 가져온 행을 SQL이 걸러서 쪽 상한에 걸리지 않는다 — 지터를 SQL이 볼 수 없는 거점 밖 좌표로 본다
+    const OUTSIDE = { lat: ASEM.lat + 0.3, lng: ASEM.lng };
+    const keys = tilesCoveringCircle(OUTSIDE, 300);
     for (const k of keys) await markTile(env.DB, k, NOW, 0, false);
     // 가장 가까운 칸에 아직 만료되지 않은(지터 창 안) 행을 쪽 상한(100 + 400 + 1600행)보다 많이 → 후보를 하나도 못 고른다
     const ids = Array.from({ length: 2200 }, (_, i) => `w${String(i).padStart(5, "0")}`);
@@ -211,9 +214,10 @@ describe("admin", () => {
         `INSERT INTO places (id, status, fetched_at) SELECT json_extract(value, '$[0]'), 'ok', json_extract(value, '$[1]') FROM json_each(?)`,
       ).bind(JSON.stringify(rows.slice(i, i + 200))).run();
     }
-    await replaceTilePlaces(env.DB, tileKeyOf(ASEM), [...ids, "zzfar"], NOW, false);
+    await replaceTilePlaces(env.DB, tileKeyOf(OUTSIDE), [...ids, "zzfar"], NOW, false);
     const { app, place } = setup();
-    const r = await (await callApp(app, `/api/admin/warm?${AREA}`, { method: "POST", headers: AUTH })).json<any>();
+    const area = `lat=${OUTSIDE.lat}&lng=${OUTSIDE.lng}&radius=300`;
+    const r = await (await callApp(app, `/api/admin/warm?${area}`, { method: "POST", headers: AUTH })).json<any>();
     expect(r).toMatchObject({ enriched: 0, failed: 0, pending: "more", truncated: true });
     expect(place.calls).toHaveLength(0);
   });
@@ -292,7 +296,9 @@ describe("admin", () => {
     await run(NOW + 2);
     expect(place.calls).toHaveLength(2);
 
-    const later = NOW + 1 + DETAIL_OK_TTL_MS + DETAIL_JITTER_MS;
+    // R63: 다음 갱신 요일(봉은사 월요일) 00:00 뒤 — 격자도 그날 다시 모은다 (여기서는 막 모은 것으로 둔다)
+    const later = hubRefreshStart(hub, NOW) + 7 * 24 * 3600_000 + 3600_000;
+    for (const h of HUBS) for (const k of tilesCoveringCircle(h, PREWARM_RADIUS)) await markTile(env.DB, k, later - 1, 0, false);
     await run(later);
     expect(place.calls).toHaveLength(4);
     expect((await getMeta(env.DB, "1001"))?.fetchedAt).toBe(later);
