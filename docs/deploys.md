@@ -8,3 +8,4 @@
 | 2026-10-06 11:26 | 6a5d3051 | 8d0bf6b | 0006_daily_rollups, 0007_hub_snapshots | 성공 | 72a9f970 |
 | 2026-10-06 14:43 | 6eeb6e06 | 9348f1b | - | 성공 | 6a5d3051 |
 | 2026-10-06 16:19 | f559fcf2 | 62c2cb5 | - | 롤백 (새 FAIL 3) — 둘째 트리거를 2-59/5로 되돌려야 해요 (대시보드 Triggers 또는 wrangler triggers deploy) | 6eeb6e06 |
+| 2026-10-06 16:33 | 9fe079da | 3fb47fe | - | 성공 | 6eeb6e06 |
