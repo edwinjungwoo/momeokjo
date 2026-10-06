@@ -318,6 +318,7 @@ export async function runDetailCron(
   const db = meteredDb(env.DB, usage);
   const calls = new D1CallBudget(usage, CRON_D1_CALL_LIMIT - CRON_D1_RESERVE);
   const result: DetailCronResult = { enriched: 0, failed: 0, calls: 0 };
+  let finished = false;
   try {
     if (await overReadBudget(db, env, opts.now)) {
       result.skipped = "read_budget";
@@ -340,11 +341,14 @@ export async function runDetailCron(
     }, result);
     result.calls = budgetSize - budget.left;
     result.d1Calls = calls.used;
+    finished = true;
     return result;
   } finally {
+    // 일찍 돌려준 건너뜀도 끝난 것이다 (skipped가 있으면 return 전에 정했다). 던졌으면 본 Cron처럼 skipped: "error"
+    const failed = !finished && result.skipped === undefined;
     const summary = {
       at: opts.now, collected: 0, incomplete: 0, enriched: result.enriched, failed: result.failed, calls: result.calls, rolled: 0,
-      ...(result.skipped ? { skipped: result.skipped } : {}),
+      ...(failed ? { skipped: "error" } : result.skipped ? { skipped: result.skipped } : {}),
       ...(result.enrichError ? { enrichError: true as const } : {}),
       ...(result.d1Skipped ? { d1Skipped: result.d1Skipped } : {}),
     };
@@ -479,10 +483,29 @@ async function maintain(
 }
 
 /**
+ * R63: 이번 실행에 완료를 확인할 거점 (열린 거점 = 이번 시작으로 아직 기록하지 않았고, 수집할 격자도 이번 보충 후보도 없는 거점).
+ * 열린 거점을 (시작, id)로 줄 세워 k(= 5분 실행 번호)번째를 고른다 — 넘겨받은 hubs 순서(hubOrder가 실행마다 돌린다)와
+ * 상관없는 순서라야 열린 집합이 그대로일 때 연속 m번(m = 열린 거점 수) 안에 모두 한 번씩 확인한다 (테스트)
+ */
+export function pickRefreshCheck(
+  hubs: readonly Hub[], now: number, refreshed: ReadonlyMap<string, { start: number }>,
+  seen: { pendingTiles: ReadonlySet<string>; candidateTiles: ReadonlySet<string> },
+): { hub: Hub; start: number } | null {
+  const open = hubs
+    .map((hub) => ({ hub, start: hubRefreshStart(hub, now) }))
+    .filter(({ hub, start }) => {
+      if (refreshed.get(hub.id)?.start === start) return false;
+      return !tilesCoveringCircle(hub, PREWARM_RADIUS).some((k) => seen.pendingTiles.has(k) || seen.candidateTiles.has(k));
+    })
+    .sort((a, b) => a.start - b.start || (a.hub.id < b.hub.id ? -1 : a.hub.id > b.hub.id ? 1 : 0));
+  return open.length === 0 ? null : open[Math.floor(now / CRON_INTERVAL_MS) % open.length];
+}
+
+/**
  * R63: 갱신을 다 끝낸 거점을 하나 기록한다 (실행마다 많아야 한 거점 — 남은 대상 확인 1 + 기록 1).
  * 후보: 이번 시작으로 아직 기록하지 않았고, 거점 격자에 수집할 격자가 남지 않았고(이번 실행 뒤 incomplete·failed),
  * 이번 실행의 보충 후보(만료·미수집)에 그 거점 격자가 없는 거점 — 후보가 있으면 아직 대상이 남은 것이 확실하니 질의하지 않는다.
- * 그중 한 거점(실행마다 하나씩 돌린다 — 아직 대상이 남은 거점이 다른 거점의 기록을 막지 않게)에
+ * 그중 한 거점(pickRefreshCheck — 실행마다 하나씩 돌린다, 아직 대상이 남은 거점이 다른 거점의 기록을 막지 않게)에
  * 남은 대상(미수집, 시작 전에 가져온 ok — hubHasDue)이 없으면 {start, at: now}를 쓰고 그 거점 스냅샷 표시를 올린다.
  * 기록한 거점 id, 아니면 null.
  */
@@ -490,13 +513,7 @@ export async function completeHubRefresh(
   db: D1Database, hubs: Hub[], now: number, refreshed: ReadonlyMap<string, { start: number }>,
   seen: { pendingTiles: ReadonlySet<string>; candidateTiles: ReadonlySet<string>; canCheck: () => boolean },
 ): Promise<string | null> {
-  const open = hubs
-    .map((hub) => ({ hub, start: hubRefreshStart(hub, now) }))
-    .filter(({ hub, start }) => {
-      if (refreshed.get(hub.id)?.start === start) return false;
-      return !tilesCoveringCircle(hub, PREWARM_RADIUS).some((k) => seen.pendingTiles.has(k) || seen.candidateTiles.has(k));
-    });
-  const first = open[Math.floor(now / CRON_INTERVAL_MS) % Math.max(1, open.length)];
+  const first = pickRefreshCheck(hubs, now, refreshed, seen);
   if (!first || !seen.canCheck()) return null;
   if (await hubHasDue(db, first.hub, now)) return null;
   await recordHubRefreshed(db, first.hub.id, first.start, now);

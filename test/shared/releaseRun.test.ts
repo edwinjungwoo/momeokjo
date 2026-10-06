@@ -547,6 +547,21 @@ describe("infra: npm run release — 기준 스모크와 자동 롤백", () => {
     expect(h.ran("npx wrangler rollback")).toHaveLength(1);
   });
 
+  it("R63: 자동 롤백했는데 지금 설정의 둘째 트리거가 1-59/2면 크게 알리고 종료 코드 3 — 옛 버전은 2-59/5를 기대한다 (wrangler rollback은 트리거를 되돌리지 않는다)", async () => {
+    const h = harness(smokes([], [FAIL_PLACES_500]), {
+      files: { "wrangler.jsonc": '"triggers": { "crons": ["*/5 * * * *", "1-59/2 * * * *"] },' },
+    });
+    const res = await runRelease(opts(), h.deps);
+    expect(res.code).toBe(3);
+    expect(h.ran("npx wrangler rollback")).toHaveLength(1);
+    expect(res.summary.rolledBack).toBe(true);
+    expect(res.summary.result).toContain("둘째 트리거를 2-59/5로 되돌려야 해요 (대시보드 Triggers 또는 wrangler triggers deploy)");
+    expect(h.output()).toContain("둘째 트리거를 2-59/5로 되돌려야 해요 (대시보드 Triggers 또는 wrangler triggers deploy)");
+    // 설정에 1-59/2가 없으면(R63 앞 설정) 예전처럼 2
+    const old = harness(smokes([], [FAIL_PLACES_500]), { files: { "wrangler.jsonc": '"crons": ["*/5 * * * *", "2-59/5 * * * *"]' } });
+    expect((await runRelease(opts(), old.deps)).code).toBe(2);
+  });
+
   it("infra: 기준에 없던 코드 수준 FAIL이 새로 생기면 기록한 버전으로 비대화식 롤백(--message, --yes), 종료 코드 2", async () => {
     const h = harness(smokes([], [FAIL_PLACES_500, FAIL_ASSET_NEW]));
     const res = await runRelease(opts(), h.deps);

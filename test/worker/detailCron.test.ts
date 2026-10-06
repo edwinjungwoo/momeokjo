@@ -104,11 +104,37 @@ describe("R63 둘째 트리거 (홀수 분) — 스냅샷·쉼·상세만 보충
     await env.DB.prepare("INSERT INTO meta (key, value) VALUES ('place_blocked_until', ?)").bind(String(at(60))).run();
     expect(await run(env, at(3))).toMatchObject({ enriched: 0, skipped: "paused" });
     await env.DB.prepare("DELETE FROM meta WHERE key = 'place_blocked_until'").run();
+    // R44 강등 모드(detail_mode frozen)도 같다
+    await env.DB.prepare("INSERT INTO meta (key, value) VALUES ('detail_mode', ?)")
+      .bind(JSON.stringify({ mode: "frozen", since: at(0), until: at(0) + 24 * 3600_000 })).run();
+    expect(await run(env, at(4))).toMatchObject({ enriched: 0, skipped: "paused" });
+    expect(JSON.parse((await metaValue(CRON_DETAIL_LAST_KEY))!)).toMatchObject({ at: at(4), skipped: "paused" });
+    await env.DB.prepare("DELETE FROM meta WHERE key = 'detail_mode'").run();
 
     await env.DB.prepare("INSERT OR REPLACE INTO meta (key, value) VALUES (?, '99999999')").bind(`d1_read:${utcDay(at(9))}`).run();
     expect(await run(env, at(9))).toMatchObject({ enriched: 0, skipped: "read_budget" });
     expect(place.calls).toHaveLength(0);
     expect(JSON.parse((await metaValue(CRON_DETAIL_LAST_KEY))!)).toMatchObject({ skipped: "read_budget" });
+  });
+
+  it("R63/R38: 상세만 실행이 던지는 오류로 끝나도 사용량과 cron_detail_last(skipped: error)는 남긴다 — 본 Cron과 같다", async () => {
+    await markFresh(ALL_KEYS, BASE);
+    const broken = { ...env, DETAIL_BATCH_SIZE: "4" } as unknown as Env;
+    const db = env.DB;
+    // 쿨다운 읽기(detail_mode·place_blocked_until)에서 던지는 D1
+    const throwing = new Proxy(db, {
+      get(t, k) {
+        if (k !== "prepare") return Reflect.get(t, k);
+        return (sql: string) => {
+          if (sql.includes("place_blocked_until") || /key IN \(\?, \?\)/.test(sql) && sql.includes("SELECT key, value FROM meta")) {
+            throw new Error("boom");
+          }
+          return t.prepare(sql);
+        };
+      },
+    }) as D1Database;
+    await expect(runDetailCron({ ...broken, DB: throwing }, { fetcher: fakePlaceApi({}).fetcher, now: at(11) })).rejects.toThrow("boom");
+    expect(JSON.parse((await metaValue(CRON_DETAIL_LAST_KEY))!)).toMatchObject({ at: at(11), skipped: "error" });
   });
 
   it("R63: 오래 걸린 실행이 겹쳐 본 Cron과 상세만 실행이 같은 후보를 동시에 골라도 저장은 망가지지 않는다 (같은 상세를 두 번 쓸 뿐) — 이어지는 실행이 남은 것을 마저 한다", async () => {

@@ -4,8 +4,8 @@ import { DETAIL_FAIL_TTL_MS, DETAIL_OK_TTL_MS, PREWARM_RADIUS, TILE_TTL_MS } fro
 import { haversine, tileKeyOf, tileRect, tilesCoveringCircle } from "../../shared/geo";
 import { HUBS, hubById, type Hub } from "../../shared/hubs";
 import { HUB_DUE_EXISTS_SQL, HUB_REFRESHED_PREFIX, hubHasDue, readHubRefreshed } from "../../worker/hubRefresh";
-import { runScheduled } from "../../worker/maintenance";
-import { dueSinceOf, tileFreshFrom, tileRefreshStart, tileRefreshStarts } from "../../worker/refreshSchedule";
+import { CRON_INTERVAL_MS, hubOrder, pickRefreshCheck, runScheduled } from "../../worker/maintenance";
+import { dueSinceOf, hubRefreshStart as refreshStartOf, tileFreshFrom, tileRefreshStart, tileRefreshStarts } from "../../worker/refreshSchedule";
 import {
   detailJitterMs, dueTileKeys, expiredDetailStates, getTiles, isPlaceDue, isTileDue, markTile, pickCronIds,
   replaceTilePlaces, saveDetailFailure, type DetailMeta, type TilePlaceState,
@@ -314,6 +314,27 @@ describe("R63 거점 갱신 완료 기록", () => {
     expect(r.tiles.incomplete).toBeGreaterThan(0);
     expect(r.refreshed).toBeUndefined();
     expect(await readHubRefreshed(env.DB, "bongeunsa")).toBeNull();
+  });
+});
+
+describe("R63 완료 확인 차례", () => {
+  it("R63: 열린 거점(아직 이번 시작으로 기록 안 함) 집합이 그대로면 연속 m번(5분 간격) 실행 안에 모두 한 번씩 확인한다 — 실행마다 돌아가는 거점 순서와 상관없이", () => {
+    const T0 = kst(2026, 10, 7, 10);
+    for (const openIdx of [[0, 1, 2, 5], [0, 3, 4, 5], [1, 7], [2, 3, 6], [0, 1, 2, 3, 4, 5, 6, 7], [4]]) {
+      const open = new Set(openIdx.map((i) => HUBS[i].id));
+      for (let offset = 0; offset < HUBS.length; offset++) {
+        const seen = new Set<string>();
+        for (let i = 0; i < open.size; i++) {
+          const now = T0 + (offset + i) * CRON_INTERVAL_MS;
+          // 닫힌 거점은 이번 시작으로 이미 기록했다
+          const refreshed = new Map(HUBS.filter((h) => !open.has(h.id)).map((h) => [h.id, { start: refreshStartOf(h, now) }]));
+          const pick = pickRefreshCheck(hubOrder(HUBS, now), now, refreshed, { pendingTiles: new Set(), candidateTiles: new Set() });
+          expect(pick && open.has(pick.hub.id), `${openIdx} @${offset + i}`).toBe(true);
+          seen.add(pick!.hub.id);
+        }
+        expect([...seen].sort(), `${openIdx} from ${offset}`).toEqual([...open].sort());
+      }
+    }
   });
 });
 

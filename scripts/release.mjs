@@ -420,6 +420,10 @@ const tail = (text, n = 15) => {
   return (lines.length > n ? ["…", ...lines.slice(-n)] : lines).join("\n");
 };
 
+/** R63 둘째 트리거 (그 앞 버전은 2-59/5를 기대한다) */
+const SECOND_TRIGGER_R63 = "1-59/2";
+const TRIGGER_RESTORE_NOTE = "둘째 트리거를 2-59/5로 되돌려야 해요 (대시보드 Triggers 또는 wrangler triggers deploy)";
+
 const ROLLBACK_CAVEATS = [
   "  ⚠ 마이그레이션은 되돌리지 않아요 — 그래서 마이그레이션은 더하기만 해요 (이전 버전도 새 스키마에서 돌아야 해요).",
   "  ⚠ wrangler rollback은 Cron 트리거를 되돌리지 않아요 — 지금 wrangler.jsonc의 crons가 그대로 남아요. 이전 버전이 다른 주기를 기대하면 손으로 맞추세요 (docs/deploy.md).",
@@ -431,6 +435,7 @@ const ROLLBACK_CAVEATS = [
 /**
  * npm run release 전체 흐름. 첫 실패에서 멈춘다.
  * 종료 코드: 0 성공 · 1 배포 전 중단(운영 코드는 그대로) · 2 스모크 실패 → 자동 롤백함 · 3 사람이 확인해야 함
+ * (R63: 자동 롤백했어도 설정의 둘째 트리거가 1-59/2면 3 — 트리거를 손으로 2-59/5로 되돌려야 한다)
  * @param {import("./release.d.mts").ReleaseOpts} opts
  * @param {import("./release.d.mts").ReleaseDeps} deps
  */
@@ -808,6 +813,14 @@ export async function runRelease(opts, deps) {
     summary.rolledBack = true;
     summary.result = `롤백 (새 FAIL ${n})`;
     log(`  롤백했어요 — 지금 활성 버전은 ${previous}`);
+    // R63: wrangler rollback은 트리거를 되돌리지 않는다. 지금 설정이 R63 둘째 트리거(1-59/2)면 옛 버전은 2-59/5를 기대한다 —
+    // 그대로 두면 옛 코드가 모르는 cron을 본 Cron으로 돌려 홀수 분마다 전체 수집을 한다. 사람이 고쳐야 하니 크게 알리고 3
+    if (deps.readFile("wrangler.jsonc")?.includes(SECOND_TRIGGER_R63)) {
+      summary.result += ` — ${TRIGGER_RESTORE_NOTE}`;
+      log(`  ✗✗ ${TRIGGER_RESTORE_NOTE}`);
+      log(`     지금 운영 트리거는 */5 + 1-59/2예요. 롤백한 버전은 2-59/5를 기대해요 — 바꾸기 전까지 본 Cron이 홀수 분마다 더 돌아요 (docs/deploy.md).`);
+      return 3;
+    }
     return 2;
   };
 
