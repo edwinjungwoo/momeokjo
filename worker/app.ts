@@ -49,7 +49,7 @@ export const StatsQuery = z.object({
   hub: z.string().refine((h) => h === "all" || isHubId(h)).default("all"),
 });
 
-/** R52 대시보드: 탭, 기간(KST, 기본 최근 7일), 거점, 이전 기간 비교(기본 켬), fresh=1이면 캐시를 건너뛴다 */
+/** R57 대시보드: 탭, 기간(KST, 기본 최근 7일), 거점, 이전 기간 비교(기본 켬), fresh=1이면 캐시를 건너뛴다 */
 export const DashboardParams = z.object({
   tab: z.enum(["overview", "behavior", "ops"]).default("overview"),
   from: z.string().refine(isDay).optional(),
@@ -292,7 +292,7 @@ export function createApp(deps: AppDeps) {
     if (!q.success) return c.json({ error: "invalid_params" }, 400);
     // R38: 오늘 D1 읽기가 소프트 한도를 넘었으면 더 수집하지 않는다 (scripts/warm.mjs는 429에서 멈춘다)
     if (await overReadBudget(c.var.db, c.env, now())) return c.json({ error: "read_budget" }, 429);
-    // R55: 이 호출이 읽고 쓴 행 수 (관리 화면 진행 표시; 요청 전체 사용량은 미들웨어가 따로 기록한다)
+    // R60: 이 호출이 읽고 쓴 행 수 (관리 화면 진행 표시; 요청 전체 사용량은 미들웨어가 따로 기록한다)
     const usage: D1Usage = { read: 0, written: 0 };
     const r = await warmOnce(
       {
@@ -331,7 +331,7 @@ export function createApp(deps: AppDeps) {
     return c.json(await eventStats(c.var.db, { ...q.data, now: now(), readSoftCap: readSoftCap(c.env) }));
   });
 
-  // R52~R55 관리자 대시보드 v2. 탭 하나에 필요한 것을 한 응답으로, 같은 (탭, 기간, 거점, 비교)는 60초 엣지 캐시
+  // R57~R60 관리자 대시보드 v2. 탭 하나에 필요한 것을 한 응답으로, 같은 (탭, 기간, 거점, 비교)는 60초 엣지 캐시
   app.get("/api/admin/dashboard", async (c) => {
     c.header("Cache-Control", "no-store");
     const p = DashboardParams.safeParse(c.req.query());

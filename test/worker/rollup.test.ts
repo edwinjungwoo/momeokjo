@@ -17,7 +17,7 @@ const kst = (day: string, h: number, m = 0, s = 0) => {
 };
 const D = "2027-01-14";
 
-/** 하루 시나리오 (R53 정의 확인용). 세션 6개, 익명 id 5개, 거점 2곳 */
+/** 하루 시나리오 (R58 정의 확인용). 세션 6개, 익명 id 5개, 거점 2곳 */
 function scenario(): Seed[] {
   const e = (n: number, s: number, hub: string, type: string, at: number, extra: Partial<Seed> = {}): Seed => ({
     anon: anonN(n), session: sessN(s), hub, type, ts: at, ...extra,
@@ -60,8 +60,8 @@ function scenario(): Seed[] {
   ];
 }
 
-describe("R54 하루 지표 (liveDayMetrics)", () => {
-  it("R53: 세션 지표 — 사용자·신규·세션·결정·퍼널·다시 뽑기·결정 시간·자동 뽑기 수용·공유 링크·시간대 (거점별, 모든 거점 '*')", async () => {
+describe("R59 하루 지표 (liveDayMetrics)", () => {
+  it("R58: 세션 지표 — 사용자·신규·세션·결정·퍼널·다시 뽑기·결정 시간·자동 뽑기 수용·공유 링크·시간대 (거점별, 모든 거점 '*')", async () => {
     await seedEvents(scenario());
     const m = metricMap(await liveDayMetrics(env.DB, D));
     expect({
@@ -87,7 +87,7 @@ describe("R54 하루 지표 (liveDayMetrics)", () => {
     expect([m["bongeunsa decided"], m["ddp decided"], m["ddp auto_left"]]).toEqual([2, 1, 1]);
   });
 
-  it("R53: 이벤트 수 — 직접·자동 뽑기, 완화 섞인 뽑기, 공유(확정 포함)와 확정, 결과 카드 번호별", async () => {
+  it("R58: 이벤트 수 — 직접·자동 뽑기, 완화 섞인 뽑기, 공유(확정 포함)와 확정, 결과 카드 번호별", async () => {
     await seedEvents(scenario());
     const m = metricMap(await liveDayMetrics(env.DB, D));
     expect({
@@ -104,7 +104,7 @@ describe("R54 하루 지표 (liveDayMetrics)", () => {
     expect([m["bongeunsa draw_auto"], m["ddp draw_auto"], m["ddp redraw"]]).toEqual([1, 2, 1]);
   });
 
-  it("R53: 필터 분포 — filter_change 스냅숏의 인원·종류(없으면 all)·예산·평점·영업 중·반경 구간", async () => {
+  it("R58: 필터 분포 — filter_change 스냅숏의 인원·종류(없으면 all)·예산·평점·영업 중·반경 구간", async () => {
     await seedEvents(scenario());
     const m = metricMap(await liveDayMetrics(env.DB, D));
     const keys = [
@@ -119,7 +119,7 @@ describe("R54 하루 지표 (liveDayMetrics)", () => {
     expect(m["ddp f_total"]).toBeUndefined();
   });
 
-  it("R53: 가게 — 직접 뽑기 picks(자동 제외), 공유 picks, 빼줘. 거점·종류마다 그날 상위 20곳만", async () => {
+  it("R58: 가게 — 직접 뽑기 picks(자동 제외), 공유 picks, 빼줘. 거점·종류마다 그날 상위 20곳만", async () => {
     await seedEvents(scenario());
     const m = metricMap(await liveDayMetrics(env.DB, D));
     expect([m["* pick:1"], m["* pick:7"], m["* pick:4"], m["* pick:12"]]).toEqual([3, 3, 1, undefined]);
@@ -135,7 +135,7 @@ describe("R54 하루 지표 (liveDayMetrics)", () => {
     expect(rows.filter((r) => r.value === 25).map((r) => r.metric).sort()).toEqual(["pick:998", "pick:999"]);
   });
 
-  it("R53: KST 날짜 경계 — 23:59:59는 그날, 00:00:00은 다음 날로 센다", async () => {
+  it("R58: KST 날짜 경계 — 23:59:59는 그날, 00:00:00은 다음 날로 센다", async () => {
     await seedEvents([
       { anon: anonN(1), session: sessN(1), hub: "ddp", type: "app_open", ts: kst(D, 23, 59, 59) },
       { anon: anonN(2), session: sessN(2), hub: "ddp", type: "app_open", ts: kst("2027-01-15", 0, 0, 0) },
@@ -145,7 +145,7 @@ describe("R54 하루 지표 (liveDayMetrics)", () => {
     expect([a["* sessions"], a["* sessions_h23"], b["* sessions"], b["* sessions_h00"]]).toEqual([1, 1, 1, 1]);
   });
 
-  it("R54: 실시간 집계는 core(세션·이벤트 수)와 detail(필터·가게)로 나눠 셀 수 있고, 둘을 합치면 전체와 같다", async () => {
+  it("R59: 실시간 집계는 core(세션·이벤트 수)와 detail(필터·가게)로 나눠 셀 수 있고, 둘을 합치면 전체와 같다", async () => {
     await seedEvents(scenario());
     const core = await liveDayMetrics(env.DB, D, "core");
     const detail = await liveDayMetrics(env.DB, D, "detail");
@@ -154,7 +154,7 @@ describe("R54 하루 지표 (liveDayMetrics)", () => {
     expect([...core, ...detail]).toEqual(await liveDayMetrics(env.DB, D));
   });
 
-  it("R53: 나오는 지표 이름은 모두 정의돼 있다 (shared/dashboard.ts METRICS·METRIC_FAMILIES)", async () => {
+  it("R58: 나오는 지표 이름은 모두 정의돼 있다 (shared/dashboard.ts METRICS·METRIC_FAMILIES)", async () => {
     await seedEvents(scenario());
     const rows = await liveDayMetrics(env.DB, D);
     expect(rows.length).toBeGreaterThan(50);
@@ -163,7 +163,7 @@ describe("R54 하루 지표 (liveDayMetrics)", () => {
   });
 });
 
-describe("R54 Cron 집계 (runRollups)", () => {
+describe("R59 Cron 집계 (runRollups)", () => {
   const stats = async (day: string) =>
     (await env.DB.prepare("SELECT hub, metric, value FROM daily_stats WHERE day = ? ORDER BY hub, metric").bind(day).all<{
       hub: string; metric: string; value: number;
@@ -171,13 +171,13 @@ describe("R54 Cron 집계 (runRollups)", () => {
   const sorted = (rows: { hub: string; metric: string; value: number }[]) =>
     [...rows].sort((a, b) => (a.hub + a.metric < b.hub + b.metric ? -1 : 1));
 
-  it("R54: 전날은 KST 04시 이후 첫 실행에서 집계한다 (그 전에는 그저께까지)", () => {
+  it("R59: 전날은 KST 04시 이후 첫 실행에서 집계한다 (그 전에는 그저께까지)", () => {
     expect(lastRollableDay(kst("2027-01-15", 3, 59))).toBe("2027-01-13");
     expect(lastRollableDay(kst("2027-01-15", 4, 0))).toBe("2027-01-14");
     expect(lastRollableDay(kst("2027-01-15", 0, 5))).toBe("2027-01-13");
   });
 
-  it("R54: 집계한 행은 같은 날의 실시간 집계와 같고, 커서(rollup_through)를 올린다. 따라잡은 뒤에는 meta 1행만 읽는다", async () => {
+  it("R59: 집계한 행은 같은 날의 실시간 집계와 같고, 커서(rollup_through)를 올린다. 따라잡은 뒤에는 meta 1행만 읽는다", async () => {
     await seedEvents(scenario());
     expect(await runRollups(env.DB, kst("2027-01-15", 4, 5))).toBe(1);
     expect(await rollupThrough(env.DB)).toBe(D);
@@ -190,7 +190,7 @@ describe("R54 Cron 집계 (runRollups)", () => {
     expect(log.map((x) => x.read)).toEqual([1]);
   });
 
-  it(`R54: 밀린 날은 오래된 날부터 실행마다 ${ROLLUP_DAYS_PER_RUN}일까지만, 처음이면 가장 오래된 이벤트 날부터`, async () => {
+  it(`R59: 밀린 날은 오래된 날부터 실행마다 ${ROLLUP_DAYS_PER_RUN}일까지만, 처음이면 가장 오래된 이벤트 날부터`, async () => {
     const days = ["2027-01-08", "2027-01-09", "2027-01-10", "2027-01-11", "2027-01-12", "2027-01-13", "2027-01-14"];
     await seedEvents(days.map((d, i) => ({ anon: anonN(i), session: sessN(i), hub: "ddp", type: "app_open", ts: kst(d, 12) })));
     const now = kst("2027-01-15", 5);
@@ -202,13 +202,13 @@ describe("R54 Cron 집계 (runRollups)", () => {
     expect((await stats("2027-01-14")).find((r) => r.hub === "*" && r.metric === "sessions")?.value).toBe(1);
   });
 
-  it("R54: 이벤트가 하나도 없으면 커서만 두고 아무것도 쓰지 않는다", async () => {
+  it("R59: 이벤트가 하나도 없으면 커서만 두고 아무것도 쓰지 않는다", async () => {
     expect(await runRollups(env.DB, kst("2027-01-15", 5))).toBe(0);
     expect(await rollupThrough(env.DB)).toBe("2027-01-14");
     expect((await env.DB.prepare("SELECT count(*) AS n FROM daily_stats").first<{ n: number }>())?.n).toBe(0);
   });
 
-  it("R54: 같은 날을 다시 집계해도 결과가 같다 (지우고 다시 쓴다, 코호트 행은 지우지 않는다)", async () => {
+  it("R59: 같은 날을 다시 집계해도 결과가 같다 (지우고 다시 쓴다, 코호트 행은 지우지 않는다)", async () => {
     await seedEvents(scenario());
     await env.DB.batch(rollupDayStatements(env.DB, D));
     const first = await stats(D);
@@ -217,7 +217,7 @@ describe("R54 Cron 집계 (runRollups)", () => {
     expect(await stats(D)).toEqual(sorted([...first, { hub: "*", metric: "cohort_size", value: 7 }]));
   });
 
-  it("R53/R54: 재방문 코호트 — 첫 방문 주(월요일)별 크기와 D1·D7·D14·D28(첫 방문일 + n일 이후 다시 엶), 이전에 온 id는 신규가 아님", async () => {
+  it("R58/R59: 재방문 코호트 — 첫 방문 주(월요일)별 크기와 D1·D7·D14·D28(첫 방문일 + n일 이후 다시 엶), 이전에 온 id는 신규가 아님", async () => {
     const open = (n: number, day: string, hub = "bongeunsa"): Seed => ({
       anon: anonN(n), session: `${sessN(n).slice(0, 30)}${day.replaceAll("-", "").slice(2)}`, hub, type: "app_open", ts: kst(day, 12),
     });
@@ -248,7 +248,7 @@ describe("R54 Cron 집계 (runRollups)", () => {
     expect([d29.users, d29.new_users]).toEqual([1, undefined]);
   });
 
-  it("R35/R54: 보관 정리 — 90일 넘게 오지 않은 id의 첫 방문 기록과 400일 지난 집계를 지운다", async () => {
+  it("R35/R59: 보관 정리 — 90일 넘게 오지 않은 id의 첫 방문 기록과 400일 지난 집계를 지운다", async () => {
     const now = kst("2027-06-01", 4, 1);
     await env.DB.batch([
       env.DB.prepare("INSERT INTO anon_first_seen VALUES (?, '2027-01-01', 'ddp', 0, '2027-03-02')").bind(anonN(1)),
@@ -261,14 +261,14 @@ describe("R54 Cron 집계 (runRollups)", () => {
   });
 });
 
-describe("R54 Cron 통합 (runScheduled)", () => {
+describe("R59 Cron 통합 (runScheduled)", () => {
   const fetcher = routeFetch(fakeKakaoLocal([]).fetcher, fakePlaceApi({}).fetcher);
   const lastRun = async () => {
     const r = await env.DB.prepare("SELECT value FROM meta WHERE key = 'cron_last'").first<{ value: string }>();
     return r ? (JSON.parse(r.value) as Record<string, unknown>) : null;
   };
 
-  it("R54: 실행마다 밀린 집계를 하고, 마지막 실행 요약(meta cron_last)을 사용량 기록과 같은 UPSERT 한 문장으로 남긴다", async () => {
+  it("R59: 실행마다 밀린 집계를 하고, 마지막 실행 요약(meta cron_last)을 사용량 기록과 같은 UPSERT 한 문장으로 남긴다", async () => {
     await seedEvents(scenario());
     const now = kst("2027-01-15", 4, 5);
     const { db, log } = recordingDb(env.DB);
@@ -281,7 +281,7 @@ describe("R54 Cron 통합 (runScheduled)", () => {
     expect(record[0].sql).toContain("INSERT INTO meta");
   });
 
-  it("R38/R54: 읽기 예산을 넘은 날은 집계도 건너뛰고, 요약에 skipped를 남긴다", async () => {
+  it("R38/R59: 읽기 예산을 넘은 날은 집계도 건너뛰고, 요약에 skipped를 남긴다", async () => {
     await seedEvents(scenario());
     const now = kst("2027-01-15", 4, 5);
     await env.DB.prepare("INSERT INTO meta (key, value) VALUES (?, '3000001')").bind(`d1_read:${utcDay(now)}`).run();
@@ -291,7 +291,7 @@ describe("R54 Cron 통합 (runScheduled)", () => {
     expect(await lastRun()).toMatchObject({ at: now, skipped: "read_budget", rolled: 0 });
   });
 
-  it("R35/R54: 보관 정리 창(KST 04:00~04:04)에서 첫 방문 기록·오래된 집계도 정리한다", async () => {
+  it("R35/R59: 보관 정리 창(KST 04:00~04:04)에서 첫 방문 기록·오래된 집계도 정리한다", async () => {
     const now = kst("2027-06-01", 4, 1);
     await env.DB.prepare("INSERT INTO anon_first_seen VALUES (?, '2027-01-01', 'ddp', 0, '2027-01-02')").bind(anonN(1)).run();
     await runScheduled(env, { fetcher, now, sleep: async () => {}, hubs: [] });

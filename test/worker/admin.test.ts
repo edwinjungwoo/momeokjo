@@ -14,7 +14,7 @@ import { placeJson, seedPlace } from "../helpers/places";
 
 const NOW = 1_800_000_000_000;
 const AUTH = { Authorization: "Bearer test-admin-token" };
-/** R55: warm 응답의 D1 행 수 */
+/** R60: warm 응답의 D1 행 수 */
 const ROWS = { rowsRead: expect.any(Number), rowsWritten: expect.any(Number) };
 const AREA = `lat=${ASEM.lat}&lng=${ASEM.lng}&radius=300`;
 const at = (dLat: number) => ASEM.lat + dLat;
@@ -125,7 +125,7 @@ describe("admin", () => {
     expect(await warm()).toEqual({ incompleteTiles: 0, pending: 0, enriched: 0, failed: 0, ...ROWS });
   });
 
-  it("R55: warm 응답에 이번 호출이 읽고 쓴 D1 행 수를 싣는다 (관리 화면 진행 표시)", async () => {
+  it("R60: warm 응답에 이번 호출이 읽고 쓴 D1 행 수를 싣는다 (관리 화면 진행 표시)", async () => {
     const { app } = setup();
     const r = await (await callApp(app, `/api/admin/warm?${AREA}`, { method: "POST", headers: AUTH })).json<any>();
     expect(r.rowsRead).toBeGreaterThan(0);

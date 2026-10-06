@@ -1,4 +1,4 @@
-// R52~R55 관리자 대시보드 v2: 지표 이름·정의, 응답 모양, 화면과 서버가 같이 쓰는 순수 계산.
+// R57~R60 관리자 대시보드 v2: 지표 이름·정의, 응답 모양, 화면과 서버가 같이 쓰는 순수 계산.
 // 화면(/admin 청크)도 부르므로 zod를 부르지 않는다.
 
 /** 기간은 최대 90일 (KST, 오늘 포함 가능) */
@@ -45,7 +45,7 @@ export function budgetLevel(fraction: number): BudgetLevel {
 }
 
 /**
- * R53 하루 지표 (거점별 + '*' 모든 거점). 이름 → 정의. 스펙 R53 표와 같아야 한다 (test/shared/dashboard.test.ts).
+ * R58 하루 지표 (거점별 + '*' 모든 거점). 이름 → 정의. 스펙 R58 표와 같아야 한다 (test/shared/dashboard.test.ts).
  * "세션"은 탭 세션 id, "결정"은 share(공유·복사, "여기로 가요" 포함) 또는 open_kakao(카카오맵 열기)다.
  */
 export const METRICS = {
@@ -98,7 +98,7 @@ export const METRICS = {
 } as const;
 export type MetricName = keyof typeof METRICS;
 
-/** 이름 뒤에 값이 붙는 지표 묶음. 접두어 → 정의 (스펙 R53 표와 같아야 한다) */
+/** 이름 뒤에 값이 붙는 지표 묶음. 접두어 → 정의 (스펙 R58 표와 같아야 한다) */
 export const METRIC_FAMILIES = {
   sessions_h: "sessions_h{00~23}: app_open의 KST 시(0~23)별 세션 수 (요일 × 시간 히트맵)",
   expand_r: "expand_r{1~3}: 결과 카드 번호별 expand_card 수",
@@ -285,7 +285,7 @@ export const budgetFraction = (b: OpsSnapshot["budget"]) =>
   Math.max(b.read / Math.max(1, b.readSoftCap), b.written / Math.max(1, b.writeSoftCap));
 
 /**
- * R52 "오늘의 이상 신호". 순서: 심각한 것 먼저.
+ * R57 "오늘의 이상 신호". 순서: 심각한 것 먼저.
  * 예산 > 70 %(소프트 한도 대비), 상세 쿨다운·frozen, pending > 0이거나 미완료 격자가 있는 거점, 15분 넘게 Cron이 돌지 않음, 집계 밀림
  */
 export function alertsOf(

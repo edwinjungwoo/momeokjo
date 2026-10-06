@@ -8,7 +8,7 @@ export const hubName = (id: string) => (HUBS.some((h) => h.id === id) ? hubById(
 
 const LEVEL_LABEL: Record<Alert["level"], string> = { crit: "긴급", warn: "주의", info: "참고" };
 
-/** R52 "오늘의 이상 신호" 띠 */
+/** R57 "오늘의 이상 신호" 띠 */
 export function AlertStrip({ alerts }: { alerts: Alert[] }) {
   return (
     <section className="alerts" aria-label="오늘의 이상 신호">

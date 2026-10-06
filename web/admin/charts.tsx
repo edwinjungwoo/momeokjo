@@ -1,7 +1,7 @@
 import { useId, useRef, useState, type CSSProperties, type ReactNode } from "react";
 
 /**
- * R52 관리 화면 차트 — 차트 라이브러리 없이 SVG·CSS. 얇은 막대(최대 24px, 끝 4px 둥글게, 기준선은 각지게),
+ * R57 관리 화면 차트 — 차트 라이브러리 없이 SVG·CSS. 얇은 막대(최대 24px, 끝 4px 둥글게, 기준선은 각지게),
  * 2px 선, 막대 사이·쌓인 조각 사이 2px 틈, 흐린 1px 격자. 값 글자는 글자색 토큰만 쓰고 색은 표식이 맡는다.
  * 모든 표식은 가리키거나 키보드로 고르면 툴팁이 뜬다.
  */

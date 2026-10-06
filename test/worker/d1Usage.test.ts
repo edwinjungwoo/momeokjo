@@ -16,7 +16,7 @@ import { placeJson } from "../helpers/places";
 
 const NOW = 1_800_000_000_000; // 2027-01-15 17:00 KST
 const TODAY = "2027-01-15";
-/** R55: warm 응답의 D1 행 수 */
+/** R60: warm 응답의 D1 행 수 */
 const ROWS = { rowsRead: expect.any(Number), rowsWritten: expect.any(Number) };
 const AUTH = { Authorization: "Bearer test-admin-token" };
 const AREA = `lat=${ASEM.lat}&lng=${ASEM.lng}&radius=300`;

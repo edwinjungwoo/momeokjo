@@ -91,11 +91,11 @@ export async function recordD1Usage(db: D1Database, usage: D1Usage, now: number)
     .run();
 }
 
-/** R54 Cron 마지막 실행 요약을 두는 meta 키 */
+/** R59 Cron 마지막 실행 요약을 두는 meta 키 */
 export const CRON_LAST_KEY = "cron_last";
 
 /**
- * R38 + R54: Cron 실행의 사용량 기록과 마지막 실행 요약(cron_last)을 UPSERT 한 문장으로 쓴다 (요약 때문에 늘어나는 쓰기는 실행당 1행).
+ * R38 + R59: Cron 실행의 사용량 기록과 마지막 실행 요약(cron_last)을 UPSERT 한 문장으로 쓴다 (요약 때문에 늘어나는 쓰기는 실행당 1행).
  * 사용량은 더하고, 요약은 바꿔 쓴다
  */
 export async function recordCronRun(db: D1Database, usage: D1Usage, now: number, summary: object): Promise<void> {

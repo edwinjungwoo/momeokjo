@@ -75,9 +75,9 @@ export type CronResult = {
   listJsonFilled?: number;
   /** R38: 오늘 D1 읽기가 소프트 한도를 넘어 수집·보충을 건너뛰었다 */
   skipped?: "read_budget";
-  /** R54: 이번 실행이 쓴 외부 호출 수 (카카오 로컬·상세) */
+  /** R59: 이번 실행이 쓴 외부 호출 수 (카카오 로컬·상세) */
   calls?: number;
-  /** R54: 이번 실행이 집계한 날 수 */
+  /** R59: 이번 실행이 집계한 날 수 */
   rolled?: number;
 };
 
@@ -98,7 +98,7 @@ export async function runScheduled(
   let result: CronResult | null = null;
   try {
     result = await maintain(env, db, opts);
-    // R54: 밀린 일별 집계 (따라잡았으면 meta 1행). 읽기 예산을 넘은 날은 건너뛴다. 실패해도 수집 결과는 그대로 둔다
+    // R59: 밀린 일별 집계 (따라잡았으면 meta 1행). 읽기 예산을 넘은 날은 건너뛴다. 실패해도 수집 결과는 그대로 둔다
     result.rolled = result.skipped
       ? 0
       : await runRollups(db, opts.now).catch((e) => {
@@ -107,7 +107,7 @@ export async function runScheduled(
         });
     return result;
   } finally {
-    // R38 사용량 + R54 마지막 실행 요약을 한 문장으로 (관리 화면 운영 탭의 "마지막 Cron")
+    // R38 사용량 + R59 마지막 실행 요약을 한 문장으로 (관리 화면 운영 탭의 "마지막 Cron")
     const r = result;
     const summary = {
       at: opts.now,

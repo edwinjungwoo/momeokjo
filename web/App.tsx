@@ -330,7 +330,7 @@ export default function App() {
           props: {
             candidates: pool, picks: r.places.map((p) => p.id), radius: filters.radius, party: filters.party,
             ...(auto ? { auto: true as const } : {}),
-            // R53: R41 완화로 조건 밖 가게가 섞인 뽑기
+            // R58: R41 완화로 조건 밖 가게가 섞인 뽑기
             ...(outside.size > 0 ? { relaxed: true as const } : {}),
           },
         });
@@ -402,7 +402,7 @@ export default function App() {
     if (outcome === "shared" || outcome === "copied") {
       record("shared", ps);
       const picks = ps.slice(0, TRIO_SIZE).map((p) => p.id);
-      // R53: 확정 공유는 결과 카드 번호도 보낸다 (결과 3곳 밖이면 없음)
+      // R58: 확정 공유는 결과 카드 번호도 보낸다 (결과 3곳 밖이면 없음)
       track("share", confirm ? { placeId: ps[0].id, props: { picks, confirm: true, ...rankOf(ps[0].id) } } : { props: { picks } });
     }
     if (outcome === "shared") toast.show("공유했어요", "love");

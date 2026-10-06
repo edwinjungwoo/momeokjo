@@ -21,19 +21,19 @@ const hub = (h: Partial<HubStatus>): HubStatus => ({
 const rollup = { through: "2027-01-14", yesterday: "2027-01-14" };
 
 describe("대시보드 순수 계산", () => {
-  it("R55: 예산 색 단계는 소프트 한도 대비 50/70/90 %에서 바뀐다", () => {
+  it("R60: 예산 색 단계는 소프트 한도 대비 50/70/90 %에서 바뀐다", () => {
     expect([0, 0.499, 0.5, 0.699, 0.7, 0.899, 0.9, 1.2].map(budgetLevel)).toEqual([
       "ok", "ok", "notice", "notice", "warn", "warn", "crit", "crit",
     ]);
     expect(budgetLevel(Number.NaN)).toBe("ok");
   });
 
-  it("R55: 예산 사용률은 읽기·쓰기 중 소프트 한도에 더 가까운 쪽", () => {
+  it("R60: 예산 사용률은 읽기·쓰기 중 소프트 한도에 더 가까운 쪽", () => {
     expect(budgetFraction(ops({ read: 1_500_000, written: 48_000 }).budget)).toBeCloseTo(0.8);
     expect(budgetFraction(ops({ read: 2_400_000, written: 6_000 }).budget)).toBeCloseTo(0.8);
   });
 
-  it("R53: 결정 시간 중앙값은 구간 안에서 선형 보간한다 (열린 마지막 구간이면 아래 경계)", () => {
+  it("R58: 결정 시간 중앙값은 구간 안에서 선형 보간한다 (열린 마지막 구간이면 아래 경계)", () => {
     expect(histogramMedian([0, 0, 0, 0, 0, 0, 0])).toBeNull();
     // 10개 중 5번째: 10~30초 구간(4개) 안에서 (5 - 2) / 4 = 0.75 → 25초
     expect(histogramMedian([2, 4, 4, 0, 0, 0, 0])).toBeCloseTo(25);
@@ -41,14 +41,14 @@ describe("대시보드 순수 계산", () => {
     expect(histogramMedian([0, 2, 0, 0, 0, 0, 0])).toBeCloseTo(20);
   });
 
-  it("R52: 이전 기간 대비 증감률 (이전이 0이거나 없으면 null)", () => {
+  it("R57: 이전 기간 대비 증감률 (이전이 0이거나 없으면 null)", () => {
     expect(deltaOf(120, 100)).toBeCloseTo(0.2);
     expect(deltaOf(50, 100)).toBeCloseTo(-0.5);
     expect(deltaOf(5, 0)).toBeNull();
     expect(deltaOf(null, 3)).toBeNull();
   });
 
-  it("R52: 날짜 계산 (KST 날짜 문자열, 월요일 시작 주)", () => {
+  it("R57: 날짜 계산 (KST 날짜 문자열, 월요일 시작 주)", () => {
     expect(addDays("2027-01-01", -1)).toBe("2026-12-31");
     expect(dayList("2026-12-30", "2027-01-02")).toEqual(["2026-12-30", "2026-12-31", "2027-01-01", "2027-01-02"]);
     expect(dayList("2027-01-02", "2027-01-01")).toEqual([]);
@@ -58,14 +58,14 @@ describe("대시보드 순수 계산", () => {
     expect([isDay("2027-02-29"), isDay("2027-02-28"), isDay("20270228")]).toEqual([false, true, false]);
   });
 
-  it("R53: 지표 이름·묶음은 스펙 R53 표와 같다 (정의된 것은 모두 표에, 표에 있는 것은 모두 정의)", () => {
-    const r53 = spec.slice(spec.indexOf("- **R53 "), spec.indexOf("- **R54 "));
+  it("R58: 지표 이름·묶음은 스펙 R58 표와 같다 (정의된 것은 모두 표에, 표에 있는 것은 모두 정의)", () => {
+    const r53 = spec.slice(spec.indexOf("- **R58 "), spec.indexOf("- **R59 "));
     const rows = [...r53.matchAll(/^\s*\| `([^`]+)` \|/gm)].map((m) => m[1]);
     expect(rows.length).toBeGreaterThan(50);
     expect(new Set(rows)).toEqual(new Set([...Object.keys(METRICS), ...Object.keys(METRIC_FAMILIES)]));
   });
 
-  it("R52: 이상 신호 —예산 70 % 이상, 쿨다운·frozen, Cron 15분 멈춤, 미수집·미완료 거점, 집계 밀림 (심각한 것 먼저)", () => {
+  it("R57: 이상 신호 —예산 70 % 이상, 쿨다운·frozen, Cron 15분 멈춤, 미수집·미완료 거점, 집계 밀림 (심각한 것 먼저)", () => {
     expect(alertsOf(ops(), [hub({})], NOW, rollup)).toEqual([]);
     const a = alertsOf(
       ops({ read: 2_200_000, blockedUntil: NOW + 60_000, cronAt: NOW - CRON_STALE_MS - 60_000 }),

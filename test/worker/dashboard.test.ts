@@ -64,13 +64,13 @@ function day(d: string, n: number, hub = "bongeunsa"): Seed[] {
 }
 
 describe("GET /api/admin/dashboard", () => {
-  it("R55: 관리자 인증·제한은 다른 관리자 API와 같다 (토큰 없으면 401, ADMIN_LIMITER를 넘으면 맞는 토큰도 429)", async () => {
+  it("R60: 관리자 인증·제한은 다른 관리자 API와 같다 (토큰 없으면 401, ADMIN_LIMITER를 넘으면 맞는 토큰도 429)", async () => {
     expect((await get(setup(), "tab=overview", {})).status).toBe(401);
     expect((await get(setup(), "tab=overview", { Authorization: "Bearer nope" })).status).toBe(401);
     expect((await get(setup({ allow: () => false }), "tab=overview")).status).toBe(429);
   });
 
-  it("R55: 잘못된 탭·날짜·거점, 90일 넘는 기간, 미래·뒤집힌 기간은 400", async () => {
+  it("R60: 잘못된 탭·날짜·거점, 90일 넘는 기간, 미래·뒤집힌 기간은 400", async () => {
     const app = setup();
     for (const q of [
       "tab=nope", "from=2027-1-1", "to=2027-02-30", "hub=gangnam", "from=2026-10-01&to=2027-01-15",
@@ -81,7 +81,7 @@ describe("GET /api/admin/dashboard", () => {
     expect((await get(app, "from=2026-10-18&to=2027-01-15")).status).toBe(200); // 90일
   });
 
-  it("R52: 개요 — KPI(이전 기간 대비, 14일 스파크라인), 일별 직접·자동 뽑기, 요일 × 시간 히트맵, 거점별, 날마다 출처(집계·실시간)", async () => {
+  it("R57: 개요 — KPI(이전 기간 대비, 14일 스파크라인), 일별 직접·자동 뽑기, 요일 × 시간 히트맵, 거점별, 날마다 출처(집계·실시간)", async () => {
     await seedEvents([
       ...day("2027-01-08", 100), // 이전 기간
       ...day("2027-01-13", 200),
@@ -114,7 +114,7 @@ describe("GET /api/admin/dashboard", () => {
     expect(d.hubs.some((h) => h.hub === "*")).toBe(false);
   });
 
-  it("R52: 거점을 고르면 그 거점 지표만 센다", async () => {
+  it("R57: 거점을 고르면 그 거점 지표만 센다", async () => {
     await seedEvents([...day("2027-01-14", 300, "ddp"), ...day(TODAY, 400)]);
     await runRollups(env.DB, kst(TODAY, 5));
     const d = await (await get(setup(), "tab=overview&from=2027-01-14&to=2027-01-15&hub=ddp")).json<OverviewData>();
@@ -122,7 +122,7 @@ describe("GET /api/admin/dashboard", () => {
     expect(d.hubs.map((h) => h.hub)).toEqual(["ddp"]);
   });
 
-  it("R54: 집계가 밀린 날은 실시간으로 세지 않고 missing으로 둔다 (실시간은 오늘·어제까지만)", async () => {
+  it("R59: 집계가 밀린 날은 실시간으로 세지 않고 missing으로 둔다 (실시간은 오늘·어제까지만)", async () => {
     await seedEvents([...day("2027-01-11", 100), ...day("2027-01-14", 200), ...day(TODAY, 300)]);
     const d = await (await get(setup(), "tab=overview&from=2027-01-11&to=2027-01-15")).json<OverviewData>();
     expect(d.rollupThrough).toBeNull();
@@ -133,7 +133,7 @@ describe("GET /api/admin/dashboard", () => {
     expect(d.alerts.some((a) => a.code === "rollup")).toBe(true);
   });
 
-  it("R53: 사용자 행태 — 기간 합계, 이전 기간, 재방문 코호트(관찰 못 한 칸은 null), 많이 뽑힌·공유된·빼진 가게(이름은 places)", async () => {
+  it("R58: 사용자 행태 — 기간 합계, 이전 기간, 재방문 코호트(관찰 못 한 칸은 null), 많이 뽑힌·공유된·빼진 가게(이름은 places)", async () => {
     await seedPlace(env.DB, "101", 37.5, 127.0, { name: "가게101", now: NOW });
     await seedEvents([
       ...day("2027-01-04", 100),
@@ -156,7 +156,7 @@ describe("GET /api/admin/dashboard", () => {
     expect(d.cohorts[1].size).toBe(2);
   });
 
-  it("R55: 운영 — D1 사용량·소프트 한도·초기화 시각, 카카오 쿨다운·차단 횟수, 마지막 Cron, 거점별 데이터 상태, 오늘 이벤트 수", async () => {
+  it("R60: 운영 — D1 사용량·소프트 한도·초기화 시각, 카카오 쿨다운·차단 횟수, 마지막 Cron, 거점별 데이터 상태, 오늘 이벤트 수", async () => {
     const hub = HUBS.find((h) => h.id === "pangyo")!;
     const keys = tilesCoveringCircle(hub, PREWARM_RADIUS);
     await replaceTilePlaces(env.DB, keys[0], ["1", "2", "3"], NOW - 1000, false);
@@ -183,7 +183,7 @@ describe("GET /api/admin/dashboard", () => {
     expect(d.alerts.map((a) => a.code)).toEqual(expect.arrayContaining(["cooldown", "hub:pangyo"]));
   });
 
-  it("R54/R55: 같은 요청은 60초 동안 엣지 캐시에서 D1을 읽지 않고 답한다 (매개변수가 다르면 새로 계산, fresh=1이면 다시 계산)", async () => {
+  it("R59/R60: 같은 요청은 60초 동안 엣지 캐시에서 D1을 읽지 않고 답한다 (매개변수가 다르면 새로 계산, fresh=1이면 다시 계산)", async () => {
     await seedEvents(day(TODAY, 100));
     const cache = memCache();
     let now = NOW;
@@ -206,7 +206,7 @@ describe("GET /api/admin/dashboard", () => {
     expect(log.some((x) => x.sql.includes("FROM meta"))).toBe(true);
   });
 
-  it("R54: 오늘 실시간 집계는 5분 동안 탭·거점이 함께 쓴다 (events를 다시 읽지 않는다)", async () => {
+  it("R59: 오늘 실시간 집계는 5분 동안 탭·거점이 함께 쓴다 (events를 다시 읽지 않는다)", async () => {
     await seedEvents(day(TODAY, 100));
     const cache = memCache();
     const app = setup({ cache });
@@ -223,7 +223,7 @@ describe("GET /api/admin/dashboard", () => {
     expect(log.filter((x) => /FROM events/.test(x.sql))).toEqual([]);
   });
 
-  it("R54: 개요는 실시간 집계 중 세션·이벤트 문장만, 운영은 오늘 이벤트 수(색인 count)만 읽는다 — 필터·가게는 행태 탭에서만", async () => {
+  it("R59: 개요는 실시간 집계 중 세션·이벤트 문장만, 운영은 오늘 이벤트 수(색인 count)만 읽는다 — 필터·가게는 행태 탭에서만", async () => {
     await seedEvents(day(TODAY, 100));
     const app = setup();
     const { db, log } = recordingDb(env.DB);
@@ -239,7 +239,7 @@ describe("GET /api/admin/dashboard", () => {
     expect(log.some((x) => x.sql.includes("'$.picks'"))).toBe(true);
   });
 
-  it("R38/R54: 오늘 읽기가 소프트 한도의 절반을 넘었으면 실시간 집계를 하지 않는다", async () => {
+  it("R38/R59: 오늘 읽기가 소프트 한도의 절반을 넘었으면 실시간 집계를 하지 않는다", async () => {
     await seedEvents(day(TODAY, 100));
     await env.DB.prepare("INSERT INTO meta VALUES (?, '1500000')").bind(`d1_read:${utcDay(NOW)}`).run();
     const d = await (await get(setup(), "tab=overview&from=2027-01-15&to=2027-01-15")).json<OverviewData>();

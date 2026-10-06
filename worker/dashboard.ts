@@ -12,7 +12,7 @@ import { usableListJsonSql } from "./present";
 import { ROLLUP_THROUGH_KEY, liveDayMetrics, type LivePart, type MetricRow } from "./rollup";
 
 /**
- * R52~R55 GET /api/admin/dashboard. 탭 하나에 필요한 것을 한 응답으로 준다.
+ * R57~R60 GET /api/admin/dashboard. 탭 하나에 필요한 것을 한 응답으로 준다.
  * 읽는 것: 일별 집계(daily_stats, 집계를 마친 날) + 아직 집계하지 않은 오늘(·새벽 4시 전이면 어제)의 실시간 집계(5분 엣지 캐시, 탭·거점 공용)
  * + meta 몇 행 + 거점별 데이터 상태(15분 엣지 캐시). events를 30·90일씩 훑지 않는다.
  */
@@ -215,7 +215,7 @@ SELECT k.hub AS hub, count(*) AS tiles,
   max(t.collected_at) AS lastTileAt
 FROM k LEFT JOIN tiles t ON t.key = k.key GROUP BY k.hub`;
 
-/** R55 거점마다: 가게 수, 상세 성공·실패·미수집, 목록에 보이는 곳·list_json 준비, 가장 오래된 상세, 격자 수·미완료(없거나 7일 지남)·포화, 마지막 격자 수집 */
+/** R60 거점마다: 가게 수, 상세 성공·실패·미수집, 목록에 보이는 곳·list_json 준비, 가장 오래된 상세, 격자 수·미완료(없거나 7일 지남)·포화, 마지막 격자 수집 */
 export async function hubStatuses(db: D1Database, now: number): Promise<HubStatus[]> {
   const pairs = JSON.stringify(HUBS.flatMap((h) => tilesCoveringCircle(h, PREWARM_RADIUS).map((k) => [h.id, k])));
   const [places, tiles] = await db.batch<Record<string, number | string | null>>([

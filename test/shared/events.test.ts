@@ -65,13 +65,13 @@ describe("events", () => {
     expect(EventSchema.safeParse(ev({ props: { auto: "yes" } })).success).toBe(false);
   });
 
-  it("R53: R41 완화가 섞인 뽑기는 props.relaxed: true만 받는다", () => {
+  it("R58: R41 완화가 섞인 뽑기는 props.relaxed: true만 받는다", () => {
     expect(EventSchema.safeParse(ev({ props: { relaxed: true, picks: ["1"] } })).success).toBe(true);
     expect(EventSchema.safeParse(ev({ props: { relaxed: false } })).success).toBe(false);
     expect(EventSchema.safeParse(ev({ props: { relaxed: 1 } })).success).toBe(false);
   });
 
-  it("R53: 확정 공유는 결과 카드 번호(rank 1~3)를 함께 받는다", () => {
+  it("R58: 확정 공유는 결과 카드 번호(rank 1~3)를 함께 받는다", () => {
     expect(EventSchema.safeParse(ev({ t: "share", placeId: "1", props: { confirm: true, picks: ["1"], rank: 2 } })).success).toBe(true);
     expect(EventSchema.safeParse(ev({ t: "share", placeId: "1", props: { confirm: true, rank: 4 } })).success).toBe(false);
   });

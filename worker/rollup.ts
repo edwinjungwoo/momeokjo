@@ -5,10 +5,10 @@ import { EVENT_RETENTION_DAYS } from "../shared/events";
 import { DAY_MS, kstDay, kstDayHour } from "../shared/kst";
 
 /**
- * R54 일별 집계. 하루치 지표를 SQL 집계 문장 4개로 계산한다 — Cron은 같은 문장을 INSERT … SELECT로 감싸 daily_stats에 쓰고
+ * R59 일별 집계. 하루치 지표를 SQL 집계 문장 4개로 계산한다 — Cron은 같은 문장을 INSERT … SELECT로 감싸 daily_stats에 쓰고
  * (D1 batch 한 번, Worker CPU는 거의 쓰지 않는다), 관리자 화면은 아직 집계하지 않은 날(오늘)만 같은 SELECT로 센다.
  * 모든 문장은 ?1 = KST 날짜 하나만 받고, (hub, metric, value) 행을 돌려준다. hub = 거점 id 또는 '*'(모든 거점). 값이 0인 행은 없다.
- * 지표 정의는 shared/dashboard.ts METRICS·METRIC_FAMILIES와 스펙 R53.
+ * 지표 정의는 shared/dashboard.ts METRICS·METRIC_FAMILIES와 스펙 R58.
  * 주의: D1은 UNION ALL 한 덩어리에 SELECT를 5개까지만 받는다("too many terms in compound SELECT") — 열을 행으로 펼 때는
  * VALUES 목록 × CASE, 이벤트 하나에서 여러 행을 낼 때는 json_each(json_array(...))를 쓴다.
  */
@@ -255,7 +255,7 @@ export function lastRollableDay(now: number): string {
 }
 
 /**
- * R54 Cron: 밀린 날을 오래된 날부터 ROLLUP_DAYS_PER_RUN일까지 집계한다 (하루 = batch 한 번). 처음이면 보관 중인 가장 오래된 이벤트 날부터.
+ * R59 Cron: 밀린 날을 오래된 날부터 ROLLUP_DAYS_PER_RUN일까지 집계한다 (하루 = batch 한 번). 처음이면 보관 중인 가장 오래된 이벤트 날부터.
  * 다 따라잡았으면 meta 1행만 읽는다. 하루라도 집계했으면 마지막 batch에서 코호트를 다시 센다. 집계한 날 수를 돌려준다.
  */
 export async function runRollups(db: D1Database, now: number): Promise<number> {
