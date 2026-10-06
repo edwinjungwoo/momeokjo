@@ -1,0 +1,37 @@
+# 모먹죠 CI (Task 32): 푸시·PR마다 typecheck·test·build. 무료(공개·개인 저장소의 GitHub 호스팅 러너 무료 분량).
+# Cloudflare 자격 증명은 쓰지 않는다 — 테스트는 vitest.config.ts의 remoteBindings: false로 로컬 D1을 쓰고,
+# 빌드(@cloudflare/vite-plugin)는 원격 D1에 붙지 않는다. 배포 잡은 없다 (docs/deploy.md "CI에서 배포하기(나중에)").
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      # 공개 지도 키 자리 — 진짜 키(.env.local)는 CI에 두지 않는다. 빌드 결과에 %VITE_ 자리표시자가 남지 않게만 한다
+      VITE_KAKAO_JS_KEY: ci-dummy-kakao-js-key
+      WRANGLER_SEND_METRICS: "false"
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          # 로컬과 같은 메이저 (개발 머신 Node 26)
+          node-version: 26
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+      - name: 빌드 결과에 %VITE_ 자리표시자 없음
+        run: "! grep -q '%VITE_' dist/client/index.html"
