@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { MIGRATION_CHECKS, objectState } from "../../scripts/migrationChecks.mjs";
 import {
+  classifySmokeFails,
+  confirmRollback,
   deployLogLine,
   dirtyPaths,
   formatDuration,
@@ -29,7 +31,11 @@ import {
   deploymentsJson,
   FAIL_ASSET_NEW,
   FAIL_ASSET_OLD,
+  emptyFail,
   FAIL_AUDIT,
+  FAIL_AUDIT_000,
+  FAIL_AUDIT_401,
+  FAIL_AUDIT_500,
   FAIL_EMPTY,
   FAIL_PLACES_000,
   FAIL_PLACES_500,
@@ -186,11 +192,45 @@ describe("infra: 스모크 FAIL 줄", () => {
     expect(smokeFailKey(FAIL_PLACES_500)).not.toBe(smokeFailKey("ddp 500m 200인데 0곳"));
   });
 
-  it("infra: 감사(Q1·Q2)와 '200인데 0곳'은 데이터 상태 신호", () => {
+  it("infra: 200으로 답했지만 통과 못 한 감사와 '200인데 0곳'은 데이터 상태 신호", () => {
     expect(isDataStateFail(FAIL_AUDIT)).toBe(true);
     expect(isDataStateFail(FAIL_EMPTY)).toBe(true);
     expect(isDataStateFail(FAIL_PLACES_500)).toBe(false);
     expect(isDataStateFail(FAIL_ASSET_NEW)).toBe(false);
+  });
+
+  it("infra: 감사 요청 자체가 실패(500·000·401, 200인데 JSON 없음)하면 코드 수준", () => {
+    for (const l of [FAIL_AUDIT_500, FAIL_AUDIT_000, FAIL_AUDIT_401, "감사 ddp → 200", "감사 ddp → 200 null"]) expect(isDataStateFail(l), l).toBe(false);
+  });
+
+  it("infra: 같은 실행에서 모든 거점이 '200인데 0곳'이면 목록 처리 회귀로 보고 코드 수준", () => {
+    const all = HUBS.map(emptyFail);
+    expect(classifySmokeFails(all, HUBS)).toEqual({ code: all, data: [] });
+    const some = HUBS.slice(0, 4).map(emptyFail);
+    expect(classifySmokeFails([...some, FAIL_AUDIT, FAIL_PLACES_500], HUBS)).toEqual({ code: [FAIL_PLACES_500], data: [...some, FAIL_AUDIT] });
+    // 거점 목록이 없으면 판단하지 않는다 (줄마다)
+    expect(classifySmokeFails(all, [])).toEqual({ code: [], data: all });
+  });
+});
+
+describe("infra: 롤백 전에 한 번 더 (일시 FAIL 거르기)", () => {
+  const s = (fails: string[]) => ({ code: fails.length ? 1 : 0, summary: { requests: 25, fails: fails.length, warns: 0 }, fails });
+
+  it("infra: 다시 돌린 스모크에도 남은 새 코드 FAIL(교집합)만으로 롤백", () => {
+    expect(confirmRollback({ first: [FAIL_PLACES_500, FAIL_ASSET_NEW], rerun: s([FAIL_PLACES_000]), baseline: [], hubIds: HUBS })).toMatchObject({
+      action: "rollback",
+      newFails: [FAIL_PLACES_000],
+    });
+  });
+
+  it("infra: 다시 돌리니 사라졌으면 그대로 (일시 FAIL)", () => {
+    expect(confirmRollback({ first: [FAIL_PLACES_500], rerun: s([]), baseline: [], hubIds: HUBS })).toMatchObject({ action: "keep" });
+  });
+
+  it("infra: 다시 돌린 결과를 못 읽으면 manual, 다른 코드 FAIL만 새로 보이면(흔들림) manual, 데이터 신호만 남으면 data", () => {
+    expect(confirmRollback({ first: [FAIL_PLACES_500], rerun: { code: 2, summary: null, fails: [] }, baseline: [], hubIds: HUBS })).toMatchObject({ action: "manual" });
+    expect(confirmRollback({ first: [FAIL_PLACES_500], rerun: s([FAIL_ASSET_NEW]), baseline: [], hubIds: HUBS })).toMatchObject({ action: "manual" });
+    expect(confirmRollback({ first: [FAIL_PLACES_500], rerun: s([FAIL_AUDIT]), baseline: [], hubIds: HUBS })).toMatchObject({ action: "data", newFails: [FAIL_AUDIT] });
   });
 });
 
@@ -224,6 +264,15 @@ describe("infra: 스모크 뒤 롤백 판단 (배포 전 기준과 비교)", () 
 
   it("infra: FAIL 0·종료 코드 0이면 그대로 (WARN은 상관없음)", () => {
     expect(shouldRollback({ code: 0, summary: s([], 4), fails: [], baseline: [] })).toMatchObject({ action: "keep" });
+  });
+
+  it("infra: 새 감사 HTTP 실패는 코드 수준이라 롤백, 모든 거점 '0곳'도 롤백", () => {
+    expect(shouldRollback({ code: 1, summary: s([FAIL_AUDIT_500]), fails: [FAIL_AUDIT_500], baseline: [], hubIds: HUBS })).toMatchObject({
+      action: "rollback",
+      newFails: [FAIL_AUDIT_500],
+    });
+    const all = HUBS.map(emptyFail);
+    expect(shouldRollback({ code: 1, summary: s(all), fails: all, baseline: [], hubIds: HUBS })).toMatchObject({ action: "rollback", newFails: all });
   });
 
   it("infra: 요약을 못 읽었거나, FAIL 줄 수가 요약과 다르거나, 종료 코드와 어긋나면 사람이 본다", () => {
@@ -345,11 +394,22 @@ describe("infra: 지난 실행에서 남은 후속 작업", () => {
     expect(planRelease({ pending: [], sqlByName: {}, allowDestructive: false, hubIds: HUBS, hasAdminToken: false, carriedHooks: carried }).ok).toBe(false);
   });
 
-  it("infra: 상태 파일 읽기 — 깨졌거나 없으면 빈 목록", () => {
-    expect(parsePendingHooks(JSON.stringify(carried))).toEqual(carried);
-    expect(parsePendingHooks(undefined)).toEqual([]);
-    expect(parsePendingHooks("not json")).toEqual([]);
-    expect(parsePendingHooks('[{"cmd": 1}]')).toEqual([]);
+  it("infra: 상태 파일 읽기 — 없으면 빈 목록, 깨졌으면 빈 목록 + corrupt", () => {
+    expect(parsePendingHooks(JSON.stringify(carried))).toEqual({ hooks: carried, corrupt: false });
+    expect(parsePendingHooks(undefined)).toEqual({ hooks: [], corrupt: false });
+    expect(parsePendingHooks("not json")).toEqual({ hooks: [], corrupt: true });
+    expect(parsePendingHooks('{"a": 1}')).toEqual({ hooks: [], corrupt: true });
+    expect(parsePendingHooks('[{"cmd": 1}]')).toEqual({ hooks: [], corrupt: true });
+  });
+
+  it("infra: 허용 목록 — node scripts/<이름>.mjs만 (다른 명령·경로 탈출은 버리고 corrupt)", () => {
+    const bad = [
+      { ...carried[0], cmd: "bash", args: ["-c", "echo hi"] },
+      { ...carried[0], args: ["scripts/../../x.mjs"] },
+      { ...carried[0], args: ["/tmp/x.mjs"] },
+      { ...carried[0], args: ["-e", "1"] },
+    ];
+    expect(parsePendingHooks(JSON.stringify([...carried, ...bad]))).toEqual({ hooks: carried, corrupt: true });
   });
 });
 

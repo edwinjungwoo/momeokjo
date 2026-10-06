@@ -33,6 +33,8 @@ const FLAGS = {
 export const PENDING_HOOKS_FILE = ".wrangler/release-pending-hooks.json";
 export const UNKNOWN_VERSION_RESULT = "배포됨 — 버전 불명, 확인 필요";
 export const DATA_STATE_RESULT = "데이터 상태 확인 필요";
+/** 배포 뒤 스모크에 새 코드 FAIL이 보이면 이만큼 기다렸다 한 번 더 돌려, 남아 있을 때만 롤백한다 */
+export const RECHECK_MS = 20_000;
 
 /**
  * @param {string[]} argv
@@ -202,10 +204,33 @@ export function smokeFailKey(line) {
   return (i >= 0 ? s.slice(0, i) : s).trim();
 }
 
-/** 코드가 아니라 데이터 상태를 말하는 FAIL — 감사(Q1·Q2), "200인데 0곳". 이것만으로는 롤백하지 않는다 */
+/**
+ * 코드가 아니라 데이터 상태를 말하는 FAIL (줄 하나만 보고). 이것만으로는 롤백하지 않는다.
+ * - 감사가 200으로 답했지만 Q1·Q2를 통과하지 못함: smoke.sh:172 `감사 <id> → 200 {"pass":{…},…}`
+ *   (감사 요청 자체의 실패 — 500·000·401, 200인데 JSON 없음 — 은 코드 수준)
+ * - 목록이 200인데 0곳: smoke.sh:121 `<id> <r>m 200인데 0곳` (모든 거점이 그러면 classifySmokeFails가 코드 수준으로 올린다)
+ */
 export function isDataStateFail(line) {
   const s = stripAnsi(line).trim();
-  return /^감사 /.test(s) || /200인데 0곳/.test(s);
+  return /^감사 \S+ → 200 \{.*"pass":\{/.test(s) || /^\S+ \d+m 200인데 0곳$/.test(s);
+}
+
+const emptyListHub = (line) => stripAnsi(line).trim().match(/^(\S+) \d+m 200인데 0곳$/)?.[1];
+
+/**
+ * 한 번의 스모크 FAIL 줄을 코드 수준·데이터 상태로 나눈다. 같은 실행에서 모든 거점이 "200인데 0곳"이면
+ * 데이터가 아니라 목록 처리가 망가진 것으로 보고 그 줄들을 코드 수준으로 올린다.
+ * @param {string[]} fails
+ * @param {string[]} hubIds
+ * @returns {{ code: string[], data: string[] }}
+ */
+export function classifySmokeFails(fails, hubIds) {
+  const emptyHubs = new Set(fails.map(emptyListHub).filter(Boolean));
+  const allEmpty = hubIds.length > 0 && hubIds.every((id) => emptyHubs.has(id));
+  const code = [];
+  const data = [];
+  for (const l of fails) (!isDataStateFail(l) || (allEmpty && emptyListHub(l)) ? code : data).push(l);
+  return { code, data };
 }
 
 /**
@@ -213,39 +238,77 @@ export function isDataStateFail(line) {
  * - 새 FAIL 중 코드 수준(데이터 상태 신호가 아닌 것)이 있으면 rollback
  * - 새 FAIL이 데이터 상태 신호뿐이면 data (롤백하지 않고 사람이 데이터를 본다)
  * - 요약을 못 읽었거나 FAIL 줄 수가 요약과 다르거나 FAIL 0인데 종료 코드가 0이 아니면 manual (운영을 함부로 되돌리지 않음)
- * @param {{ code: number, summary: { requests: number, fails: number, warns: number } | null, fails?: string[], baseline?: string[] }} smoke
+ * 이 판단의 rollback은 아직 확정이 아니다 — runRelease가 RECHECK_MS 뒤 다시 돌려 confirmRollback으로 정한다.
+ * @param {{ code: number, summary: { requests: number, fails: number, warns: number } | null, fails?: string[], baseline?: string[], hubIds?: string[] }} smoke
  * @returns {{ action: "keep" | "rollback" | "data" | "manual", reason: string, newFails: string[] }}
  */
-export function shouldRollback({ code, summary, fails = [], baseline = [] }) {
+export function shouldRollback({ code, summary, fails = [], baseline = [], hubIds = [] }) {
   if (!summary) return { action: "manual", reason: `스모크 요약 줄을 읽지 못했어요 (종료 코드 ${code})`, newFails: [] };
   if (summary.fails !== fails.length) {
     return { action: "manual", reason: `스모크 FAIL 줄 ${fails.length}개가 요약(FAIL ${summary.fails})과 달라요`, newFails: [] };
   }
   const base = new Set(baseline.map(smokeFailKey));
   const fresh = fails.filter((l) => !base.has(smokeFailKey(l)));
-  const codeFails = fresh.filter((l) => !isDataStateFail(l));
+  const codeClass = new Set(classifySmokeFails(fails, hubIds).code);
+  const codeFails = fresh.filter((l) => codeClass.has(l));
   if (codeFails.length) return { action: "rollback", reason: `배포 전에 없던 FAIL ${codeFails.length}개`, newFails: codeFails };
   if (fresh.length) return { action: "data", reason: `배포 전에 없던 FAIL ${fresh.length}개가 모두 데이터 상태 신호(감사·0곳)예요`, newFails: fresh };
   if (code !== 0 && summary.fails === 0) return { action: "manual", reason: `스모크가 FAIL 0인데 종료 코드가 ${code}예요`, newFails: [] };
   return { action: "keep", reason: `새 FAIL 없음 (FAIL ${summary.fails} · WARN ${summary.warns})`, newFails: [] };
 }
 
-/** PENDING_HOOKS_FILE 내용 → 후속 작업 목록 (없거나 깨졌으면 빈 목록) */
+/**
+ * 처음 스모크에서 rollback이 나왔을 때, RECHECK_MS 뒤 다시 돌린 스모크로 확정한다.
+ * 다시 돌려도 남은 새 코드 FAIL(처음 것과 같은 확인 = 교집합)이 있을 때만 rollback.
+ * - 다시 돌린 결과를 못 읽음 → manual
+ * - 새 코드 FAIL이 있지만 처음 것과 겹치지 않음(흔들림) → manual
+ * - 남은 새 FAIL이 데이터 상태 신호뿐 → data
+ * - 사라짐 → keep (일시 FAIL)
+ * @param {{ first: string[], rerun: { code: number, summary: { requests: number, fails: number, warns: number } | null, fails: string[] }, baseline: string[], hubIds: string[] }} input
+ */
+export function confirmRollback({ first, rerun, baseline, hubIds }) {
+  const v = shouldRollback({ code: rerun.code, summary: rerun.summary, fails: rerun.fails, baseline, hubIds });
+  if (v.action === "manual") return { action: "manual", reason: `다시 돌린 스모크: ${v.reason}`, newFails: [] };
+  if (v.action === "rollback") {
+    const firstKeys = new Set(first.map(smokeFailKey));
+    const persistent = v.newFails.filter((l) => firstKeys.has(smokeFailKey(l)));
+    if (persistent.length) return { action: "rollback", reason: `다시 돌려도 남은 새 FAIL ${persistent.length}개`, newFails: persistent };
+    return { action: "manual", reason: "다시 돌리니 처음과 다른 새 FAIL이 보여요 (결과가 흔들려요)", newFails: v.newFails };
+  }
+  if (v.action === "data") return v;
+  return { action: "keep", reason: `처음 본 새 FAIL ${first.length}개가 다시 돌리니 사라졌어요 (일시 FAIL)`, newFails: [] };
+}
+
+/** 상태 파일의 후속 작업으로 돌려도 되는 명령: node scripts/<이름>.mjs 뿐 (경로 탈출·다른 실행기 금지) */
+const isAllowedHook = (h) => h.cmd === "node" && /^scripts\/[A-Za-z0-9_-]+\.mjs$/.test(h.args[0] ?? "");
+
+/**
+ * PENDING_HOOKS_FILE 내용 → 후속 작업 목록. 없으면 빈 목록. JSON이 깨졌거나 배열이 아니거나 모양·허용 목록에
+ * 맞지 않는 항목이 있으면 corrupt (맞는 항목만 돌려준다 — runRelease가 경고하고 원본을 .corrupt로 남긴다).
+ * @returns {{ hooks: Array<{ migration: string, name: string, cmd: string, args: string[], needsAdminToken: boolean }>, corrupt: boolean }}
+ */
 export function parsePendingHooks(text) {
-  if (typeof text !== "string") return [];
+  if (typeof text !== "string") return { hooks: [], corrupt: false };
   let v;
   try {
     v = JSON.parse(text);
   } catch {
-    return [];
+    return { hooks: [], corrupt: true };
   }
-  if (!Array.isArray(v)) return [];
-  return v
+  if (!Array.isArray(v)) return { hooks: [], corrupt: true };
+  const hooks = v
     .filter(
       (h) =>
-        h && typeof h.migration === "string" && typeof h.name === "string" && typeof h.cmd === "string" && Array.isArray(h.args) && h.args.every((a) => typeof a === "string"),
+        h &&
+        typeof h.migration === "string" &&
+        typeof h.name === "string" &&
+        typeof h.cmd === "string" &&
+        Array.isArray(h.args) &&
+        h.args.every((a) => typeof a === "string") &&
+        isAllowedHook(h),
     )
     .map((h) => ({ migration: h.migration, name: h.name, cmd: h.cmd, args: h.args, needsAdminToken: Boolean(h.needsAdminToken) }));
+  return { hooks, corrupt: hooks.length !== v.length };
 }
 
 /** `git status --porcelain` → 배포를 막는 변경 경로 (DIRTY_IGNORED 제외) */
@@ -380,10 +443,30 @@ export async function runRelease(opts, deps) {
     result: "",
     elapsedMs: 0,
   };
-  const state = { touchedProd: false, deployed: false, listed: false, applyFailed: false };
+  const state = { touchedProd: false, deployed: false, listed: false, applyFailed: false, hooksStarted: false };
   /** 지난 실행에서 남은 후속 작업과 이번 계획의 후속 작업 */
-  const carriedHooks = parsePendingHooks(deps.readFile(PENDING_HOOKS_FILE));
+  const pendingText = deps.readFile(PENDING_HOOKS_FILE);
+  const pendingParsed = parsePendingHooks(pendingText);
+  const carriedHooks = pendingParsed.hooks;
+  if (pendingParsed.corrupt) {
+    log(`⚠ ${PENDING_HOOKS_FILE}이(가) 깨졌거나 허용되지 않은 명령(node scripts/<이름>.mjs만 허용)이 있어요 — 맞는 항목 ${carriedHooks.length}개만 써요.`);
+    if (!opts.dryRun) {
+      try {
+        deps.writeFile(`${PENDING_HOOKS_FILE}.corrupt`, pendingText);
+        deps.writeFile(PENDING_HOOKS_FILE, `${JSON.stringify(carriedHooks, null, 2)}\n`);
+        log(`  원본은 ${PENDING_HOOKS_FILE}.corrupt로 남겼어요. 확인한 뒤 지우세요.`);
+      } catch (e) {
+        log(`  ⚠ 원본을 남기지 못했어요 (${e instanceof Error ? e.message : e})`);
+      }
+    }
+  }
+  const hookKey = (h) => [h.cmd, ...h.args].join(" ");
   let plannedHooks = [];
+  /** 아직 돌리지 못한 후속 작업 중 남길 것: 지난 실행에서 온 것 + 이번에 실제로 적용된 마이그레이션의 것 */
+  const hooksToKeep = () => {
+    const carriedKeys = new Set(carriedHooks.map(hookKey));
+    return plannedHooks.filter((h) => carriedKeys.has(hookKey(h)) || summary.migrationsApplied.includes(h.migration));
+  };
   const saveHooks = (hooks) => {
     try {
       deps.writeFile(PENDING_HOOKS_FILE, `${JSON.stringify(hooks, null, 2)}\n`);
@@ -531,6 +614,14 @@ export async function runRelease(opts, deps) {
       const r = await exec("npx", ["wrangler", "d1", "migrations", "apply", DB_NAME, "--remote"], { echo: true });
       if (r.code !== 0) {
         state.applyFailed = true;
+        // 앞의 것은 적용됐을 수 있다 — 목록을 다시 읽어 적용된 것을 가린다 (그 후속 작업을 남기려고)
+        try {
+          const left = await listPending();
+          summary.migrationsApplied = pending.filter((n) => !left.includes(n));
+          if (summary.migrationsApplied.length) log(`  적용 실패 전에 적용된 것: ${summary.migrationsApplied.join(", ")}`);
+        } catch (e) {
+          log(`  ⚠ 적용 실패 뒤 목록을 다시 읽지 못해 어디까지 적용됐는지 몰라요 (${e instanceof Error ? e.message.split("\n")[0] : e}) — npx wrangler d1 migrations list ${DB_NAME} --remote로 확인하세요`);
+        }
         throw d1Stop(r, "마이그레이션 적용 — 실패한 마이그레이션은 wrangler가 되돌리고 앞의 것은 남아요");
       }
       summary.migrationsApplied = [...pending];
@@ -559,14 +650,17 @@ export async function runRelease(opts, deps) {
     }
     summary.smokeBaseline = base.fails;
     if (base.fails.length) {
+      const cls = classifySmokeFails(base.fails, deps.hubIds);
       log(`  배포 전부터 FAIL ${base.fails.length}개:`);
-      for (const f of base.fails) log(`    FAIL  ${f}`);
-      if (!opts.acceptBaselineFails) {
+      for (const f of cls.code) log(`    FAIL  ${f}`);
+      for (const f of cls.data) log(`    FAIL  ${f}   (데이터 상태)`);
+      if (cls.code.length && !opts.acceptBaselineFails) {
         throw new Stop(
-          `배포 전부터 운영 스모크에 FAIL이 ${base.fails.length}개 있어요 — 먼저 고치거나, 이 FAIL을 안고 배포하려면 --accept-baseline-fails를 붙이세요 (--yes로는 받아들이지 않아요). 배포 뒤에는 여기 없던 FAIL만 롤백 사유로 봐요`,
+          `배포 전부터 운영 스모크에 코드 수준 FAIL이 ${cls.code.length}개 있어요 — 먼저 고치거나, 이 FAIL을 안고 배포하려면 --accept-baseline-fails를 붙이세요 (--yes로는 받아들이지 않아요). 배포 뒤에는 여기 없던 FAIL만 롤백 사유로 봐요`,
         );
       }
-      log("  기준 FAIL로 받아들여요 — 배포 뒤에는 새로 생긴 FAIL만 봐요");
+      if (cls.code.length) log("  기준 FAIL로 받아들여요 (--accept-baseline-fails) — 배포 뒤에는 새로 생긴 FAIL만 봐요");
+      else log("  ⚠ 기준 FAIL이 모두 데이터 상태 신호(감사 200 미통과·0곳)라 플래그 없이 진행해요 — 배포 뒤에는 새로 생긴 FAIL만 봐요");
     } else log("  ok 기준 스모크 FAIL 0");
 
     // 6. 배포 — 확인 질문·기준 스모크 사이에 트리·HEAD가 바뀌지 않았는지 다시 본다
@@ -611,6 +705,7 @@ export async function runRelease(opts, deps) {
     const failedHooks = [];
     if (plannedHooks.length) {
       log("== 7. 후속 작업");
+      state.hooksStarted = true;
       for (const h of plannedHooks) {
         const env = { MMJ_BASE: PROD_URL };
         if (deps.adminToken) env.ADMIN_TOKEN = deps.adminToken;
@@ -630,12 +725,24 @@ export async function runRelease(opts, deps) {
     log(`== 8. 스모크 (${SMOKE_SETTLE_MS / 1000}초 기다린 뒤)`);
     await deps.sleep(SMOKE_SETTLE_MS);
     const after = await runSmoke();
-    const verdict = shouldRollback({ code: after.code, summary: after.summary, fails: after.fails, baseline: base.fails });
+    let verdict = shouldRollback({ code: after.code, summary: after.summary, fails: after.fails, baseline: base.fails, hubIds: deps.hubIds });
     summary.smoke = after.summary ? { ...after.summary, newFails: verdict.newFails } : null;
+    let transientNote = "";
+    if (verdict.action === "rollback") {
+      // 일시적인 FAIL 하나로 운영을 되돌리지 않게: 기다렸다 한 번 더 돌려 남아 있는 것만 본다
+      const first = verdict.newFails;
+      log(`  배포 전에 없던 FAIL ${first.length}개 — ${RECHECK_MS / 1000}초 기다렸다 한 번 더 돌려 봐요 (일시 FAIL 거르기):`);
+      for (const f of first) log(`    FAIL  ${f}`);
+      await deps.sleep(RECHECK_MS);
+      const again = await runSmoke();
+      verdict = confirmRollback({ first, rerun: again, baseline: base.fails, hubIds: deps.hubIds });
+      if (again.summary) summary.smoke = { ...again.summary, newFails: verdict.newFails };
+      if (verdict.action === "keep") transientNote = ` (일시 FAIL ${first.length}개 — 다시 돌리니 사라짐)`;
+    }
     const hooksNote = failedHooks.length ? ` · 후속 작업 실패 ${failedHooks.length}` : "";
     if (verdict.action === "keep") {
       log(`  ok ${verdict.reason}`);
-      const baseNote = base.fails.length ? ` (기준 FAIL ${base.fails.length} 그대로)` : "";
+      const baseNote = `${base.fails.length ? ` (기준 FAIL ${base.fails.length} 그대로)` : ""}${transientNote}`;
       if (failedHooks.length) {
         summary.result = `성공${baseNote} (후속 작업 실패 — 확인 필요)`;
         log(`  ⚠ 후속 작업 ${failedHooks.length}개가 실패했어요 — 위 출력을 보고 손으로 다시 돌리거나 다음 npm run release가 이어서 돌려요`);
@@ -684,12 +791,13 @@ export async function runRelease(opts, deps) {
     // 배포된 뒤의 실패는 항상 사람이 봐야 한다 (1 = 운영 코드 그대로라는 뜻이라 쓰지 않음)
     code = state.deployed && stop.code < 3 ? 3 : stop.code;
     summary.result = stop.result ?? (state.deployed ? "확인 필요" : "배포 전 중단");
-    if (!state.deployed && summary.migrationsApplied.length && plannedHooks.length) {
-      // 마이그레이션은 적용됐는데 그 뒤 후속 작업(새 코드가 필요)을 못 돌렸다 — 다음 실행이 배포 뒤 이어서 돌린다
-      log(`  남은 후속 작업 (배포 뒤에 돌려야 해요 — 다음 npm run release가 ${PENDING_HOOKS_FILE}에서 이어서 돌려요):`);
-      for (const h of plannedHooks) log(`    ${[h.cmd, ...h.args].join(" ")}`);
-      saveHooks(plannedHooks);
-      summary.result += ` (후속 작업 대기: ${[...new Set(plannedHooks.map((h) => h.migration.replace(/\.sql$/, "")))].join(", ")})`;
+    const keep = state.hooksStarted || opts.dryRun ? [] : hooksToKeep();
+    if (keep.length) {
+      // 후속 작업을 시작하기 전에 멈췄다(배포 전이든, 배포됐는데 버전을 모르든) — 적용된 마이그레이션의 것과 지난 실행에서 온 것을 남긴다
+      log(`  남은 후속 작업 (새 코드가 배포된 뒤 돌려야 해요 — 다음 npm run release가 ${PENDING_HOOKS_FILE}에서 이어서 돌려요):`);
+      for (const h of keep) log(`    ${hookKey(h)}`);
+      saveHooks(keep);
+      summary.result += ` (후속 작업 대기: ${[...new Set(keep.map((h) => h.migration.replace(/\.sql$/, "")))].join(", ")})`;
     }
   }
 
@@ -711,8 +819,12 @@ export async function runRelease(opts, deps) {
       at: startedAt,
       version: state.deployed ? (summary.newVersion ?? "?") : null,
       commit: summary.commit,
-      migrations: summary.migrationsApplied.length ? summary.migrationsApplied : summary.migrationsPending,
-      migrationsNote: state.applyFailed ? "적용 실패" : undefined,
+      migrations: state.applyFailed || !summary.migrationsApplied.length ? summary.migrationsPending : summary.migrationsApplied,
+      migrationsNote: state.applyFailed
+        ? summary.migrationsApplied.length
+          ? `적용 실패 — 적용됨: ${summary.migrationsApplied.map((n) => n.replace(/\.sql$/, "")).join(", ")}`
+          : "적용 실패"
+        : undefined,
       result: summary.result,
       previous: summary.previousVersion,
     });

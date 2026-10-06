@@ -11,7 +11,9 @@ import {
   deploymentsJson,
   FAIL_ASSET_NEW,
   FAIL_ASSET_OLD,
+  emptyFail,
   FAIL_AUDIT,
+  FAIL_AUDIT_500,
   FAIL_EMPTY,
   FAIL_PLACES_000,
   FAIL_PLACES_500,
@@ -67,6 +69,7 @@ function harness(over: Record<string, Reply | Reply[]> = {}, extra: { files?: Re
   const logs: string[] = [];
   const appended: { path: string; text: string }[] = [];
   const written: { path: string; text: string }[] = [];
+  const sleeps: number[] = [];
   const files: Record<string, string> = {
     "dist/client/index.html": '<script src="https://dapi.kakao.com/v2/maps/sdk.js?appkey=abc&autoload=false"></script>',
     "migrations/0003_meta.sql": sql0003,
@@ -101,14 +104,14 @@ function harness(over: Record<string, Reply | Reply[]> = {}, extra: { files?: Re
     },
     log: (s: string) => void logs.push(s),
     confirm: async () => extra.confirm ?? true,
-    sleep: async () => {},
+    sleep: async (ms: number) => void sleeps.push(ms),
     now: () => (clock += 1000),
     isTTY: extra.isTTY ?? false,
     adminToken: extra.adminToken === null ? undefined : (extra.adminToken ?? TOKEN),
     hubIds: HUBS,
   };
   const ran = (prefix: string) => calls.filter((c) => c.line === prefix || c.line.startsWith(prefix + " "));
-  return { deps, calls, logs, appended, written, files, ran, output: () => logs.join("\n") };
+  return { deps, calls, logs, appended, written, files, sleeps, ran, output: () => logs.join("\n") };
 }
 
 const opts = (o: Partial<ReleaseOpts> = {}): ReleaseOpts => ({ dryRun: false, skipTests: false, force: false, yes: true, allowDestructive: false, acceptBaselineFails: false, ...o });
@@ -410,9 +413,49 @@ describe("infra: npm run release — 배포 전 중단", () => {
   });
 
   it("infra: 마이그레이션 적용이 실패하면 기록에 '(적용 실패)'로 남긴다", async () => {
-    const h = harness({ "npx wrangler d1 migrations apply momeokjo --remote": fail("✘ [ERROR] SQLITE_ERROR") });
+    const h = harness({
+      "npx wrangler d1 migrations apply momeokjo --remote": fail("✘ [ERROR] SQLITE_ERROR"),
+      // 실패한 마이그레이션은 wrangler가 되돌려 그대로 남아 있다
+      "npx wrangler d1 migrations list momeokjo --remote": ok(MIGRATIONS_PENDING_0005_ANSI),
+    });
     expect((await runRelease(opts(), h.deps)).code).toBe(1);
     expect(h.appended[0].text).toMatch(/\| 0005_list_json \(적용 실패\) \| 배포 전 중단 \|/);
+    expect(h.written.filter((w) => w.path === ".wrangler/release-pending-hooks.json")).toEqual([]);
+  });
+
+  it("infra: 일부만 적용되고 실패하면 목록을 다시 읽어 적용된 것을 가리고, 그 후속 작업을 남긴다", async () => {
+    const both = "Migrations to be applied:\n│ 0005_list_json.sql │\n│ 0006_next.sql │\n";
+    const onlyNext = "Migrations to be applied:\n│ 0006_next.sql │\n";
+    const h = harness(
+      {
+        "npx wrangler d1 migrations list momeokjo --remote": [ok(both), ok(onlyNext)],
+        "npx wrangler d1 migrations apply momeokjo --remote": fail("✘ [ERROR] 0006_next.sql: SQLITE_ERROR"),
+      },
+      { files: { "migrations/0006_next.sql": "CREATE TABLE next_t (id INTEGER);" } },
+    );
+    expect((await runRelease(opts(), h.deps)).code).toBe(1);
+    deployedNothing(h);
+    expect(h.appended[0].text).toMatch(/\| 0005_list_json, 0006_next \(적용 실패 — 적용됨: 0005_list_json\) \| 배포 전 중단 \(후속 작업 대기: 0005_list_json\) \|/);
+    expect(JSON.parse(h.files[".wrangler/release-pending-hooks.json"])).toHaveLength(HUBS.length);
+    expect(h.output()).toContain("node scripts/backfill.mjs --hub ddp --limit 150");
+  });
+
+  it("infra: 상태 파일이 깨졌거나 허용되지 않은 명령이 있으면 경고하고 .corrupt로 남긴 뒤 계속 (허용된 것만 돌림)", async () => {
+    const garbage = "{ not json";
+    const g = harness({ "npx wrangler d1 migrations list momeokjo --remote": ok(MIGRATIONS_NONE) }, { files: { ".wrangler/release-pending-hooks.json": garbage } });
+    expect((await runRelease(opts(), g.deps)).code).toBe(0);
+    expect(g.written).toContainEqual({ path: ".wrangler/release-pending-hooks.json.corrupt", text: garbage });
+    expect(g.output()).toContain(".corrupt");
+
+    const evil = JSON.stringify([
+      { migration: "0005_list_json.sql", name: "x", cmd: "bash", args: ["-c", "echo pwned"], needsAdminToken: false },
+      { migration: "0005_list_json.sql", name: "list_json 백필", cmd: "node", args: ["scripts/backfill.mjs", "--hub", "ddp", "--limit", "150"], needsAdminToken: true },
+    ]);
+    const e = harness({ "npx wrangler d1 migrations list momeokjo --remote": ok(MIGRATIONS_NONE) }, { files: { ".wrangler/release-pending-hooks.json": evil } });
+    expect((await runRelease(opts(), e.deps)).code).toBe(0);
+    expect(e.calls.some((c) => c.line.includes("echo pwned"))).toBe(false);
+    expect(e.ran("node scripts/backfill.mjs --hub ddp")).toHaveLength(1);
+    expect(e.written).toContainEqual({ path: ".wrangler/release-pending-hooks.json.corrupt", text: evil });
   });
 });
 
@@ -429,6 +472,11 @@ describe("infra: npm run release — 배포는 됐는데 새 버전을 모를 �
     expect(h.appended[0].text).toMatch(/^\| [\d-]+ [\d:]+ \| \? \|/);
     expect(h.ran("bash scripts/smoke.sh")).toHaveLength(1); // 기준만, 배포 뒤 스모크·롤백 없음
     expect(h.ran("npx wrangler rollback")).toHaveLength(0);
+    // 후속 작업은 시작 전이라 보여주고 남긴다 (배포됐든 아니든)
+    expect(h.ran("node scripts/backfill.mjs")).toHaveLength(0);
+    expect(out).toContain("node scripts/backfill.mjs --hub ddp --limit 150");
+    expect(JSON.parse(h.files[".wrangler/release-pending-hooks.json"])).toHaveLength(HUBS.length);
+    expect(h.appended[0].text).toContain("후속 작업 대기: 0005_list_json");
   };
 
   it("infra: 'Current Version ID'가 없고 deployments list도 실패", async () => {
@@ -467,6 +515,46 @@ describe("infra: npm run release — 기준 스모크와 자동 롤백", () => {
     expect(out).toContain("마이그레이션은 되돌리지 않아요");
     expect(out).toMatch(/[Cc]ron/);
     expect(h.appended[0].text).toMatch(/\| 72a9f970 \| fc22b79 \| 0005_list_json \| 롤백 \(새 FAIL 2\) \| 2f5adde0 \|/);
+    // 롤백 전에 20초 기다려 한 번 더 돌려 본다 (기준 + 배포 뒤 + 다시)
+    expect(h.ran("bash scripts/smoke.sh")).toHaveLength(3);
+    expect(h.sleeps).toContain(20_000);
+  });
+
+  it("infra: 다시 돌리니 사라진 일시 FAIL로는 롤백하지 않는다 (종료 코드 0)", async () => {
+    const h = harness({ "bash scripts/smoke.sh": [ok(smokeOutput(0)), fail("", 1, smokeOutput([FAIL_PLACES_500])), ok(smokeOutput(0))] });
+    const res = await runRelease(opts(), h.deps);
+    expect(res.code).toBe(0);
+    expect(h.ran("npx wrangler rollback")).toHaveLength(0);
+    expect(h.ran("bash scripts/smoke.sh")).toHaveLength(3);
+    expect(h.output()).toContain("일시");
+    expect(res.summary.result).toContain("일시 FAIL");
+  });
+
+  it("infra: 다시 돌린 스모크 결과를 못 읽으면 롤백하지 않고 확인 필요(3)", async () => {
+    const h = harness({ "bash scripts/smoke.sh": [ok(smokeOutput(0)), fail("", 1, smokeOutput([FAIL_PLACES_500])), fail("curl: (6)", 2)] });
+    const res = await runRelease(opts(), h.deps);
+    expect(res.code).toBe(3);
+    expect(h.ran("npx wrangler rollback")).toHaveLength(0);
+    expect(h.output()).toContain(`npx wrangler rollback ${PREV_VERSION}`);
+  });
+
+  it("infra: 새 감사 HTTP 실패(500)와 모든 거점 '0곳'은 코드 회귀라 (계속되면) 롤백", async () => {
+    const audit = harness(smokes([], [FAIL_AUDIT_500]));
+    expect((await runRelease(opts(), audit.deps)).code).toBe(2);
+    expect(audit.ran("npx wrangler rollback")).toHaveLength(1);
+
+    const empty = harness(smokes([], HUBS.map(emptyFail)));
+    expect((await runRelease(opts(), empty.deps)).code).toBe(2);
+    expect(empty.ran("npx wrangler rollback")).toHaveLength(1);
+  });
+
+  it("infra: 기준 FAIL이 모두 데이터 상태 신호면 플래그 없이도 경고만 하고 진행", async () => {
+    const h = harness(smokes([FAIL_AUDIT, FAIL_EMPTY], [FAIL_AUDIT, FAIL_EMPTY]));
+    const res = await runRelease(opts({ yes: true }), h.deps);
+    expect(res.code).toBe(0);
+    expect(h.ran("npm run deploy")).toHaveLength(1);
+    expect(h.output()).toContain(FAIL_AUDIT);
+    expect(h.output()).toMatch(/데이터 상태/);
   });
 
   it("infra: 배포 전부터 있던 FAIL은 배포 뒤에도 롤백 사유가 아니다 (--accept-baseline-fails로 받아들였을 때)", async () => {

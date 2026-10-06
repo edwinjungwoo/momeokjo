@@ -60,6 +60,7 @@ export declare const DEPLOY_LOG_HEADER: string;
 export declare const PENDING_HOOKS_FILE: string;
 export declare const UNKNOWN_VERSION_RESULT: string;
 export declare const DATA_STATE_RESULT: string;
+export declare const RECHECK_MS: number;
 
 export declare function parseReleaseArgs(argv: string[]): { ok: true; opts: ReleaseOpts } | { ok: false; error: string };
 export declare function stripAnsi(s: string): string;
@@ -74,12 +75,22 @@ export declare function parseSmokeSummary(text: string): SmokeSummary | null;
 export declare function parseSmokeFails(text: string): string[];
 export declare function smokeFailKey(line: string): string;
 export declare function isDataStateFail(line: string): boolean;
-export declare function shouldRollback(smoke: { code: number; summary: SmokeSummary | null; fails?: string[]; baseline?: string[] }): {
-  action: "keep" | "rollback" | "data" | "manual";
-  reason: string;
-  newFails: string[];
-};
-export declare function parsePendingHooks(text: string | undefined): PlannedHook[];
+export declare function classifySmokeFails(fails: string[], hubIds: string[]): { code: string[]; data: string[] };
+export type RollbackVerdict = { action: "keep" | "rollback" | "data" | "manual"; reason: string; newFails: string[] };
+export declare function shouldRollback(smoke: {
+  code: number;
+  summary: SmokeSummary | null;
+  fails?: string[];
+  baseline?: string[];
+  hubIds?: string[];
+}): RollbackVerdict;
+export declare function confirmRollback(input: {
+  first: string[];
+  rerun: { code: number; summary: SmokeSummary | null; fails: string[] };
+  baseline: string[];
+  hubIds: string[];
+}): RollbackVerdict;
+export declare function parsePendingHooks(text: string | undefined): { hooks: PlannedHook[]; corrupt: boolean };
 export declare function dirtyPaths(porcelain: string): string[];
 export declare function planRelease(input: {
   pending: string[];
