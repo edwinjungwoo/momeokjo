@@ -32,6 +32,17 @@ describe("placesCache", () => {
     expect(readPlacesCache(e, "ddp", NOW - 1)).toBeNull();
   });
 
+  it("R56: 응답의 ETag를 같이 저장해 두고 읽을 때 돌려준다 (예전 저장본·이상한 값은 ETag 없이)", () => {
+    const e = placesCacheEntry("ddp", "{}", NOW, 'W/"1-ddp-abc"')!;
+    expect(e).toEqual({ v: DEVICE_CACHE_VERSION, hub: "ddp", savedAt: NOW, text: "{}", etag: 'W/"1-ddp-abc"' });
+    expect(readPlacesCache(e, "ddp", NOW)).toEqual({ text: "{}", savedAt: NOW, fresh: true, etag: 'W/"1-ddp-abc"' });
+    expect(placesCacheEntry("ddp", "{}", NOW, null)).not.toHaveProperty("etag");
+    expect(readPlacesCache(placesCacheEntry("ddp", "{}", NOW), "ddp", NOW)).not.toHaveProperty("etag");
+    for (const etag of [1, "", "x".repeat(300)]) {
+      expect(readPlacesCache({ ...placesCacheEntry("ddp", "{}", NOW), etag }, "ddp", NOW)).not.toHaveProperty("etag");
+    }
+  });
+
   it("R45: 다른 거점·다른 버전·깨진 값은 읽지 않는다", () => {
     const e = placesCacheEntry("ddp", "{}", NOW)!;
     expect(readPlacesCache(e, "pangyo", NOW)).toBeNull();

@@ -15,15 +15,21 @@ export const PLACES_CACHE_FRESH_MS = 24 * HOUR;
 /** 이보다 오래된 저장본은 보여주지 않는다. 서버의 상세 유지 기간(DETAIL_OK_TTL_MS, 3일)과 같다 (스펙 §3.1을 보수적으로 읽음) */
 export const PLACES_CACHE_MAX_AGE_MS = 3 * 24 * HOUR;
 
-export type PlacesCacheEntry = { v: number; hub: string; savedAt: number; text: string };
+/** R56: 저장본과 함께 두는 응답 ETag의 최대 길이 (서버 ETag는 40자 안팎) */
+const ETAG_MAX_CHARS = 200;
+const validEtag = (v: unknown): v is string => typeof v === "string" && v.length > 0 && v.length <= ETAG_MAX_CHARS;
+
+/** etag: R56 서버 스냅샷 응답의 ETag (없던 예전 저장본은 키가 없다 — 판을 올리지 않아도 읽힌다) */
+export type PlacesCacheEntry = { v: number; hub: string; savedAt: number; text: string; etag?: string };
 
 /** 저장할 항목. 너무 크면 null */
-export function placesCacheEntry(hub: string, text: string, now: number): PlacesCacheEntry | null {
+export function placesCacheEntry(hub: string, text: string, now: number, etag?: string | null): PlacesCacheEntry | null {
   if (text.length === 0 || text.length > PLACES_CACHE_MAX_CHARS) return null;
-  return { v: DEVICE_CACHE_VERSION, hub, savedAt: now, text };
+  return { v: DEVICE_CACHE_VERSION, hub, savedAt: now, text, ...(validEtag(etag) ? { etag } : {}) };
 }
 
-export type CachedPlacesView = { text: string; savedAt: number; fresh: boolean };
+/** etag가 있으면 다시 열 때 If-None-Match로 보낸다 (R56: 바뀐 게 없으면 304 — 본문을 받지 않는다) */
+export type CachedPlacesView = { text: string; savedAt: number; fresh: boolean; etag?: string };
 
 /** 읽은 값이 이 거점의 쓸 수 있는 저장본이면 원문과 신선도. 모양·버전·거점이 틀리거나 너무 오래됐으면 null */
 export function readPlacesCache(raw: unknown, hub: string, now: number): CachedPlacesView | null {
@@ -34,7 +40,7 @@ export function readPlacesCache(raw: unknown, hub: string, now: number): CachedP
   const age = now - e.savedAt;
   // 기기 시계가 뒤로 갔으면(저장 시각이 미래) 오래된 것으로 친다
   if (age < 0 || age > PLACES_CACHE_MAX_AGE_MS) return null;
-  return { text: e.text, savedAt: e.savedAt, fresh: age <= PLACES_CACHE_FRESH_MS };
+  return { text: e.text, savedAt: e.savedAt, fresh: age <= PLACES_CACHE_FRESH_MS, ...(validEtag(e.etag) ? { etag: e.etag } : {}) };
 }
 
 /** 저장 뒤 지울 거점: 방금 저장한 거점은 남기고, 나머지는 최근 저장 순으로 MAX_HUBS개까지만 */

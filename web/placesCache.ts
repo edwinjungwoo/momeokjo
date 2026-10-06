@@ -87,12 +87,12 @@ export async function readCachedPlaces(hub: string): Promise<CachedPlacesView | 
   }
 }
 
-/** 응답 원문을 저장하고, 오래된 거점은 지운다 (최근 3곳) */
-export async function saveCachedPlaces(hub: string, text: string): Promise<void> {
+/** 응답 원문(과 R56 ETag)을 저장하고, 오래된 거점은 지운다 (최근 3곳) */
+export async function saveCachedPlaces(hub: string, text: string, etag?: string | null): Promise<void> {
   let p: Promise<IDBDatabase | null> | null = null;
   let db: IDBDatabase | null = null;
   try {
-    const entry = placesCacheEntry(hub, text, Date.now());
+    const entry = placesCacheEntry(hub, text, Date.now(), etag);
     p = openDb();
     db = await p;
     if (!db) return;

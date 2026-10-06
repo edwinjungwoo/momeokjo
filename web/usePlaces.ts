@@ -28,6 +28,7 @@ type State = {
  * R45: 디바운스는 거점을 바꿀 때만 한다. 처음 열 때와 "다시 시도"는 바로 부른다 (첫 목록이 250ms 늦지 않게).
  * R45: 이 거점의 기기 저장본이 있으면 새 목록이 오기 전에 먼저 보여준다 (24시간 안이면 그대로, 넘었으면 흐리게).
  * 새 목록이 오면 바꾸고, 폴링이 끝난 마지막 응답을 다시 저장한다.
+ * R56: 첫 요청은 저장본의 ETag를 If-None-Match로 보낸다 — 서버 스냅샷이 같으면 304(본문 없음)라 저장본을 새 목록으로 쓴다.
  */
 export function usePlaces(hubId: string) {
   const [state, setState] = useState<State>({
@@ -41,10 +42,25 @@ export function usePlaces(hubId: string) {
     let polls = 0;
     let timer: number | undefined;
     let received = false;
+    // 저장본은 디바운스 없이 바로 읽고 한 번만 해석한다 (먼저 보여주기와 첫 요청의 ETag에 같이 쓴다)
+    const cached = readCachedPlaces(hubId).then((c) => {
+      if (!c) return null;
+      try {
+        return { ...c, data: JSON.parse(c.text) as PlacesResponse };
+      } catch {
+        return null;
+      }
+    });
+    let first = true;
     const load = async () => {
       try {
-        const { data, text } = await fetchPlaces(hubId, MAX_RADIUS, ctrl.signal);
+        const saved = first ? await cached : null;
+        first = false;
         if (ctrl.signal.aborted) return;
+        const r = await fetchPlaces(hubId, MAX_RADIUS, ctrl.signal, saved?.etag);
+        if (ctrl.signal.aborted) return;
+        if (r.notModified && !saved) throw new Error("304 without a saved list");
+        const { data, text, etag } = r.notModified ? saved! : r;
         received = true;
         const delay = shouldPoll(data) ? pollDelayMs(polls) : null;
         const more = delay !== null;
@@ -53,23 +69,17 @@ export function usePlaces(hubId: string) {
           polls += 1;
           timer = window.setTimeout(load, delay);
         } else {
-          void saveCachedPlaces(hubId, text);
+          void saveCachedPlaces(hubId, text, etag);
         }
       } catch {
         if (!ctrl.signal.aborted) setState((s) => ({ ...s, loading: false, error: true, polling: false }));
       }
     };
     setState((s) => ({ ...s, loading: true, error: false }));
-    // 저장본은 디바운스 없이 바로 읽는다. 이 거점의 새 목록을 이미 들고 있으면(다시 시도) 쓰지 않는다
-    void readCachedPlaces(hubId).then((c) => {
+    // 이 거점의 새 목록을 이미 들고 있으면(다시 시도) 저장본은 쓰지 않는다
+    void cached.then((c) => {
       if (!c || received || ctrl.signal.aborted) return;
-      let data: PlacesResponse;
-      try {
-        data = JSON.parse(c.text) as PlacesResponse;
-      } catch {
-        return;
-      }
-      setState((s) => mergeCachedPlaces(s, hubId, { data, savedAt: c.savedAt, fresh: c.fresh }));
+      setState((s) => mergeCachedPlaces(s, hubId, { data: c.data, savedAt: c.savedAt, fresh: c.fresh }));
     });
     const hubChanged = lastHub.current !== hubId;
     lastHub.current = hubId;
