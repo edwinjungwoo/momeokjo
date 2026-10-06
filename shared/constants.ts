@@ -33,6 +33,6 @@ export const DETAIL_FREEZE_MS = 24 * HOUR;
  */
 export const LIST_JSON_VERSION = 1;
 
-export const MAX_QUAD_DEPTH = 4;
+export const MAX_QUAD_DEPTH = 5;
 export const KAKAO_PAGE_SIZE = 15;
 export const KAKAO_MAX_RESULTS = 45;

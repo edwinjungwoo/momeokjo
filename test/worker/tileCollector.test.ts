@@ -1,7 +1,7 @@
 import { env } from "cloudflare:test";
 import { describe, expect, it } from "vitest";
 import { ASEM, TILE_TTL_MS } from "../../shared/constants";
-import { tileKeyOf, tileRect, tilesCoveringCircle } from "../../shared/geo";
+import { splitRect, tileKeyOf, tileRect, tilesCoveringCircle } from "../../shared/geo";
 import { Budget } from "../../worker/budget";
 import { getTiles, markTile, tilePlaceStates } from "../../worker/repo";
 import { collectTiles } from "../../worker/tileCollector";
@@ -43,6 +43,19 @@ describe("collectTiles", () => {
     await collectTiles(deps(fakeKakaoLocal(same).fetcher, 100), [KEY]);
     expect(await idCount()).toBe(45);
     expect((await getTiles(env.DB, [KEY])).get(KEY)?.saturated).toBe(true);
+  });
+
+  it("R2: 깊이 4 칸에 46곳 넘게 몰려도 깊이 5에서 45곳 이하로 나뉘면 saturated가 아니고 ID를 빠짐없이 기록한다 (한 건물에 몰린 가게)", async () => {
+    // 격자를 깊이 4까지 내려간 칸 하나(약 15m)에 50곳: 깊이 5 하위 칸에는 40 / 10곳
+    let cell = RECT;
+    for (let d = 0; d < 4; d++) cell = splitRect(cell)[3];
+    const [, subA, subB] = splitRect(cell);
+    const docs = [...gridDocs("big", 40, subA), ...gridDocs("small", 10, subB)];
+    const kakao = fakeKakaoLocal(docs);
+    const r = await collectTiles(deps(kakao.fetcher, 100), [KEY]);
+    expect(r).toEqual({ collected: [KEY], incomplete: [], failed: [] });
+    expect(await idCount()).toBe(50);
+    expect((await getTiles(env.DB, [KEY])).get(KEY)).toEqual({ collectedAt: NOW, saturated: false });
   });
 
   it("R2/R5: 간식(디저트) 업종은 ID도 기록하지 않는다", async () => {
