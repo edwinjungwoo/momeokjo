@@ -1,12 +1,17 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type Ref } from "react";
 import { HUBS, type Hub } from "../../shared/hubs";
 import { CheckIcon, ChevronDown, PinIcon } from "./Icons";
 import { Mascot } from "./Mascot";
 
-type Props = { hub: Hub; onChange: (id: string) => void };
+type Props = {
+  hub: Hub;
+  onChange: (id: string) => void;
+  /** R61: 첫 접속 질문을 닫은 뒤 포커스를 옮길 자리 */
+  buttonRef?: Ref<HTMLButtonElement>;
+};
 
 /** R24: 거점 칩 — shared/hubs.ts의 거점 중 하나를 고른다 */
-export function HubChip({ hub, onChange }: Props) {
+export function HubChip({ hub, onChange, buttonRef }: Props) {
   const [open, setOpen] = useState(false);
   const root = useRef<HTMLDivElement>(null);
 
@@ -29,7 +34,7 @@ export function HubChip({ hub, onChange }: Props) {
 
   return (
     <div className="hub-chip" ref={root}>
-      <button type="button" aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen((o) => !o)}>
+      <button type="button" ref={buttonRef} aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen((o) => !o)}>
         <PinIcon className="chip-icon" />
         <span className="chip-label">{hub.name}</span>
         <ChevronDown className="caret" />

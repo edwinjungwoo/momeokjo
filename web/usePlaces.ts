@@ -4,9 +4,7 @@ import type { PlacesResponse } from "../shared/types";
 import { mergeCachedPlaces } from "../shared/placesCache";
 import { fetchPlaces } from "./api";
 import { readCachedPlaces, saveCachedPlaces } from "./placesCache";
-import { pollDelayMs, shouldPoll } from "./pollSchedule";
-
-const DEBOUNCE_MS = 250;
+import { loadDelayMs, pollDelayMs, shouldPoll } from "./pollSchedule";
 
 type State = {
   data: PlacesResponse | null;
@@ -40,7 +38,8 @@ export function usePlaces(hubId: string, enabled = true) {
   const lastHub = useRef<string | null>(null);
 
   useEffect(() => {
-    if (!enabled) return;
+    const delay0 = loadDelayMs(lastHub.current, hubId, enabled);
+    if (delay0 === null) return;
     const ctrl = new AbortController();
     let polls = 0;
     let timer: number | undefined;
@@ -75,9 +74,8 @@ export function usePlaces(hubId: string, enabled = true) {
       }
       setState((s) => mergeCachedPlaces(s, hubId, { data, savedAt: c.savedAt, fresh: c.fresh }));
     });
-    const hubChanged = lastHub.current !== null && lastHub.current !== hubId;
     lastHub.current = hubId;
-    const debounce = window.setTimeout(load, hubChanged ? DEBOUNCE_MS : 0);
+    const debounce = window.setTimeout(load, delay0);
     return () => {
       ctrl.abort();
       window.clearTimeout(debounce);

@@ -24,3 +24,15 @@ export function shouldPoll(data: PlacesResponse): boolean {
   const paused = (data.detailsPaused ?? false) || (data.detailsFrozenSince ?? null) !== null;
   return data.pending > 0 && !paused;
 }
+
+/** R29: 거점을 바꿀 때 목록을 부르기 전 디바운스 */
+export const HUB_CHANGE_DEBOUNCE_MS = 250;
+
+/**
+ * R29/R45/R61: 목록을 부르기 전에 기다릴 시간. 꺼져 있으면(첫 접속 거점 질문 중) null — 부르지 않는다.
+ * 처음 부를 때(lastHub null — 질문에서 고른 직후 포함)와 같은 거점 다시 시도는 바로, 거점을 바꿀 때만 디바운스.
+ */
+export function loadDelayMs(lastHub: string | null, hubId: string, enabled: boolean): number | null {
+  if (!enabled) return null;
+  return lastHub !== null && lastHub !== hubId ? HUB_CHANGE_DEBOUNCE_MS : 0;
+}

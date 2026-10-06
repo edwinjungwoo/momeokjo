@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { MAX_RADIUS, MIN_RADIUS, PREWARM_RADIUS, isValidRadius } from "../../shared/constants";
 import { DEFAULT_FILTERS } from "../../shared/recommend";
 import {
-  DEFAULT_SETTINGS, applyShareParams, needsHubPicker, parseSettings, resolveStart, urlAfterHubChange,
+  DEFAULT_SETTINGS, applyShareParams, needsHubPicker, parseSettings, resolveStart, showHubPicker, urlAfterHubChange,
 } from "../../shared/settings";
 
 describe("settings", () => {
@@ -137,6 +137,10 @@ describe("settings", () => {
     expect(needsHubPicker({ stored: null, path: "/gangnam", query: "" })).toBe(true);
     expect(needsHubPicker({ stored: null, path: "/", query: "?h=gangnam" })).toBe(true);
     expect(needsHubPicker({ stored: null, path: "/", query: "?t=abc" })).toBe(true);
+    // 거점이 없는 공유 링크(경로 거점·h 없는 t, 예전 p)도 거점을 정하지 않는다 — 받은 시트를 닫은 뒤 묻는다 (showHubPicker)
+    expect(needsHubPicker({ stored: null, path: "/", query: "?t=1" })).toBe(true);
+    expect(needsHubPicker({ stored: null, path: "/", query: "?p=12345" })).toBe(true);
+    expect(needsHubPicker({ stored: null, path: "/", query: "?t=1,2&r=700" })).toBe(true);
   });
 
   it("R61: 설정이 저장된 기존 사용자는 묻지 않는다 (예전 저장값·깨진 값 포함 — 저장값이 있으면 고른 것으로 친다)", () => {
@@ -153,14 +157,13 @@ describe("settings", () => {
     expect(needsHubPicker({ stored: null, tipSeen: true, path: "/", query: "" })).toBe(false);
   });
 
-  it("R61: 거점 짧은 링크·공유 링크(t, 예전 p·h)로 열면 묻지 않는다 (링크가 거점을 정한다)", () => {
+  it("R61: 거점을 정하는 링크(짧은 링크, 거점 경로·h가 있는 공유 링크, 예전 h)로 열면 묻지 않는다", () => {
     for (const [path, query] of [
       ["/pangyo", ""],
       ["/pangyo/", ""],
       ["/ddp", "?t=1,2&r=700"],
-      ["/", "?t=1"],
-      ["/", "?p=12345"],
       ["/", "?h=naebang"],
+      ["/", "?p=12345&h=pangyo"],
       ["/", "?t=1&h=ddp&r=300"],
     ]) {
       expect(needsHubPicker({ stored: null, path, query }), path + query).toBe(false);
@@ -180,13 +183,25 @@ describe("settings", () => {
     const share = resolveStart(null, "/ddp", "?t=1,2&r=700");
     expect(share).toMatchObject({ askHub: false, saveHub: "ddp", replaceUrl: "/", settings: { hubId: "ddp", filters: { radius: 700 } } });
     expect(resolveStart(null, "/", "?t=1&h=naebang")).toMatchObject({ askHub: false, saveHub: "naebang" });
-    // 거점이 없는 예전 공유 링크는 기본 거점을 고른 것으로 친다
-    expect(resolveStart(null, "/", "?p=12345")).toMatchObject({ askHub: false, saveHub: "bongeunsa" });
+    // 거점이 없는 공유 링크는 기본 거점을 저장하지 않고, 받은 시트 뒤에 묻는다
+    expect(resolveStart(null, "/", "?p=12345")).toMatchObject({ askHub: true, saveHub: null, replaceUrl: "/" });
+    expect(resolveStart(null, "/", "?t=1,2&r=700")).toMatchObject({ askHub: true, saveHub: null, replaceUrl: "/" });
     // 이미 고른 기기(저장값 또는 첫 방문 안내를 닫음)의 공유 링크 거점은 예전처럼 이번에만 (R43)
     const stored = JSON.stringify({ ...DEFAULT_SETTINGS, hubId: "pangyo" });
     expect(resolveStart(stored, "/ddp", "?t=1")).toMatchObject({ askHub: false, saveHub: null });
     expect(resolveStart(null, "/ddp", "?t=1", true)).toMatchObject({ askHub: false, saveHub: null });
     expect(resolveStart(null, "/", "", true)).toMatchObject({ askHub: false, saveHub: null });
     expect(resolveStart(stored, "/", "")).toMatchObject({ askHub: false, saveHub: null });
+  });
+
+  it("R61: 질문을 언제 보이나 — 거점 없는 공유 링크면 받은 곳을 다 불러오고 그 시트를 닫은 뒤에", () => {
+    expect(showHubPicker({ askHub: false, shareLink: false, shareSettled: false, sheetOpen: false })).toBe(false);
+    expect(showHubPicker({ askHub: true, shareLink: false, shareSettled: false, sheetOpen: false })).toBe(true);
+    // 공유 링크: 불러오는 중이거나 받은 시트(3곳·한 곳)가 떠 있으면 아직
+    expect(showHubPicker({ askHub: true, shareLink: true, shareSettled: false, sheetOpen: false })).toBe(false);
+    expect(showHubPicker({ askHub: true, shareLink: true, shareSettled: true, sheetOpen: true })).toBe(false);
+    // 다 불러왔고(못 찾았어도) 시트가 닫혀 있으면 묻는다
+    expect(showHubPicker({ askHub: true, shareLink: true, shareSettled: true, sheetOpen: false })).toBe(true);
+    expect(showHubPicker({ askHub: false, shareLink: true, shareSettled: true, sheetOpen: false })).toBe(false);
   });
 });

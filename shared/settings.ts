@@ -63,9 +63,12 @@ const SHARE_KEYS = ["t", "p", "h", "r", "lat", "lng"];
  */
 export const hasHubChoice = (stored: string | null, tipSeen = false): boolean => stored !== null || tipSeen;
 
-/** R61: 링크가 거점을 정해 주는가 — 거점 짧은 링크(/pangyo), 공유 링크(t·예전 p; 거점이 없으면 기본 거점), 예전 h */
+/**
+ * R61: 링크가 거점을 정해 주는가 — 거점 짧은 링크(/pangyo), 거점 경로나 h가 있는 공유 링크, 예전 h.
+ * 거점이 없는 공유 링크(경로 거점·h 없는 t, 예전 p)는 정하지 않는다 — 기본 거점을 저장하지 않고 받은 시트 뒤에 묻는다
+ */
 function linkSetsHub(share: ShareParams): boolean {
-  return share.hubId !== null || share.placeIds.length > 0;
+  return share.hubId !== null;
 }
 
 /**
@@ -77,10 +80,19 @@ export function needsHubPicker(o: { stored: string | null; tipSeen?: boolean; pa
   return !linkSetsHub(parseShareParams(o.query, o.path));
 }
 
+/**
+ * R61: 지금 질문을 보일까. 거점 없는 공유 링크로 열었으면 받은 곳을 다 불러오고(못 찾았어도) 받은 시트를 닫은 뒤에 묻는다 —
+ * 친구가 보낸 곳을 먼저 보여주고, 질문이 그 위에 겹치지 않게
+ */
+export function showHubPicker(o: { askHub: boolean; shareLink: boolean; shareSettled: boolean; sheetOpen: boolean }): boolean {
+  if (!o.askHub) return false;
+  return !o.shareLink || (o.shareSettled && !o.sheetOpen);
+}
+
 export type Start = {
   settings: Settings;
   share: ShareParams;
-  /** R43: 북마크 거점 경로로 열었으면 저장할 거점 id. R61: 거점 선택이 없는 기기에서 공유 링크로 열었으면 그 거점 */
+  /** R43: 북마크 거점 경로로 열었으면 저장할 거점 id. R61: 거점 선택이 없는 기기에서 거점을 정한 공유 링크로 열었으면 그 거점 */
   saveHub: string | null;
   /** 주소창을 바꿀 값 (바꿀 필요가 없으면 null) */
   replaceUrl: string | null;
@@ -91,8 +103,8 @@ export type Start = {
 /**
  * R25/R43: 처음 열 때의 설정. 저장값 → 거점 경로(공유 링크가 아니면 저장) → 공유 파라미터(이번에만).
  * 공유 링크(t·p)의 거점 경로는 예전 h처럼 이번에만 쓰고, 주소는 /로 돌린다 (받은 사람의 저장 거점을 덮지 않게).
- * R61: 단, 거점 선택이 아직 없는 기기면 공유 링크의 거점(없으면 기본 거점)을 이 기기의 거점으로 저장한다 (덮을 저장 거점이 없고, 다시 묻지 않게).
- * 반경 같은 다른 공유 파라미터는 그래도 이번에만이다.
+ * R61: 단, 거점 선택이 아직 없는 기기면 공유 링크가 정한 거점(경로·h)을 이 기기의 거점으로 저장한다 (덮을 저장 거점이 없고, 다시 묻지 않게).
+ * 거점이 없는 공유 링크면 아무것도 저장하지 않고 askHub(받은 시트 뒤에 묻기). 반경 같은 다른 공유 파라미터는 그래도 이번에만이다.
  */
 export function resolveStart(stored: string | null, pathname: string, search: string, tipSeen = false): Start {
   const share = parseShareParams(search, pathname);
