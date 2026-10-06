@@ -9,7 +9,7 @@ import { utcDay } from "../../shared/kst";
 import { PLACES_CACHE_MS, PLACES_CACHE_VERSION, createApp, placesCacheKey } from "../../worker/app";
 import {
   HUB_SNAPSHOT_VERSION, SNAPSHOT_DIRTY_REBUILD_MS, SNAPSHOT_EDGE_CACHE_MS, SNAPSHOT_MAX_AGE_MS, SNAPSHOT_REFRESH_BEFORE_MS,
-  SNAPSHOT_SKIP_BACKOFF_MS, SNAPSHOT_SKIP_PREFIX, acceptsGzip, buildHubSnapshot, etagMatches, maintainSnapshots, readHubSnapshot, snapshotEdgeTtlMs,
+  SNAPSHOT_SKIP_BACKOFF_MS, SNAPSHOT_SKIP_MAX_BACKOFF_MS, SNAPSHOT_SKIP_PREFIX, acceptsGzip, skipBackoffMs, buildHubSnapshot, etagMatches, maintainSnapshots, readHubSnapshot, snapshotEdgeTtlMs,
 } from "../../worker/hubSnapshot";
 import { hubsOfTile } from "../../worker/hubTiles";
 import { MAIN_CRON, SNAPSHOT_CRON, runCron, runSnapshotCron } from "../../worker/maintenance";
@@ -515,12 +515,68 @@ describe("R56 Fix wave 11 — 만들 수 없는 거점의 비용 상한", () => 
         return typeof v === "function" ? v.bind(target) : v;
       },
     });
+    const skipOf = async () =>
+      JSON.parse((await env.DB.prepare("SELECT value FROM meta WHERE key = ?").bind(skipKey).first<{ value: string }>())!.value) as {
+        until: number; attempts: number;
+      };
     await expect(maintainSnapshots(dying, [HUB], NOW)).rejects.toThrow("exceeded CPU");
-    const left = await env.DB.prepare("SELECT value FROM meta WHERE key = ?").bind(skipKey).first<{ value: string }>();
-    expect(Number(left?.value)).toBe(NOW + SNAPSHOT_SKIP_BACKOFF_MS);
+    expect(await skipOf()).toEqual({ until: NOW + SNAPSHOT_SKIP_BACKOFF_MS, attempts: 1 });
     expect(await maintainSnapshots(env.DB, [HUB], NOW + 5 * 60_000)).toEqual({ status: "idle" });
-    expect(await maintainSnapshots(env.DB, [HUB], NOW + SNAPSHOT_SKIP_BACKOFF_MS)).toMatchObject({ status: "built" });
+    // Fix wave 14: 끝나지 못한 시도가 이어지면 기다림이 두 배씩 (20 → 40 → 80 … 최대 6시간)
+    let t = NOW;
+    const waits: number[] = [];
+    for (let i = 0; i < 7; i++) {
+      t = i === 0 ? NOW : (await skipOf()).until;
+      if (i > 0) await expect(maintainSnapshots(dying, [HUB], t)).rejects.toThrow("exceeded CPU");
+      const s = await skipOf();
+      expect(s.attempts).toBe(i + 1);
+      waits.push((s.until - t) / 60_000);
+    }
+    expect(waits).toEqual([20, 40, 80, 160, 320, 360, 360]);
+    expect(SNAPSHOT_SKIP_MAX_BACKOFF_MS).toBe(6 * 3600_000);
+    // 끝나면(만들면) 표시를 지운다
+    expect(await maintainSnapshots(env.DB, [HUB], (await skipOf()).until)).toMatchObject({ status: "built" });
     expect(await env.DB.prepare("SELECT value FROM meta WHERE key = ?").bind(skipKey).first()).toBeNull();
+  });
+
+  it("R56: 끝까지 간 건너뜀(pending)은 시도 수를 0으로 되돌린다 — 다음에 죽은 시도는 다시 20분부터", async () => {
+    await seedHub();
+    const skipKey = SNAPSHOT_SKIP_PREFIX + "bongeunsa";
+    await env.DB.prepare("INSERT INTO meta (key, value) VALUES (?, ?)").bind(skipKey, JSON.stringify({ until: NOW, attempts: 4 })).run();
+    await env.DB.prepare("DELETE FROM places WHERE id = '1002'").run();
+    expect(await maintainSnapshots(env.DB, [HUB], NOW)).toMatchObject({ status: "skipped", reason: "pending" });
+    const v = JSON.parse((await env.DB.prepare("SELECT value FROM meta WHERE key = ?").bind(skipKey).first<{ value: string }>())!.value);
+    expect(v).toEqual({ until: NOW + SNAPSHOT_SKIP_BACKOFF_MS, attempts: 0 });
+    // 예전 형식(숫자만)도 읽는다
+    await env.DB.prepare("UPDATE meta SET value = ? WHERE key = ?").bind(String(NOW + 10 * 60_000), skipKey).run();
+    expect(await maintainSnapshots(env.DB, [HUB], NOW + 5 * 60_000)).toEqual({ status: "idle" });
+  });
+
+  it("R56: 건너뜀마다 기다리는 시간 — pending·tiles 20분, oversize 2시간, 끝나지 못한 시도는 두 배씩 최대 6시간", () => {
+    expect(skipBackoffMs("pending", 0)).toBe(20 * 60_000);
+    expect(skipBackoffMs("tiles", 0)).toBe(20 * 60_000);
+    expect(skipBackoffMs("oversize", 0)).toBe(2 * 3600_000);
+    expect([1, 2, 3, 4, 5, 6, 30].map((n) => skipBackoffMs("unfinished", n) / 60_000)).toEqual([20, 40, 80, 160, 320, 360, 360]);
+  });
+
+  it("R56: 쓸 수 있는 스냅샷이 있는 거점은 건너뛰어도 만료 5분 전 너머로 기다리지 않는다 (스냅샷이 끊기지 않게)", async () => {
+    await seedHub();
+    await buildHubSnapshot(env.DB, HUB, NOW);
+    const t = NOW + SNAPSHOT_MAX_AGE_MS - SNAPSHOT_REFRESH_BEFORE_MS + 1;
+    await env.DB.prepare("DELETE FROM places WHERE id = '1002'").run();
+    expect(await maintainSnapshots(env.DB, [HUB], t)).toMatchObject({ status: "skipped", reason: "pending" });
+    const skipKey = SNAPSHOT_SKIP_PREFIX + "bongeunsa";
+    const v = JSON.parse((await env.DB.prepare("SELECT value FROM meta WHERE key = ?").bind(skipKey).first<{ value: string }>())!.value);
+    expect(v.until).toBe(NOW + SNAPSHOT_MAX_AGE_MS - 5 * 60_000);
+    expect(v.until).toBeLessThan(t + SNAPSHOT_SKIP_BACKOFF_MS);
+    // 그때 다시 본다 (스냅샷이 아직 쓸 수 있을 때)
+    expect(await maintainSnapshots(env.DB, [HUB], v.until)).toMatchObject({ status: "skipped", reason: "pending" });
+    // 쓸 수 있는 스냅샷이 없으면 그대로 20분
+    await env.DB.prepare("DELETE FROM hub_snapshots").run();
+    await env.DB.prepare("DELETE FROM meta WHERE key = ?").bind(skipKey).run();
+    await maintainSnapshots(env.DB, [HUB], t);
+    const w = JSON.parse((await env.DB.prepare("SELECT value FROM meta WHERE key = ?").bind(skipKey).first<{ value: string }>())!.value);
+    expect(w.until).toBe(t + SNAPSHOT_SKIP_BACKOFF_MS);
   });
 
   it("R56: 쿨다운(paused)으로 건너뛴 것은 기다리지 않는다 (무거운 읽기 전에 판단해서 싸다)", async () => {
@@ -532,18 +588,23 @@ describe("R56 Fix wave 11 — 만들 수 없는 거점의 비용 상한", () => 
     expect(await env.DB.prepare("SELECT value FROM meta WHERE key = ?").bind(SNAPSHOT_SKIP_PREFIX + "bongeunsa").first()).toBeNull();
   });
 
-  it("R56: 거점 목록에 없는 거점이나 SNAPSHOT_MAX_AGE_MS가 지난 스냅샷 행은 지운다", async () => {
+  it("R56: 넘겨받은 거점 목록에 없는 거점이나 SNAPSHOT_MAX_AGE_MS가 지난 스냅샷 행은 지운다", async () => {
     await seedHub();
+    const copyAs = (hub: string) =>
+      env.DB.prepare("INSERT INTO hub_snapshots SELECT ?, version, built_at, source_at, encoding, etag, body FROM hub_snapshots WHERE hub = 'bongeunsa'")
+        .bind(hub).run();
+    const hubs = async () => (await env.DB.prepare("SELECT hub, built_at FROM hub_snapshots ORDER BY hub").all<{ hub: string; built_at: number }>()).results;
     await buildHubSnapshot(env.DB, HUB, NOW);
-    await env.DB.prepare("INSERT INTO hub_snapshots SELECT 'gone', version, built_at, source_at, encoding, etag, body FROM hub_snapshots").run();
+    await copyAs("gone");
+    // 오래된 봉은사 행·목록 밖 행을 지운 뒤 봉은사를 새로 만든다
     const t = NOW + SNAPSHOT_MAX_AGE_MS;
-    await maintainSnapshots(env.DB, [], t);
-    expect(await env.DB.prepare("SELECT count(*) AS c FROM hub_snapshots").first<{ c: number }>()).toEqual({ c: 0 });
-    await buildHubSnapshot(env.DB, HUB, t);
-    await env.DB.prepare("INSERT INTO hub_snapshots SELECT 'gone', version, built_at, source_at, encoding, etag, body FROM hub_snapshots").run();
-    await maintainSnapshots(env.DB, [], t + 1);
-    const left = await env.DB.prepare("SELECT hub FROM hub_snapshots").all<{ hub: string }>();
-    expect(left.results.map((r) => r.hub)).toEqual(["bongeunsa"]);
+    expect(await maintainSnapshots(env.DB, [HUB], t)).toMatchObject({ status: "built", hub: "bongeunsa" });
+    expect(await hubs()).toEqual([{ hub: "bongeunsa", built_at: t }]);
+    // HUBS에 있어도 넘겨받은 목록에 없으면 지운다
+    await copyAs("ddp");
+    await copyAs("gone");
+    expect(await maintainSnapshots(env.DB, [HUB], t + 1)).toEqual({ status: "idle" });
+    expect((await hubs()).map((r) => r.hub)).toEqual(["bongeunsa"]);
   });
 
   it("R56: 판이 다르거나 오래된 행은 SQL에서 걸러 본문(base64)을 받지 않는다", async () => {

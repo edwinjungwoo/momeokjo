@@ -1,6 +1,6 @@
 import { MAX_RADIUS } from "../shared/constants";
 import { tilesCoveringCircle } from "../shared/geo";
-import { HUBS, type Hub } from "../shared/hubs";
+import type { Hub } from "../shared/hubs";
 import { placesPayload, readListRows } from "./placesService";
 import { placesBody } from "./present";
 import { countUnfetchedIn, detailGate, detailsAllowed, frozenSince, getTiles, isTileDue, tilePlaceStates } from "./repo";
@@ -28,14 +28,42 @@ export const SNAPSHOT_EDGE_CACHE_MS = 10 * MIN;
 export const SNAPSHOT_MAX_CHARS = 1_500_000;
 const ENCODING = "gzip";
 /**
- * 만들 수 없었던 거점(pending·tiles·oversize)과 끝나지 못한 시도(CPU 초과로 죽은 실행)를 다시 보기까지 기다리는 시간.
+ * 만들 수 없었던 거점(pending·tiles)과 끝나지 못한 첫 시도(CPU 초과로 죽은 실행)를 다시 보기까지 기다리는 시간.
  * 그동안 Cron은 그 거점의 격자-장소(수천 행)를 다시 읽지 않는다
  */
 export const SNAPSHOT_SKIP_BACKOFF_MS = 20 * MIN;
-/** meta snapshot_skip:{hub} = 이 시각 전에는 고르지 않는다 (만들기 시작할 때 써 두고, 끝나면 지우거나 그대로 둔다) */
+/** 본문이 너무 커서(oversize) 건너뛴 거점 — 곧 줄지 않으므로 오래 기다린다 */
+export const SNAPSHOT_OVERSIZE_BACKOFF_MS = 120 * MIN;
+/** 끝나지 못한 시도가 이어질 때 두 배씩 늘리는 기다림의 상한 (죽은 실행은 사용량도 기록하지 못해서 이것이 헛읽기의 유일한 상한이다) */
+export const SNAPSHOT_SKIP_MAX_BACKOFF_MS = 360 * MIN;
+/** 쓸 수 있는 스냅샷이 있는 거점은 건너뛰어도 그 만료 이만큼 전 너머로는 기다리지 않는다 (스냅샷이 끊기지 않게 한 번은 다시 해 본다) */
+export const SNAPSHOT_SKIP_EXPIRY_MARGIN_MS = 5 * MIN;
+/** meta snapshot_skip:{hub} = {until, attempts}: until 전에는 고르지 않는다. attempts = 이어서 끝나지 못한 시도 수 (끝나면 0) */
 export const SNAPSHOT_SKIP_PREFIX = "snapshot_skip:";
 /** 기다려야 하는 건너뜀 — 데이터가 바뀌어야 풀리고 판단에 무거운 읽기가 드는 것 (paused·raced는 싸거나 곧 풀려서 기다리지 않는다) */
 const BACKOFF_REASONS: ReadonlySet<SnapshotSkip> = new Set(["pending", "tiles", "oversize"]);
+const META_SET = "INSERT INTO meta (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value";
+
+type SkipState = { until: number; attempts: number };
+
+/** 저장된 건너뜀 표시. 예전 형식(숫자 = until)도 읽는다 */
+function parseSkip(raw: string | undefined): SkipState | null {
+  if (!raw) return null;
+  if (/^\d+$/.test(raw)) return { until: Number(raw), attempts: 0 };
+  try {
+    const o = JSON.parse(raw) as Partial<SkipState>;
+    return typeof o.until === "number" && typeof o.attempts === "number" ? { until: o.until, attempts: o.attempts } : null;
+  } catch {
+    return null;
+  }
+}
+
+/** 기다리는 시간: pending·tiles 20분, oversize 2시간, 끝나지 못한 시도는 n번째에 20분 × 2^(n−1) (최대 6시간) */
+export function skipBackoffMs(reason: SnapshotSkip | "unfinished", attempts: number): number {
+  if (reason === "oversize") return SNAPSHOT_OVERSIZE_BACKOFF_MS;
+  if (reason !== "unfinished") return SNAPSHOT_SKIP_BACKOFF_MS;
+  return Math.min(SNAPSHOT_SKIP_BACKOFF_MS * 2 ** Math.max(0, Math.min(attempts - 1, 10)), SNAPSHOT_SKIP_MAX_BACKOFF_MS);
+}
 
 type Base64Bytes = { toBase64(): string };
 const fromBase64 = (s: string): Uint8Array => (Uint8Array as unknown as { fromBase64(s: string): Uint8Array }).fromBase64(s);
@@ -192,16 +220,17 @@ export type SnapshotRun = SnapshotBuild | { status: "idle" };
  * R56 Cron: 실행마다 거점 하나만 만든다 (CPU·D1 읽기를 실행마다 나눈다).
  * 고르는 순서: 스냅샷이 없거나 판이 다른 거점(넘겨받은 순서 = 실행마다 돌아가는 hubOrder) →
  * 만료 SNAPSHOT_REFRESH_BEFORE_MS 전이 된 것, 또는 더러운데(표시 ≠ source_at) 만든 지 SNAPSHOT_DIRTY_REBUILD_MS가 지난 것 중 가장 오래된 것.
- * snapshot_skip:{hub}가 지금보다 뒤인 거점은 고르지 않는다 (SNAPSHOT_SKIP_BACKOFF_MS).
- * 만들기 전에 그 표시를 지금 + SNAPSHOT_SKIP_BACKOFF_MS로 써 둔다 — 실행이 CPU 초과로 죽으면 표시가 남아 매 실행 다시 시도하지 않는다.
- * 만들었거나 기다릴 필요가 없는 건너뜀(paused·raced)이면 지운다.
- * 처음에 거점 목록(HUBS)에 없는 거점과 SNAPSHOT_MAX_AGE_MS가 지난(또는 미래 시각) 행을 지운다.
+ * snapshot_skip:{hub}의 until이 지금보다 뒤인 거점은 고르지 않는다 (skipBackoffMs).
+ * 만들기 전에 {until: 지금 + 기다림, attempts: 이전 + 1}을 써 둔다 — 실행이 CPU 초과로 죽으면 표시가 남고, 이어서 죽을수록
+ * 기다림이 두 배씩(20 → 40 → 80분 … 최대 6시간) 는다. 만들었거나 기다릴 필요가 없는 건너뜀(paused·raced)이면 지우고,
+ * pending·tiles·oversize면 그 사유의 기다림과 attempts 0으로 다시 쓴다. 쓸 수 있는 스냅샷이 있는 거점은 그 만료 5분 전 너머로 기다리지 않는다.
+ * 처음에 넘겨받은 거점 목록(hubs)에 없는 거점과 SNAPSHOT_MAX_AGE_MS가 지난(또는 미래 시각) 행을 지운다.
  * 할 일이 없으면 idle (스냅샷 메타 ≤ 거점 수 행 + 표시 ≤ 2 × 거점 수 행만 읽는다).
  */
 export async function maintainSnapshots(db: D1Database, hubs: Hub[], now: number): Promise<SnapshotRun> {
   await db
     .prepare("DELETE FROM hub_snapshots WHERE built_at <= ? OR built_at > ? OR hub NOT IN (SELECT value FROM json_each(?))")
-    .bind(now - SNAPSHOT_MAX_AGE_MS, now, JSON.stringify(HUBS.map((h) => h.id)))
+    .bind(now - SNAPSHOT_MAX_AGE_MS, now, JSON.stringify(hubs.map((h) => h.id)))
     .run();
   if (hubs.length === 0) return { status: "idle" };
   const marks = hubs.map(() => "?").join(",");
@@ -217,7 +246,8 @@ export async function maintainSnapshots(db: D1Database, hubs: Hub[], now: number
   let pick: { hub: Hub; rank: number; builtAt: number } | null = null;
   for (const hub of hubs) {
     const m = metas.results.find((x) => x.hub === hub.id);
-    if (metaNum(SNAPSHOT_SKIP_PREFIX + hub.id) > now) continue;
+    const skip = parseSkip(stamps.results.find((x) => x.key === SNAPSHOT_SKIP_PREFIX + hub.id)?.value);
+    if (skip && skip.until > now) continue;
     const stamp = metaNum(SNAPSHOT_DIRTY_PREFIX + hub.id);
     let rank: number | null = null;
     if (!m || m.version !== HUB_SNAPSHOT_VERSION) rank = 0;
@@ -232,13 +262,21 @@ export async function maintainSnapshots(db: D1Database, hubs: Hub[], now: number
     if (!pick || rank < pick.rank || (rank === pick.rank && builtAt < pick.builtAt)) pick = { hub, rank, builtAt };
   }
   if (!pick) return { status: "idle" };
-  const skipKey = SNAPSHOT_SKIP_PREFIX + pick.hub.id;
-  await db.prepare(META_SET).bind(skipKey, String(now + SNAPSHOT_SKIP_BACKOFF_MS)).run();
+  const hubId = pick.hub.id;
+  const skipKey = SNAPSHOT_SKIP_PREFIX + hubId;
+  // 쓸 수 있는 스냅샷이 있으면 그 만료 SNAPSHOT_SKIP_EXPIRY_MARGIN_MS 전 너머로는 기다리지 않는다 (스냅샷이 끊기지 않게)
+  const valid = metas.results.find((x) => x.hub === hubId && x.version === HUB_SNAPSHOT_VERSION && x.built_at <= now);
+  const skipUntil = (wait: number) =>
+    valid ? Math.min(now + wait, valid.built_at + SNAPSHOT_MAX_AGE_MS - SNAPSHOT_SKIP_EXPIRY_MARGIN_MS) : now + wait;
+  const setSkip = (s: SkipState) => db.prepare(META_SET).bind(skipKey, JSON.stringify(s)).run();
+  // 시작 표시: 이번 시도가 끝나지 못하면(CPU 초과로 죽음) 이 값이 남는다 — 이어서 죽을수록 오래 기다린다
+  const attempts = (parseSkip(stamps.results.find((x) => x.key === skipKey)?.value)?.attempts ?? 0) + 1;
+  await setSkip({ until: skipUntil(skipBackoffMs("unfinished", attempts)), attempts });
   const r = await buildHubSnapshot(db, pick.hub, now);
-  if (r.status === "built" || !BACKOFF_REASONS.has(r.reason)) {
+  if (r.status === "skipped" && BACKOFF_REASONS.has(r.reason)) {
+    await setSkip({ until: skipUntil(skipBackoffMs(r.reason, 0)), attempts: 0 });
+  } else {
     await db.prepare("DELETE FROM meta WHERE key = ?").bind(skipKey).run();
   }
   return r;
 }
-
-const META_SET = "INSERT INTO meta (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value";
