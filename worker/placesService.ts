@@ -127,7 +127,11 @@ export async function getPlaces(
         },
         center,
         radiusM,
-      ).catch((e) => console.error("enrich failed", e)),
+      )
+        .then((r) => {
+          if (r.error !== undefined) console.error("enrich failed", r.error);
+        })
+        .catch((e) => console.error("enrich failed", e)),
     );
   }
 

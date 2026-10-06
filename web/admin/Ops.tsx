@@ -5,6 +5,7 @@ import {
 import { HUBS } from "../../shared/hubs";
 import type { Api } from "./AdminPage";
 import { Meter } from "./charts";
+import { CronResult } from "./CronResult";
 import { ago, kstTime, num, pct, until } from "./format";
 import { AlertStrip, HubName, hubName } from "./Overview";
 
@@ -297,19 +298,7 @@ export function Ops({ data, api }: { data: OpsData; api: Api }) {
           <div>
             <dt>그 실행 결과</dt>
             <dd>
-              {cron ? (
-                cron.skipped ? (
-                  <span className="pill lv-warn">건너뜀 · {cron.skipped === "read_budget" ? "읽기 예산" : cron.skipped}</span>
-                ) : (
-                  <>
-                    격자 {num(cron.collected)} · 상세 {num(cron.enriched)}
-                    {cron.failed > 0 ? ` (실패 ${num(cron.failed)})` : ""} · 외부 호출 {num(cron.calls)}
-                    {cron.rolled > 0 ? ` · 집계 ${cron.rolled}일` : ""}
-                  </>
-                )
-              ) : (
-                "–"
-              )}
+              <CronResult cron={cron} />
             </dd>
           </div>
           <div>

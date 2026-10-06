@@ -5,7 +5,7 @@ import { HUBS, type Hub } from "../../shared/hubs";
 import { tileKeyOf, tilesCoveringCircle } from "../../shared/geo";
 import { createApp } from "../../worker/app";
 import { auditArea } from "../../worker/audit";
-import { limitsFrom } from "../../worker/config";
+import { MAX_DETAIL_BATCH_SIZE, limitsFrom } from "../../worker/config";
 import { hubOrder, runScheduled } from "../../worker/maintenance";
 import { DETAIL_JITTER_MS, DETAIL_OK_TTL_MS } from "../../shared/constants";
 import {
@@ -37,10 +37,16 @@ function setup() {
 describe("admin", () => {
   it("R10: 운영 기본값은 보수적으로 둔다 — wrangler.jsonc vars DETAIL_BATCH_SIZE 4·DETAIL_CHAR_BUDGET 200000 (설정만 바꿔 올릴 수 있다)", () => {
     expect(limitsFrom(env)).toEqual({ budgetSize: 40, batchSize: 4, detailCharBudget: 200_000 });
-    // 변수가 없거나 양수가 아니면 코드 기본값
+    // 변수가 없거나 양수가 아니면 코드 기본값 (배치는 천장 MAX_DETAIL_BATCH_SIZE)
     expect(limitsFrom({ ...env, DETAIL_BATCH_SIZE: undefined, DETAIL_CHAR_BUDGET: "0" } as unknown as Env)).toEqual({
-      budgetSize: 40, batchSize: 10, detailCharBudget: 600_000,
+      budgetSize: 40, batchSize: MAX_DETAIL_BATCH_SIZE, detailCharBudget: 600_000,
     });
+  });
+
+  it("R10/R38: DETAIL_BATCH_SIZE는 천장 MAX_DETAIL_BATCH_SIZE(8)로 자른다 — 그보다 크게 설정해도 한 실행의 D1 호출 예산을 넘지 않게 (음수·소수는 0·내림)", () => {
+    expect(MAX_DETAIL_BATCH_SIZE).toBe(8);
+    const withBatch = (v: string) => limitsFrom({ ...env, DETAIL_BATCH_SIZE: v } as unknown as Env).batchSize;
+    expect([withBatch("50"), withBatch("8"), withBatch("4"), withBatch("2.7"), withBatch("-3"), withBatch("0")]).toEqual([8, 8, 4, 2, 0, 0]);
   });
 
   it("R31: 토큰이 없거나 틀리면 401", async () => {
@@ -171,7 +177,7 @@ describe("admin", () => {
     const r2 = await runScheduled(tight, { fetcher: place.fetcher, now: NOW + 2, sleep: async () => {} });
     expect(r2).toMatchObject({ enriched: 2, failed: 0 });
     expect(place.calls.map((c) => c.id)).toEqual(ids);
-    // 다 채웠으면 미수집 확인을 끝낸다 (다음 실행은 미수집을 훑지 않고 상세 API도 부르지 않는다)
+    // 다 채웠으면 더 고를 미수집이 없다 (다음 실행은 상세 API를 부르지 않는다)
     const r3 = await runScheduled(tight, { fetcher: place.fetcher, now: NOW + 3, sleep: async () => {} });
     expect(r3).toMatchObject({ enriched: 0, failed: 0, calls: 0 });
     expect(place.calls).toHaveLength(ids.length);

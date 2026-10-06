@@ -35,5 +35,8 @@ describe("warm.mjs: 후보 고르기가 쪽 상한에서 멈춘 응답", () => {
     expect(nextTruncatedStreak({ truncated: false, enriched: 0, failed: 0 }, 2)).toBe(0);
     // 예전 서버(필드 없음)는 truncated가 아니다
     expect(nextTruncatedStreak({ enriched: 0, failed: 0 }, 2)).toBe(0);
+    // 아직 격자를 모으는 중(incompleteTiles > 0)이면 나아가고 있으니 세지 않는다
+    expect(nextTruncatedStreak({ truncated: true, enriched: 0, failed: 0, incompleteTiles: 3 }, 2)).toBe(0);
+    expect(nextTruncatedStreak({ truncated: true, enriched: 0, failed: 0, incompleteTiles: 0 }, 2)).toBe(3);
   });
 });

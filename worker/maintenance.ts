@@ -35,8 +35,10 @@ export type WarmDeps = {
  */
 export type WarmResult = {
   incompleteTiles: number; pending: number | "more"; enriched: number; failed: number; deferred: number; chars: number;
-  /** 후보 고르기가 쪽 상한에서 멈췄다 (warm.mjs는 아무것도 못 한 채 3번 이어지면 멈춘다) */
+  /** 후보 고르기가 쪽 상한에서 멈췄다 (warm.mjs는 격자를 다 모은 뒤 아무것도 못 한 채 3번 이어지면 멈춘다) */
   truncated: boolean;
+  /** 보충 저장 오류가 있었다 (센 수는 그대로, 원인은 Workers 로그) */
+  enrichError?: true;
 };
 
 /**
@@ -66,9 +68,13 @@ export async function warmOnce(
     center,
     radiusM,
   );
+  if (e.error !== undefined) console.error("warm enrich failed", e.error);
   let pending: WarmResult["pending"];
-  if (opts.count) pending = await countNeedingDetail(deps.db, center, radiusM, deps.now);
-  else {
+  if (opts.count) {
+    // 정확히 세기(?count=1)는 격자-장소 상태를 다 읽는다 (90칸마다 D1 1번). 예산이 모자라면 세지 않고 more
+    const countCalls = Math.ceil(tilesCoveringCircle(center, radiusM).length / 90);
+    pending = d1 && !d1.has(countCalls) ? "more" : await countNeedingDetail(deps.db, center, radiusM, deps.now);
+  } else {
     // 글자·D1 호출 예산으로 남긴 곳(deferred)이 있거나 후보 고르기가 쪽 상한에서 멈췄거나(truncated)
     // D1 호출 예산으로 격자를 다 모으지 못했으면(새 ID가 더 있을 수 있다) 끝나지 않았다
     const done =
@@ -79,7 +85,7 @@ export async function warmOnce(
   }
   return {
     incompleteTiles: tiles.incomplete.length + tiles.failed.length, pending, enriched: e.enriched, failed: e.failed,
-    deferred: e.deferred, chars: e.chars, truncated: e.truncated,
+    deferred: e.deferred, chars: e.chars, truncated: e.truncated, ...(e.error !== undefined ? { enrichError: true as const } : {}),
   };
 }
 
@@ -88,6 +94,10 @@ export async function warmOnce(
  * CRON_D1_RESERVE: 끝의 사용량·요약 기록(recordCronRun / 요청 미들웨어의 recordD1Usage) 1번과 여유
  */
 export const CRON_D1_CALL_LIMIT = 50;
+/**
+ * 끝의 기록 1번 + 여유 4번. 여유는 보충의 동시 시작 넘침도 받는다: 동시 DETAIL_CONCURRENCY곳이 같은 때 "4번 남았나"를
+ * 확인하고 시작하면 마지막 묶음 저장·차단 기록이 그보다 1~2번 더 쓸 수 있다
+ */
 export const CRON_D1_RESERVE = 5;
 /** 집계(R59) 한 번의 최악 D1 호출: meta 1 + 첫 날 찾기 1 + 하루 batch × 3 + 실패 기록 2 */
 export const ROLLUP_D1_CALLS = 7;
@@ -103,6 +113,19 @@ const BACKFILL_D1_CALLS = 3;
  */
 export const afterCollectCalls = (batchSize: number) =>
   BACKFILL_D1_CALLS + 1 + 1 + FRONTIER_MIN_CALLS + enrichCallReserve(batchSize) + ROLLUP_D1_CALLS;
+
+/** 보충 말고 한 실행이 늘 할 수 있게 남겨 둘 D1 호출: 격자 확인 1 + 격자 2칸 + 백필 + 게이트 + tiles_changed_at + 만료 최악 + 미수집 최소 + 집계 */
+const NON_ENRICH_CALLS = 1 + 2 * 2 + BACKFILL_D1_CALLS + 1 + 1 + EXPIRED_D1_CALLS + FRONTIER_MIN_CALLS + ROLLUP_D1_CALLS;
+
+/**
+ * Task 34: 이번 실행의 유효 배치 = min(설정, 남은 D1 호출 left로 보충 최악(enrichCallReserve)이 들어가는 가장 큰 값).
+ * 만료 후보·격자·미수집·집계 몫을 먼저 남긴다 — DETAIL_BATCH_SIZE를 올려도 다른 단계를 밀어내지 않는다 (천장 MAX_DETAIL_BATCH_SIZE)
+ */
+export function cronBatchFor(left: number, batchSize: number): number {
+  let b = Math.max(0, Math.floor(batchSize));
+  while (b > 0 && enrichCallReserve(b) > left - NON_ENRICH_CALLS) b--;
+  return b;
+}
 
 // Cron 주기: wrangler.jsonc의 5분 간격 스케줄과 맞춘다
 export const CRON_INTERVAL_MS = 5 * 60_000;
@@ -127,8 +150,10 @@ export type CronResult = {
   d1Calls?: number;
   /** Task 34: D1 호출 예산 때문에 건너뛴 단계 */
   d1Skipped?: string[];
-  /** Task 34: 보충 중 저장 오류가 있었다 (로그에 원인) */
+  /** Task 34: 보충 중 저장 오류가 있었다 (로그에 원인, 센 수는 그대로) */
   enrichError?: true;
+  /** Task 34: 이번 실행의 유효 배치 (cronBatchFor) */
+  batch?: number;
   /** 0005 전 행에 채운 list_json 수 (다 채운 뒤에는 0) */
   listJsonFilled?: number;
   /** R38: 오늘 D1 읽기가 소프트 한도를 넘어 수집·보충을 건너뛰었다 */
@@ -143,7 +168,8 @@ export type CronResult = {
  * R11: 모든 거점을 PREWARM_RADIUS로 유지한다 (R62 준비 중 거점 포함 — 공개 전에 채운다). 외부 호출 예산 하나를 거점끼리 나눠 쓴다.
  * 거점들의 격자를 합집합(중복 제거)으로 한 번에 처리하고, 상세 후보도 합집합에서 ID 중복 없이
  * 가장 가까운 거점 기준으로 고른다 — 겹치는 거점이 있어도 같은 격자·장소를 두 번 부르지 않는다.
- * D1 읽기를 아끼려고: 만료 후보는 (status, fetched_at) 인덱스로, 미수집 ID는 격자가 바뀐 뒤에만 훑는다.
+ * D1 읽기를 아끼려고: 만료 후보는 (status, fetched_at) 인덱스와 커서로, 미수집은 앞선 커서(unfetched_from)부터 묶음씩 읽는다
+ * (커서가 끝이고 격자가 그대로면 meta 1행만). 실행당 D1 호출은 CRON_D1_CALL_LIMIT 안에서 단계마다 남은 수를 본다 (Task 34).
  * pending은 세지 않는다 (관리용 warm만 센다).
  */
 export async function runScheduled(
@@ -181,6 +207,9 @@ export async function runScheduled(
       calls: r?.calls ?? 0,
       rolled: r?.rolled ?? 0,
       ...(r === null ? { skipped: "error" } : r.skipped ? { skipped: r.skipped } : {}),
+      // Task 34: 관리 화면 "마지막 Cron"에 경고로 보인다
+      ...(r?.enrichError ? { enrichError: true as const } : {}),
+      ...(r?.d1Skipped ? { d1Skipped: r.d1Skipped } : {}),
     };
     await recordCronRun(env.DB, usage, opts.now, summary).catch((e) => console.error("d1 usage record failed", e));
   }
@@ -223,7 +252,7 @@ async function maintain(
   env: Env, db: D1Database,
   opts: { fetcher: FetchFn; now: number; sleep?: (ms: number) => Promise<void>; hubs?: Hub[]; calls: D1CallBudget },
 ): Promise<CronResult> {
-  const { budgetSize, batchSize, detailCharBudget } = limitsFrom(env);
+  const { budgetSize, batchSize: configured, detailCharBudget } = limitsFrom(env);
   const calls = opts.calls;
   const budget = new Budget(budgetSize);
   const hubs = hubOrder(opts.hubs ?? HUBS, opts.now);
@@ -240,7 +269,9 @@ async function maintain(
     };
   }
 
-  // Task 34: 격자 하나 = D1 2번 (지금 ID 읽기 + 바꾸기). 뒤 단계 몫(afterCollectCalls)이 남을 때만 다음 격자를 시작한다
+  // Task 34: 이번 실행의 유효 배치 — 만료·격자·미수집·집계 몫을 남기고 보충 최악이 들어가는 만큼
+  const batchSize = cronBatchFor(calls.left, configured);
+  // 격자 하나 = D1 2번 (지금 ID 읽기 + 바꾸기). 뒤 단계 몫(afterCollectCalls)이 남을 때만 다음 격자를 시작한다
   const reserve = afterCollectCalls(batchSize);
   const tiles = await collectTiles(
     {
@@ -254,6 +285,7 @@ async function maintain(
     tiles: { total: keys.length, collected: tiles.collected.length, incomplete: tiles.incomplete.length + tiles.failed.length },
     enriched: 0,
     failed: 0,
+    batch: batchSize,
   };
   const skip = (stage: string) => (result.d1Skipped ??= []).push(stage);
   // R12: 목록 원소 조각이 없는 예전 행을 실행마다 최대 200행 채운다 (외부 호출 없음, 다 채우면 meta 1행만 읽는다)
@@ -284,23 +316,22 @@ async function maintain(
       candidates.push(...u.states);
     } else skip("unfetched");
   }
-  if (candidates.length > 0) {
-    try {
-      const e = await enrichDetails(
-        {
-          db, fetcher: opts.fetcher, budget, now: opts.now, batchSize, sleep: opts.sleep, candidates, charBudget: detailCharBudget,
-          d1: calls,
-        },
-        hubs,
-        PREWARM_RADIUS,
-      );
-      result.enriched = e.enriched;
-      result.failed = e.failed;
-      result.deferred = e.deferred;
-      result.chars = e.chars;
-    } catch (e) {
-      // 저장 오류가 있어도 집계·기록은 한다 (받은 결과는 enrichDetails가 묶음마다 이미 저장했다)
-      console.error("enrich failed", e);
+  if (candidates.length > 0 && batchSize > 0) {
+    const e = await enrichDetails(
+      {
+        db, fetcher: opts.fetcher, budget, now: opts.now, batchSize, sleep: opts.sleep, candidates, charBudget: detailCharBudget,
+        d1: calls,
+      },
+      hubs,
+      PREWARM_RADIUS,
+    );
+    result.enriched = e.enriched;
+    result.failed = e.failed;
+    result.deferred = e.deferred;
+    result.chars = e.chars;
+    if (e.error !== undefined) {
+      // 저장 오류가 있어도 센 수·집계·기록은 지킨다 (받은 결과는 enrichDetails가 묶음마다 이미 저장했다)
+      console.error("enrich failed", e.error);
       result.enrichError = true;
     }
   }

@@ -267,6 +267,10 @@ export type CronSummary = {
   calls: number;
   rolled: number;
   skipped?: string;
+  /** Task 34: 보충 저장 오류가 있었다 (센 수는 그대로, 원인은 Workers 로그) */
+  enrichError?: true;
+  /** Task 34: D1 호출 예산 때문에 건너뛴 단계 (expired·unfetched·rollup) */
+  d1Skipped?: string[];
 };
 export type OpsSnapshot = {
   budget: {

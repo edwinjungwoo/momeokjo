@@ -40,7 +40,11 @@ export const enrichCallReserve = (batchSize: number) =>
  * deferred: 글자 예산을 다 써서 이번에 시작하지 않고 남긴 곳 (실패가 아니다 — 다음 실행이 이어 한다).
  * chars: 이번에 읽은 상세 본문 글자 수. truncated: 후보 고르기가 쪽 상한에서 멈췄다 (남은 후보가 있을 수 있다)
  */
-export type EnrichResult = { enriched: number; failed: number; deferred: number; chars: number; truncated: boolean };
+export type EnrichResult = {
+  enriched: number; failed: number; deferred: number; chars: number; truncated: boolean;
+  /** 저장(또는 차단 기록) 중 첫 오류 — 던지지 않고 실어서 센 수를 잃지 않는다 (받은 결과는 묶음마다 이미 저장했다) */
+  error?: unknown;
+};
 
 /**
  * center: 기준점. candidates를 넘길 때는 여러 거점을 넘겨서 가장 가까운 거점 기준으로 줄 세울 수 있다.
@@ -51,7 +55,8 @@ export type EnrichResult = { enriched: number; failed: number; deferred: number;
  * - 결과는 받는 대로 작은 묶음으로 저장한다: 첫 결과는 혼자 바로(실행이 CPU 한도로 죽어도 적어도 한 곳은 나아간다),
  *   그다음은 DETAIL_CONCURRENCY곳씩, 남은 것은 끝에. 묶음마다 D1 batch 하나(saveDetails — 한 곳씩 저장한 것과 같은 행).
  *   묶음의 batch가 실패하면 그 묶음을 한 곳씩 다시 저장해서 문제 있는 한 곳이 다른 곳을 막지 않는다.
- * - 작업자 안의 오류(차단 기록·저장)는 잡아 두고 모든 작업자가 끝나 남은 결과를 저장한 뒤 첫 오류를 다시 던진다.
+ * - 작업자 안의 오류(차단 기록·저장)는 잡아 두고 모든 작업자가 끝나 남은 결과를 저장한 뒤 첫 오류를 결과(error)에 싣는다
+ *   (부르는 쪽이 로그·요약에 남긴다 — 던지면 enriched·failed 수를 잃는다).
  */
 export async function enrichDetails(
   deps: EnrichDeps, center: LatLng | LatLng[], radiusM: number,
@@ -135,6 +140,6 @@ export async function enrichDetails(
     }
   });
   await flush(true);
-  if (failure) throw (failure as { error: unknown }).error;
+  if (failure) return { ...result, error: (failure as { error: unknown }).error };
   return result;
 }

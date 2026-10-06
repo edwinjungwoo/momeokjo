@@ -868,9 +868,11 @@ async function metaNumber(db: D1Database, key: string): Promise<number> {
   return Number.isFinite(v) ? v : 0;
 }
 
-/** 마지막으로 격자 ID가 바뀐 시각. Cron은 이 값이 마지막 미수집 확인 뒤일 때만 미수집 ID를 훑는다 */
+/**
+ * 격자 ID가 바뀔 때마다 커지는 값 (MAX(이전 + 1, now) — replaceTilePlaces). 만료·미수집 커서는 쓸 때 본 값과 같은지로
+ * 격자 변화를 알아보고 다르면 처음부터 다시 읽는다
+ */
 export const tilesChangedAt = (db: D1Database) => metaNumber(db, TILES_CHANGED_KEY);
-/** Cron이 모든 거점의 미수집 ID를 다 채웠다고 확인한 시각 */
 
 /** R44 강등 모드. frozen이면 until 전까지 상세 후보를 읽지도 부르지도 않는다 */
 export type DetailGate = { blockedUntil: number; frozen: { since: number; until: number } | null };

@@ -29,10 +29,10 @@ export function on429(bodyText, retries) {
 export const TRUNCATED_STOP_AFTER = 3;
 
 /**
- * @param {{ truncated?: boolean, enriched?: number, failed?: number }} r warm 응답
+ * @param {{ truncated?: boolean, enriched?: number, failed?: number, incompleteTiles?: number }} r warm 응답
  * @param {number} streak 지금까지 이어진 횟수
- * @returns {number} 이 응답 뒤의 횟수 (하나라도 했거나 truncated가 아니면 0)
+ * @returns {number} 이 응답 뒤의 횟수 (하나라도 했거나, 아직 격자를 모으는 중이거나, truncated가 아니면 0)
  */
 export function nextTruncatedStreak(r, streak) {
-  return r.truncated === true && !r.enriched && !r.failed ? streak + 1 : 0;
+  return r.truncated === true && !r.enriched && !r.failed && !r.incompleteTiles ? streak + 1 : 0;
 }

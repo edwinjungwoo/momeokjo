@@ -5,7 +5,9 @@ import { tileKeyOf, tileRect, tilesCoveringCircle, haversine } from "../../share
 import { HUBS } from "../../shared/hubs";
 import { kstDay } from "../../shared/kst";
 import { createApp } from "../../worker/app";
-import { CRON_D1_CALL_LIMIT, runScheduled } from "../../worker/maintenance";
+import { CRON_D1_CALL_LIMIT, CRON_D1_RESERVE, cronBatchFor, runScheduled, warmOnce } from "../../worker/maintenance";
+import { D1CallBudget, meteredDb, type D1Usage } from "../../worker/d1Usage";
+import { MAX_DETAIL_BATCH_SIZE } from "../../worker/config";
 import { replaceTilePlaces } from "../../worker/repo";
 import { callApp } from "../helpers/callApp";
 import { anonN, seedEvents, sessN } from "../helpers/events";
@@ -128,7 +130,8 @@ describe("Task 34: 본 Cron의 D1 호출 예산", () => {
     // 미수집(가장 먼 칸)을 찾으러 걷고, 만료 후보(최악 8번)는 이번에는 건너뛴다
     expect(r.d1Skipped).toEqual(["expired"]);
     expect(r.rolled).toBe(3);
-    expect(last).not.toBeNull();
+    // 마지막 Cron 요약(관리 화면)에도 건너뛴 단계가 남는다
+    expect(JSON.parse(last!.value)).toMatchObject({ d1Skipped: ["expired"] });
     expect(place.calls.length).toBeLessThanOrEqual(4);
   });
 
@@ -140,6 +143,9 @@ describe("Task 34: 본 Cron의 D1 호출 예산", () => {
     // 만료 후보(e1~)로 보충했고, 403으로 세 번째 차단 → 강등 모드, 저장 오류는 기록만 하고 집계·요약은 했다
     expect(place.calls.map((c) => c.id)).toContain("e3");
     expect(r.enrichError).toBe(true);
+    // 저장 오류가 있어도 센 수(받은 2곳, 403 1곳)를 잃지 않고, 마지막 Cron 요약에 오류가 보인다
+    expect(r).toMatchObject({ enriched: 2, failed: 1 });
+    expect(JSON.parse(last!.value)).toMatchObject({ enriched: 2, failed: 1, enrichError: true });
     const mode = await env.DB.prepare("SELECT value FROM meta WHERE key = 'detail_mode'").first<{ value: string }>();
     expect(JSON.parse(mode!.value)).toMatchObject({ mode: "frozen" });
     expect(r.rolled).toBe(3);
@@ -181,5 +187,61 @@ describe("Task 34: 본 Cron의 D1 호출 예산", () => {
     expect(r.incompleteTiles).toBeGreaterThan(0);
     expect(r.pending).toBe("more");
     expect(local.calls.length).toBeGreaterThan(0);
+  });
+
+  it("R10/R38: 한 실행의 유효 배치는 설정과 남은 D1 호출(만료·격자·미수집·집계 몫을 남기고) 중 작은 쪽 — 천장(8)은 보통 실행에 그대로 들어가고, 보관 정리 실행에서는 줄어든다", () => {
+    const steady = CRON_D1_CALL_LIMIT - CRON_D1_RESERVE - 1; // 읽기 예산 확인 1번 뒤
+    expect(cronBatchFor(steady, MAX_DETAIL_BATCH_SIZE)).toBe(MAX_DETAIL_BATCH_SIZE);
+    expect(cronBatchFor(steady, 4)).toBe(4);
+    // 천장보다 하나 큰 배치는 보통 실행에도 들어가지 않는다 (천장이 맞게 정해졌다)
+    expect(cronBatchFor(steady, MAX_DETAIL_BATCH_SIZE + 1)).toBe(MAX_DETAIL_BATCH_SIZE);
+    // 보관 정리(3번) 뒤에는 더 작게, 남은 것이 거의 없으면 0 (보충하지 않는다)
+    expect(cronBatchFor(steady - 3, MAX_DETAIL_BATCH_SIZE)).toBeLessThan(MAX_DETAIL_BATCH_SIZE);
+    expect(cronBatchFor(10, MAX_DETAIL_BATCH_SIZE)).toBe(0);
+  });
+
+  it("R10/R11/R38: 천장 배치(DETAIL_BATCH_SIZE 8)로도 보통 실행은 만료 후보·격자 수집·미수집 걷기를 모두 하고 D1 호출 50번 안이다", async () => {
+    const steadyNow = NOW + 3 * 3600_000; // 보관 정리 창 밖
+    const home = tileKeyOf(HUBS[0]);
+    // 미수집은 가까운 순 40번째쯤 칸 — 첫 묶음(30칸)을 넘겨 걸어야 찾는다 (한 실행에 많아야 6묶음)
+    const far = [...KEYS].sort((a, b) => midDist(a) - midDist(b)).filter((k) => k !== home)[40];
+    const due = KEYS.filter((k) => k !== home && k !== far).slice(0, 2);
+    await markFresh(KEYS.filter((k) => !due.includes(k)), steadyNow);
+    await insertPlaces([
+      ...Array.from({ length: 850 }, (_, i) => [`ook${i}`, "ok", steadyNow - 10 * DETAIL_OK_TTL_MS + i] as [string, string, number]),
+      ...["e1", "e2", "e3", "e4"].map((id) => [id, "ok", steadyNow - DETAIL_OK_TTL_MS - DETAIL_JITTER_MS - 1000] as [string, string, number]),
+    ]);
+    await replaceTilePlaces(env.DB, home, ["e1", "e2", "e3", "e4"], steadyNow, false);
+    await replaceTilePlaces(env.DB, far, ["farnew"], steadyNow, false);
+    const json = (name: string) => placeJson({ name, lat: HUBS[0].lat, lng: HUBS[0].lng });
+    const place = fakePlaceApi({ e1: json("1"), e2: json("2"), e3: json("3"), e4: json("4"), farnew: json("f") });
+    const { db, n } = countingDb(env.DB);
+    const ceiling = { ...env, DB: db, DETAIL_BATCH_SIZE: String(MAX_DETAIL_BATCH_SIZE), DETAIL_CHAR_BUDGET: "100000000" } as unknown as Env;
+    const r = await runScheduled(ceiling, {
+      fetcher: routeFetch(fakeKakaoLocal([]).fetcher, place.fetcher), now: steadyNow, sleep: async () => {},
+    });
+    expect(n.calls, `D1 calls ${n.calls}`).toBeLessThanOrEqual(CRON_D1_CALL_LIMIT);
+    expect(r.d1Skipped).toBeUndefined();
+    expect(r.batch).toBe(MAX_DETAIL_BATCH_SIZE);
+    expect(r.tiles.collected).toBe(2);
+    // 만료 후보(e1~e4)와 미수집(가장 먼 칸)을 모두 고르고 보충했다
+    expect(place.calls.map((c) => c.id).sort()).toEqual(["e1", "e2", "e3", "e4", "farnew"]);
+    expect(r).toMatchObject({ enriched: 5, failed: 0 });
+  });
+
+  it("R31/R38: warm ?count=1(격자-장소 상태 전체 읽기)은 D1 호출 예산이 모자라면 세지 않고 pending more다", async () => {
+    const keys = tilesCoveringCircle(HUBS[0], 300);
+    await markFresh(keys, NOW);
+    await replaceTilePlaces(env.DB, tileKeyOf(HUBS[0]), ["c1"], NOW, false);
+    const deps = (limit: number) => {
+      const usage: D1Usage = { read: 0, written: 0 };
+      return {
+        db: meteredDb(env.DB, usage), fetcher: fakePlaceApi({}).fetcher, restKey: "x", budgetSize: 40, batchSize: 0,
+        now: NOW, sleep: async () => {}, d1: new D1CallBudget(usage, limit),
+      };
+    };
+    // 배치 0 → 보충 없이 세기만: 예산이 넉넉하면 1곳, 모자라면 more
+    expect((await warmOnce(deps(45), HUBS[0], 300, { count: true })).pending).toBe(1);
+    expect((await warmOnce(deps(2), HUBS[0], 300, { count: true })).pending).toBe("more");
   });
 });

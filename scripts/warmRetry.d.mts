@@ -5,4 +5,7 @@ export declare function on429(
   retries: number,
 ): { action: "retry"; waitMs: number } | { action: "stop"; reason: "rate_limited" | "read_budget" | "write_budget" | "unknown" };
 export declare const TRUNCATED_STOP_AFTER: number;
-export declare function nextTruncatedStreak(r: { truncated?: boolean; enriched?: number; failed?: number }, streak: number): number;
+export declare function nextTruncatedStreak(
+  r: { truncated?: boolean; enriched?: number; failed?: number; incompleteTiles?: number },
+  streak: number,
+): number;

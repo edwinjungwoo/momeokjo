@@ -186,7 +186,7 @@ describe("enrichDetails", () => {
     expect(await p).toEqual(res(3, 0));
   });
 
-  it("R10: 한 묶음의 batch가 실패하면 그 묶음을 한 곳씩 다시 저장한다 — 문제 있는 한 곳이 다른 곳을 막지 않고, 오류는 끝에 알린다", async () => {
+  it("R10: 한 묶음의 batch가 실패하면 그 묶음을 한 곳씩 다시 저장한다 — 문제 있는 한 곳이 다른 곳을 막지 않고, 오류는 결과(error)에 싣고 센 수는 지킨다", async () => {
     await env.DB.prepare(
       "CREATE TRIGGER bad_row BEFORE INSERT ON places WHEN NEW.id = '3x' BEGIN SELECT RAISE(ABORT, 'bad row'); END",
     ).run();
@@ -194,7 +194,9 @@ describe("enrichDetails", () => {
     const ids = ["1", "3", "3x", "4", "5"];
     await seedIds(ids);
     const api = fakePlaceApi({ "1": json("a"), "3": json("c"), "3x": json("x"), "4": 404, "5": json("e") });
-    await expect(run(api.fetcher)).rejects.toThrow(/bad row/);
+    const r = await run(api.fetcher);
+    expect(String((r as { error?: unknown }).error)).toMatch(/bad row/);
+    expect(r).toMatchObject({ enriched: 4, failed: 1, deferred: 0 });
     expect((await placeById(env.DB, "1"))!.place.name).toBe("a");
     expect((await placeById(env.DB, "3"))!.place.name).toBe("c");
     expect((await placeById(env.DB, "5"))!.place.name).toBe("e");
