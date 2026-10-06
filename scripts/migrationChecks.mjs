@@ -38,6 +38,16 @@ export const MIGRATION_CHECKS = {
       },
     ],
   },
+  // R56: 스냅샷 표. 후속 작업 없음 — 스냅샷 Cron(2-59/5)이 거점마다 채우고, 그동안은 실시간 경로로 답한다
+  "0007_hub_snapshots.sql": {
+    checks: [
+      {
+        what: "hub_snapshots 테이블",
+        sql: "SELECT name FROM sqlite_master WHERE name IN ('hub_snapshots')",
+        expect: ["hub_snapshots"],
+      },
+    ],
+  },
 };
 
 /**
