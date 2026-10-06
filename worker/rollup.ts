@@ -1,6 +1,6 @@
 import {
   COHORT_METRICS, DAILY_STATS_RETENTION_DAYS, ROLLUP_BUDGET_SHARE, ROLLUP_DAYS_PER_RUN, ROLLUP_HOUR_KST, ROLLUP_MAX_DAYS_PER_UTC_DAY,
-  ROLLUP_RETRY_MS, TOP_PLACES_PER_DAY, addDays, dayList, mondayOf,
+  ROLLUP_MAX_FAILURES_PER_UTC_DAY, ROLLUP_RETRY_MAX_MS, ROLLUP_RETRY_MS, TOP_PLACES_PER_DAY, addDays, dayList, mondayOf,
 } from "../shared/dashboard";
 import { EVENT_RETENTION_DAYS } from "../shared/events";
 import { DAY_MS, kstDay, kstDayHour, utcDay } from "../shared/kst";
@@ -275,6 +275,10 @@ export function lastRollableDay(now: number): string {
 }
 
 export const ROLLUP_FAILED_KEY = "rollup_failed";
+/** meta rollup_failed: 실패한 날, 마지막 실패 시각, 그날의 연속 실패 수, 실패한 UTC 날과 그 UTC 날의 실패 수 */
+export type RollupFailure = { day: string; at: number; attempts: number; utc: string; utcAttempts: number };
+/** 실패 n번째 뒤 다시 하기까지: 1시간 × 2^(n−1), 최대 24시간 */
+export const rollupRetryMs = (attempts: number) => Math.min(ROLLUP_RETRY_MAX_MS, ROLLUP_RETRY_MS * 2 ** Math.max(0, attempts - 1));
 const ROLLUP_DAYS_PREFIX = "rollup_days:";
 const COUNT_UPSERT = `INSERT INTO meta (key, value) VALUES (?, '1')
   ON CONFLICT(key) DO UPDATE SET value = CAST(meta.value AS INTEGER) + 1`;
@@ -289,8 +293,8 @@ export type RollupOpts = {
 /**
  * R59 Cron: 밀린 날을 오래된 날부터 ROLLUP_DAYS_PER_RUN일까지 집계한다 (하루 = batch 한 번). 처음이면 보관 중인 가장 오래된 이벤트 날부터.
  * 속도 조절: 오늘(UTC) 읽기가 소프트 한도의 ROLLUP_BUDGET_SHARE 이상이면 하지 않고, UTC 하루에 ROLLUP_MAX_DAYS_PER_UTC_DAY일까지만
- * (meta rollup_days:{UTC 날짜}을 같은 batch에서 올린다). 실패한 날은 meta rollup_failed {day, at}을 남기고 ROLLUP_RETRY_MS 뒤에 다시 한다
- * (성공하면 같은 batch에서 지운다). 따라잡았으면 meta 한 문장(4키)만 읽는다. 하루라도 집계했으면 마지막 batch에서 코호트를 다시 센다.
+ * (meta rollup_days:{UTC 날짜}을 같은 batch에서 올린다 — 실패한 시도도 batch 밖에서 센다). 실패한 날은 meta rollup_failed를 남기고
+ * 1→2→4시간… (최대 24시간, rollupRetryMs) 뒤에 다시 하며, UTC 하루에 3번 실패하면 그날은 더 하지 않는다 (성공하면 같은 batch에서 지운다). 따라잡았으면 meta 한 문장(4키)만 읽는다. 하루라도 집계했으면 마지막 batch에서 코호트를 다시 센다.
  * 집계한 날 수를 돌려준다.
  */
 export async function runRollups(db: D1Database, now: number, opts: RollupOpts = {}): Promise<number> {
@@ -320,13 +324,16 @@ export async function runRollups(db: D1Database, now: number, opts: RollupOpts =
     start = first.d;
   }
   if (start < oldest) start = oldest;
-  let failed: { day?: unknown; at?: unknown } | null = null;
+  let failed: Partial<RollupFailure> | null = null;
   try {
-    failed = JSON.parse(get(ROLLUP_FAILED_KEY) ?? "null") as { day?: unknown; at?: unknown } | null;
+    failed = JSON.parse(get(ROLLUP_FAILED_KEY) ?? "null") as Partial<RollupFailure> | null;
   } catch {
     failed = null;
   }
-  if (failed && failed.day === start && typeof failed.at === "number" && now - failed.at < ROLLUP_RETRY_MS) return 0;
+  // 같은 UTC 날에 ROLLUP_MAX_FAILURES_PER_UTC_DAY번 실패했으면 그날은 더 하지 않는다
+  if (failed?.utc === utc && (failed.utcAttempts ?? 0) >= ROLLUP_MAX_FAILURES_PER_UTC_DAY) return 0;
+  // 같은 날이 실패했으면 1→2→4시간… (최대 24시간) 뒤에 다시
+  if (failed && failed.day === start && typeof failed.at === "number" && now - failed.at < rollupRetryMs(failed.attempts ?? 1)) return 0;
   const days = dayList(start, last).slice(0, Math.min(ROLLUP_DAYS_PER_RUN, room));
   let done = 0;
   for (const [i, day] of days.entries()) {
@@ -337,11 +344,16 @@ export async function runRollups(db: D1Database, now: number, opts: RollupOpts =
       await db.batch(stmts);
     } catch (e) {
       console.error("rollup failed", day, e);
-      await db
-        .prepare(META_UPSERT)
-        .bind(ROLLUP_FAILED_KEY, JSON.stringify({ day, at: now }))
-        .run()
-        .catch((x) => console.error("rollup failure record failed", x));
+      // 되돌려진 batch 밖에서 시도를 남긴다: 실패 기록(재시도 간격·UTC 하루 실패 수)과 오늘(UTC) 집계 횟수 — 실패도 하루 상한에 센다
+      const record: RollupFailure = {
+        day,
+        at: now,
+        attempts: failed?.day === day ? (failed.attempts ?? 0) + 1 : 1,
+        utc,
+        utcAttempts: failed?.utc === utc ? (failed.utcAttempts ?? 0) + 1 : 1,
+      };
+      await db.prepare(META_UPSERT).bind(ROLLUP_FAILED_KEY, JSON.stringify(record)).run().catch((x) => console.error("rollup failure record failed", x));
+      await db.prepare(COUNT_UPSERT).bind(countKey).run().catch((x) => console.error("rollup count record failed", x));
       break;
     }
     done += 1;

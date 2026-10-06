@@ -2,7 +2,7 @@ import { env } from "cloudflare:test";
 import { describe, expect, it } from "vitest";
 import { ROLLUP_BUDGET_SHARE, ROLLUP_DAYS_PER_RUN, ROLLUP_MAX_DAYS_PER_UTC_DAY, dayList, isKnownMetric } from "../../shared/dashboard";
 import {
-  cohortStatements, liveDayMetrics, pruneRollups, rollupDayStatements, rollupThrough, runRollups, lastRollableDay,
+  cohortStatements, liveDayMetrics, pruneRollups, rollupDayStatements, rollupRetryMs, rollupThrough, runRollups, lastRollableDay,
 } from "../../worker/rollup";
 import { kstDay, utcDay } from "../../shared/kst";
 import { runScheduled } from "../../worker/maintenance";
@@ -104,7 +104,7 @@ describe("R59 하루 지표 (liveDayMetrics)", () => {
     expect([m["* auto_sessions"], m["* auto_accepted"], m["* auto_redrawn"], m["* auto_left"]]).toEqual([2, 1, 1, undefined]);
   });
 
-  it("R58: 이벤트 수 —직접·자동 뽑기, 완화 섞인 뽑기, 공유(확정 포함)와 확정, 결과 카드 번호별", async () => {
+  it("R58: 이벤트 수 — 직접·자동 뽑기, 완화 섞인 뽑기, 공유(확정 포함)와 확정, 결과 카드 번호별", async () => {
     await seedEvents(scenario());
     const m = metricMap(await liveDayMetrics(env.DB, D));
     expect({
@@ -249,12 +249,48 @@ describe("R59 Cron 집계 (runRollups)", () => {
     expect(await runRollups(failing, now)).toBe(0);
     expect(calls).toBe(1);
     const failed = await env.DB.prepare("SELECT value FROM meta WHERE key = 'rollup_failed'").first<{ value: string }>();
-    expect(JSON.parse(failed!.value)).toEqual({ day: D, at: now });
+    expect(JSON.parse(failed!.value)).toEqual({ day: D, at: now, attempts: 1, utc: utcDay(now), utcAttempts: 1 });
+    // 실패한 시도도 오늘(UTC) 집계 횟수에 센다 (되돌려진 batch 밖에서)
+    expect((await env.DB.prepare("SELECT value FROM meta WHERE key = ?").bind(`rollup_days:${utcDay(now)}`).first<{ value: string }>())?.value).toBe("1");
     expect(await runRollups(failing, now + 30 * 60_000)).toBe(0);
     expect(calls).toBe(1);
     // 한 시간 뒤에는 다시 하고, 성공하면 실패 기록을 지운다
     expect(await runRollups(env.DB, now + 61 * 60_000)).toBe(1);
     expect(await env.DB.prepare("SELECT value FROM meta WHERE key = 'rollup_failed'").first()).toBeNull();
+  });
+
+  it("R59: 실패가 되풀이되면 1→2→4시간… 간격(최대 24시간)으로 늦추고, UTC 하루에 3번 실패하면 그날은 더 하지 않는다", async () => {
+    await seedEvents(scenario());
+    const t0 = kst("2027-01-15", 9, 30); // UTC 01-15 00:30
+    const H = 3600_000;
+    let calls = 0;
+    const failing = new Proxy(env.DB, {
+      get(t, k) {
+        if (k === "batch") {
+          return async () => {
+            calls += 1;
+            throw new Error("boom");
+          };
+        }
+        const v = Reflect.get(t, k);
+        return typeof v === "function" ? v.bind(t) : v;
+      },
+    });
+    for (const at of [t0, t0 + 0.5 * H, t0 + 1 * H, t0 + 2.5 * H, t0 + 3 * H, t0 + 6 * H, t0 + 7 * H, t0 + 20 * H]) {
+      await runRollups(failing, at);
+    }
+    // t0, t0+1h(1시간 뒤), t0+3h(2시간 뒤)에만 시도하고, 세 번 실패한 뒤로는 같은 UTC 날(t0+7h, t0+20h)에는 시도하지 않는다
+    expect(calls).toBe(3);
+    const failed = JSON.parse((await env.DB.prepare("SELECT value FROM meta WHERE key = 'rollup_failed'").first<{ value: string }>())!.value);
+    expect(failed).toEqual({ day: D, at: t0 + 3 * H, attempts: 3, utc: utcDay(t0), utcAttempts: 3 });
+    // 다음 UTC 날에는 (마지막 실패 + 4시간이 지났으면) 다시 한다
+    await runRollups(failing, t0 + 24 * H);
+    expect(calls).toBe(4);
+    expect(JSON.parse((await env.DB.prepare("SELECT value FROM meta WHERE key = 'rollup_failed'").first<{ value: string }>())!.value))
+      .toMatchObject({ attempts: 4, utcAttempts: 1 });
+    expect(rollupRetryMs(1)).toBe(H);
+    expect(rollupRetryMs(5)).toBe(16 * H);
+    expect(rollupRetryMs(9)).toBe(24 * H);
   });
 
   it(`R59: 밀린 날은 오래된 날부터 실행마다 ${ROLLUP_DAYS_PER_RUN}일까지만, 처음이면 가장 오래된 이벤트 날부터`, async () => {

@@ -11,8 +11,11 @@ export const ROLLUP_DAYS_PER_RUN = 3;
 export const ROLLUP_MAX_DAYS_PER_UTC_DAY = 7;
 /** 오늘(UTC) D1 읽기가 소프트 한도의 이만큼 이상이면 집계하지 않는다 (목록 서비스 몫을 남긴다) */
 export const ROLLUP_BUDGET_SHARE = 0.3;
-/** 집계가 실패한 날은 이만큼 지난 뒤에 다시 한다 */
+/** 집계가 실패한 날은 이만큼 지난 뒤에 다시 한다 (실패가 이어지면 두 배씩, 최대 ROLLUP_RETRY_MAX_MS) */
 export const ROLLUP_RETRY_MS = 60 * 60_000;
+export const ROLLUP_RETRY_MAX_MS = 24 * 60 * 60_000;
+/** UTC 하루에 이만큼 실패하면 그날은 집계를 더 하지 않는다 */
+export const ROLLUP_MAX_FAILURES_PER_UTC_DAY = 3;
 /** 전날은 KST 이 시각 이후 첫 Cron에서 집계한다 (늦게 오는 이벤트 ±10분과 보관 정리 창에 맞춘다) */
 export const ROLLUP_HOUR_KST = 4;
 /** 아직 집계하지 않은 최근 날은 화면이 이만큼까지만 실시간으로 센다 (오늘, 새벽 4시 전이면 어제도) */

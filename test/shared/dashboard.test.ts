@@ -72,7 +72,7 @@ describe("대시보드 순수 계산", () => {
     expect(new Set(rows)).toEqual(new Set([...Object.keys(METRICS), ...Object.keys(METRIC_FAMILIES)]));
   });
 
-  it("R57: 이상 신호 —예산 70 % 이상, 쿨다운·frozen, Cron 15분 멈춤, 미수집·미완료 거점, 집계 밀림 (심각한 것 먼저)", () => {
+  it("R57: 이상 신호 — 예산 70 % 이상, 쿨다운·frozen, Cron 15분 멈춤, 미수집·미완료 거점, 집계 밀림 (심각한 것 먼저)", () => {
     expect(alertsOf(ops(), [hub({})], NOW, rollup)).toEqual([]);
     const a = alertsOf(
       ops({ read: 2_200_000, blockedUntil: NOW + 60_000, cronAt: NOW - CRON_STALE_MS - 60_000 }),
