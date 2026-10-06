@@ -9,3 +9,10 @@ export declare function nextTruncatedStreak(
   r: { truncated?: boolean; enriched?: number; failed?: number; incompleteTiles?: number },
   streak: number,
 ): number;
+export declare function warmLine(
+  i: number,
+  r: {
+    incompleteTiles: number; pending: number | string; enriched: number; failed: number; deferred?: number; chars?: number;
+    truncated?: boolean; enrichError?: boolean;
+  },
+): string;

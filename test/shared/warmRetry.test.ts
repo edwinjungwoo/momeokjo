@@ -40,3 +40,18 @@ describe("warm.mjs: 후보 고르기가 쪽 상한에서 멈춘 응답", () => {
     expect(nextTruncatedStreak({ truncated: true, enriched: 0, failed: 0, incompleteTiles: 0 }, 2)).toBe(3);
   });
 });
+
+describe("warm.mjs: 호출마다 한 줄", () => {
+  it("R31: 응답 한 줄에 격자·남은 수·보충·글자 수와 함께 저장 오류(enrichError)도 찍는다 (Task 34 리뷰)", async () => {
+    const { warmLine } = await import("../../scripts/warmRetry.mjs");
+    const r = { incompleteTiles: 0, pending: "more", enriched: 3, failed: 1, deferred: 2, chars: 180000 };
+    expect(warmLine(4, r)).toBe("#4 incompleteTiles=0 pending=more enriched=3 failed=1 deferred=2 chars=180000");
+    expect(warmLine(5, { ...r, truncated: true, enrichError: true })).toBe(
+      "#5 incompleteTiles=0 pending=more enriched=3 failed=1 deferred=2 chars=180000 truncated enrichError",
+    );
+    // 예전 서버(필드 없음)
+    expect(warmLine(1, { incompleteTiles: 2, pending: 0, enriched: 0, failed: 0 })).toBe(
+      "#1 incompleteTiles=2 pending=0 enriched=0 failed=0 deferred=0 chars=0",
+    );
+  });
+});

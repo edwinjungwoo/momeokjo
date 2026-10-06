@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { areasFromArgs } from "./area.mjs";
-import { nextTruncatedStreak, on429, RATE_LIMIT_RETRIES, TRUNCATED_STOP_AFTER } from "./warmRetry.mjs";
+import { nextTruncatedStreak, on429, RATE_LIMIT_RETRIES, TRUNCATED_STOP_AFTER, warmLine } from "./warmRetry.mjs";
 
 const base = process.env.MMJ_BASE ?? "https://mmj.itmz.me";
 const fromDevVars = () => {
@@ -54,8 +54,8 @@ async function warm({ label, lat, lng, radius }) {
       continue;
     }
     const r = await res.json();
-    // deferred: 글자 예산으로 남긴 곳(다음 호출이 이어 한다), chars: 읽은 상세 본문 글자 수 (Task 34)
-    console.log(`#${i} incompleteTiles=${r.incompleteTiles} pending=${r.pending} enriched=${r.enriched} failed=${r.failed} deferred=${r.deferred ?? 0} chars=${r.chars ?? 0}${r.truncated ? " truncated" : ""}`);
+    // deferred·chars·truncated·enrichError(보충 저장 오류 — 원인은 Workers 로그)까지 한 줄로 (warmRetry.mjs warmLine)
+    console.log(warmLine(i, r));
     if (r.incompleteTiles === 0 && r.pending === 0) {
       console.log("완료");
       return true;

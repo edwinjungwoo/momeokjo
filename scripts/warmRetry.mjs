@@ -36,3 +36,14 @@ export const TRUNCATED_STOP_AFTER = 3;
 export function nextTruncatedStreak(r, streak) {
   return r.truncated === true && !r.enriched && !r.failed && !r.incompleteTiles ? streak + 1 : 0;
 }
+
+/**
+ * warm.mjs가 호출마다 찍는 한 줄. deferred: 글자 예산으로 남긴 곳, chars: 읽은 상세 본문 글자 수 (Task 34),
+ * truncated: 후보 고르기가 쪽 상한에서 멈춤, enrichError: 보충 저장 오류(센 수는 그대로, 원인은 Workers 로그)
+ * @param {number} i 호출 번호
+ * @param {{ incompleteTiles: number, pending: number | string, enriched: number, failed: number, deferred?: number, chars?: number, truncated?: boolean, enrichError?: boolean }} r
+ * @returns {string}
+ */
+export function warmLine(i, r) {
+  return `#${i} incompleteTiles=${r.incompleteTiles} pending=${r.pending} enriched=${r.enriched} failed=${r.failed} deferred=${r.deferred ?? 0} chars=${r.chars ?? 0}${r.truncated ? " truncated" : ""}${r.enrichError ? " enrichError" : ""}`;
+}
