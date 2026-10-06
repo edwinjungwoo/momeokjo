@@ -91,6 +91,27 @@ export async function recordD1Usage(db: D1Database, usage: D1Usage, now: number)
     .run();
 }
 
+/** R54 Cron 마지막 실행 요약을 두는 meta 키 */
+export const CRON_LAST_KEY = "cron_last";
+
+/**
+ * R38 + R54: Cron 실행의 사용량 기록과 마지막 실행 요약(cron_last)을 UPSERT 한 문장으로 쓴다 (요약 때문에 늘어나는 쓰기는 실행당 1행).
+ * 사용량은 더하고, 요약은 바꿔 쓴다
+ */
+export async function recordCronRun(db: D1Database, usage: D1Usage, now: number, summary: object): Promise<void> {
+  const day = utcDay(now);
+  await db
+    .prepare(
+      `INSERT INTO meta (key, value) VALUES (?, ?), (?, ?), ('${CRON_LAST_KEY}', ?)
+       ON CONFLICT(key) DO UPDATE SET value = CASE WHEN meta.key = '${CRON_LAST_KEY}' THEN excluded.value
+         ELSE CAST(meta.value AS INTEGER) + CAST(excluded.value AS INTEGER) END`,
+    )
+    .bind(
+      readKey(day), String(Math.round(usage.read)), writtenKey(day), String(Math.round(usage.written)), JSON.stringify(summary),
+    )
+    .run();
+}
+
 export async function d1UsageOn(db: D1Database, day: string): Promise<D1Usage> {
   const r = await db
     .prepare("SELECT key, value FROM meta WHERE key IN (?, ?)")

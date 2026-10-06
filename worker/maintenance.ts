@@ -4,9 +4,10 @@ import { HUBS, type Hub } from "../shared/hubs";
 import type { LatLng } from "../shared/types";
 import { Budget } from "./budget";
 import { limitsFrom } from "./config";
-import { meteredDb, overReadBudget, recordD1Usage, type D1Usage } from "./d1Usage";
+import { meteredDb, overReadBudget, recordCronRun, type D1Usage } from "./d1Usage";
 import { enrichDetails } from "./detailEnricher";
 import { isRetentionWindow, pruneOldEvents } from "./events";
+import { pruneRollups, runRollups } from "./rollup";
 import type { FetchFn } from "./fetchFn";
 import {
   backfillListJson, countNeedingDetail, detailGate, detailsAllowed, expiredDetailStates, markUnfetchedCleared, tilesChangedAt,
@@ -74,6 +75,10 @@ export type CronResult = {
   listJsonFilled?: number;
   /** R38: 오늘 D1 읽기가 소프트 한도를 넘어 수집·보충을 건너뛰었다 */
   skipped?: "read_budget";
+  /** R54: 이번 실행이 쓴 외부 호출 수 (카카오 로컬·상세) */
+  calls?: number;
+  /** R54: 이번 실행이 집계한 날 수 */
+  rolled?: number;
 };
 
 /**
@@ -90,10 +95,31 @@ export async function runScheduled(
   // R38: 이번 실행이 읽고 쓴 행 수를 모아 끝에 한 번 기록한다
   const usage: D1Usage = { read: 0, written: 0 };
   const db = meteredDb(env.DB, usage);
+  let result: CronResult | null = null;
   try {
-    return await maintain(env, db, opts);
+    result = await maintain(env, db, opts);
+    // R54: 밀린 일별 집계 (따라잡았으면 meta 1행). 읽기 예산을 넘은 날은 건너뛴다. 실패해도 수집 결과는 그대로 둔다
+    result.rolled = result.skipped
+      ? 0
+      : await runRollups(db, opts.now).catch((e) => {
+          console.error("rollup failed", e);
+          return 0;
+        });
+    return result;
   } finally {
-    await recordD1Usage(env.DB, usage, opts.now).catch((e) => console.error("d1 usage record failed", e));
+    // R38 사용량 + R54 마지막 실행 요약을 한 문장으로 (관리 화면 운영 탭의 "마지막 Cron")
+    const r = result;
+    const summary = {
+      at: opts.now,
+      collected: r?.tiles.collected ?? 0,
+      incomplete: r?.tiles.incomplete ?? 0,
+      enriched: r?.enriched ?? 0,
+      failed: r?.failed ?? 0,
+      calls: r?.calls ?? 0,
+      rolled: r?.rolled ?? 0,
+      ...(r === null ? { skipped: "error" } : r.skipped ? { skipped: r.skipped } : {}),
+    };
+    await recordCronRun(env.DB, usage, opts.now, summary).catch((e) => console.error("d1 usage record failed", e));
   }
 }
 
@@ -107,11 +133,12 @@ async function maintain(
   // R35: 하루 한 번 90일 지난 이벤트를 지운다 (지울 행만 인덱스로 읽어서 읽기 예산을 넘은 날에도 돈다)
   if (isRetentionWindow(opts.now)) {
     await pruneOldEvents(db, opts.now).catch((e) => console.error("event prune failed", e));
+    await pruneRollups(db, opts.now).catch((e) => console.error("rollup prune failed", e));
   }
   if (await overReadBudget(db, env, opts.now)) {
     return {
       order: hubs.map((h) => h.id), tiles: { total: keys.length, collected: 0, incomplete: 0 }, enriched: 0, failed: 0,
-      skipped: "read_budget",
+      skipped: "read_budget", calls: 0,
     };
   }
 
@@ -128,7 +155,11 @@ async function maintain(
     return 0;
   });
   // R10 쿨다운·R44 강등 모드면 상세 후보를 읽지도 부르지도 않는다
-  if (budget.left <= 0 || !detailsAllowed(await detailGate(db), opts.now)) return result;
+  const spent = () => {
+    result.calls = budgetSize - budget.left;
+    return result;
+  };
+  if (budget.left <= 0 || !detailsAllowed(await detailGate(db), opts.now)) return spent();
 
   const candidates: TilePlaceState[] = await expiredDetailStates(db, keys, opts.now);
   // 격자가 바뀐 적이 없으면(마지막 확인 이후) 미수집 ID가 생길 수 없으니 훑지 않는다
@@ -149,5 +180,5 @@ async function maintain(
     result.failed = e.failed;
   }
   if (checkUnfetched && unfetched === 0) await markUnfetchedCleared(db, opts.now);
-  return result;
+  return spent();
 }

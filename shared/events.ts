@@ -23,8 +23,10 @@ export const EventPropsSchema = z.strictObject({
   rank: z.number().int().min(1).max(3).optional(),
   /** R39 열자마자 자동으로 뽑은 draw */
   auto: z.literal(true).optional(),
-  /** R47 펼친 카드의 "여기로 가요"(한 곳 확정)로 보낸 share */
+  /** R47 펼친 카드의 "여기로 가요"(한 곳 확정)로 보낸 share (R53: rank도 같이 보낸다) */
   confirm: z.literal(true).optional(),
+  /** R53 R41 완화로 조건 밖 가게가 섞인 draw·redraw */
+  relaxed: z.literal(true).optional(),
 });
 export type EventProps = z.infer<typeof EventPropsSchema>;
 
