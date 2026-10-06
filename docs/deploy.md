@@ -156,6 +156,8 @@ git add docs/deploys.md && git commit -m "docs(deploy): <날짜> 배포 기록" 
 - `places` 행을 손으로 지우면(`DELETE FROM places …`) 그 가게는 다시 "미수집"이 돼요. Cron은 미수집을 앞선 커서(`meta.unfetched_from`)부터 찾아서, 커서 앞 칸에 다시 생긴 미수집은 보지 못해요. **같이 커서와 "미수집 확인 끝" 표시도 지워요** (다음 Cron이 처음부터 다시 찾아요):
   `npx wrangler d1 execute momeokjo --remote --command "DELETE FROM meta WHERE key = 'unfetched_from'"` (예전 `unfetched_cleared_at` 키는 더 쓰지 않아요 — 남아 있어도 무시해요)
 - 격자 ID(`tile_places`)를 앱이 아닌 SQL로 넣을 때도 같아요 — 앱(`replaceTilePlaces`)은 `tiles_changed_at`을 올려서 커서가 저절로 처음부터 읽어요.
+- 격자 상태(`tiles`) 행을 손으로 지우거나 `collected_at`을 되돌리면 **`meta.tiles_fresh`도 지워요** (Task 40 — 본 Cron은 "수집할 격자 없음"을 확인한 뒤 한 시간 동안, 거점 갱신 시작이 지나지 않는 한 격자 확인을 건너뛰어요. 지우지 않아도 한 시간 안에 다시 확인해요):
+  `npx wrangler d1 execute momeokjo --remote --command "DELETE FROM meta WHERE key = 'tiles_fresh'"`
 - 상세 보충 양은 `wrangler.jsonc` vars `DETAIL_BATCH_SIZE`(지금 4)·`DETAIL_CHAR_BUDGET`(지금 200000)로 정해요. 운영 Workers 로그의 cpuTime(warm·Cron)과 Cron 로그 줄의 `deferred`·`chars`를 보고 올려요.
   - **`DETAIL_BATCH_SIZE`의 천장은 8이에요** (`worker/config.ts` `MAX_DETAIL_BATCH_SIZE`). 더 크게 적어도 8로 잘라요 — 무료 플랜은 실행 하나에 D1 질의 50개라서, 보통 Cron 실행이 만료 갱신·격자 수집·미수집 찾기·집계를 다 하고도 보충 최악(곳마다 한 곳씩 다시 저장 + 차단 기록)이 들어가는 가장 큰 값이에요. 실행마다 남은 D1 호출에 맞춰 더 작아질 수 있어요(하루 한 번 보관 정리 실행은 6곳). 이번 실행의 배치는 Cron 로그 줄의 `batch`예요.
   - 관리 화면 운영 탭 "마지막 Cron"에 **저장 오류**나 **D1 예산으로 건너뜀**(만료 갱신·미수집 찾기·집계) 알약이 보이면 Workers 로그에서 원인을 봐요. 건너뛴 단계는 다음 실행이 이어 해요.

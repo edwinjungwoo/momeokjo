@@ -161,6 +161,23 @@ export async function d1UsageOn(db: D1Database, day: string): Promise<D1Usage> {
   return { read: get(readKey(day)), written: get(writtenKey(day)) };
 }
 
+/**
+ * Task 40: 오늘(UTC) 읽기 행 수와 meta 몇 키를 한 질의로 (본 Cron 시작 — 읽기 예산 확인과 격자 확인 표시를 D1 호출 하나로)
+ */
+export async function readTodayAndMeta(
+  db: D1Database, now: number, keys: readonly string[],
+): Promise<{ read: number; meta: Map<string, string> }> {
+  const day = readKey(utcDay(now));
+  const r = await db
+    .prepare("SELECT key, value FROM meta WHERE key IN (SELECT value FROM json_each(?))")
+    .bind(JSON.stringify([day, ...keys]))
+    .all<{ key: string; value: string }>();
+  const meta = new Map(r.results.map((x) => [x.key, x.value] as const));
+  const read = Number(meta.get(day) ?? 0);
+  meta.delete(day);
+  return { read: Number.isFinite(read) ? read : 0, meta };
+}
+
 function positiveVar(env: Env, name: string, fallback: number): number {
   const v = Number((env as unknown as Record<string, string | undefined>)[name]);
   return Number.isFinite(v) && v > 0 ? v : fallback;

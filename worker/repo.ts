@@ -199,6 +199,36 @@ export async function dueTileKeys(db: D1Database, keys: string[], now: number): 
   return r.results.map((x) => x.key);
 }
 
+/**
+ * Task 40: 본 Cron 격자 확인 표시 — meta tiles_fresh = {fp, at}. at에 dueTileKeys로 확인했더니 수집할 격자가 하나도 없었고,
+ * fp는 그때의 [격자, tileFreshFrom] 지문이다. 거점 격자의 기준(tileFreshFrom = 덮는 거점들의 가장 늦은 갱신 시작)은 다음 갱신
+ * 요일까지 그대로고 수집 시각(collected_at)은 늘기만 하므로, 지문이 같으면 그사이 새로 수집할 격자가 생기지 않는다 —
+ * 그래서 본 Cron은 지문이 같고 TILES_FRESH_RECHECK_MS 안이면 격자 수백 칸 확인(실행마다 ≈ 1천 행)을 건너뛴다.
+ * 거점 밖 격자의 기준은 now를 따라 움직여서 지문이 실행마다 달라진다(언제나 확인). 손으로 tiles 행을 지우거나 되돌리는
+ * 드문 일은 TILES_FRESH_RECHECK_MS 안에 다시 확인해 잡는다
+ */
+export const TILES_FRESH_KEY = "tiles_fresh";
+export const TILES_FRESH_RECHECK_MS = 60 * 60_000;
+type TilesFresh = { fp: string; at: number };
+
+export const tilesFreshFingerprint = (keys: string[], now: number) =>
+  tileSetFingerprint(keys.map((k) => `${k}@${tileFreshFrom(k, now)}`));
+
+export function tilesKnownFresh(raw: string | undefined, fp: string, now: number): boolean {
+  if (!raw) return false;
+  try {
+    const o = JSON.parse(raw) as Partial<TilesFresh>;
+    return o.fp === fp && typeof o.at === "number" && o.at <= now && now - o.at < TILES_FRESH_RECHECK_MS;
+  } catch {
+    return false;
+  }
+}
+
+export async function markTilesFresh(db: D1Database, fp: string, now: number): Promise<void> {
+  const value: TilesFresh = { fp, at: now };
+  await db.prepare(META_UPSERT).bind(TILES_FRESH_KEY, JSON.stringify(value)).run();
+}
+
 /** id로 정해지는 0 ≤ jitter < 24시간 (FNV-1a 32비트 + murmur3 마무리 섞기 — 연속된 id도 고르게 흩어진다) */
 export function detailJitterMs(id: string): number {
   let h = 0x811c9dc5;
@@ -374,15 +404,27 @@ export const UNFETCHED_FROM_KEY = "unfetched_from";
 export const UNFETCHED_CHUNK_TILES = 30;
 /** 한 실행이 미수집을 찾으며 읽는 묶음 수 상한 (D1 질의 수·읽기 — 다음 실행이 이어 읽는다) */
 export const UNFETCHED_MAX_CHUNKS = 6;
-/** rank: 이 순위 앞 묶음에는 미수집이 없다. changedAt·keys: 그때의 tiles_changed_at과 격자·기준점 지문 */
-type FrontierCursor = { rank: number; changedAt: number; keys: string };
+/**
+ * Task 40: 지난 실행이 커서 순위에서 미수집을 찾았으면(hit) 먼저 작은 묶음들(이 칸 수씩 — 순위 묶음은 쪼개지 않는다)을 읽고,
+ * 그래도 못 채우면 예전처럼 UNFETCHED_CHUNK_TILES칸 묶음 UNFETCHED_MAX_CHUNKS개까지 읽는다 (작은 묶음은 그 수에 넣지 않는다 —
+ * 한 실행이 읽을 수 있는 칸은 예전보다 줄지 않는다). 미수집이 몰린 앞선 자리(새 거점)에서 실행마다 30칸(≈2천 행)을 다시 읽지 않게.
+ * hit가 아니면(재설정·드문 미수집을 찾아 걷는 중) 예전처럼 처음부터 UNFETCHED_CHUNK_TILES칸씩
+ */
+export const UNFETCHED_PROBE_TILES: readonly number[] = [2, 4, 8, 16];
+/** 미수집 찾기 한 번의 최대 D1 호출: 커서 읽기 1 + 작은 묶음 + 묶음 UNFETCHED_MAX_CHUNKS + 커서 쓰기 1 */
+export const UNFETCHED_MAX_QUERIES = 2 + UNFETCHED_PROBE_TILES.length + UNFETCHED_MAX_CHUNKS;
+/**
+ * rank: 이 순위 앞 묶음에는 미수집이 없다. changedAt·keys: 그때의 tiles_changed_at과 격자·기준점 지문.
+ * hit: rank 묶음에서 미수집을 찾았다 (없으면 읽다 멈춘 자리 — 예전 커서도 hit 없음)
+ */
+type FrontierCursor = { rank: number; changedAt: number; keys: string; hit?: true };
 
 function parseFrontier(raw: string | undefined): FrontierCursor | null {
   if (!raw) return null;
   try {
     const o = JSON.parse(raw) as Partial<Record<keyof FrontierCursor, unknown>>;
     return typeof o.rank === "number" && typeof o.changedAt === "number" && typeof o.keys === "string"
-      ? { rank: o.rank, changedAt: o.changedAt, keys: o.keys }
+      ? { rank: o.rank, changedAt: o.changedAt, keys: o.keys, ...(o.hit === true ? { hit: true as const } : {}) }
       : null;
   } catch {
     return null;
@@ -405,7 +447,8 @@ export type UnfetchedPick = { states: TilePlaceState[]; cleared: boolean };
  * 처음부터 다시 읽는 때: 커서가 없거나, tiles_changed_at이 커서의 값과 다르거나(격자에 ID가 들어왔을 수 있다 — R4),
  * 격자·기준점 지문이 다르다(거점 추가·변경). 미수집은 그 밖에는 생기지 않는다 — places 행을 손으로 지우면 unfetched_from도
  * 지운다(docs/deploy.md).
- * 실행마다 많아야 UNFETCHED_MAX_CHUNKS묶음 — 다 못 읽으면 다음 실행이 이어 읽는다.
+ * 실행마다 많아야 UNFETCHED_MAX_CHUNKS묶음 — 다 못 읽으면 다음 실행이 이어 읽는다. Task 40: 지난번에 커서 자리에서 미수집을 찾았으면(hit)
+ * 그 앞에 작은 묶음(UNFETCHED_PROBE_TILES)부터 읽는다 — 새 거점처럼 미수집이 몰린 자리를 실행마다 30칸씩 다시 읽지 않게.
  * cleared: 끝까지 읽었고 미수집이 없다. limit이 0이면 읽지 않고 cleared도 아니다. 커서가 끝(마지막 순위 + 1)이고 tiles_changed_at·지문이
  * 같으면 묶음 질의 없이 cleared다 — 그래서 Cron은 따로 "미수집 확인 끝" 표시를 두지 않는다 (tiles_changed_at은 바뀔 때마다 커진다).
  * opts.changedAt: 호출하는 쪽이 한 번 읽은 tiles_changed_at (다시 읽지 않는다). opts.maxQueries: 이번에 쓸 D1 호출 수 상한
@@ -431,7 +474,8 @@ export async function nearestUnfetchedStates(
   const changedNum = opts.changedAt ?? Number(get(TILES_CHANGED_KEY) ?? 0);
   const changedAt = Number.isFinite(changedNum) ? changedNum : 0;
   const cursor = parseFrontier(get(UNFETCHED_FROM_KEY));
-  const startRank = cursor !== null && cursor.changedAt === changedAt && cursor.keys === fingerprint ? cursor.rank : 0;
+  const resume = cursor !== null && cursor.changedAt === changedAt && cursor.keys === fingerprint;
+  const startRank = resume ? cursor.rank : 0;
 
   let gi = groups.findIndex((g) => g.rank >= startRank);
   if (gi < 0) gi = groups.length;
@@ -439,9 +483,12 @@ export async function nearestUnfetchedStates(
   const out: TilePlaceState[] = [];
   let frontier: number | null = null;
   let used = 0;
-  for (let chunks = 0; gi < groups.length && out.length < want && chunks < UNFETCHED_MAX_CHUNKS && used < walkQueries; chunks++) {
+  // Task 40: 앞선 자리에 미수집이 있었으면 작은 묶음부터 (고르는 결과는 같다 — 순위 묶음 순서대로 읽고 want에서 멈춘다)
+  const sizes = [...(resume && cursor.hit ? UNFETCHED_PROBE_TILES : []), ...Array<number>(UNFETCHED_MAX_CHUNKS).fill(UNFETCHED_CHUNK_TILES)];
+  for (let chunks = 0; gi < groups.length && out.length < want && chunks < sizes.length && used < walkQueries; chunks++) {
     const chunk: RankGroup[] = [];
-    for (let tiles = 0; gi < groups.length && (chunk.length === 0 || tiles < UNFETCHED_CHUNK_TILES); gi++) {
+    const size = sizes[chunks];
+    for (let tiles = 0; gi < groups.length && (chunk.length === 0 || tiles < size); gi++) {
       chunk.push(groups[gi]);
       tiles += groups[gi].keys.length;
     }
@@ -453,8 +500,12 @@ export async function nearestUnfetchedStates(
   const end = groups.length; // 마지막 순위 + 1
   const nextRank = frontier ?? (gi < groups.length ? groups[gi].rank : end);
   const cleared = frontier === null && gi >= groups.length;
-  if (cursor === null || cursor.rank !== nextRank || cursor.changedAt !== changedAt || cursor.keys !== fingerprint) {
-    const value: FrontierCursor = { rank: nextRank, changedAt, keys: fingerprint };
+  const hit = frontier !== null;
+  if (
+    cursor === null || cursor.rank !== nextRank || cursor.changedAt !== changedAt || cursor.keys !== fingerprint ||
+    (cursor.hit === true) !== hit
+  ) {
+    const value: FrontierCursor = { rank: nextRank, changedAt, keys: fingerprint, ...(hit ? { hit: true as const } : {}) };
     await db.prepare(META_UPSERT).bind(UNFETCHED_FROM_KEY, JSON.stringify(value)).run();
   }
   return { states: out, cleared };
@@ -608,6 +659,8 @@ type ExpiredRow = { rid: number; id: string; status: string; fetched_at: number;
  */
 export async function expiredDetailStates(
   db: D1Database, keys: string[], now: number, observedChangedAt?: number,
+  /** Task 40: "failed"면 실패 행만 읽는다 (ok 커서는 읽지도 쓰지도 않는다 — 미수집이 배치를 다 채운 실행) */
+  only?: "failed",
 ): Promise<TilePlaceState[]> {
   const unique = [...new Set(keys)];
   if (unique.length === 0) return [];
@@ -622,9 +675,9 @@ export async function expiredDetailStates(
   const statuses = [
     { status: "ok", before: Math.max(...okBefore.values()) - 1, fingerprint: okFingerprint, due: (x: ExpiredRow, k: string) => x.fetched_at < (okBefore.get(k) as number) },
     { status: "failed", before: failBefore, fingerprint: keysFingerprint, due: () => true },
-  ] as const;
+  ].filter((x) => only === undefined || x.status === only);
   const saved = await db
-    .prepare("SELECT key, value FROM meta WHERE key IN (?, ?)")
+    .prepare(`SELECT key, value FROM meta WHERE key IN (${marks(statuses.length)})`)
     .bind(...statuses.map((x) => EXPIRED_FROM_PREFIX + x.status))
     .all<{ key: string; value: string }>();
   const out: TilePlaceState[] = [];

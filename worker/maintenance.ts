@@ -5,7 +5,8 @@ import type { LatLng } from "../shared/types";
 import { Budget } from "./budget";
 import { limitsFrom } from "./config";
 import {
-  CRON_DETAIL_LAST_KEY, D1CallBudget, d1UsageOn, meteredDb, overReadBudget, readSoftCap, recordCronRun, recordD1Usage, type D1Usage,
+  CRON_DETAIL_LAST_KEY, D1CallBudget, d1UsageOn, meteredDb, overReadBudget, readSoftCap, readTodayAndMeta, recordCronRun, recordD1Usage,
+  type D1Usage,
 } from "./d1Usage";
 import { utcDay } from "../shared/kst";
 import { enrichCallReserve, enrichDetails } from "./detailEnricher";
@@ -17,8 +18,9 @@ import { isReadOnly } from "./readOnly";
 import { hubHasDue, readCronMeta, recordHubRefreshed } from "./hubRefresh";
 import { hubRefreshStart } from "./refreshSchedule";
 import {
-  backfillListJson, countNeedingDetail, detailGate, detailsAllowed, EXPIRED_RESET_PAGES, expiredDetailStates,
-  nearestUnfetchedStates, pickCronIds, UNFETCHED_MAX_CHUNKS, type TilePlaceState,
+  backfillListJson, countNeedingDetail, detailGate, detailsAllowed, EXPIRED_RESET_PAGES, expiredDetailStates, markTilesFresh,
+  nearestUnfetchedStates, pickCronIds, TILES_FRESH_KEY, tilesFreshFingerprint, tilesKnownFresh, UNFETCHED_MAX_QUERIES,
+  type TilePlaceState,
 } from "./repo";
 import { collectTiles } from "./tileCollector";
 
@@ -388,16 +390,38 @@ async function refreshDetails(
   const candidates: TilePlaceState[] = [];
   if (batchSize <= 0) return candidates;
   // 유효 배치가 0이면 고를 것도 없으니 만료 후보도 읽지 않는다 (Task 34 리뷰)
-  if (calls.has(EXPIRED_D1_CALLS + FRONTIER_MIN_CALLS + tail)) {
-    candidates.push(...(await expiredDetailStates(db, ctx.keys, ctx.now, ctx.changedAt)));
-  } else skip("expired");
+  const readExpired = (only?: "failed") => expiredDetailStates(db, ctx.keys, ctx.now, ctx.changedAt, only);
   // Task 34: 미수집은 앞선 커서부터 거점에 가까운 순 batchSize곳만 (만료 후보와 합쳐 고르는 결과는 전부 읽은 것과 같다).
   // 커서가 끝이고 tiles_changed_at·지문이 같으면 묶음 질의 없이 끝난다 (따로 "다 채움" 표시를 두지 않는다)
-  const maxQueries = Math.min(2 + UNFETCHED_MAX_CHUNKS, calls.left - tail);
-  if (maxQueries >= FRONTIER_MIN_CALLS) {
-    const u = await nearestUnfetchedStates(db, ctx.keys, ctx.hubs, batchSize, { changedAt: ctx.changedAt, maxQueries });
-    candidates.push(...u.states);
-  } else skip("unfetched");
+  const readUnfetched = async (maxQueries: number) =>
+    (await nearestUnfetchedStates(db, ctx.keys, ctx.hubs, batchSize, { changedAt: ctx.changedAt, maxQueries })).states;
+  if (calls.has(EXPIRED_D1_CALLS + UNFETCHED_MAX_QUERIES + tail)) {
+    // Task 40: 두 단계 모두 최악 몫이 남는 보통 실행은 미수집을 먼저 읽는다. 미수집이 배치를 다 채웠으면 ok 만료 후보는 고를 자리가 없다
+    // (pickCronIds는 미수집이 먼저) — 실패 재시도 자리(R9)를 위해 실패 행만 읽고, ok 커서는 그대로 둔다 (고르는 ID는 둘 다 읽은 것과 같다)
+    const unfetched = await readUnfetched(UNFETCHED_MAX_QUERIES);
+    candidates.push(...unfetched, ...(await readExpired(unfetched.length >= batchSize ? "failed" : undefined)));
+    return pickAndEnrich(db, ctx, candidates, out);
+  }
+  // D1 호출이 모자란 실행(격자를 많이 모은 실행 등)은 예전 순서 그대로: 만료 후보(최악 몫이 남을 때만) → 남은 호출로 미수집
+  if (calls.has(EXPIRED_D1_CALLS + FRONTIER_MIN_CALLS + tail)) candidates.push(...(await readExpired()));
+  else skip("expired");
+  const maxQueries = Math.min(UNFETCHED_MAX_QUERIES, calls.left - tail);
+  if (maxQueries >= FRONTIER_MIN_CALLS) candidates.push(...(await readUnfetched(maxQueries)));
+  else skip("unfetched");
+  return pickAndEnrich(db, ctx, candidates, out);
+}
+
+/** 후보에서 pickCronIds로 고르고 enrichDetails로 보충한다 (refreshDetails의 끝). 결과 수를 out에 쓰고 후보를 돌려준다 */
+async function pickAndEnrich(
+  db: D1Database,
+  ctx: {
+    fetcher: FetchFn; now: number; sleep?: (ms: number) => Promise<void>; hubs: Hub[]; calls: D1CallBudget;
+    budget: Budget; batchSize: number; charBudget: number;
+  },
+  candidates: TilePlaceState[],
+  out: { enriched: number; failed: number; deferred?: number; chars?: number; enrichError?: true },
+): Promise<TilePlaceState[]> {
+  const { calls, batchSize } = ctx;
   if (candidates.length === 0) return candidates;
   // R63: 미수집 먼저, 그다음 갱신 시작이 오래된 거점부터, 거점 안에서는 가까운 순 (실패 재시도 자리 하나)
   const ids = pickCronIds(candidates, ctx.hubs, ctx.now, batchSize);
@@ -435,7 +459,9 @@ async function maintain(
     await pruneOldEvents(db, opts.now).catch((e) => console.error("event prune failed", e));
     await pruneRollups(db, opts.now).catch((e) => console.error("rollup prune failed", e));
   }
-  if (await overReadBudget(db, env, opts.now)) {
+  // R38 읽기 예산과 Task 40 격자 확인 표시(tiles_fresh)를 한 질의로 읽는다
+  const start = await readTodayAndMeta(db, opts.now, [TILES_FRESH_KEY]);
+  if (start.read >= readSoftCap(env)) {
     return {
       order: hubs.map((h) => h.id), tiles: { total: keys.length, collected: 0, incomplete: 0 }, enriched: 0, failed: 0,
       skipped: "read_budget", calls: 0,
@@ -446,13 +472,20 @@ async function maintain(
   const batchSize = cronBatchFor(calls.left, configured);
   // 격자 하나 = D1 2번 (지금 ID 읽기 + 바꾸기). 뒤 단계 몫(afterCollectCalls)이 남을 때만 다음 격자를 시작한다
   const reserve = afterCollectCalls(batchSize);
+  // Task 40: 지난 확인 뒤 격자 기준(갱신 시작)이 그대로고 한 시간 안이면 수집할 격자가 없다 — 격자 확인(≈ 1천 행)을 건너뛴다
+  const freshFp = tilesFreshFingerprint(keys, opts.now);
+  const knownFresh = tilesKnownFresh(start.meta.get(TILES_FRESH_KEY), freshFp, opts.now);
   const tiles = await collectTiles(
     {
       db, fetcher: opts.fetcher, restKey: env.KAKAO_REST_KEY, budget, now: opts.now,
       canStartTile: () => calls.has(2 + reserve),
     },
-    keys,
+    knownFresh ? [] : keys,
   );
+  // 확인했는데 수집할 격자가 없었다 — 표시를 쓴다 (격자를 모으지 않은 실행이라 그 몫의 D1 호출이 남는다)
+  if (!knownFresh && tiles.collected.length + tiles.incomplete.length + tiles.failed.length === 0) {
+    await markTilesFresh(db, freshFp, opts.now).catch((e) => console.error("tiles fresh mark failed", e));
+  }
   const result: CronResult = {
     order: hubs.map((h) => h.id),
     tiles: { total: keys.length, collected: tiles.collected.length, incomplete: tiles.incomplete.length + tiles.failed.length },
