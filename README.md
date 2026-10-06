@@ -1,6 +1,6 @@
 # 모먹죠 (mmj.itmz.me)
 
-ASEM 타워 근처 점심 추천. Cloudflare Worker 하나(Hono API + React SPA, `@cloudflare/vite-plugin`) + D1 + Cron(5분). 설계는 `docs/superpowers/specs/2026-10-05-momeokjo-design.md`.
+거점(역) 근처 점심 추천 — 봉은사역·동대문역사문화공원역·판교역·내방역·정부과천청사역. Cloudflare Worker 하나(Hono API + React SPA, `@cloudflare/vite-plugin`) + D1 + Cron(5분). 설계는 `docs/superpowers/specs/2026-10-05-momeokjo-design.md`.
 
 ## 개발
 
