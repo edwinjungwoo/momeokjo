@@ -5,7 +5,7 @@ import { tileKeyOf, tilesCoveringCircle } from "../../shared/geo";
 import { hubById } from "../../shared/hubs";
 import { createApp } from "../../worker/app";
 import worker from "../../worker/index";
-import { ReadOnlyViolation, readOnlyDb, readOnlyEnv, writeKeyword } from "../../worker/readOnly";
+import { ReadOnlyViolation, isReadOnly, logReadOnlyOnce, readOnlyDb, readOnlyEnv, resetReadOnlyNoticeForTest, writeKeyword } from "../../worker/readOnly";
 import { fakeKakaoLocal, fakePlaceApi, routeFetch } from "../helpers/fakeKakao";
 import { placeJson, seedPlace } from "../helpers/places";
 
@@ -99,6 +99,16 @@ describe("R52: 읽기 전용 D1 (readOnlyDb)", () => {
     expect(() => db.withSession().prepare("UPDATE meta SET value = '2'")).toThrow(ReadOnlyViolation);
   });
 
+  it("R52: exec는 항상 막는다 — D1 exec는 줄바꿈으로 문장을 나누므로 SQL 분류를 믿을 수 없고, 앱은 exec를 쓰지 않는다", async () => {
+    const db = readOnlyDb(env.DB);
+    // 줄바꿈으로 이어 붙인 쓰기 (분류기는 한 문장으로 읽지만 D1은 줄마다 실행한다)
+    await expect(db.exec("SELECT 1\nDELETE FROM meta")).rejects.toThrow(ReadOnlyViolation);
+    await expect(db.exec("INSERT INTO meta (key, value) VALUES ('a', '1')\nINSERT INTO meta (key, value) VALUES ('b', '2')")).rejects.toThrow(ReadOnlyViolation);
+    // 읽기만 있어도 막는다
+    await expect(db.exec("SELECT 1")).rejects.toThrow(ReadOnlyViolation);
+    expect((await env.DB.prepare("SELECT key FROM meta").all()).results).toEqual([]);
+  });
+
   it("R52: READ_ONLY가 \"1\"일 때만 Worker 입구에서 DB를 감싼다", () => {
     expect(readOnlyEnv(env)).toBe(env);
     expect(readOnlyEnv({ ...env, READ_ONLY: "0" } as Env).DB).toBe(env.DB);
@@ -107,8 +117,90 @@ describe("R52: 읽기 전용 D1 (readOnlyDb)", () => {
     expect(() => ro.DB.prepare("DELETE FROM meta")).toThrow(ReadOnlyViolation);
   });
 
+  it.each([["1", true], ["true", true], ["yes", true], ["on", true], ["TRUE", true], ["2", true], [" 1 ", true], ["0", false], ["false", false], ["FALSE", false], [" 0 ", false], ["", false], ["  ", false], [undefined, false]])(
+    "R52: READ_ONLY=%j 이면 읽기 전용 %s (비어 있지 않고 0·false가 아니면 켠다 — 실패하면 닫힌다)",
+    (value, expected) => {
+      const e = { ...env, READ_ONLY: value } as Env;
+      expect(isReadOnly(e)).toBe(expected);
+      expect(readOnlyEnv(e).DB === env.DB).toBe(!expected);
+    },
+  );
+
   it("R52: 운영 설정(wrangler.jsonc vars)에는 READ_ONLY가 없다", () => {
     expect((env as unknown as Record<string, unknown>).READ_ONLY).toBeUndefined();
+  });
+});
+
+describe("R52: 읽기 전용 알림 (격리 하나에 한 번)", () => {
+  afterEach(() => resetReadOnlyNoticeForTest());
+
+  it("R52: READ_ONLY가 켜져 있으면 첫 요청에서만 한 줄 남기고, 꺼져 있으면 남기지 않는다", () => {
+    const log = vi.spyOn(console, "log").mockImplementation(() => {});
+    try {
+      resetReadOnlyNoticeForTest();
+      logReadOnlyOnce(env);
+      expect(log).not.toHaveBeenCalled();
+      logReadOnlyOnce(RO_ENV);
+      logReadOnlyOnce(RO_ENV);
+      expect(log.mock.calls).toEqual([["[read-only] 운영 D1 읽기 전용 모드"]]);
+    } finally {
+      log.mockRestore();
+    }
+  });
+
+  it("R52: Worker 입구의 첫 fetch가 알림을 남긴다", async () => {
+    const log = vi.spyOn(console, "log").mockImplementation(() => {});
+    try {
+      resetReadOnlyNoticeForTest();
+      const ctx = createExecutionContext();
+      const req = new Request("http://localhost/api/places?hub=gwacheon&radius=1000") as Parameters<typeof worker.fetch>[0];
+      await worker.fetch(req, RO_ENV, ctx);
+      await worker.fetch(req, RO_ENV, ctx);
+      await waitOnExecutionContext(ctx);
+      expect(log.mock.calls.filter((c) => c[0] === "[read-only] 운영 D1 읽기 전용 모드")).toHaveLength(1);
+    } finally {
+      log.mockRestore();
+    }
+  });
+});
+
+describe("R52: Worker 입구가 DB를 실제로 감싼다 (스파이 D1)", () => {
+  it("R52: READ_ONLY=1로 worker.fetch를 거친 목록 요청이 안쪽 D1에 넘긴 SQL은 모두 읽기다", async () => {
+    const seen: string[] = [];
+    // 호출 스택에 readOnly 감싸개가 있는지 — 입구가 DB를 감싸지 않았다면 앱이 스파이를 직접 부른다 (앱은 쓰기를 먼저 건너뛰므로 SQL만으로는 알 수 없다)
+    const viaWrapper: boolean[] = [];
+    const spy = {
+      prepare: (sql: string) => {
+        seen.push(sql);
+        viaWrapper.push(/worker\/readOnly\.ts/.test(new Error().stack ?? ""));
+        return env.DB.prepare(sql);
+      },
+      batch: (stmts: D1PreparedStatement[]) => env.DB.batch(stmts),
+      exec: (sql: string) => {
+        seen.push(sql);
+        return env.DB.exec(sql);
+      },
+      withSession: (c?: string) => env.DB.withSession(c),
+      dump: () => env.DB.dump(),
+    } as unknown as D1Database;
+    const hub = hubById("gwacheon");
+    await seedPlace(env.DB, "1001", hub.lat + 0.0005, hub.lng, { now: Date.now() });
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockImplementation(async () => {
+      throw new Error("테스트에서 외부 호출 없음");
+    });
+    try {
+      const ctx = createExecutionContext();
+      const req = new Request("http://localhost/api/places?hub=gwacheon&radius=1000") as Parameters<typeof worker.fetch>[0];
+      const res = await worker.fetch(req, { ...env, READ_ONLY: "1", DB: spy } as Env, ctx);
+      await waitOnExecutionContext(ctx);
+      expect(res.status).toBe(200);
+    } finally {
+      fetchSpy.mockRestore();
+    }
+    // 스파이가 실제로 쓰였는지 (감싸개를 건너뛰고 env.DB를 직접 썼다면 비어 있다)
+    expect(seen.length).toBeGreaterThan(0);
+    expect(viaWrapper.every(Boolean)).toBe(true);
+    expect(seen.filter((sql) => writeKeyword(sql) !== null)).toEqual([]);
   });
 });
 

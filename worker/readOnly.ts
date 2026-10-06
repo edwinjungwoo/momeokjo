@@ -5,7 +5,28 @@
  * 앱은 쓰기 경로(수집·보충·사용량 기록·이벤트·관리자 쓰기·Cron)를 먼저 건너뛰고, 이 감싸개는 빠뜨린 쓰기를 실행 전에 막는 안전망이다.
  */
 
-export const isReadOnly = (env: Env): boolean => (env as unknown as Record<string, unknown>).READ_ONLY === "1";
+/**
+ * 비어 있지 않은 값이 "0"·"false"가 아니면 켠다 (실패하면 닫히는 쪽 — "true"·"yes"·오타도 읽기 전용이 된다).
+ * 값이 없거나 공백뿐이거나 "0"·"false"일 때만 끈다.
+ */
+export const isReadOnly = (env: Env): boolean => {
+  const v = (env as unknown as Record<string, unknown>).READ_ONLY;
+  if (v === undefined || v === null) return false;
+  const t = String(v).trim().toLowerCase();
+  return t !== "" && t !== "0" && t !== "false";
+};
+
+let noticed = false;
+/** R52: 읽기 전용 모드가 켜져 있으면 격리(isolate) 하나에 한 번만 알린다 — dev 서버가 운영 D1을 읽기만 하는 중임을 로그에 남긴다 */
+export function logReadOnlyOnce(env: Env): void {
+  if (noticed || !isReadOnly(env)) return;
+  noticed = true;
+  console.log("[read-only] 운영 D1 읽기 전용 모드");
+}
+/** 테스트용 */
+export const resetReadOnlyNoticeForTest = (): void => {
+  noticed = false;
+};
 
 /** 읽기 전용 D1에서 쓰기(또는 확인할 수 없는) 문장을 실행하려 했다 */
 export class ReadOnlyViolation extends Error {
@@ -172,9 +193,9 @@ function guarded<T extends Preparer>(db: T) {
 export function readOnlyDb(db: D1Database): D1Database {
   const wrapped = {
     ...guarded(db),
-    exec: async (query: string) => {
-      assertRead(query);
-      return db.exec(query);
+    // D1 exec는 줄바꿈으로 문장을 나눠 실행하므로("SELECT 1\nDELETE ...") SQL 분류를 믿을 수 없다. 앱은 exec를 쓰지 않으니 항상 막는다
+    exec: async (query: string): Promise<D1ExecResult> => {
+      throw new ReadOnlyViolation("EXEC", query);
     },
     withSession: (constraintOrBookmark?: string) => {
       const session = db.withSession(constraintOrBookmark);
