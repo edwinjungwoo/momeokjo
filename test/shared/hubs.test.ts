@@ -6,14 +6,14 @@ import { DEFAULT_HUB_ID, HUBS, PUBLIC_HUBS, hubById, isHubId, isPublicHubId, pub
 describe("hubs", () => {
   it("R24: 거점은 봉은사역(기본), 동대문역사문화공원역, 판교역, 내방역, 정부과천청사역, 강남역, 여의도역, 광화문역", () => {
     expect(HUBS).toEqual([
-      { id: "bongeunsa", name: "봉은사역", lat: 37.514255, lng: 127.060234, ready: true },
-      { id: "ddp", name: "동대문역사문화공원역", lat: 37.5651, lng: 127.00749, ready: true },
-      { id: "pangyo", name: "판교역", lat: 37.394777, lng: 127.11159, ready: true },
-      { id: "naebang", name: "내방역", lat: 37.487659, lng: 126.9936, ready: true },
-      { id: "gwacheon", name: "정부과천청사역", lat: 37.426505, lng: 126.989868, ready: true },
-      { id: "gangnam", name: "강남역", lat: 37.498086, lng: 127.028001, ready: false },
-      { id: "yeouido", name: "여의도역", lat: 37.521775, lng: 126.924398, ready: false },
-      { id: "gwanghwamun", name: "광화문역", lat: 37.571649, lng: 126.976424, ready: false },
+      { id: "bongeunsa", name: "봉은사역", lat: 37.514255, lng: 127.060234, ready: true, refreshDay: 1 },
+      { id: "ddp", name: "동대문역사문화공원역", lat: 37.5651, lng: 127.00749, ready: true, refreshDay: 2 },
+      { id: "pangyo", name: "판교역", lat: 37.394777, lng: 127.11159, ready: true, refreshDay: 3 },
+      { id: "naebang", name: "내방역", lat: 37.487659, lng: 126.9936, ready: true, refreshDay: 3 },
+      { id: "gwacheon", name: "정부과천청사역", lat: 37.426505, lng: 126.989868, ready: true, refreshDay: 4 },
+      { id: "gangnam", name: "강남역", lat: 37.498086, lng: 127.028001, ready: false, refreshDay: 5 },
+      { id: "yeouido", name: "여의도역", lat: 37.521775, lng: 126.924398, ready: false, refreshDay: 6 },
+      { id: "gwanghwamun", name: "광화문역", lat: 37.571649, lng: 126.976424, ready: false, refreshDay: 4 },
     ]);
     expect(DEFAULT_HUB_ID).toBe("bongeunsa");
     expect(new Set(HUBS.map((h) => h.id)).size).toBe(HUBS.length);

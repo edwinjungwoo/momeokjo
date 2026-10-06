@@ -258,8 +258,8 @@ describe("admin", () => {
   });
 
   it("R11: 겹치는 거점이 있어도 한 실행에서 격자와 장소는 한 번씩만 확인·호출한다", async () => {
-    const a: Hub = { id: "a", name: "a", lat: ASEM.lat, lng: ASEM.lng, ready: true };
-    const b: Hub = { id: "b", name: "b", lat: ASEM.lat + 0.001, lng: ASEM.lng, ready: true };
+    const a: Hub = { id: "a", name: "a", lat: ASEM.lat, lng: ASEM.lng, ready: true, refreshDay: 1 };
+    const b: Hub = { id: "b", name: "b", lat: ASEM.lat + 0.001, lng: ASEM.lng, ready: true, refreshDay: 1 };
     const hubs = [a, b];
     const s1 = setup();
     await runScheduled(env, { fetcher: s1.fetcher, now: NOW, sleep: async () => {}, hubs });

@@ -3,21 +3,25 @@
  * R62: 새 거점은 `ready: false`(준비 중)로 더한다 — Cron 수집·보충, 관리자 warm·backfill·audit, 관리 화면은 모든 거점(HUBS)을,
  * 화면(거점 메뉴·첫 접속 질문·짧은 링크·공유 링크·설정 검증), 공개 목록 API, 이벤트 검증, 스냅샷은 공개 거점(PUBLIC_HUBS)만 쓴다.
  * 공개 순서: 수집 → 감사 Q1·Q2 통과 → `ready: true` 한 줄 → release (docs/deploy.md).
- * scripts/smoke.sh가 이 파일의 거점 줄을 sed로 읽는다 — 한 줄에 `id, name, lat, lng, ready` 순서를 지킨다.
+ * scripts/smoke.sh가 이 파일의 거점 줄을 sed로 읽는다 — 한 줄에 `id, name, lat, lng, ready, refreshDay` 순서를 지킨다.
+ * R63: `refreshDay`는 그 거점 가게 정보를 다시 가져오는 요일(KST, 0=일 ~ 6=토)이다. 그날 00:00 KST부터 그 시각 전에 가져온
+ * 가게가 갱신 대상이 되고(다 못 하면 다음 날로 이어진다), 격자 재수집도 같은 시작에 맞춘다 (worker/refreshSchedule.ts).
+ * 새 거점은 거점이 적은 요일에 넣는다 — 한 요일에 큰 거점이 몰리면 그 주 갱신이 늦어진다. 일요일(0)은 비워 둔 여유 날이다.
+ * 지금: 월 봉은사 · 화 동대문 · 수 판교·내방 · 목 정부과천청사·광화문 · 금 강남 · 토 여의도.
  */
-export type Hub = { id: string; name: string; lat: number; lng: number; ready: boolean };
+export type Hub = { id: string; name: string; lat: number; lng: number; ready: boolean; refreshDay: number };
 
 export const HUBS: Hub[] = [
-  { id: "bongeunsa", name: "봉은사역", lat: 37.514255, lng: 127.060234, ready: true },
-  { id: "ddp", name: "동대문역사문화공원역", lat: 37.5651, lng: 127.00749, ready: true },
+  { id: "bongeunsa", name: "봉은사역", lat: 37.514255, lng: 127.060234, ready: true, refreshDay: 1 },
+  { id: "ddp", name: "동대문역사문화공원역", lat: 37.5651, lng: 127.00749, ready: true, refreshDay: 2 },
   // 신분당선·경강선 출구 사이
-  { id: "pangyo", name: "판교역", lat: 37.394777, lng: 127.11159, ready: true },
-  { id: "naebang", name: "내방역", lat: 37.487659, lng: 126.9936, ready: true },
-  { id: "gwacheon", name: "정부과천청사역", lat: 37.426505, lng: 126.989868, ready: true },
+  { id: "pangyo", name: "판교역", lat: 37.394777, lng: 127.11159, ready: true, refreshDay: 3 },
+  { id: "naebang", name: "내방역", lat: 37.487659, lng: 126.9936, ready: true, refreshDay: 3 },
+  { id: "gwacheon", name: "정부과천청사역", lat: 37.426505, lng: 126.989868, ready: true, refreshDay: 4 },
   // 2026-10-06 추가 — 좌표는 카카오 로컬 키워드 검색(SW8 지하철역) 결과. R62: 수집·감사가 끝날 때까지 준비 중
-  { id: "gangnam", name: "강남역", lat: 37.498086, lng: 127.028001, ready: false },
-  { id: "yeouido", name: "여의도역", lat: 37.521775, lng: 126.924398, ready: false },
-  { id: "gwanghwamun", name: "광화문역", lat: 37.571649, lng: 126.976424, ready: false },
+  { id: "gangnam", name: "강남역", lat: 37.498086, lng: 127.028001, ready: false, refreshDay: 5 },
+  { id: "yeouido", name: "여의도역", lat: 37.521775, lng: 126.924398, ready: false, refreshDay: 6 },
+  { id: "gwanghwamun", name: "광화문역", lat: 37.571649, lng: 126.976424, ready: false, refreshDay: 4 },
 ];
 
 /** R62: 사용자에게 보이는 거점 (ready만) */
