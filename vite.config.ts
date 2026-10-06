@@ -11,4 +11,6 @@ const DEV_ONLY_VARS = { READ_ONLY: "1" };
 
 export default defineConfig(({ command }) => ({
   plugins: [react(), cloudflare(command === "serve" ? { config: { vars: DEV_ONLY_VARS } } : {})],
+  // 서브에이전트 작업 트리(.claude/worktrees)와 작업 기록(.superpowers)이 바뀔 때 dev 서버가 다시 읽지 않게
+  server: { watch: { ignored: ["**/.claude/**", "**/.superpowers/**"] } },
 }));
