@@ -59,6 +59,42 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
+describe("R56 저장본 ETag (작은 키)", () => {
+  function fakeStorage(throwing = false) {
+    const m = new Map<string, string>();
+    const guard = () => {
+      if (throwing) throw new Error("SecurityError");
+    };
+    return {
+      m,
+      getItem: (k: string) => (guard(), m.get(k) ?? null),
+      setItem: (k: string, v: string) => (guard(), void m.set(k, v)),
+      removeItem: (k: string) => (guard(), void m.delete(k)),
+    };
+  }
+
+  it("R56: 거점마다 ETag만 localStorage에 따로 두고 바로(동기) 읽는다 — 이상한 값·없는 값은 null", async () => {
+    const ls = fakeStorage();
+    vi.stubGlobal("localStorage", ls);
+    const { mod } = await load([]);
+    expect(mod.readCachedEtag("ddp")).toBeNull();
+    mod.writeCachedEtag("ddp", 'W/"1-ddp-abc"');
+    expect(mod.readCachedEtag("ddp")).toBe('W/"1-ddp-abc"');
+    expect(mod.readCachedEtag("pangyo")).toBeNull();
+    mod.writeCachedEtag("ddp", null);
+    expect(mod.readCachedEtag("ddp")).toBeNull();
+    ls.m.set("mmj-places-etag:ddp", "x".repeat(300));
+    expect(mod.readCachedEtag("ddp")).toBeNull();
+  });
+
+  it("R56: localStorage를 못 쓰면(사생활 보호 모드) 조용히 null", async () => {
+    vi.stubGlobal("localStorage", fakeStorage(true));
+    const { mod } = await load([]);
+    expect(() => mod.writeCachedEtag("ddp", 'W/"x"')).not.toThrow();
+    expect(mod.readCachedEtag("ddp")).toBeNull();
+  });
+});
+
 describe("R45 기기 저장본 — 저장소 열기 실패", () => {
   it("R45: 열기가 한 번 실패(onerror)해도 다음 호출은 다시 연다 (새로고침 전까지 꺼지지 않는다)", async () => {
     const { open, mod } = await load(["error", "success"]);

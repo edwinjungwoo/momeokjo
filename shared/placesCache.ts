@@ -18,6 +18,8 @@ export const PLACES_CACHE_MAX_AGE_MS = 3 * 24 * HOUR;
 /** R56: 저장본과 함께 두는 응답 ETag의 최대 길이 (서버 ETag는 40자 안팎) */
 const ETAG_MAX_CHARS = 200;
 const validEtag = (v: unknown): v is string => typeof v === "string" && v.length > 0 && v.length <= ETAG_MAX_CHARS;
+/** 저장해 둔 ETag 값이 쓸 만하면 그 값, 아니면 null */
+export const usableEtag = (v: unknown): string | null => (validEtag(v) ? v : null);
 
 /** etag: R56 서버 스냅샷 응답의 ETag (없던 예전 저장본은 키가 없다 — 판을 올리지 않아도 읽힌다) */
 export type PlacesCacheEntry = { v: number; hub: string; savedAt: number; text: string; etag?: string };
