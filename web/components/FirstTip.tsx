@@ -4,7 +4,8 @@ import { Mascot } from "./Mascot";
 
 const KEY = "mmj:tip-draw:v1";
 
-function seen(): boolean {
+/** 첫 방문 안내를 닫은 기기인가 (R39 재방문자, R61 기존 사용자 판단에도 쓴다) */
+export function firstTipSeen(): boolean {
   try {
     return localStorage.getItem(KEY) === "1";
   } catch {
@@ -14,7 +15,7 @@ function seen(): boolean {
 
 /** 첫 방문 안내 말풍선. 첫 뽑기나 ✕로 닫고, 다시 보이지 않게 기억한다 (저장이 안 되면 이번 세션만) */
 export function useFirstTip() {
-  const [open, setOpen] = useState(() => !seen());
+  const [open, setOpen] = useState(() => !firstTipSeen());
   const dismiss = useCallback(() => {
     setOpen(false);
     try {

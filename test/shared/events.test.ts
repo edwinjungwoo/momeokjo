@@ -71,6 +71,12 @@ describe("events", () => {
     expect(EventSchema.safeParse(ev({ t: "share", props: { confirm: "yes" } })).success).toBe(false);
   });
 
+  it("R61: 첫 접속 거점 고르기의 hub_change는 props.onboarding: true만 받는다", () => {
+    expect(EventSchema.safeParse(ev({ t: "hub_change", hub: "pangyo", props: { onboarding: true } })).success).toBe(true);
+    expect(EventSchema.safeParse(ev({ t: "hub_change", props: { onboarding: false } })).success).toBe(false);
+    expect(EventSchema.safeParse(ev({ t: "hub_change", props: { onboarding: "yes" } })).success).toBe(false);
+  });
+
   it("R35: 저장 행은 서버 기준 시각, KST 날짜·시, 짧은 props JSON(없으면 null)", () => {
     const late = Date.UTC(2027, 0, 14, 15, 3);
     expect(toStored({ t: "share", ts: late, hub: "ddp", props: { picks: ["1", "2"] } }, late + 60_000)).toEqual({

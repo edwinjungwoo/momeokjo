@@ -25,6 +25,8 @@ export const EventPropsSchema = z.strictObject({
   auto: z.literal(true).optional(),
   /** R47 펼친 카드의 "여기로 가요"(한 곳 확정)로 보낸 share */
   confirm: z.literal(true).optional(),
+  /** R61 첫 접속 질문에서 거점을 고른 hub_change */
+  onboarding: z.literal(true).optional(),
 });
 export type EventProps = z.infer<typeof EventPropsSchema>;
 

@@ -1,7 +1,7 @@
 import { isValidRadius } from "./constants";
 import { DEFAULT_HUB_ID, isHubId } from "./hubs";
 import { DEFAULT_FILTERS, type Filters } from "./recommend";
-import { parseHubPath, parseShareParams, type ShareParams } from "./share";
+import { isAdminPath, parseHubPath, parseShareParams, type ShareParams } from "./share";
 
 /** R25: 필터와 선택한 거점 id */
 export type Settings = { filters: Filters; hubId: string };
@@ -55,31 +55,60 @@ export function applyShareParams(s: Settings, share: ShareParams): Settings {
 /** 주소에서 지우는 공유 파라미터 (예전 링크의 lat/lng 포함) */
 const SHARE_KEYS = ["t", "p", "h", "r", "lat", "lng"];
 
+/**
+ * R61: 이 기기가 거점을 이미 골랐는가. 따로 표시를 두지 않고 "설정 저장값이 있다"로 판단한다 —
+ * 거점을 고르면(첫 접속 질문·짧은 링크·거점 칩) 설정을 저장하고, 예전부터 쓰던 사람(필터나 거점을 바꿔 본 사람)도
+ * 저장값이 있어서 그대로 고른 것으로 친다 (모양이 예전 것이거나 깨졌어도 — 저장한 적이 있다는 뜻이라서).
+ * 설정은 안 바꿨어도 첫 방문 안내를 닫은(뽑기를 해 본) 기기(tipSeen)도 기존 사용자로 친다.
+ */
+export const hasHubChoice = (stored: string | null, tipSeen = false): boolean => stored !== null || tipSeen;
+
+/** R61: 링크가 거점을 정해 주는가 — 거점 짧은 링크(/pangyo), 공유 링크(t·예전 p; 거점이 없으면 기본 거점), 예전 h */
+function linkSetsHub(share: ShareParams): boolean {
+  return share.hubId !== null || share.placeIds.length > 0;
+}
+
+/**
+ * R61: 첫 접속 때 "어느 역 근처에서 점심 드세요?"를 물을까. 모두 맞을 때만 묻는다:
+ * 이 기기에 거점 선택이 없고(hasHubChoice), 링크(짧은 링크·공유 링크)로 열지 않았고, 관리 화면이 아님
+ */
+export function needsHubPicker(o: { stored: string | null; tipSeen?: boolean; path: string; query: string }): boolean {
+  if (isAdminPath(o.path) || hasHubChoice(o.stored, o.tipSeen)) return false;
+  return !linkSetsHub(parseShareParams(o.query, o.path));
+}
+
 export type Start = {
   settings: Settings;
   share: ShareParams;
-  /** R43: 북마크 거점 경로로 열었으면 저장할 거점 id */
+  /** R43: 북마크 거점 경로로 열었으면 저장할 거점 id. R61: 거점 선택이 없는 기기에서 공유 링크로 열었으면 그 거점 */
   saveHub: string | null;
   /** 주소창을 바꿀 값 (바꿀 필요가 없으면 null) */
   replaceUrl: string | null;
+  /** R61: 첫 접속이라 거점을 물어야 하는가 */
+  askHub: boolean;
 };
 
 /**
  * R25/R43: 처음 열 때의 설정. 저장값 → 거점 경로(공유 링크가 아니면 저장) → 공유 파라미터(이번에만).
  * 공유 링크(t·p)의 거점 경로는 예전 h처럼 이번에만 쓰고, 주소는 /로 돌린다 (받은 사람의 저장 거점을 덮지 않게).
+ * R61: 단, 거점 선택이 아직 없는 기기면 공유 링크의 거점(없으면 기본 거점)을 이 기기의 거점으로 저장한다 (덮을 저장 거점이 없고, 다시 묻지 않게).
+ * 반경 같은 다른 공유 파라미터는 그래도 이번에만이다.
  */
-export function resolveStart(stored: string | null, pathname: string, search: string): Start {
+export function resolveStart(stored: string | null, pathname: string, search: string, tipSeen = false): Start {
   const share = parseShareParams(search, pathname);
   const pathHub = parseHubPath(pathname);
   const isShare = share.placeIds.length > 0;
-  const saveHub = pathHub !== null && !isShare ? pathHub : null;
+  let saveHub = pathHub !== null && !isShare ? pathHub : null;
   let settings = parseSettings(stored);
   if (saveHub) settings = { ...settings, hubId: saveHub };
   settings = applyShareParams(settings, share);
+  const chosen = hasHubChoice(stored, tipSeen);
+  if (saveHub === null && !chosen && linkSetsHub(share)) saveHub = settings.hubId;
   const q = new URLSearchParams(search);
   const hasParams = SHARE_KEYS.some((k) => q.has(k));
   const replaceUrl = hasParams ? (isShare ? "/" : pathname) : null;
-  return { settings, share, saveHub, replaceUrl };
+  const askHub = needsHubPicker({ stored, tipSeen, path: pathname, query: search });
+  return { settings, share, saveHub, replaceUrl, askHub };
 }
 
 /**

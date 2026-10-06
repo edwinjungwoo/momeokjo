@@ -28,15 +28,19 @@ type State = {
  * R45: 디바운스는 거점을 바꿀 때만 한다. 처음 열 때와 "다시 시도"는 바로 부른다 (첫 목록이 250ms 늦지 않게).
  * R45: 이 거점의 기기 저장본이 있으면 새 목록이 오기 전에 먼저 보여준다 (24시간 안이면 그대로, 넘었으면 흐리게).
  * 새 목록이 오면 바꾸고, 폴링이 끝난 마지막 응답을 다시 저장한다.
+ * R61: enabled가 false(첫 접속 거점 질문이 떠 있음)면 아무것도 부르지 않는다 — 고르기 전 기본 거점 목록을 헛되이 받지 않게.
+ * 켜지면 그 거점을 디바운스 없이 바로 부른다.
  */
-export function usePlaces(hubId: string) {
+export function usePlaces(hubId: string, enabled = true) {
   const [state, setState] = useState<State>({
     data: null, loading: true, error: false, polling: false, hub: null, cache: null,
   });
   const [reloadKey, setReloadKey] = useState(0);
-  const lastHub = useRef(hubId);
+  /** 마지막으로 불러온 거점 (아직 안 불렀으면 null — 첫 요청은 디바운스하지 않는다) */
+  const lastHub = useRef<string | null>(null);
 
   useEffect(() => {
+    if (!enabled) return;
     const ctrl = new AbortController();
     let polls = 0;
     let timer: number | undefined;
@@ -71,7 +75,7 @@ export function usePlaces(hubId: string) {
       }
       setState((s) => mergeCachedPlaces(s, hubId, { data, savedAt: c.savedAt, fresh: c.fresh }));
     });
-    const hubChanged = lastHub.current !== hubId;
+    const hubChanged = lastHub.current !== null && lastHub.current !== hubId;
     lastHub.current = hubId;
     const debounce = window.setTimeout(load, hubChanged ? DEBOUNCE_MS : 0);
     return () => {
@@ -79,7 +83,7 @@ export function usePlaces(hubId: string) {
       window.clearTimeout(debounce);
       window.clearTimeout(timer);
     };
-  }, [hubId, reloadKey]);
+  }, [hubId, reloadKey, enabled]);
 
   const reload = useCallback(() => setReloadKey((k) => k + 1), []);
   const { data, loading, error, polling, cache } = state;

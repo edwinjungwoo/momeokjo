@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { MAX_RADIUS, MIN_RADIUS, PREWARM_RADIUS, isValidRadius } from "../../shared/constants";
 import { DEFAULT_FILTERS } from "../../shared/recommend";
-import { DEFAULT_SETTINGS, applyShareParams, parseSettings, resolveStart, urlAfterHubChange } from "../../shared/settings";
+import {
+  DEFAULT_SETTINGS, applyShareParams, needsHubPicker, parseSettings, resolveStart, urlAfterHubChange,
+} from "../../shared/settings";
 
 describe("settings", () => {
   it("R16: 반경은 100~1000m, 50m 단위이고 상한은 Cron 사전 수집 반경과 같다", () => {
@@ -125,5 +127,66 @@ describe("settings", () => {
     expect(urlAfterHubChange("/")).toBeNull();
     expect(urlAfterHubChange("/brand")).toBeNull();
     expect(urlAfterHubChange("/admin")).toBeNull();
+  });
+  it("R61: 새 기기(저장값 없음)에서 링크 없이 열면 거점을 묻는다", () => {
+    expect(needsHubPicker({ stored: null, path: "/", query: "" })).toBe(true);
+    // 거점을 정하지 않는 파라미터·모르는 경로·모르는 거점은 링크로 치지 않는다
+    expect(needsHubPicker({ stored: null, path: "/", query: "?track=1" })).toBe(true);
+    expect(needsHubPicker({ stored: null, path: "/", query: "?r=700" })).toBe(true);
+    expect(needsHubPicker({ stored: null, path: "/brand", query: "" })).toBe(true);
+    expect(needsHubPicker({ stored: null, path: "/gangnam", query: "" })).toBe(true);
+    expect(needsHubPicker({ stored: null, path: "/", query: "?h=gangnam" })).toBe(true);
+    expect(needsHubPicker({ stored: null, path: "/", query: "?t=abc" })).toBe(true);
+  });
+
+  it("R61: 설정이 저장된 기존 사용자는 묻지 않는다 (예전 저장값·깨진 값 포함 — 저장값이 있으면 고른 것으로 친다)", () => {
+    for (const stored of [
+      JSON.stringify(DEFAULT_SETTINGS),
+      JSON.stringify({ ...DEFAULT_SETTINGS, hubId: "ddp" }),
+      JSON.stringify({ filters: { ...DEFAULT_FILTERS, lunch: 30 }, center: { lat: 37.5, lng: 127 } }),
+      JSON.stringify({ filters: { radius: 700 } }),
+      "{oops",
+    ]) {
+      expect(needsHubPicker({ stored, path: "/", query: "" }), stored).toBe(false);
+    }
+    // 설정은 안 바꿨어도 첫 방문 안내를 닫은(뽑기를 해 본) 기기는 기존 사용자다
+    expect(needsHubPicker({ stored: null, tipSeen: true, path: "/", query: "" })).toBe(false);
+  });
+
+  it("R61: 거점 짧은 링크·공유 링크(t, 예전 p·h)로 열면 묻지 않는다 (링크가 거점을 정한다)", () => {
+    for (const [path, query] of [
+      ["/pangyo", ""],
+      ["/pangyo/", ""],
+      ["/ddp", "?t=1,2&r=700"],
+      ["/", "?t=1"],
+      ["/", "?p=12345"],
+      ["/", "?h=naebang"],
+      ["/", "?t=1&h=ddp&r=300"],
+    ]) {
+      expect(needsHubPicker({ stored: null, path, query }), path + query).toBe(false);
+    }
+  });
+
+  it("R61: 관리 화면(/admin)에서는 묻지 않는다", () => {
+    expect(needsHubPicker({ stored: null, path: "/admin", query: "" })).toBe(false);
+    expect(needsHubPicker({ stored: null, path: "/admin/", query: "?days=7" })).toBe(false);
+  });
+
+  it("R61: 처음 열 때 묻는지(askHub)와, 새 기기에서 링크가 정한 거점은 이 기기의 거점으로 저장한다", () => {
+    expect(resolveStart(null, "/", "")).toMatchObject({ askHub: true, saveHub: null, settings: DEFAULT_SETTINGS });
+    // 짧은 링크는 원래도 저장한다
+    expect(resolveStart(null, "/pangyo", "")).toMatchObject({ askHub: false, saveHub: "pangyo" });
+    // 새 기기의 공유 링크: 거점은 저장하고(반경은 이번에만), 주소는 /로
+    const share = resolveStart(null, "/ddp", "?t=1,2&r=700");
+    expect(share).toMatchObject({ askHub: false, saveHub: "ddp", replaceUrl: "/", settings: { hubId: "ddp", filters: { radius: 700 } } });
+    expect(resolveStart(null, "/", "?t=1&h=naebang")).toMatchObject({ askHub: false, saveHub: "naebang" });
+    // 거점이 없는 예전 공유 링크는 기본 거점을 고른 것으로 친다
+    expect(resolveStart(null, "/", "?p=12345")).toMatchObject({ askHub: false, saveHub: "bongeunsa" });
+    // 이미 고른 기기(저장값 또는 첫 방문 안내를 닫음)의 공유 링크 거점은 예전처럼 이번에만 (R43)
+    const stored = JSON.stringify({ ...DEFAULT_SETTINGS, hubId: "pangyo" });
+    expect(resolveStart(stored, "/ddp", "?t=1")).toMatchObject({ askHub: false, saveHub: null });
+    expect(resolveStart(null, "/ddp", "?t=1", true)).toMatchObject({ askHub: false, saveHub: null });
+    expect(resolveStart(null, "/", "", true)).toMatchObject({ askHub: false, saveHub: null });
+    expect(resolveStart(stored, "/", "")).toMatchObject({ askHub: false, saveHub: null });
   });
 });

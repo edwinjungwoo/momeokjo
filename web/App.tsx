@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { AUTO_DRAW_POLL_WAIT_MS, pollingElapsed, shouldAutoDraw } from "../shared/autoDraw";
 import { haversine, walkMinutes } from "../shared/geo";
-import { hubById } from "../shared/hubs";
+import { DEFAULT_HUB_ID, hubById } from "../shared/hubs";
 import { kstDay } from "../shared/kst";
 import { topPercents } from "../shared/rank";
 import { trioReasons } from "../shared/reasons";
@@ -20,6 +20,7 @@ import { EmptyState, ErrorState } from "./components/EmptyState";
 import { FilterPanel } from "./components/FilterPanel";
 import { FirstTip, useFirstTip } from "./components/FirstTip";
 import { HubChip } from "./components/HubChip";
+import { HubPicker } from "./components/HubPicker";
 import { MapView } from "./components/MapView";
 import { warmPoses } from "./components/Mascot";
 import { PlaceCard } from "./components/PlaceCard";
@@ -67,11 +68,12 @@ const fullOf = (p: ApiPlace): Full | null => (p.detail ? { detail: p.detail, pho
 const byId = (ps: ApiPlace[]) => Object.fromEntries(ps.map((p) => [p.id, p]));
 
 export default function App() {
-  const { settings, share, update } = useSettings();
+  const { settings, share, update, askHub, chooseHub } = useSettings();
   const { filters } = settings;
   const hub = hubById(settings.hubId);
   const center = useMemo<LatLng>(() => ({ lat: hub.lat, lng: hub.lng }), [hub.lat, hub.lng]);
-  const { data, loading, error, polling, fromCache, reload } = usePlaces(hub.id);
+  // R61: 첫 접속 거점 질문이 떠 있는 동안은 기본 거점 목록을 받지 않는다 (고른 뒤 그 거점을 바로 받는다)
+  const { data, loading, error, polling, fromCache, reload } = usePlaces(hub.id, !askHub);
   const now = useNow();
   const personal = usePersonal();
   const { isExcluded, record } = personal;
@@ -93,14 +95,16 @@ export default function App() {
   /** 지금 떠 있는 결과가 자동 뽑기로 뜬 것인가 (닫으면 그날은 끈다) */
   const autoTrio = useRef(false);
 
-  // R35: 세션 시작(app_open)과 이벤트에 붙일 거점. 공유 링크의 거점이 적용된 뒤의 값이다
+  // R35: 세션 시작(app_open)과 이벤트에 붙일 거점. 공유 링크의 거점이 적용된 뒤의 값이다.
+  // R61: 첫 접속 거점 질문이 떠 있으면 고른 뒤에 시작한다 (app_open이 고르기 전 기본 거점으로 남지 않게)
   const openTracked = useRef(false);
   useEffect(() => {
+    if (askHub) return;
     setTrackingHub(hub.id);
     if (openTracked.current) return;
     openTracked.current = true;
     startTracking(hub.id, { radius: filters.radius, party: filters.party });
-  }, [hub.id, filters.radius, filters.party]);
+  }, [hub.id, filters.radius, filters.party, askHub]);
 
   // R37: "여긴 빼줘"한 곳은 후보(목록·지도·뽑기)에 나오지 않는다
   const candidates = useMemo(
@@ -260,6 +264,16 @@ export default function App() {
       if (url !== null) window.history.replaceState(null, "", url);
     }
   };
+  /** R61: 첫 접속 질문에서 고름 → 저장하고 그 거점 목록을 받는다. app_open을 먼저 남기고 hub_change(onboarding)를 남긴다 */
+  const pickHub = (hubId: string) => {
+    chooseHub(hubId);
+    setTrackingHub(hubId);
+    openTracked.current = true;
+    startTracking(hubId, { radius: filters.radius, party: filters.party });
+    track("hub_change", { props: { onboarding: true } });
+  };
+  /** R61: 고르지 않고 닫음(✕·끌어내리기·Esc) → 기본 거점으로 고른 것으로 치고 다시 묻지 않는다 (이벤트는 app_open만) */
+  const dismissHubPicker = useCallback(() => chooseHub(DEFAULT_HUB_ID), [chooseHub]);
   const closeTrio = () => {
     if (shuffle.running) return;
     if (autoTrio.current) {
@@ -485,13 +499,14 @@ export default function App() {
 
   return (
     <div className={`app${trioOpen || cardPlace ? " has-sheet" : ""}${trioOpen ? " has-trio" : ""}`}>
-      <header className="topbar">
+      {/* R61: 질문이 떠 있는 동안 뒤 화면은 누를 수도 포커스할 수도 없다 */}
+      <header className="topbar" inert={askHub}>
         <h1 className="logo">
           <img src="/brand/logo.webp" alt="모먹죠" width={63} height={28} draggable={false} />
         </h1>
         <HubChip hub={hub} onChange={setHub} />
       </header>
-      <main className="main">
+      <main className="main" inert={askHub}>
         <section className="map-wrap">
           <MapView
             center={center}
@@ -541,7 +556,8 @@ export default function App() {
           )}
         </section>
         <aside className="panel">
-          {tip.open && <FirstTip onClose={tip.dismiss} />}
+          {/* R61: 첫 방문 안내는 거점을 고른 뒤에 보인다 (질문 위에 겹치지 않게) */}
+          {tip.open && !askHub && <FirstTip onClose={tip.dismiss} />}
           <FilterPanel filters={filters} onChange={setFilters} />
           {status && <StatusLine status={status} onRetry={error ? reload : undefined} />}
           {list}
@@ -558,6 +574,7 @@ export default function App() {
           </div>
         </aside>
       </main>
+      {askHub && <HubPicker onPick={pickHub} onDismiss={dismissHubPicker} />}
       <Toast msg={toast.msg} onAction={toast.hide} onPause={toast.pause} onResume={toast.resume} />
     </div>
   );
