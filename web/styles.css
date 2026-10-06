@@ -851,6 +851,8 @@ input[type="range"] { width: 100%; height: 44px; margin: 0; accent-color: var(--
 /* 시트가 열려 있으면 시트 아래쪽 행동(공유)을 가리지 않게 위쪽에 띄운다 */
 .has-sheet .toast { bottom: auto; top: calc(var(--topbar-h) + env(safe-area-inset-top) + 12px); animation-name: toast-in-top; }
 .toast.has-action { display: flex; align-items: center; gap: 12px; padding: 6px 6px 6px 18px; }
+/* 이름이 긴 가게: 알림 글자는 최대 2줄(그 뒤는 말줄임), 단어 중간에서도 줄을 바꾸고 되돌리기 버튼은 그대로 */
+.toast > span { min-width: 0; overflow-wrap: anywhere; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; }
 .toast-action { flex: none; min-height: 40px; padding: 0 12px; border: 0; border-radius: 10px; background: rgba(255, 255, 255, 0.14); color: #ffd2bf; font-size: 14px; font-weight: 700; }
 
 /* ── 데스크톱 (≥ 900px): 왼쪽 패널 + 오른쪽 지도 ── */

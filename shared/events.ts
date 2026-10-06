@@ -106,7 +106,7 @@ export type StatsResponse = {
   hourly: number[];
   hubs: { hub: string; users: number; sessions: number; draws: number; shares: number }[];
   top: { placeId: string; name: string | null; count: number }[];
-  /** 결과 카드 번호(1~3)별: 펼침, 카카오맵 열기, 빼줘 */
+  /** 결과 카드 번호(1~3)별: 펼침, 카카오맵 열기, 다음부터 안 보기 */
   ranks: { expand: number[]; kakao: number[]; exclude: number[] };
   /** 뽑기한 세션 중 공유 / 카카오맵까지 간 세션 비율 (뽑기 세션이 없으면 null) */
   conversion: { drawSessions: number; toShare: number | null; toKakao: number | null };

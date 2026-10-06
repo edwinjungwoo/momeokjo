@@ -136,7 +136,7 @@ describe("R59 하루 지표 (liveDayMetrics)", () => {
     expect(m["ddp f_total"]).toBeUndefined();
   });
 
-  it("R58: 가게 — 직접 뽑기 picks(자동 제외), 공유 picks, 빼줘. 거점·종류마다 그날 상위 20곳만", async () => {
+  it("R58: 가게 — 직접 뽑기 picks(자동 제외), 공유 picks, 다음부터 안 보기. 거점·종류마다 그날 상위 20곳만", async () => {
     await seedEvents(scenario());
     const m = metricMap(await liveDayMetrics(env.DB, D));
     expect([m["* pick:1"], m["* pick:7"], m["* pick:4"], m["* pick:12"]]).toEqual([3, 3, 1, undefined]);

@@ -477,7 +477,7 @@ export default function App() {
     track("exclude_place", { placeId: p.id, props: rankOf(p.id) });
     personal.exclude(p.id);
     setFocusId(null);
-    // 받은 후보는 친구가 고른 곳이라 카드는 그대로 두고, 다음 뽑기부터만 뺀다
+    // 이름을 넣은 알림 + 8초 되돌리기
     toast.show(excludeToastText(p.name), undefined, {
       ms: 8000,
       action: {
