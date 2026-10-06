@@ -6,7 +6,7 @@ import type { Reason } from "../../shared/reasons";
 import type { Party } from "../../shared/recommend";
 import type { ApiPlace } from "../../shared/types";
 import { callFirst, openState, priceText, todayHoursText, won } from "../format";
-import { ChevronDown, CloseIcon } from "./Icons";
+import { ChevronDown, CloseIcon, InfoIcon } from "./Icons";
 import { Mascot } from "./Mascot";
 import { RankPill } from "./RankPill";
 import { useSwipeDown } from "./useSwipeDown";
@@ -40,6 +40,9 @@ type Props = {
   onConfirm: (p: ApiPlace) => void;
   onKakao: (p: ApiPlace) => void;
   onExclude: (p: ApiPlace) => void;
+  /** R64: 제목 옆 ⓘ — "모먹죠는 이렇게 골라요" 설명 시트 (시트 자체는 App이 띄운다) */
+  infoOpen: boolean;
+  onInfo: () => void;
 };
 
 /** 56px 썸네일 + 왼쪽 위 번호 (지도 핀 번호와 같다). 사진이 없으면 크림색 자리 + 흐린 마스코트 */
@@ -179,20 +182,20 @@ function TrioCard(props: {
  */
 export function TrioSheet(props: Props) {
   const { slotName, places, received, focusId, detailLoading, ranks, outside, now, drawLabel } = props;
-  const { onDraw, onFocus, onClose, onShare, onConfirm, onKakao } = props;
+  const { onDraw, onFocus, onClose, onShare, onConfirm, onKakao, infoOpen, onInfo } = props;
   const shuffling = slotName !== null;
   const swipe = useSwipeDown(onClose);
   const closeBtn = useRef<HTMLButtonElement>(null);
 
-  // 셔플 중에는 Esc로 닫지 않는다 (M2)
+  // 셔플 중에는 Esc로 닫지 않는다 (M2). R64 설명 시트가 떠 있으면 Esc는 그 시트만 닫는다
   useEffect(() => {
-    if (shuffling) return;
+    if (shuffling || infoOpen) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") onClose();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [onClose, shuffling]);
+  }, [onClose, shuffling, infoOpen]);
 
   const firstId = places[0]?.id;
   useEffect(() => {
@@ -252,9 +255,14 @@ export function TrioSheet(props: Props) {
       <div className="trio-head">
         <Mascot pose="thumbsup" height={44} eager />
         <div className="trio-head-text">
-          <h2 className="trio-title" id="trio-title" tabIndex={-1}>
-            {title}
-          </h2>
+          <div className="trio-title-row">
+            <h2 className="trio-title" id="trio-title" tabIndex={-1}>
+              {title}
+            </h2>
+            <button type="button" className="trio-info" aria-label="모먹죠가 고르는 방법" aria-haspopup="dialog" aria-expanded={infoOpen} onClick={onInfo}>
+              <InfoIcon />
+            </button>
+          </div>
           <p className="trio-hint">눌러서 메뉴와 영업시간을 볼 수 있어요</p>
         </div>
       </div>

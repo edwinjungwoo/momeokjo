@@ -1,3 +1,4 @@
+import { REASON_MIN_REVIEWS } from "./reasons";
 import type { ApiPlace } from "./types";
 
 /** R51: 순위 점수에 섞는 지역 평균의 무게 (리뷰 이만큼 있는 셈) */
@@ -11,8 +12,9 @@ export const RANK_TOP_LIMIT = 30;
  * R51: 대상은 평점이 있는 곳. 순위는 리뷰 수로 보정한 평점 (v × R + m × C) / (v + m)으로 매긴다
  * (v = 리뷰 수(없으면 0), R = 평점, C = 대상 평점 평균, m = 20). 리뷰 6개짜리 5.0점이 1위가 되지 않게 한다.
  * 보이는 별점은 원래 값 그대로이고 이 점수는 순위에만 쓴다. 같은 점수는 더 좋은 순위를 함께 쓴다.
- * 리뷰 수가 없거나 0개인 곳은 대상 수(n)·평균(C)·순위 자리에는 들어가지만 자기 알약은 달지 않는다 (근거가 별점 하나뿐이라).
- * 반환: id → 상위 N% (1~30). 대상이 아니거나, 리뷰 수가 없거나, 30%를 넘으면 넣지 않는다.
+ * 리뷰가 REASON_MIN_REVIEWS(20)개 미만이거나 수를 모르는 곳은 대상 수(n)·평균(C)·순위 자리에는 그대로 들어가지만
+ * 자기 알약은 달지 않는다 ("평점 최고"와 같은 문턱 — 근거가 별점 몇 개뿐이라).
+ * 반환: id → 상위 N% (1~30). 대상이 아니거나, 리뷰가 20개 미만이거나, 30%를 넘으면 넣지 않는다.
  */
 export function topPercents(places: ApiPlace[], radius = Infinity): Map<string, number> {
   const rated: { id: string; rating: number; reviews: number }[] = [];
@@ -33,7 +35,7 @@ export function topPercents(places: ApiPlace[], radius = Infinity): Map<string, 
     if (i > 0 && scored[i].score < scored[i - 1].score) rank = i + 1;
     const top = Math.max(1, Math.ceil((rank / n) * 100));
     if (top > RANK_TOP_LIMIT) break;
-    if (scored[i].reviews > 0) out.set(scored[i].id, top);
+    if (scored[i].reviews >= REASON_MIN_REVIEWS) out.set(scored[i].id, top);
   }
   return out;
 }

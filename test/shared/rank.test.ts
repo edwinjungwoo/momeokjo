@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { REASON_MIN_REVIEWS } from "../../shared/reasons";
 import { RANK_PRIOR_REVIEWS, RANK_TOP_LIMIT, topPercents } from "../../shared/rank";
 import { apiPlace } from "../helpers/apiPlace";
 
@@ -37,8 +38,8 @@ describe("R34 근처 상위 N%", () => {
     const m = topPercents(ps);
     // 대상은 평점이 있는 12곳, C = 38.2 / 12 ≈ 3.18
     // top (50×4.9 + 20C)/70 ≈ 4.41 > few (4×5.0 + 20C)/24 ≈ 3.49 > nocount = C ≈ 3.18 > x0 (50×3.0 + 20C)/70 ≈ 3.05
-    // nocount는 3위(25%)를 차지하지만 리뷰 수가 없어서 알약은 달지 않는다
-    expect([...m.entries()]).toEqual([["top", 9], ["few", 17]]);
+    // nocount는 3위(25%), few는 2위(17%)를 차지하지만 리뷰가 20개 미만이거나 없어서 알약은 달지 않는다
+    expect([...m.entries()]).toEqual([["top", 9]]);
   });
 
   it("R51: 리뷰 수가 없거나 0개인 곳은 대상 수(n)와 평균(C)에는 들어가지만 자기 알약은 달지 않는다", () => {
@@ -61,12 +62,32 @@ describe("R34 근처 상위 N%", () => {
     ];
     const m = topPercents(ps);
     expect(m.get("solid")).toBe(10);
-    expect(m.get("five")).toBe(20);
+    // five는 2위(20%)지만 리뷰가 20개 미만이라 알약은 없다
+    expect(m.has("five")).toBe(false);
     expect(ps[0].detail?.rating).toBe(5.0);
   });
 
+  it("R34/R51: 알약은 리뷰가 20개 이상(REASON_MIN_REVIEWS, \"평점 최고\"와 같은 문턱)인 곳에만 — 적은 곳도 대상 수·평균·순위 자리에는 그대로 들어간다", () => {
+    expect(REASON_MIN_REVIEWS).toBe(20);
+    const build = (fiveReviews: number | null) => [
+      rated("five", 5.0, fiveReviews), rated("a", 4.9, 300), rated("b", 4.7, 300),
+      ...Array.from({ length: 7 }, (_, i) => rated(`x${i}`, 3.5, 100)),
+    ];
+    // 5.0이 리뷰 6개짜리면 1~3위 안에 있어도(보정 점수 순서: a > b > five) 알약이 없고, a·b의 순위는 그대로다
+    const few = topPercents(build(6));
+    expect([...few.entries()]).toEqual([["a", 10], ["b", 20]]);
+    // 19개는 없고 20개부터 있다
+    expect(topPercents(build(19)).has("five")).toBe(false);
+    const edge = topPercents(build(20));
+    expect(edge.has("five")).toBe(true);
+    expect(topPercents(build(null)).has("five")).toBe(false);
+    // 리뷰가 적은 곳을 모집단에서 빼지 않는다: 같은 순위 자리를 쓰므로 five가 있어도 a·b의 N%는 같다
+    expect(edge.get("a")).toBe(few.get("a"));
+    expect(edge.get("b")).toBe(few.get("b"));
+  });
+
   it("R51: 같은 평점·같은 리뷰 수는 같은 점수라 더 좋은 순위를 함께 쓰고, 평점이 같아도 리뷰가 많은 쪽이 위", () => {
-    const ps = [rated("a", 4.5, 200), rated("b", 4.5, 200), rated("c", 4.5, 10), ...Array.from({ length: 7 }, (_, i) => rated(`x${i}`, 3.5, 50))];
+    const ps = [rated("a", 4.5, 200), rated("b", 4.5, 200), rated("c", 4.5, 25), ...Array.from({ length: 7 }, (_, i) => rated(`x${i}`, 3.5, 50))];
     const m = topPercents(ps);
     expect(m.get("a")).toBe(10);
     expect(m.get("b")).toBe(10);

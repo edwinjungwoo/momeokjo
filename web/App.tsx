@@ -29,6 +29,7 @@ import { PlaceList } from "./components/PlaceList";
 import { SkeletonList } from "./components/Skeleton";
 import { StatusLine } from "./components/StatusLine";
 import { Toast, useToast } from "./components/Toast";
+import { PickInfo } from "./components/PickInfo";
 import { TrioSheet } from "./components/TrioSheet";
 import { refreshNote, statusOf } from "./format";
 import { usePersonal } from "./personal";
@@ -504,6 +505,13 @@ export default function App() {
   const note = data && data.center.lat === hub.lat && data.center.lng === hub.lng ? refreshNote(data, hub.refreshDay) : null;
   /** 셔플 중(고르는 중 시트)이거나 결과 3곳 시트가 떠 있음 — 시트 아래 줄이 뽑기 바를 대신한다 (.has-trio) */
   const trioOpen = selected === null && (shuffle.display !== null || trioPlaces.length > 0);
+  // R64: "모먹죠는 이렇게 골라요" 설명 시트. 결과 시트가 사라지면 같이 닫는다
+  const [pickInfo, setPickInfo] = useState(false);
+  const infoOpen = pickInfo && trioOpen;
+  useEffect(() => {
+    if (!trioOpen) setPickInfo(false);
+  }, [trioOpen]);
+  const closeInfo = useCallback(() => setPickInfo(false), []);
   const drawLabel = shuffle.running ? "고르는 중…" : trio?.source === "drawn" ? "다시 뽑기" : "모먹죠?";
 
   let list: ReactNode;
@@ -538,13 +546,13 @@ export default function App() {
     // R61: 첫 접속 질문이 떠 있으면 토스트(예: 공유된 가게를 못 찾음)를 위쪽에 띄워 거점 줄을 가리지 않게 한다 (.has-sheet)
     <div className={`app${trioOpen || cardPlace || pickerOpen ? " has-sheet" : ""}${trioOpen ? " has-trio" : ""}`}>
       {/* R61: 질문이 떠 있는 동안 뒤 화면은 누를 수도 포커스할 수도 없다 */}
-      <header className="topbar" inert={pickerOpen}>
+      <header className="topbar" inert={pickerOpen || infoOpen}>
         <h1 className="logo">
           <img src="/brand/logo.webp" alt="모먹죠" width={63} height={28} draggable={false} />
         </h1>
         <HubChip hub={hub} onChange={setHub} buttonRef={hubButton} />
       </header>
-      <main className="main" inert={pickerOpen}>
+      <main className="main" inert={pickerOpen || infoOpen}>
         <section className="map-wrap">
           <MapView
             center={center}
@@ -590,6 +598,8 @@ export default function App() {
               onConfirm={onConfirm}
               onKakao={onKakao}
               onExclude={onExclude}
+              infoOpen={infoOpen}
+              onInfo={() => setPickInfo(true)}
             />
           )}
         </section>
@@ -614,6 +624,7 @@ export default function App() {
         </aside>
       </main>
       {pickerOpen && <HubPicker onPick={pickHub} onDismiss={dismissHubPicker} />}
+      {infoOpen && <PickInfo onClose={closeInfo} />}
       <p className="sr-only" role="status" aria-live="polite">
         {hubNotice}
       </p>

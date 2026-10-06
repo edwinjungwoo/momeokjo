@@ -36,3 +36,13 @@ export function CheckIcon({ size = 16, className }: P) {
     </svg>
   );
 }
+
+export function InfoIcon({ size = 18, className }: P) {
+  return (
+    <svg className={className} width={size} height={size} viewBox="0 0 18 18" aria-hidden="true" focusable="false">
+      <circle cx="9" cy="9" r="7.25" fill="none" stroke="currentColor" strokeWidth="1.5" />
+      <path d="M9 8.2v4.1" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+      <circle cx="9" cy="5.6" r="1" fill="currentColor" />
+    </svg>
+  );
+}

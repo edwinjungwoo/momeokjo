@@ -12,7 +12,7 @@ export type Reason = "제일 가까워요" | "평점 최고" | "가성비" | "�
 export const NEW_PLACE_MIN_SEEN = 15;
 export const TOP_RATING_MIN = 4.0;
 export const VALUE_RATING_MIN = 3.8;
-/** "평점 최고"·"가성비"는 평점을 근거로 하니, 리뷰가 이만큼은 있어야 붙인다 (리뷰 몇 개짜리 5.0은 믿기 어려워서) */
+/** "평점 최고"·"가성비"와 R34 "근처 상위 N%" 알약(shared/rank.ts)은 평점을 근거로 하니, 리뷰가 이만큼은 있어야 붙인다 (리뷰 몇 개짜리 5.0은 믿기 어려워서) */
 export const REASON_MIN_REVIEWS = 20;
 /** 예산 필터(R18)와 같은 경계: 1만 이하 / 1.5만 이하 / 2만 이하 / 그 위 */
 const PRICE_BANDS = [10000, 15000, 20000];
