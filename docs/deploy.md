@@ -123,7 +123,7 @@ git add docs/deploys.md && git commit -m "docs(deploy): <날짜> 배포 기록" 
 ## 손으로 D1을 고칠 때 (Task 34)
 
 - `places` 행을 손으로 지우면(`DELETE FROM places …`) 그 가게는 다시 "미수집"이 돼요. Cron은 미수집을 앞선 커서(`meta.unfetched_from`)부터 찾아서, 커서 앞 칸에 다시 생긴 미수집은 보지 못해요. **같이 커서와 "미수집 확인 끝" 표시도 지워요** (다음 Cron이 처음부터 다시 찾아요):
-  `npx wrangler d1 execute momeokjo --remote --command "DELETE FROM meta WHERE key IN ('unfetched_from', 'unfetched_cleared_at')"`
+  `npx wrangler d1 execute momeokjo --remote --command "DELETE FROM meta WHERE key = 'unfetched_from'"` (예전 `unfetched_cleared_at` 키는 더 쓰지 않아요 — 남아 있어도 무시해요)
 - 격자 ID(`tile_places`)를 앱이 아닌 SQL로 넣을 때도 같아요 — 앱(`replaceTilePlaces`)은 `tiles_changed_at`을 올려서 커서가 저절로 처음부터 읽어요.
 - 상세 보충 양은 `wrangler.jsonc` vars `DETAIL_BATCH_SIZE`(지금 4)·`DETAIL_CHAR_BUDGET`(지금 200000)로 정해요. 운영 Workers 로그의 cpuTime(warm·Cron)과 Cron 로그 줄의 `deferred`·`chars`를 보고 올려요.
 
