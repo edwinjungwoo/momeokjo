@@ -105,7 +105,7 @@ fi
 echo "== 목록 (거점마다 1번)"
 ELEM_KEYS='["category","detail","distance","group","id","lat","lng","name","photoUrl","url","walkMinutes"]'
 DETAIL_KEYS='["bookable","groupFriendly","hours","menus","price","rating","reviewCount","soloFriendly","strengths"]'
-TOP_KEYS='["center","detailsFrozenSince","detailsNewestAt","incompleteTiles","pending","places","radius","stale"]'
+TOP_KEYS='["center","detailsFrozenSince","detailsNewestAt","detailsPaused","incompleteTiles","pending","places","radius","stale"]'
 for h in "${hubs[@]}"; do
   read -r id _ _ <<<"$h"
   r=500
@@ -119,8 +119,9 @@ for h in "${hubs[@]}"; do
   f="$tmp/places-$id.body"
   n=$(jq '.places | length' "$f")
   if [ "$n" -gt 0 ]; then ok "$id ${r}m 200, ${n}곳"; else bad "$id ${r}m 200인데 0곳"; fi
-  jq -e --argjson r "$r" '.radius == $r and ([.places[].distance] | all(. <= $r))' "$f" >/dev/null \
-    && ok "$id 반경 ${r}m 안의 가게만" || bad "$id 응답 반경이 다르거나 반경 밖 가게가 있음"
+  # R42: 서버는 반경 값과 상관없이 거점의 1000m 목록 하나만 계산·캐시한다(화면이 반경으로 거름)
+  jq -e '.radius == 1000 and ([.places[].distance] | all(. <= 1000))' "$f" >/dev/null \
+    && ok "$id 1000m 목록(반경 ${r} 요청)" || bad "$id 응답 반경이 1000이 아니거나 1000m 밖 가게가 있음"
   jq -e --argjson top "$TOP_KEYS" --argjson el "$ELEM_KEYS" --argjson de "$DETAIL_KEYS" \
     '(keys == $top) and (([.places[] | keys[]] | unique) - $el | length == 0)
      and (([.places[] | .detail // {} | keys[]] | unique) - $de | length == 0)' "$f" >/dev/null \
