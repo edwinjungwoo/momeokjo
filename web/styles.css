@@ -605,6 +605,57 @@ input[type="range"] { width: 100%; height: 44px; margin: 0; accent-color: var(--
 /* R48: 펼친 카드의 정보 확인 시점("N일 전 확인") — 시트 아래 출처 글자와 같은 크기·색 */
 .trio-source { margin: -4px 0 4px; font-size: 11px; line-height: 16px; color: var(--text-3); }
 
+/* ── 첫 접속 거점 고르기 (R61): 결과 시트와 같은 바텀 시트. 모바일은 화면 맨 아래, 데스크톱은 가운데 창 ── */
+.picker-scrim { position: fixed; inset: 0; z-index: 60; background: rgba(60, 47, 37, 0.32); animation: scrim-in 0.2s ease-out; }
+.sheet.picker {
+  bottom: 0;
+  z-index: 61;
+  --pb: calc(12px + env(safe-area-inset-bottom));
+  display: flex;
+  flex-direction: column;
+  /* 거점이 늘면 목록만 스크롤하고 제목은 그대로 둔다 */
+  overflow: hidden;
+  max-height: calc(100vh - env(safe-area-inset-top) - 24px);
+  max-height: calc(100dvh - env(safe-area-inset-top) - 24px);
+}
+.picker .sheet-grab { flex: none; }
+.picker-head { flex: none; display: flex; align-items: center; gap: 12px; padding: 0 40px 12px 0; }
+.picker-head-text { flex: 1; min-width: 0; }
+.picker-title { font-size: 20px; font-weight: 700; letter-spacing: -0.03em; line-height: 1.3; word-break: keep-all; }
+.picker-title:focus { outline: none; }
+.picker-hint { margin-top: 2px; font-size: 13px; color: var(--text-3); word-break: keep-all; }
+/* 누르는 줄은 양옆 12px 넓힌다 (시트 안쪽 여백 20px 안이라 넘치지 않는다) */
+.picker-list {
+  list-style: none;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 2px;
+  min-height: 0;
+  margin: 0 -12px;
+  padding: 0 0 4px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.picker-row {
+  width: 100%;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 56px;
+  padding: 8px 12px;
+  border: 0;
+  border-radius: 14px;
+  background: none;
+  text-align: left;
+  font-size: 17px;
+  font-weight: 600;
+  transition: transform 0.18s var(--spring);
+}
+.picker-row:active { background: var(--fill); transform: scale(0.98); transition-duration: 0.1s; }
+.picker-pin { color: var(--accent); }
+.picker-name { min-width: 0; overflow-wrap: anywhere; word-break: keep-all; }
+
 /* ── 거점 칩 (R24) ───────────────────────────── */
 .hub-chip { position: relative; min-width: 0; max-width: 62vw; }
 .hub-chip > button {
@@ -819,6 +870,16 @@ input[type="range"] { width: 100%; height: 44px; margin: 0; accent-color: var(--
     box-shadow: var(--shadow-pop);
   }
   .sheet-grab, .menus-more { display: none; }
+  /* R61: 데스크톱은 화면 가운데 창 */
+  .sheet.picker {
+    position: fixed;
+    inset: 0;
+    width: 400px;
+    height: fit-content;
+    max-height: calc(100vh - 64px);
+    margin: auto;
+    padding: 20px 20px 12px;
+  }
   .hero { max-height: none; }
   /* 데스크톱은 더보기 없이 최대 5개 (R28) */
   .menus:not(.is-open) li:nth-child(n + 4) { display: flex; }
@@ -865,6 +926,7 @@ input[type="range"] { width: 100%; height: 44px; margin: 0; accent-color: var(--
   .draw:hover { background: var(--accent-press); }
   .draw.is-secondary:hover { background: var(--fill-press); }
   .trio-row:hover { background: #fbf7f3; }
+  .picker-row:hover { background: #fbf7f3; }
   .trio-card.is-open .trio-row:hover { background: none; }
 }
 
@@ -883,6 +945,7 @@ input[type="range"] { width: 100%; height: 44px; margin: 0; accent-color: var(--
 @keyframes progress { to { left: 100%; } }
 @keyframes shimmer { from { background-position: 100% 0; } to { background-position: 0 0; } }
 @keyframes blink { 50% { opacity: 0.3; } }
+@keyframes scrim-in { from { opacity: 0; } }
 @keyframes fade-up { from { transform: translateY(6px); opacity: 0; } }
 @keyframes toast-in { from { transform: translate(-50%, 8px); opacity: 0; } }
 @keyframes toast-in-top { from { transform: translate(-50%, -8px); opacity: 0; } }

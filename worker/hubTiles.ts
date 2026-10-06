@@ -9,3 +9,15 @@ export function hubTileKeys(): ReadonlySet<string> {
   cached ??= new Set(HUBS.flatMap((h) => tilesCoveringCircle(h, PREWARM_RADIUS)));
   return cached;
 }
+
+let byTile: ReadonlyMap<string, string[]> | null = null;
+
+/** R56: 이 격자를 PREWARM_RADIUS 격자로 덮는 거점 id들 (없으면 빈 배열, isolate마다 한 번 계산) */
+export function hubsOfTile(key: string): string[] {
+  if (!byTile) {
+    const m = new Map<string, string[]>();
+    for (const h of HUBS) for (const k of tilesCoveringCircle(h, PREWARM_RADIUS)) m.set(k, [...(m.get(k) ?? []), h.id]);
+    byTile = m;
+  }
+  return byTile.get(key) ?? [];
+}

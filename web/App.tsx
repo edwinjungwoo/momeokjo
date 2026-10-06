@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { AUTO_DRAW_POLL_WAIT_MS, pollingElapsed, shouldAutoDraw } from "../shared/autoDraw";
 import { haversine, walkMinutes } from "../shared/geo";
-import { hubById } from "../shared/hubs";
+import { DEFAULT_HUB_ID, hubById } from "../shared/hubs";
 import { kstDay } from "../shared/kst";
 import { topPercents } from "../shared/rank";
 import { trioReasons } from "../shared/reasons";
@@ -9,17 +9,19 @@ import type { Seen } from "../shared/seen";
 import {
   TRIO_SIZE, drawTrio, filterPlaces, relaxNotice, relaxToFill, relaxedBy, sortPlaces, type Filters,
 } from "../shared/recommend";
-import { urlAfterHubChange } from "../shared/settings";
-import { shareConfirmText, shareText } from "../shared/share";
+import { showHubPicker, urlAfterHubChange } from "../shared/settings";
+import { shareConfirmText, shareText, toParticle } from "../shared/share";
 import { createTapGate } from "../shared/tapGate";
 import type { ApiDetail, ApiPlace, LatLng } from "../shared/types";
 import { filterProps, setTrackingHub, startTracking, track, trackFilters } from "./analytics";
 import { fetchPlace } from "./api";
+import { trackHubPicked } from "./onboarding";
 import { autoDrawOffDay, autoDrawnThisSession, markAutoDrawn, turnOffAutoDraw, useInteracted } from "./autoDraw";
 import { EmptyState, ErrorState } from "./components/EmptyState";
 import { FilterPanel } from "./components/FilterPanel";
 import { FirstTip, useFirstTip } from "./components/FirstTip";
 import { HubChip } from "./components/HubChip";
+import { HubPicker } from "./components/HubPicker";
 import { MapView } from "./components/MapView";
 import { warmPoses } from "./components/Mascot";
 import { PlaceCard } from "./components/PlaceCard";
@@ -67,11 +69,13 @@ const fullOf = (p: ApiPlace): Full | null => (p.detail ? { detail: p.detail, pho
 const byId = (ps: ApiPlace[]) => Object.fromEntries(ps.map((p) => [p.id, p]));
 
 export default function App() {
-  const { settings, share, update } = useSettings();
+  const { settings, share, update, askHub, chooseHub } = useSettings();
   const { filters } = settings;
   const hub = hubById(settings.hubId);
   const center = useMemo<LatLng>(() => ({ lat: hub.lat, lng: hub.lng }), [hub.lat, hub.lng]);
-  const { data, loading, error, polling, fromCache, reload } = usePlaces(hub.id);
+  // R61: 첫 접속 거점을 아직 안 골랐으면(질문이 떠 있거나, 거점 없는 공유 링크라 받은 시트 뒤로 미뤘거나) 기본 거점 목록을 받지 않는다.
+  // 고른 뒤 그 거점을 바로 받는다
+  const { data, loading, error, polling, fromCache, reload } = usePlaces(hub.id, !askHub);
   const now = useNow();
   const personal = usePersonal();
   const { isExcluded, record } = personal;
@@ -93,14 +97,18 @@ export default function App() {
   /** 지금 떠 있는 결과가 자동 뽑기로 뜬 것인가 (닫으면 그날은 끈다) */
   const autoTrio = useRef(false);
 
-  // R35: 세션 시작(app_open)과 이벤트에 붙일 거점. 공유 링크의 거점이 적용된 뒤의 값이다
+  // R35: 세션 시작(app_open)과 이벤트에 붙일 거점. 공유 링크의 거점이 적용된 뒤의 값이다.
+  // R61: 첫 접속 거점 질문을 보일 거면 고른 뒤에 시작한다 (app_open이 고르기 전 기본 거점으로 남지 않게).
+  // 거점 없는 공유 링크는 받은 곳(share_open)을 바로 세야 해서 지금 시작한다 (질문은 받은 시트 뒤에)
   const openTracked = useRef(false);
+  const deferTracking = askHub && share.placeIds.length === 0;
   useEffect(() => {
+    if (deferTracking) return;
     setTrackingHub(hub.id);
     if (openTracked.current) return;
     openTracked.current = true;
     startTracking(hub.id, { radius: filters.radius, party: filters.party });
-  }, [hub.id, filters.radius, filters.party]);
+  }, [hub.id, filters.radius, filters.party, deferTracking]);
 
   // R37: "여긴 빼줘"한 곳은 후보(목록·지도·뽑기)에 나오지 않는다
   const candidates = useMemo(
@@ -191,6 +199,7 @@ export default function App() {
 
   // R23′: 공유 링크의 가게는 목록과 상관없이 바로 id로 받아 온다 (목록이 실패해도 보여준다)
   const shareStarted = useRef(false);
+  const [shareSettled, setShareSettled] = useState(false);
   const { show: showToast } = toast;
   useEffect(() => {
     const ids = share.placeIds;
@@ -200,6 +209,8 @@ export default function App() {
     const ctrl = new AbortController();
     shareCtrl.current = ctrl;
     void Promise.allSettled(ids.map((id) => fetchPlace(id, ctrl.signal))).then((results) => {
+      // R61: 멈췄어도(뽑기 등) 다 불러온 것으로 친다 — 미뤄 둔 거점 질문이 영영 안 뜨지 않게
+      setShareSettled(true);
       if (ctrl.signal.aborted) return;
       const found = results.flatMap((r) => (r.status === "fulfilled" ? [r.value] : []));
       if (found.length === 0) {
@@ -250,7 +261,9 @@ export default function App() {
   };
   const setHub = (hubId: string) => {
     clearTrio();
-    update((s) => ({ ...s, hubId }));
+    // R61: 미뤄 둔 첫 접속 질문 전에 거점 칩으로 골랐으면 그게 답이다 (다시 묻지 않는다)
+    if (askHub) chooseHub(hubId);
+    else update((s) => ({ ...s, hubId }));
     setSelected(null);
     if (hubId !== hub.id) {
       setTrackingHub(hubId);
@@ -260,6 +273,32 @@ export default function App() {
       if (url !== null) window.history.replaceState(null, "", url);
     }
   };
+  /** R61: 첫 접속 질문에서 고름 → 저장하고 그 거점 목록을 받는다. app_open을 먼저 남기고 hub_change(onboarding)를 남긴다 */
+  const pickHub = (hubId: string) => {
+    chooseHub(hubId);
+    trackHubPicked(hubId, { radius: filters.radius, party: filters.party }, openTracked.current);
+    openTracked.current = true;
+  };
+  /** R61: 고르지 않고 닫음(✕·끌어내리기·Esc) → 기본 거점으로 고른 것으로 치고 다시 묻지 않는다 (이벤트는 app_open만) */
+  const dismissHubPicker = useCallback(() => chooseHub(DEFAULT_HUB_ID), [chooseHub]);
+  // R61: 거점 없는 공유 링크면 받은 곳을 다 불러오고 받은 시트를 닫은 뒤에 묻는다
+  const pickerOpen = showHubPicker({
+    askHub, shareLink: share.placeIds.length > 0, shareSettled, sheetOpen: trio !== null || selected !== null,
+  });
+  // R61: 질문이 닫히면 포커스를 거점 칩으로 옮기고, 고른 거점을 스크린리더에 조용히 알린다
+  const hubButton = useRef<HTMLButtonElement>(null);
+  const [hubNotice, setHubNotice] = useState("");
+  const pickerWasOpen = useRef(false);
+  useEffect(() => {
+    if (pickerOpen) {
+      pickerWasOpen.current = true;
+      return;
+    }
+    if (!pickerWasOpen.current) return;
+    pickerWasOpen.current = false;
+    hubButton.current?.focus({ preventScroll: true });
+    setHubNotice(`${hub.name}${toParticle(hub.name)} 볼게요`);
+  }, [pickerOpen, hub.name]);
   const closeTrio = () => {
     if (shuffle.running) return;
     if (autoTrio.current) {
@@ -276,6 +315,13 @@ export default function App() {
   const onDraw = ({ auto = false }: { auto?: boolean } = {}) => {
     if (shuffle.running) return;
     if (!auto && !drawGate.current(performance.now())) return;
+    // R61: 거점 없는 공유 링크로 열어 아직 거점을 안 골랐으면 받은 시트를 닫아 거점부터 묻는다 (목록은 고른 뒤에 받는다)
+    if (askHub && !auto) {
+      setTrio(null);
+      setFocusId(null);
+      setSelected(null);
+      return;
+    }
     if (tip.open && !auto) tip.dismiss();
     // 아직 오는 중인 공유 링크 결과가 방금 뽑은 결과를 덮어쓰지 않게 한다
     shareCtrl.current?.abort();
@@ -487,14 +533,16 @@ export default function App() {
   }
 
   return (
-    <div className={`app${trioOpen || cardPlace ? " has-sheet" : ""}${trioOpen ? " has-trio" : ""}`}>
-      <header className="topbar">
+    // R61: 첫 접속 질문이 떠 있으면 토스트(예: 공유된 가게를 못 찾음)를 위쪽에 띄워 거점 줄을 가리지 않게 한다 (.has-sheet)
+    <div className={`app${trioOpen || cardPlace || pickerOpen ? " has-sheet" : ""}${trioOpen ? " has-trio" : ""}`}>
+      {/* R61: 질문이 떠 있는 동안 뒤 화면은 누를 수도 포커스할 수도 없다 */}
+      <header className="topbar" inert={pickerOpen}>
         <h1 className="logo">
           <img src="/brand/logo.webp" alt="모먹죠" width={63} height={28} draggable={false} />
         </h1>
-        <HubChip hub={hub} onChange={setHub} />
+        <HubChip hub={hub} onChange={setHub} buttonRef={hubButton} />
       </header>
-      <main className="main">
+      <main className="main" inert={pickerOpen}>
         <section className="map-wrap">
           <MapView
             center={center}
@@ -544,7 +592,8 @@ export default function App() {
           )}
         </section>
         <aside className="panel">
-          {tip.open && <FirstTip onClose={tip.dismiss} />}
+          {/* R61: 첫 방문 안내는 거점을 고른 뒤에 보인다 (질문 위에 겹치지 않게) */}
+          {tip.open && !askHub && <FirstTip onClose={tip.dismiss} />}
           <FilterPanel filters={filters} onChange={setFilters} />
           {status && <StatusLine status={status} onRetry={error ? reload : undefined} />}
           {list}
@@ -561,6 +610,10 @@ export default function App() {
           </div>
         </aside>
       </main>
+      {pickerOpen && <HubPicker onPick={pickHub} onDismiss={dismissHubPicker} />}
+      <p className="sr-only" role="status" aria-live="polite">
+        {hubNotice}
+      </p>
       <Toast msg={toast.msg} onAction={toast.hide} onPause={toast.pause} onResume={toast.resume} />
     </div>
   );

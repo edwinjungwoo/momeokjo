@@ -1,4 +1,4 @@
-import { placesCacheEntry, placesCacheEvictions, readPlacesCache, type CachedPlacesView } from "../shared/placesCache";
+import { placesCacheEntry, placesCacheEvictions, readPlacesCache, usableEtag, type CachedPlacesView } from "../shared/placesCache";
 
 /**
  * R45: 거점별 마지막 목록 응답을 IndexedDB에 둔다 (원문 0.6~1.0MB × 최대 3곳이라 localStorage 5MB에는 빠듯하다).
@@ -71,6 +71,31 @@ const done = <T>(req: IDBRequest<T>) =>
     req.onerror = () => reject(req.error);
   });
 
+/**
+ * R56: 거점별 ETag만 localStorage의 작은 키에 따로 둔다 — 다시 열 때 저장본(~1MB)을 IndexedDB에서 읽고 해석하기를 기다리지 않고
+ * 바로 If-None-Match로 요청하려고. 저장본과 어긋날 수 있으므로 304면 저장본의 ETag가 같은지 다시 본다 (web/api.ts loadPlaces).
+ * 못 쓰면(사생활 보호 모드 등) 조용히 없는 셈 친다
+ */
+const etagKey = (hub: string) => `mmj-places-etag:${hub}`;
+
+export function readCachedEtag(hub: string): string | null {
+  try {
+    return usableEtag(localStorage.getItem(etagKey(hub)));
+  } catch {
+    return null;
+  }
+}
+
+export function writeCachedEtag(hub: string, etag: string | null | undefined): void {
+  try {
+    const v = usableEtag(etag);
+    if (v) localStorage.setItem(etagKey(hub), v);
+    else localStorage.removeItem(etagKey(hub));
+  } catch {
+    /* 저장하지 못해도 화면은 그대로 */
+  }
+}
+
 /** 이 거점의 쓸 수 있는 저장본 (없거나 못 읽으면 null) */
 export async function readCachedPlaces(hub: string): Promise<CachedPlacesView | null> {
   let p: Promise<IDBDatabase | null> | null = null;
@@ -87,12 +112,12 @@ export async function readCachedPlaces(hub: string): Promise<CachedPlacesView | 
   }
 }
 
-/** 응답 원문을 저장하고, 오래된 거점은 지운다 (최근 3곳) */
-export async function saveCachedPlaces(hub: string, text: string): Promise<void> {
+/** 응답 원문(과 R56 ETag)을 저장하고, 오래된 거점은 지운다 (최근 3곳) */
+export async function saveCachedPlaces(hub: string, text: string, etag?: string | null): Promise<void> {
   let p: Promise<IDBDatabase | null> | null = null;
   let db: IDBDatabase | null = null;
   try {
-    const entry = placesCacheEntry(hub, text, Date.now());
+    const entry = placesCacheEntry(hub, text, Date.now(), etag);
     p = openDb();
     db = await p;
     if (!db) return;
@@ -100,6 +125,7 @@ export async function saveCachedPlaces(hub: string, text: string): Promise<void>
     // 너무 커서 못 저장하면 옛 저장본도 지운다 (새 응답보다 오래된 목록이 남지 않게)
     if (entry) store.put(entry);
     else store.delete(hub);
+    writeCachedEtag(hub, entry?.etag);
     if (!entry) return;
     // 원문(거점당 ~1MB)은 읽지 않고 저장 시각 인덱스의 키만 훑는다
     const meta: { hub: string; savedAt: number }[] = [];
@@ -109,7 +135,10 @@ export async function saveCachedPlaces(hub: string, text: string): Promise<void>
         const c = cur.result;
         if (!c) {
           // 트랜잭션이 살아 있는 이 콜백 안에서 지운다
-          for (const h of placesCacheEvictions(meta, hub)) store.delete(h);
+          for (const h of placesCacheEvictions(meta, hub)) {
+            store.delete(h);
+            writeCachedEtag(h, null);
+          }
           return resolve();
         }
         meta.push({ hub: String(c.primaryKey), savedAt: Number(c.key) });

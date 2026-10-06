@@ -27,6 +27,8 @@ export const EventPropsSchema = z.strictObject({
   confirm: z.literal(true).optional(),
   /** R58 R41 완화로 조건 밖 가게가 섞인 draw·redraw */
   relaxed: z.literal(true).optional(),
+  /** R61 첫 접속 질문에서 거점을 고른 hub_change */
+  onboarding: z.literal(true).optional(),
 });
 export type EventProps = z.infer<typeof EventPropsSchema>;
 

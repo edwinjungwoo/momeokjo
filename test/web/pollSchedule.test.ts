@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { PlacesResponse } from "../../shared/types";
-import { MAX_POLLS, pollDelayMs, shouldPoll } from "../../web/pollSchedule";
+import { HUB_CHANGE_DEBOUNCE_MS, MAX_POLLS, loadDelayMs, pollDelayMs, shouldPoll } from "../../web/pollSchedule";
 
 /** worker/app.ts PLACES_PENDING_CACHE_MS (화면 tsconfig는 worker 타입을 모른다 — 값만 맞춘다, api.test.ts가 서버 쪽 값을 고정) */
 const PLACES_PENDING_CACHE_MS = 10_000;
@@ -35,5 +35,19 @@ describe("R29 목록 폴링 간격", () => {
     delete old.detailsPaused;
     expect(shouldPoll(old as PlacesResponse)).toBe(false);
     expect(shouldPoll({ ...old, detailsFrozenSince: null } as PlacesResponse)).toBe(true);
+  });
+});
+
+describe("R29/R61 목록 첫 요청", () => {
+  it("R61: 꺼져 있으면(첫 접속 거점 질문 중) 부르지 않는다", () => {
+    expect(loadDelayMs(null, "bongeunsa", false)).toBeNull();
+    expect(loadDelayMs("ddp", "pangyo", false)).toBeNull();
+  });
+
+  it("R45/R61: 처음 부를 때(질문에서 고른 직후 포함)와 같은 거점 다시 시도는 바로, 거점을 바꿀 때만 250ms 디바운스", () => {
+    expect(HUB_CHANGE_DEBOUNCE_MS).toBe(250);
+    expect(loadDelayMs(null, "pangyo", true)).toBe(0);
+    expect(loadDelayMs("pangyo", "pangyo", true)).toBe(0);
+    expect(loadDelayMs("bongeunsa", "pangyo", true)).toBe(250);
   });
 });
