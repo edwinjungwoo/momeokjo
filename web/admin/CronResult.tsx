@@ -5,7 +5,7 @@ import { num } from "./format";
 const STAGE: Record<string, string> = { expired: "만료 갱신", unfetched: "미수집 찾기", rollup: "집계" };
 /** 건너뛴 이유 */
 const SKIPPED: Record<string, string> = {
-  read_budget: "읽기 예산", read_share: "읽기 몫(본 Cron에 양보)", paused: "상세 멈춤", read_only: "읽기 전용",
+  read_budget: "읽기 예산", read_share: "읽기 몫(본 Cron에 양보)", paused: "상세 멈춤", read_only: "읽기 전용", error: "오류",
 };
 
 /**
