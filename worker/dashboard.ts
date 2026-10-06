@@ -432,9 +432,11 @@ async function behavior(deps: DashboardDeps, q: DashboardQuery, state: MetaState
     .map((w) => ({
       week: w,
       size: metricOf(cohortStore, w, key, "cohort_size"),
+      // 주 첫날 + n일이 지났으면 값(일부만 관찰), 주 마지막 날 + n일까지 지났으면 다 관찰
       ret: RETENTION_DAYS.map((n) =>
         through !== null && addDays(w, n) <= through ? metricOf(cohortStore, w, key, `cohort_d${n}`) : null,
       ),
+      partial: RETENTION_DAYS.map((n) => through !== null && addDays(w, n) <= through && addDays(w, 6 + n) > through),
     }))
     .filter((c) => c.size > 0);
 

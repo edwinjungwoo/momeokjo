@@ -2,9 +2,9 @@ import { env } from "cloudflare:test";
 import { describe, expect, it } from "vitest";
 import { ROLLUP_DAYS_PER_RUN, isKnownMetric } from "../../shared/dashboard";
 import {
-  liveDayMetrics, pruneRollups, rollupDayStatements, rollupThrough, runRollups, lastRollableDay,
+  cohortStatements, liveDayMetrics, pruneRollups, rollupDayStatements, rollupThrough, runRollups, lastRollableDay,
 } from "../../worker/rollup";
-import { utcDay } from "../../shared/kst";
+import { kstDay, utcDay } from "../../shared/kst";
 import { runScheduled } from "../../worker/maintenance";
 import { fakeKakaoLocal, fakePlaceApi, routeFetch } from "../helpers/fakeKakao";
 import { recordingDb } from "../helpers/recordDb";
@@ -87,7 +87,24 @@ describe("R59 하루 지표 (liveDayMetrics)", () => {
     expect([m["bongeunsa decided"], m["ddp decided"], m["ddp auto_left"]]).toEqual([2, 1, 1]);
   });
 
-  it("R58: 이벤트 수 — 직접·자동 뽑기, 완화 섞인 뽑기, 공유(확정 포함)와 확정, 결과 카드 번호별", async () => {
+  it("R58: 자동 뽑기 수용은 첫 뽑기가 자동인 세션만 — 직접 뽑기 뒤 자동 뽑기가 온 세션은 빼고, 첫 자동 뽑기 뒤 직접 뽑기가 있으면 다시 뽑음", async () => {
+    const d = "2027-01-13";
+    const e = (s: number, type: string, sec: number, props?: object): Seed => ({
+      anon: anonN(s), session: sessN(s), hub: "ddp", type, ts: kst(d, 12, 0, sec), ...(props ? { props } : {}),
+    });
+    await seedEvents([
+      // X: 직접 → 자동 → 결정 (자동 뽑기 수용에서 뺀다)
+      e(1, "app_open", 0), e(1, "draw", 1, { picks: ["1"] }), e(1, "draw", 2, { picks: ["2"], auto: true }), e(1, "share", 3, { picks: ["2"] }),
+      // Y: 자동 → 결정 → 직접 (수용)
+      e(2, "app_open", 0), e(2, "draw", 1, { picks: ["1"], auto: true }), e(2, "open_kakao", 2, { rank: 1 }), e(2, "redraw", 3, { picks: ["3"] }),
+      // Z: 자동 → 직접 → 결정 (다시 뽑음)
+      e(3, "app_open", 0), e(3, "draw", 1, { picks: ["1"], auto: true }), e(3, "redraw", 2, { picks: ["3"] }), e(3, "share", 3, { picks: ["3"] }),
+    ]);
+    const m = metricMap(await liveDayMetrics(env.DB, d));
+    expect([m["* auto_sessions"], m["* auto_accepted"], m["* auto_redrawn"], m["* auto_left"]]).toEqual([2, 1, 1, undefined]);
+  });
+
+  it("R58: 이벤트 수 —직접·자동 뽑기, 완화 섞인 뽑기, 공유(확정 포함)와 확정, 결과 카드 번호별", async () => {
     await seedEvents(scenario());
     const m = metricMap(await liveDayMetrics(env.DB, D));
     expect({
@@ -246,6 +263,25 @@ describe("R59 Cron 집계 (runRollups)", () => {
     // 12/29의 id 1은 재방문이라 신규가 아니다
     const d29 = Object.fromEntries((await stats("2026-12-29")).filter((r) => r.hub === "*").map((r) => [r.metric, r.value]));
     expect([d29.users, d29.new_users]).toEqual([1, undefined]);
+  });
+
+  it("R58/R59: 코호트는 첫 방문 기록이 모두 남아 있는 주(월요일 ≥ 오늘 − 90일)만 다시 세고, 그보다 오래된 주는 마지막 값 그대로 둔다 (정리로 줄어들지 않게)", async () => {
+    const now = kst("2027-06-01", 4, 1); // 90일 전 = 2027-03-03(수) → 다시 세는 첫 주 = 03-08
+    await env.DB.batch([
+      env.DB.prepare("INSERT INTO daily_stats VALUES ('2027-03-01', '*', 'cohort_size', 5), ('2027-03-01', '*', 'cohort_d1', 2)"),
+      // 03-01 주의 id(마지막 방문 03-02)는 정리에서 지워진다
+      env.DB.prepare("INSERT INTO anon_first_seen VALUES (?, '2027-03-02', 'ddp', 1, '2027-03-02')").bind(anonN(1)),
+      env.DB.prepare("INSERT INTO anon_first_seen VALUES (?, '2027-03-09', 'ddp', 1, '2027-03-10')").bind(anonN(2)),
+    ]);
+    await pruneRollups(env.DB, now);
+    await env.DB.batch(cohortStatements(env.DB, kstDay(now)));
+    const rows = (await env.DB.prepare("SELECT day, metric, value FROM daily_stats WHERE hub = '*' ORDER BY day, metric").all()).results;
+    expect(rows).toEqual([
+      { day: "2027-03-01", metric: "cohort_d1", value: 2 },
+      { day: "2027-03-01", metric: "cohort_size", value: 5 },
+      { day: "2027-03-08", metric: "cohort_d1", value: 1 },
+      { day: "2027-03-08", metric: "cohort_size", value: 1 },
+    ]);
   });
 
   it("R35/R59: 보관 정리 — 90일 넘게 오지 않은 id의 첫 방문 기록과 400일 지난 집계를 지운다", async () => {

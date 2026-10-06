@@ -72,9 +72,9 @@ export const METRICS = {
   dt_lt300: "같은 기준, 2~5분",
   dt_lt900: "같은 기준, 5~15분",
   dt_ge900: "같은 기준, 15분 이상",
-  auto_sessions: "자동 뽑기가 있는 세션 수",
+  auto_sessions: "첫 뽑기가 자동 뽑기인 세션 수 (직접 뽑기 뒤에 온 자동 뽑기는 뺀다)",
   auto_accepted: "auto_sessions 중 첫 자동 뽑기 뒤 직접 뽑기 전에 결정한 세션 수",
-  auto_redrawn: "auto_sessions 중 결정 전에(또는 결정 없이) 직접 다시 뽑은 세션 수",
+  auto_redrawn: "auto_sessions 중 수용이 아니고 첫 자동 뽑기 뒤 직접 뽑기가 있는 세션 수",
   auto_left: "auto_sessions 중 결정도 직접 뽑기도 없는 세션 수 (닫기는 따로 보내지 않아 이것으로 본다)",
   link_sessions: "받은 공유 링크를 연(share_open) 세션 수",
   reshare_sessions: "link_sessions 중 share도 한 세션 수",
@@ -215,7 +215,8 @@ export type OverviewData = DashboardBase & {
 };
 
 export type TopPlace = { placeId: string; name: string | null; count: number };
-export type Cohort = { week: string; size: number; ret: (number | null)[] };
+/** ret: D1·D7·D14·D28 재방문 수(주 첫날 + n일이 아직 안 지났으면 null), partial: 주 마지막 날 + n일은 아직 안 지나 일부만 관찰한 칸 */
+export type Cohort = { week: string; size: number; ret: (number | null)[]; partial: boolean[] };
 
 export type BehaviorData = DashboardBase & {
   tab: "behavior";

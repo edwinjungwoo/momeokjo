@@ -318,6 +318,7 @@ button.cell:hover, button.cell:focus-visible { outline: 2px solid var(--text); o
 .cohort td { padding: 6px; white-space: nowrap; }
 .cohort .num { text-align: right; }
 .cohort td.ret { border-radius: 4px; background: rgba(232, 81, 42, var(--a)); color: var(--text); font-weight: 600; }
+.cohort td.ret.is-partial { background: repeating-linear-gradient(135deg, rgba(232, 81, 42, var(--a)) 0 5px, rgba(232, 81, 42, calc(var(--a) * 0.6)) 5px 8px); }
 .cohort td.ret.is-na { background: var(--fill); color: var(--text-3); text-align: center; font-weight: 400; }
 .cohort-wrap > p { margin-top: 8px; }
 

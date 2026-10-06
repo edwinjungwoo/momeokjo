@@ -101,7 +101,7 @@ function CohortGrid({ data }: { data: BehaviorData }) {
             <th>첫 방문 주</th>
             <th className="num">인원</th>
             {RETENTION_DAYS.map((n) => (
-              <th key={n} className="num">
+              <th key={n} className="num" title={`D${n}: 첫 방문일 + ${n}일 이후(그날 포함) 한 번이라도 다시 연 비율 — 기간 끝은 정하지 않아요`}>
                 D{n}
               </th>
             ))}
@@ -114,14 +114,19 @@ function CohortGrid({ data }: { data: BehaviorData }) {
               <td className="num">{num(c.size)}</td>
               {c.ret.map((r, i) => {
                 const share = r === null || c.size === 0 ? null : r / c.size;
+                const partial = c.partial?.[i] === true;
                 return (
                   <td
                     key={RETENTION_DAYS[i]}
-                    className={`num ret${share === null ? " is-na" : ""}`}
+                    className={`num ret${share === null ? " is-na" : ""}${partial ? " is-partial" : ""}`}
                     style={share === null ? undefined : ({ "--a": Math.max(0.06, share) } as CSSProperties)}
-                    title={share === null ? "아직 관찰할 수 없어요" : `${r}명 / ${c.size}명`}
+                    title={
+                      share === null
+                        ? "아직 관찰할 수 없어요"
+                        : `${r}명 / ${c.size}명${partial ? " — 이 주의 뒷날 방문자는 아직 D" + RETENTION_DAYS[i] + "이 안 지나 일부만 관찰했어요" : ""}`
+                    }
                   >
-                    {share === null ? "·" : pct(share)}
+                    {share === null ? "·" : `${pct(share)}${partial ? "*" : ""}`}
                   </td>
                 );
               })}
@@ -129,7 +134,10 @@ function CohortGrid({ data }: { data: BehaviorData }) {
           ))}
         </tbody>
       </table>
-      <p className="muted small">Dn = 첫 방문일 + n일 이후(그날 포함) 다시 앱을 연 비율. 점(·)은 아직 그만큼 지나지 않은 칸이에요.</p>
+      <p className="muted small">
+        Dn = 첫 방문일 + n일 이후(그날 포함) 한 번이라도 다시 앱을 연 비율(기간 끝 없음). 점(·)은 아직 그만큼 지나지 않은 칸, 별(*)은 그 주의 일부
+        방문자만 관찰한 칸이에요.
+      </p>
     </div>
   );
 }

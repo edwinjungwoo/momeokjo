@@ -53,10 +53,11 @@ const SESSION_COLUMNS: [string, string][] = [
       `count(CASE WHEN first_decision >= first_draw AND first_decision - first_draw >= ${lo * 1000}${hi === null ? "" : ` AND first_decision - first_draw < ${hi * 1000}`} THEN 1 END)`,
     ],
   ),
-  ["auto_sessions", "count(CASE WHEN autos > 0 THEN 1 END)"],
-  ["auto_accepted", "count(CASE WHEN autos > 0 AND accepted THEN 1 END)"],
-  ["auto_redrawn", "count(CASE WHEN autos > 0 AND NOT accepted AND first_manual > first_auto THEN 1 END)"],
-  ["auto_left", "count(CASE WHEN autos > 0 AND NOT accepted AND NOT coalesce(first_manual > first_auto, 0) THEN 1 END)"],
+  // 자동 뽑기 수용은 첫 뽑기가 자동인 세션만 (직접 뽑기 뒤에 온 자동 뽑기는 열자마자 뽑기가 아니다)
+  ["auto_sessions", "count(CASE WHEN auto_first THEN 1 END)"],
+  ["auto_accepted", "count(CASE WHEN auto_first AND accepted THEN 1 END)"],
+  ["auto_redrawn", "count(CASE WHEN auto_first AND NOT accepted AND first_manual > first_auto THEN 1 END)"],
+  ["auto_left", "count(CASE WHEN auto_first AND NOT accepted AND first_manual IS NULL THEN 1 END)"],
   ["link_sessions", "count(CASE WHEN via_link THEN 1 END)"],
   ["reshare_sessions", "count(CASE WHEN via_link AND shared THEN 1 END)"],
 ];
@@ -88,9 +89,11 @@ s AS MATERIALIZED (
   FROM ev GROUP BY session
 ),
 gs AS (
-  SELECT hub AS grp, *, coalesce(first_decision >= first_auto AND (first_manual IS NULL OR first_manual > first_decision), 0) AS accepted FROM s
+  SELECT hub AS grp, *, coalesce(first_decision >= first_auto AND (first_manual IS NULL OR first_manual > first_decision), 0) AS accepted,
+    coalesce(autos > 0 AND first_auto = first_draw, 0) AS auto_first FROM s
   UNION ALL
-  SELECT '*' AS grp, *, coalesce(first_decision >= first_auto AND (first_manual IS NULL OR first_manual > first_decision), 0) FROM s
+  SELECT '*' AS grp, *, coalesce(first_decision >= first_auto AND (first_manual IS NULL OR first_manual > first_decision), 0),
+    coalesce(autos > 0 AND first_auto = first_draw, 0) FROM s
 ),
 w AS MATERIALIZED (
   SELECT grp, ${SESSION_COLUMNS.map(([name, expr]) => `${expr} AS ${name}`).join(",\n    ")}
@@ -184,7 +187,12 @@ export async function liveDayMetrics(db: D1Database, day: string, part: LivePart
   return rs.flatMap((r) => r.results.map((x) => ({ hub: String(x.hub), metric: String(x.metric), value: Number(x.value) })));
 }
 
-/** 첫 방문·재방문 비트·마지막 방문일 갱신. 그날 처음 온 id는 넣고, 전에 온 id는 (첫 방문일 + n일 이후) 비트를 켠다. 바뀌는 행만 쓴다 */
+/**
+ * 첫 방문·재방문 비트·마지막 방문일 갱신. 그날 처음 온 id는 넣고, 전에 온 id는 (첫 방문일 + n일 이후) 비트를 켠다. 바뀌는 행만 쓴다.
+ * 주의(되돌릴 수 없는 경우): 비트는 그때 아는 첫 방문일 기준이다. 더 이른 날을 나중에 집계하면 첫 방문일은 당겨지지만 그 사이에 켠 비트는
+ * 새 첫 방문일 기준으로 다시 계산하지 않는다 — Cron은 언제나 오래된 날부터 집계하므로 생기지 않는다. 또 정리(last_day 90일)로 지운 id가
+ * 다시 오면 그날을 첫 방문으로 새로 시작한다(신규로 센다).
+ */
 export const FIRST_SEEN_UPSERT = `INSERT INTO anon_first_seen (anon, day, hub, ret, last_day)
 SELECT anon, ?1, hub, 0, ?1 FROM (SELECT anon, hub, min(ts) FROM events WHERE type = 'app_open' AND day = ?1 GROUP BY anon) WHERE true
 ON CONFLICT(anon) DO UPDATE SET
@@ -235,7 +243,10 @@ export function rollupDayStatements(db: D1Database, day: string): D1PreparedStat
 
 /** 코호트(첫 방문 주)를 다시 센다: 첫 방문이 today − 90일이 속한 주의 월요일 이후인 id만 */
 export function cohortStatements(db: D1Database, today: string): D1PreparedStatement[] {
-  const since = mondayOf(addDays(today, -EVENT_RETENTION_DAYS));
+  // 첫 방문 기록이 하나도 정리되지 않았을 주만: 월요일이 보관 경계(오늘 − 90일) 이후인 첫 주부터.
+  // 그 전 주의 행은 다시 쓰지도 지우지도 않는다 — 정리(last_day 90일)로 인원이 줄어든 값으로 덮지 않게 마지막 값 그대로 둔다
+  const cutoff = addDays(today, -EVENT_RETENTION_DAYS);
+  const since = mondayOf(cutoff) === cutoff ? cutoff : addDays(mondayOf(cutoff), 7);
   const weeks: string[] = [];
   for (let w = since; w <= today; w = addDays(w, 7)) weeks.push(w);
   const list = JSON.stringify(weeks);

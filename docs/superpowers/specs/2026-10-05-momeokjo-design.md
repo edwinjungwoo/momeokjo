@@ -379,10 +379,10 @@ CREATE TABLE anon_first_seen (anon TEXT PRIMARY KEY, day TEXT NOT NULL, hub TEXT
   | `dt_lt300` | 같은 기준, 2~5분 |
   | `dt_lt900` | 같은 기준, 5~15분 |
   | `dt_ge900` | 같은 기준, 15분 이상 |
-  | `auto_sessions` | 자동 뽑기가 있는 세션 |
+  | `auto_sessions` | 첫 뽑기가 자동 뽑기인 세션 (직접 뽑기 뒤에 온 자동 뽑기는 열자마자 뽑기가 아니라서 뺀다) |
   | `auto_accepted` | 그중 첫 결정이 첫 자동 뽑기 뒤이고 그 전에 직접 뽑기가 없는 세션 |
   | `auto_redrawn` | 그중 수용이 아니고 첫 자동 뽑기 뒤 직접 뽑기가 있는 세션 |
-  | `auto_left` | 그중 수용도 다시 뽑기도 아닌 세션 |
+  | `auto_left` | 그중 결정도 직접 뽑기도 없는 세션 ("닫기"는 이벤트가 없어 이것으로 본다) |
   | `link_sessions` | `share_open`이 있는 세션 |
   | `reshare_sessions` | `link_sessions` 중 `share`도 있는 세션 |
   | `draw_manual` | 직접 `draw` 이벤트 수 |

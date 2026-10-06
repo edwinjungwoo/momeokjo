@@ -151,8 +151,9 @@ describe("GET /api/admin/dashboard", () => {
     expect(d.places.shared[0]).toEqual({ placeId: "101", name: "가게101", count: 3 });
     expect(d.places.excluded).toEqual([{ placeId: "105", name: null, count: 1 }]);
     expect(d.cohorts.map((c) => c.week)).toEqual(["2027-01-04", "2027-01-11"]);
-    // 2027-01-04 주: 2명, 그중 1명이 다음 날 다시 옴. 집계는 01-14까지라 D28은 아직 관찰 못 했다
-    expect(d.cohorts[0]).toEqual({ week: "2027-01-04", size: 2, ret: [1, 0, null, null] });
+    // 2027-01-04 주: 2명, 그중 1명이 다음 날 다시 옴. 집계는 01-14까지:
+    // D1은 주 마지막 날(01-10) + 1 ≤ 01-14라 다 관찰, D7은 주 첫날 + 7(01-11)만 지나 일부(partial), D14·D28은 아직 못 봄(null)
+    expect(d.cohorts[0]).toEqual({ week: "2027-01-04", size: 2, ret: [1, 0, null, null], partial: [false, true, false, false] });
     expect(d.cohorts[1].size).toBe(2);
   });
 
