@@ -126,6 +126,8 @@ git add docs/deploys.md && git commit -m "docs(deploy): <날짜> 배포 기록" 
   `npx wrangler d1 execute momeokjo --remote --command "DELETE FROM meta WHERE key = 'unfetched_from'"` (예전 `unfetched_cleared_at` 키는 더 쓰지 않아요 — 남아 있어도 무시해요)
 - 격자 ID(`tile_places`)를 앱이 아닌 SQL로 넣을 때도 같아요 — 앱(`replaceTilePlaces`)은 `tiles_changed_at`을 올려서 커서가 저절로 처음부터 읽어요.
 - 상세 보충 양은 `wrangler.jsonc` vars `DETAIL_BATCH_SIZE`(지금 4)·`DETAIL_CHAR_BUDGET`(지금 200000)로 정해요. 운영 Workers 로그의 cpuTime(warm·Cron)과 Cron 로그 줄의 `deferred`·`chars`를 보고 올려요.
+  - **`DETAIL_BATCH_SIZE`의 천장은 8이에요** (`worker/config.ts` `MAX_DETAIL_BATCH_SIZE`). 더 크게 적어도 8로 잘라요 — 무료 플랜은 실행 하나에 D1 질의 50개라서, 보통 Cron 실행이 만료 갱신·격자 수집·미수집 찾기·집계를 다 하고도 보충 최악(곳마다 한 곳씩 다시 저장 + 차단 기록)이 들어가는 가장 큰 값이에요. 실행마다 남은 D1 호출에 맞춰 더 작아질 수 있어요(하루 한 번 보관 정리 실행은 6곳). 이번 실행의 배치는 Cron 로그 줄의 `batch`예요.
+  - 관리 화면 운영 탭 "마지막 Cron"에 **저장 오류**나 **D1 예산으로 건너뜀**(만료 갱신·미수집 찾기·집계) 알약이 보이면 Workers 로그에서 원인을 봐요. 건너뛴 단계는 다음 실행이 이어 해요.
 
 ## D1 일일 한도
 
