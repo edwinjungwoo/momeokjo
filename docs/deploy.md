@@ -106,6 +106,7 @@ git add docs/deploys.md && git commit -m "docs(deploy): <날짜> 배포 기록" 
 롤백 명령: `npx wrangler rollback <버전 id> --message "<이유>"` (스크립트 밖에서는 확인 질문이 나와요).
 
 **R63(주 1회 갱신) 앞 버전으로 되돌렸을 때 — 꼭 할 것**
+- `npm run release`가 자동 롤백했는데 지금 `wrangler.jsonc`에 `1-59/2`가 있으면 "둘째 트리거를 2-59/5로 되돌려야 해요 (대시보드 Triggers 또는 wrangler triggers deploy)"를 크게 찍고 종료 코드 **3**(사람이 확인)이에요 — 롤백 대상이 이미 R63 뒤 버전(1-59/2를 기대)이면 그대로 두면 돼요.
 - 둘째 트리거를 `1-59/2 * * * *`에서 **`2-59/5 * * * *`로 되돌려요** (대시보드 Workers → momeokjo → Triggers, 또는 그 커밋의 `wrangler.jsonc`로 `wrangler triggers deploy`). 자동 롤백(`npm run release`)의 대상은 보통 바로 앞 버전 — R63 첫 배포라면 R63 앞 버전(`6eeb6e06`)이에요. 옛 코드는 모르는 cron 값(`1-59/2`)을 본 Cron으로 돌려서, 그대로 두면 본 Cron(격자 수집·보충·집계)이 시간당 30번 더 돌아요(카카오·D1 호출 여러 배).
 - `meta hub_refreshed:*`·`cron_detail_last`는 남아 있어도 옛 코드에 해가 없어요.
 
