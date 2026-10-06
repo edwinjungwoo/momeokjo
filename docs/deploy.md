@@ -108,6 +108,13 @@ git add docs/deploys.md && git commit -m "docs(deploy): <날짜> 배포 기록" 
 2. 이 버전(스냅샷 포함)을 다시 올리기 **전에** 남은 스냅샷을 비워요 — 되돌린 동안의 변화가 스냅샷에 빠져 있어요: `npx wrangler d1 execute momeokjo --remote --command "DELETE FROM hub_snapshots"`.
 3. `daily_stats`·`anon_first_seen`·`hub_snapshots` 표는 남아 있어도 옛 코드에 해가 없어요.
 
+## 손으로 D1을 고칠 때 (Task 34)
+
+- `places` 행을 손으로 지우면(`DELETE FROM places …`) 그 가게는 다시 "미수집"이 돼요. Cron은 미수집을 앞선 커서(`meta.unfetched_from`)부터 찾아서, 커서 앞 칸에 다시 생긴 미수집은 보지 못해요. **같이 커서와 "미수집 확인 끝" 표시도 지워요** (다음 Cron이 처음부터 다시 찾아요):
+  `npx wrangler d1 execute momeokjo --remote --command "DELETE FROM meta WHERE key IN ('unfetched_from', 'unfetched_cleared_at')"`
+- 격자 ID(`tile_places`)를 앱이 아닌 SQL로 넣을 때도 같아요 — 앱(`replaceTilePlaces`)은 `tiles_changed_at`을 올려서 커서가 저절로 처음부터 읽어요.
+- 상세 보충 양은 `wrangler.jsonc` vars `DETAIL_BATCH_SIZE`(지금 4)·`DETAIL_CHAR_BUDGET`(지금 200000)로 정해요. 운영 Workers 로그의 cpuTime(warm·Cron)과 Cron 로그 줄의 `deferred`·`chars`를 보고 올려요.
+
 ## D1 일일 한도
 
 - 무료 플랜의 D1 읽기·쓰기 한도는 **매일 00:00 UTC = 09:00 KST**에 풀려요. 한도를 넘으면 쿼리가 오류 7500으로 실패해요. 스크립트는 처음 `SELECT 1`에서 이걸 알아보고 아무것도 바꾸지 않은 채 멈춰요.
