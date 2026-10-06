@@ -8,6 +8,7 @@ import { meteredDb, overReadBudget, recordD1Usage, type D1Usage } from "./d1Usag
 import { enrichDetails } from "./detailEnricher";
 import { isRetentionWindow, pruneOldEvents } from "./events";
 import type { FetchFn } from "./fetchFn";
+import { maintainSnapshots, type SnapshotRun } from "./hubSnapshot";
 import {
   backfillListJson, countNeedingDetail, detailGate, detailsAllowed, expiredDetailStates, markUnfetchedCleared, tilesChangedAt,
   unfetchedClearedAt, unfetchedStates, type TilePlaceState,
@@ -74,6 +75,8 @@ export type CronResult = {
   listJsonFilled?: number;
   /** R38: 오늘 D1 읽기가 소프트 한도를 넘어 수집·보충을 건너뛰었다 */
   skipped?: "read_budget";
+  /** R56: 이번 실행이 만든(또는 건너뛴) 거점 스냅샷 하나 */
+  snapshot?: SnapshotRun | { status: "error" };
 };
 
 /**
@@ -91,7 +94,14 @@ export async function runScheduled(
   const usage: D1Usage = { read: 0, written: 0 };
   const db = meteredDb(env.DB, usage);
   try {
-    return await maintain(env, db, opts);
+    const result = await maintain(env, db, opts);
+    // R56: 수집·보충 뒤에 거점 스냅샷 하나를 만든다 (이번 실행의 보충까지 담기게). 읽기 예산을 넘은 날에도 만든다 —
+    // 스냅샷이 있으면 엣지 캐시 미스가 수천 행 대신 1행만 읽는다
+    result.snapshot = await maintainSnapshots(db, hubOrder(opts.hubs ?? HUBS, opts.now), opts.now).catch((e) => {
+      console.error("hub snapshot failed", e);
+      return { status: "error" as const };
+    });
+    return result;
   } finally {
     await recordD1Usage(env.DB, usage, opts.now).catch((e) => console.error("d1 usage record failed", e));
   }
