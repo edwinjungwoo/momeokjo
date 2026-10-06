@@ -371,6 +371,7 @@ button.cell:hover, button.cell:focus-visible { outline: 2px solid var(--text); o
 .pill { display: inline-block; padding: 3px 10px; border-radius: 999px; font-size: 12px; font-weight: 700; color: #fff; }
 .banner { margin-bottom: 12px; padding: 10px 12px; border-radius: 8px; font-size: 13px; font-weight: 600; }
 .banner.lv-crit { background: #fff1ef; color: var(--crit); }
+.banner.lv-warn { background: #fff6f0; color: var(--accent-ink); }
 .run-panel { margin-top: 16px; padding: 12px; border-radius: 10px; background: var(--bg-2); border: 1px solid var(--border); font-size: 13px; }
 .run-panel.lv-ok { border-color: #bfe0cc; background: #f3faf6; }
 .run-panel.lv-warn { border-color: #ffd4c2; background: #fff6f0; }
