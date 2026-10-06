@@ -18,10 +18,14 @@ export type PlaceFetchResult =
   | { ok: true; summary: PlaceSummary; detail: PlaceDetail }
   | { ok: false; reason: string };
 
+/**
+ * onBody: 정상 응답 본문을 읽었을 때 그 글자 수 (Task 34 — 상세 보충의 CPU는 대부분 본문 JSON을 푸는 데 쓰여서,
+ * 보충은 이 값을 모아 한 번에 풀 글자 수를 제한한다). 본문은 text()로 읽어 JSON.parse한다 — res.json()과 결과가 같다(테스트)
+ */
 export async function fetchPlaceDetail(
   fetcher: FetchFn,
   id: string,
-  opts: { budget: Budget; sleep?: (ms: number) => Promise<void> },
+  opts: { budget: Budget; sleep?: (ms: number) => Promise<void>; onBody?: (chars: number) => void },
 ): Promise<PlaceFetchResult> {
   const wait = opts.sleep ?? realSleep;
   const url = `https://place-api.map.kakao.com/places/panel3/${encodeURIComponent(id)}`;
@@ -36,7 +40,9 @@ export async function fetchPlaceDetail(
     if (res && res.ok) {
       let json: unknown;
       try {
-        json = await res.json();
+        const text = await res.text();
+        opts.onBody?.(text.length);
+        json = JSON.parse(text);
       } catch {
         return { ok: false, reason: "schema" };
       }

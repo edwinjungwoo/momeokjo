@@ -11,8 +11,8 @@ import { pruneRollups, runRollups } from "./rollup";
 import type { FetchFn } from "./fetchFn";
 import { maintainSnapshots, type SnapshotRun } from "./hubSnapshot";
 import {
-  backfillListJson, countNeedingDetail, detailGate, detailsAllowed, expiredDetailStates, markUnfetchedCleared, tilesChangedAt,
-  unfetchedClearedAt, unfetchedStates, type TilePlaceState,
+  backfillListJson, countNeedingDetail, detailGate, detailsAllowed, expiredDetailStates, markUnfetchedCleared,
+  nearestUnfetchedStates, tilesChangedAt, unfetchedClearedAt, type TilePlaceState,
 } from "./repo";
 import { collectTiles } from "./tileCollector";
 
@@ -22,6 +22,8 @@ export type WarmDeps = {
   restKey: string;
   budgetSize: number;
   batchSize: number;
+  /** Task 34: 한 번에 풀 상세 JSON 글자 수 (없으면 기본값) */
+  detailCharBudget?: number;
   now: number;
   sleep?: (ms: number) => Promise<void>;
 };
@@ -42,15 +44,20 @@ export async function warmOnce(
     tilesCoveringCircle(center, radiusM),
   );
   const e = await enrichDetails(
-    { db: deps.db, fetcher: deps.fetcher, budget, now: deps.now, batchSize: deps.batchSize, sleep: deps.sleep },
+    {
+      db: deps.db, fetcher: deps.fetcher, budget, now: deps.now, batchSize: deps.batchSize, sleep: deps.sleep,
+      charBudget: deps.detailCharBudget,
+    },
     center,
     radiusM,
   );
   let pending: WarmResult["pending"];
   if (opts.count) pending = await countNeedingDetail(deps.db, center, radiusM, deps.now);
   else {
+    // 글자 예산으로 남긴 곳(deferred)이 있으면 끝나지 않았다
     const done =
-      e.enriched + e.failed < deps.batchSize && budget.left > 0 && detailsAllowed(await detailGate(deps.db), deps.now);
+      e.enriched + e.failed < deps.batchSize && e.deferred === 0 && budget.left > 0 &&
+      detailsAllowed(await detailGate(deps.db), deps.now);
     pending = done ? 0 : "more";
   }
   return { incompleteTiles: tiles.incomplete.length + tiles.failed.length, pending, enriched: e.enriched, failed: e.failed };
@@ -159,7 +166,7 @@ export async function runCron(
 async function maintain(
   env: Env, db: D1Database, opts: { fetcher: FetchFn; now: number; sleep?: (ms: number) => Promise<void>; hubs?: Hub[] },
 ): Promise<CronResult> {
-  const { budgetSize, batchSize } = limitsFrom(env);
+  const { budgetSize, batchSize, detailCharBudget } = limitsFrom(env);
   const budget = new Budget(budgetSize);
   const hubs = hubOrder(opts.hubs ?? HUBS, opts.now);
   const keys = [...new Set(hubs.flatMap((h) => tilesCoveringCircle(h, PREWARM_RADIUS)))];
@@ -199,13 +206,16 @@ async function maintain(
   const checkUnfetched = (await tilesChangedAt(db)) >= (await unfetchedClearedAt(db));
   let unfetched = 0;
   if (checkUnfetched) {
-    const u = await unfetchedStates(db, keys);
+    // Task 34: 미수집은 거점에 가까운 순 batchSize곳만 받아 온다 (만료 후보와 합쳐 고르는 결과는 전부 받아 온 것과 같다)
+    const u = await nearestUnfetchedStates(db, keys, hubs, batchSize);
     unfetched = u.length;
     candidates.push(...u);
   }
   if (candidates.length > 0) {
     const e = await enrichDetails(
-      { db, fetcher: opts.fetcher, budget, now: opts.now, batchSize, sleep: opts.sleep, candidates },
+      {
+        db, fetcher: opts.fetcher, budget, now: opts.now, batchSize, sleep: opts.sleep, candidates, charBudget: detailCharBudget,
+      },
       hubs,
       PREWARM_RADIUS,
     );

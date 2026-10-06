@@ -144,8 +144,9 @@ describe("R44 상세 차단 시 강등 모드", () => {
     expect(local.calls.length).toBeGreaterThan(0);
     expect(place.calls).toHaveLength(0);
     expect(r.enriched).toBe(0);
+    // 만료 후보(fetched_at 범위)와 미수집 후보(격자-장소 상태 tile_places tp — 예전 전체 조회·Task 34 가까운 순 조회 모두)를 읽지 않는다
     expect(sqls.some((q) => q.includes("p.fetched_at <="))).toBe(false);
-    expect(sqls.some((q) => q.includes("NOT EXISTS"))).toBe(false);
+    expect(sqls.some((q) => q.includes("tile_places tp"))).toBe(false);
   });
 
   it("R44: 24시간이 지나면 다시 보충한다", async () => {

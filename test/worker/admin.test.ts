@@ -125,6 +125,42 @@ describe("admin", () => {
     expect(await warm()).toEqual({ incompleteTiles: 0, pending: 0, enriched: 0, failed: 0, ...ROWS });
   });
 
+  it("R31/R10: warm은 상세 JSON 글자 예산(DETAIL_CHAR_BUDGET)을 다 쓰면 남은 곳을 남기고 pending은 more — 다음 warm이 이어 하고 끝나면 0", async () => {
+    const ids = ["2001", "2002", "2003", "2004", "2005"];
+    const local = fakeKakaoLocal(ids.map((id, k) => doc(id, at(0.0002 * (k + 1)), ASEM.lng)));
+    const place = fakePlaceApi(Object.fromEntries(ids.map((id, k) => [id, placeJson({ name: id, lat: at(0.0002 * (k + 1)), lng: ASEM.lng })])));
+    const app = createApp({ fetcher: routeFetch(local.fetcher, place.fetcher), now: () => NOW, sleep: async () => {}, rateLimit: async () => true });
+    const tight = { ...env, DETAIL_CHAR_BUDGET: "1" } as Env;
+    const warm = async () => {
+      const ctx = createExecutionContext();
+      const res = await app.fetch(new Request(`http://localhost/api/admin/warm?${AREA}`, { method: "POST", headers: AUTH }), tight, ctx);
+      await waitOnExecutionContext(ctx);
+      return res.json<any>();
+    };
+    // 동시에 시작한 3곳만 하고 2곳은 남긴다 (실패로 기록하지 않는다)
+    expect(await warm()).toEqual({ incompleteTiles: 0, pending: "more", enriched: 3, failed: 0, ...ROWS });
+    expect(await warm()).toEqual({ incompleteTiles: 0, pending: 0, enriched: 2, failed: 0, ...ROWS });
+    expect(place.calls.map((c) => c.id).sort()).toEqual(ids);
+  });
+
+  it("R11/R10: Cron도 상세 JSON 글자 예산을 지킨다 — 남은 곳은 다음 실행이 가까운 순으로 이어 한다", async () => {
+    for (const h of HUBS) for (const k of tilesCoveringCircle(h, PREWARM_RADIUS)) await markTile(env.DB, k, NOW, 0, false);
+    const ids = ["3001", "3002", "3003", "3004", "3005"];
+    await replaceTilePlaces(env.DB, tileKeyOf(HUBS[0]), ids, NOW, false);
+    const place = fakePlaceApi(Object.fromEntries(ids.map((id) => [id, placeJson({ name: id, lat: HUBS[0].lat, lng: HUBS[0].lng })])));
+    const tight = { ...env, DETAIL_CHAR_BUDGET: "1" } as Env;
+    const r1 = await runScheduled(tight, { fetcher: place.fetcher, now: NOW + 1, sleep: async () => {} });
+    expect(r1).toMatchObject({ enriched: 3, failed: 0, calls: 3 });
+    expect(place.calls.map((c) => c.id)).toEqual(ids.slice(0, 3));
+    const r2 = await runScheduled(tight, { fetcher: place.fetcher, now: NOW + 2, sleep: async () => {} });
+    expect(r2).toMatchObject({ enriched: 2, failed: 0 });
+    expect(place.calls.map((c) => c.id)).toEqual(ids);
+    // 다 채웠으면 미수집 확인을 끝낸다 (다음 실행은 미수집을 훑지 않고 상세 API도 부르지 않는다)
+    const r3 = await runScheduled(tight, { fetcher: place.fetcher, now: NOW + 3, sleep: async () => {} });
+    expect(r3).toMatchObject({ enriched: 0, failed: 0, calls: 0 });
+    expect(place.calls).toHaveLength(ids.length);
+  });
+
   it("R60: warm 응답에 이번 호출이 읽고 쓴 D1 행 수를 싣는다 (관리 화면 진행 표시)", async () => {
     const { app } = setup();
     const r = await (await callApp(app, `/api/admin/warm?${AREA}`, { method: "POST", headers: AUTH })).json<any>();

@@ -18,6 +18,8 @@ export type ServiceDeps = {
   restKey: string;
   budgetSize: number;
   batchSize: number;
+  /** Task 34: 요청 뒤 보충이 풀 상세 JSON 글자 수 (없으면 기본값) */
+  detailCharBudget?: number;
   now: number;
   rateLimit: () => Promise<boolean>;
   waitUntil: (p: Promise<unknown>) => void;
@@ -121,7 +123,7 @@ export async function getPlaces(
       enrichDetails(
         {
           db: deps.db, fetcher: deps.fetcher, budget, now: deps.now, batchSize: deps.batchSize, sleep: deps.sleep,
-          scope: "unfetched", candidates: tileStates,
+          scope: "unfetched", candidates: tileStates, charBudget: deps.detailCharBudget,
         },
         center,
         radiusM,

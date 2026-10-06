@@ -4,7 +4,7 @@ import type { Place, Rect } from "../shared/types";
 import type { Budget } from "./budget";
 import { UpstreamError, type FetchFn } from "./fetchFn";
 import { searchRect } from "./kakaoLocal";
-import { getTiles, isTileDue, replaceTilePlaces, type TileState } from "./repo";
+import { dueTileKeys, isTileDue, replaceTilePlaces, type TileState } from "./repo";
 
 export type CollectDeps = { db: D1Database; fetcher: FetchFn; restKey: string; budget: Budget; now: number };
 export type CollectResult = { collected: string[]; incomplete: string[]; failed: string[] };
@@ -39,12 +39,14 @@ async function collectRect(deps: CollectDeps, rect: Rect, depth: number): Promis
   return { ids, saturated: first.totalCount > KAKAO_MAX_RESULTS };
 }
 
-/** states: 이미 읽어 둔 격자 상태가 있으면 넘겨서 다시 읽지 않는다 */
+/**
+ * known: 이미 읽어 둔 격자 상태가 있으면 넘겨서 다시 읽지 않는다.
+ * 없으면 수집할 격자(없음·만료)만 D1에서 고른다 (Task 34: Cron·warm이 격자 상태 수백 행을 매번 받아 오지 않게)
+ */
 export async function collectTiles(
   deps: CollectDeps, keys: string[], known?: Map<string, TileState>,
 ): Promise<CollectResult> {
-  const states = known ?? (await getTiles(deps.db, keys));
-  const due = keys.filter((k) => isTileDue(states.get(k), deps.now));
+  const due = known ? keys.filter((k) => isTileDue(known.get(k), deps.now)) : await dueTileKeys(deps.db, keys, deps.now);
   const result: CollectResult = { collected: [], incomplete: [], failed: [] };
   for (let i = 0; i < due.length; i++) {
     const key = due[i];

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { Budget } from "../../worker/budget";
+import { parseDetail } from "../../worker/detailParser";
 import { fetchPlaceDetail } from "../../worker/kakaoPlace";
 import jungang from "../fixtures/place-detail/27531028-jungang-haejang.json";
 import { fakePlaceApi } from "../helpers/fakeKakao";
@@ -56,5 +57,47 @@ describe("fetchPlaceDetail", () => {
   it("R6: JSON이 아니면 schema", async () => {
     const r = await fetchPlaceDetail(async () => new Response("<html>"), "a", { budget: new Budget(5), sleep });
     expect(r).toEqual({ ok: false, reason: "schema" });
+  });
+
+  it("R10: 본문을 글자로 읽어 JSON으로 풀어도 res.json()과 결과가 같고(BOM·빈 본문·깨진 JSON·잘못된 UTF-8), 읽은 글자 수를 onBody로 알린다", async () => {
+    const enc = new TextEncoder();
+    const text = JSON.stringify(jungang);
+    const badUtf8 = enc.encode(text.replace('"name":"', '"name":"\u0000'));
+    badUtf8[badUtf8.indexOf(0)] = 0xff; // 이름 첫 바이트를 잘못된 UTF-8로
+    const bodies: Uint8Array[] = [
+      enc.encode(text),
+      enc.encode(`﻿${text}`),
+      enc.encode(`  \n${text}\n `),
+      enc.encode(""),
+      enc.encode("{bad"),
+      enc.encode("null"),
+      enc.encode("[]"),
+      badUtf8,
+    ];
+    for (const body of bodies) {
+      // 예전 길: res.json() → parseDetail
+      let expected: unknown;
+      try {
+        const parsed = parseDetail(await new Response(body).json());
+        expected = parsed.ok ? parsed : { ok: false, reason: parsed.reason };
+      } catch {
+        expected = { ok: false, reason: "schema" };
+      }
+      const seen: number[] = [];
+      const r = await fetchPlaceDetail(async () => new Response(body), "a", {
+        budget: new Budget(5), sleep, onBody: (n) => seen.push(n),
+      });
+      expect(r).toEqual(expected);
+      expect(seen).toEqual([new TextDecoder().decode(body).length]);
+    }
+  });
+
+  it("R10: 실패 응답(4xx·5xx·네트워크)은 본문을 읽지 않아 onBody가 불리지 않는다", async () => {
+    const seen: number[] = [];
+    const api = fakePlaceApi({ a: [500, 500, 500], b: 404, c: ["throw", "throw", "throw"] });
+    for (const id of ["a", "b", "c"]) {
+      await fetchPlaceDetail(api.fetcher, id, { budget: new Budget(5), sleep, onBody: (n) => seen.push(n) });
+    }
+    expect(seen).toEqual([]);
   });
 });

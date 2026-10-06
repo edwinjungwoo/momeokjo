@@ -9,7 +9,7 @@ import type { CategoryGroup, LatLng, Place, PlaceDetail, PlaceSummary, Rect, Sto
 import { HUBS } from "../shared/hubs";
 import { hubsOfTile } from "./hubTiles";
 import { listItemJson, storedListJson, usableListJson, usableListJsonSql } from "./present";
-import { deleteSnapshotsStmt, markHubsDirtyStmt, markPlaceHubsDirtyStmt } from "./snapshotDirty";
+import { deleteSnapshotsStmt, markHubsDirtyStmt, markPlaceHubsDirtyStmt, markPlacesHubsDirtyStmt } from "./snapshotDirty";
 
 export type DetailMeta = { status: "ok" | "failed"; fetchedAt: number; reason: string | null } | null;
 export type PlaceRow = { place: Place; detail: StoredDetail; meta: NonNullable<DetailMeta> };
@@ -175,6 +175,23 @@ export function isTileDue(state: TileState | undefined, now: number): boolean {
   return !state || now - state.collectedAt >= TILE_TTL_MS;
 }
 
+/**
+ * keys 중 수집할 격자(없음·만료 — isTileDue)만 keys 순서대로. getTiles + isTileDue와 같지만 격자 상태 행을 받아 오지 않는다
+ * (Task 34: Cron은 모든 거점의 격자 수백 개를 실행마다 확인한다)
+ */
+export async function dueTileKeys(db: D1Database, keys: string[], now: number): Promise<string[]> {
+  if (keys.length === 0) return [];
+  const r = await db
+    .prepare(
+      `SELECT k.value AS key FROM json_each(?) AS k
+       WHERE NOT EXISTS (SELECT 1 FROM tiles t WHERE t.key = k.value AND t.collected_at > ?)
+       ORDER BY k.key`,
+    )
+    .bind(JSON.stringify(keys), now - TILE_TTL_MS)
+    .all<{ key: string }>();
+  return r.results.map((x) => x.key);
+}
+
 /** id로 정해지는 0 ≤ jitter < 24시간 (FNV-1a 32비트 + murmur3 마무리 섞기 — 연속된 id도 고르게 흩어진다) */
 export function detailJitterMs(id: string): number {
   let h = 0x811c9dc5;
@@ -211,11 +228,99 @@ export async function tilePlaceStates(db: D1Database, keys: string[]): Promise<T
   return out;
 }
 
+/**
+ * 보충할 ID (격자 중심이 기준점에 가까운 순, 같으면 id순).
+ * limit이 없으면(warm count=1) 격자-장소 상태를 다 읽어 고른다. limit이 있으면(보충) SQL이 같은 순서로 줄 세워
+ * 쪽(DETAIL_PICK_PAGE행)씩만 돌려준다 — Task 34: 거점 격자 상태 수천 행을 Worker로 받아 오는 CPU를 아낀다. 결과는 같다(테스트).
+ */
 export async function idsNeedingDetail(
   db: D1Database, center: LatLng, radiusM: number, now: number, limit?: number, scope: DetailScope = "due",
 ): Promise<string[]> {
-  return pickDetailIds(await tilePlaceStates(db, tilesCoveringCircle(center, radiusM)), center, now, limit, scope);
+  const keys = tilesCoveringCircle(center, radiusM);
+  if (limit === undefined) return pickDetailIds(await tilePlaceStates(db, keys), center, now, limit, scope);
+  return (await nearestStates(db, keys, [center], now, limit, scope)).map((t) => t.id);
 }
+
+/** 기준점(여럿이면 가장 가까운 곳)에서 격자 중심까지 거리 — pickDetailIds와 SQL 순위(rankTiles)가 같은 값을 쓴다 */
+function tileDistance(key: string, centers: LatLng[]): number {
+  const r = tileRect(key);
+  const mid = { lat: (r.minLat + r.maxLat) / 2, lng: (r.minLng + r.maxLng) / 2 };
+  return Math.min(...centers.map((c) => haversine(c, mid)));
+}
+
+/**
+ * 격자마다 거리 순위(거리가 같으면 같은 순위)를 매긴 [key, rank] JSON.
+ * SQL은 (칸 순위, id)로 줄 세우고 Worker가 id마다 처음 나온 행만 쓴다 — 처음 나온 행이 가장 가까운 칸이라
+ * pickDetailIds의 (가장 가까운 칸 거리, id) 순서와 같다.
+ */
+function rankTiles(keys: string[], centers: LatLng[]): string {
+  const dist = new Map<string, number>();
+  for (const k of keys) if (!dist.has(k)) dist.set(k, tileDistance(k, centers));
+  const rank = new Map([...new Set(dist.values())].sort((a, b) => a - b).map((d, i) => [d, i] as const));
+  return JSON.stringify([...dist].map(([k, d]) => [k, rank.get(d)]));
+}
+
+/** 보충 후보를 SQL에서 줄 세워 쪽씩 읽을 때 한 쪽의 행 수 (limit이 더 크면 limit) */
+export const DETAIL_PICK_PAGE = 100;
+
+/**
+ * ?1 [key, rank] JSON, ?2 쪽 크기, ?3 offset (+ 조건의 바인드). (가게, 칸)마다 한 행 — GROUP BY보다 D1 읽기 행이 적다.
+ * 정렬 키에 tile_key까지 넣어 쪽 경계가 실행마다 같다
+ */
+const nearestSql = (where: string) => `SELECT tp.place_id AS id, tp.tile_key AS tile_key,
+    p.status AS status, p.fetched_at AS fetched_at, p.fail_reason AS fail_reason
+  FROM json_each(?1) AS k
+  JOIN tile_places tp ON tp.tile_key = json_extract(k.value, '$[0]')
+  LEFT JOIN places p ON p.id = tp.place_id
+  WHERE ${where}
+  ORDER BY json_extract(k.value, '$[1]'), tp.place_id, tp.tile_key
+  LIMIT ?2 OFFSET ?3`;
+export const NEAREST_UNFETCHED_SQL = nearestSql("p.id IS NULL");
+/**
+ * due일 수 있는 행: 상세 없음, ok는 지터 전 TTL이 지남(실제 만료는 isDetailDue로 다시 본다), 실패는 TTL이 지남.
+ * ?4 ok 기준(now − DETAIL_OK_TTL_MS), ?5 실패 기준(now − DETAIL_FAIL_TTL_MS)
+ */
+export const NEAREST_DUE_SQL = nearestSql(
+  "(p.id IS NULL OR (p.status = 'ok' AND p.fetched_at <= ?4) OR (p.status <> 'ok' AND p.fetched_at <= ?5))",
+);
+type NearestRow = { id: string; tile_key: string; status: string | null; fetched_at: number | null; fail_reason: string | null };
+
+/**
+ * pickDetailIds(tilePlaceStates(keys), centers, now, limit, scope)와 같은 가게를 같은 순서로 고른다 (상태는 가장 가까운 칸 기준).
+ * ok 행의 지터는 SQL에서 볼 수 없어서 쪽을 읽고 isDetailDue로 거른다 — limit곳을 채우거나 후보가 끝날 때까지 다음 쪽을 읽는다.
+ */
+async function nearestStates(
+  db: D1Database, keys: string[], centers: LatLng[], now: number, limit: number, scope: DetailScope,
+): Promise<TilePlaceState[]> {
+  const want = Math.max(0, Math.floor(limit));
+  if (want === 0 || keys.length === 0) return [];
+  const ranked = rankTiles(keys, centers);
+  const page = Math.max(want, DETAIL_PICK_PAGE);
+  const seen = new Set<string>();
+  const out: TilePlaceState[] = [];
+  for (let offset = 0; ; offset += page) {
+    const stmt = scope === "unfetched"
+      ? db.prepare(NEAREST_UNFETCHED_SQL).bind(ranked, page, offset)
+      : db.prepare(NEAREST_DUE_SQL).bind(ranked, page, offset, now - DETAIL_OK_TTL_MS, now - DETAIL_FAIL_TTL_MS);
+    const r = await stmt.all<NearestRow>();
+    for (const x of r.results) {
+      if (out.length >= want) break;
+      // 한 가게가 여러 칸에 기록됐으면 처음(가장 가까운 칸) 것만 — 상태는 칸과 상관없이 같다
+      if (seen.has(x.id)) continue;
+      seen.add(x.id);
+      const meta = metaOf(x.status, x.fetched_at, x.fail_reason);
+      if (scope === "unfetched" || isDetailDue(meta, now, x.id)) out.push({ id: x.id, tileKey: x.tile_key, meta });
+    }
+    if (out.length >= want || r.results.length < page) return out;
+  }
+}
+
+/**
+ * R11 Cron: 주어진 격자에 기록됐지만 상세가 없는 장소 중 기준점에 가까운 순 limit곳 (unfetchedStates는 전부).
+ * Cron은 만료 후보와 이것을 합쳐 pickDetailIds로 limit곳을 고른다 — 미수집 전부를 합친 것과 같은 ID다(테스트).
+ */
+export const nearestUnfetchedStates = (db: D1Database, keys: string[], centers: LatLng[], limit: number) =>
+  nearestStates(db, keys, centers, 0, limit, "unfetched");
 
 /**
  * 이미 읽어 둔 격자-장소 상태에서 보충할 ID를 고른다 (ID 중복 제거).
@@ -226,11 +331,11 @@ export function pickDetailIds(
 ): string[] {
   const centers = Array.isArray(center) ? center : [center];
   const nearest = new Map<string, number>();
+  const distOf = new Map<string, number>();
   for (const t of states) {
     if (scope === "unfetched" ? t.meta !== null : !isDetailDue(t.meta, now, t.id)) continue;
-    const r = tileRect(t.tileKey);
-    const mid = { lat: (r.minLat + r.maxLat) / 2, lng: (r.minLng + r.maxLng) / 2 };
-    const d = Math.min(...centers.map((c) => haversine(c, mid)));
+    let d = distOf.get(t.tileKey);
+    if (d === undefined) distOf.set(t.tileKey, (d = tileDistance(t.tileKey, centers)));
     const prev = nearest.get(t.id);
     if (prev === undefined || d < prev) nearest.set(t.id, d);
   }
@@ -557,13 +662,9 @@ export async function getMeta(db: D1Database, id: string): Promise<DetailMeta> {
   return r ? metaOf(r.status, r.fetched_at, r.fail_reason) : null;
 }
 
-/** R56: 상세 저장·실패 기록은 같은 batch에서 그 가게가 보이는 거점의 스냅샷 표시를 올린다 (snapshotDirty.ts) */
-export async function saveDetail(
-  db: D1Database, id: string, s: PlaceSummary, d: PlaceDetail, now: number,
-): Promise<void> {
-  // 표시 문장을 먼저 둔다 — 옮기기 전 좌표(저장된 행)도 보게
-  const mark = markPlaceHubsDirtyStmt(db, id, { lat: s.lat, lng: s.lng }, now);
-  const insert = db
+/** 상세 한 곳을 쓰는 문장 (saveDetail과 saveDetails가 같은 문장을 쓴다) */
+function detailInsertStmt(db: D1Database, id: string, s: PlaceSummary, d: PlaceDetail, now: number): D1PreparedStatement {
+  return db
     .prepare(
       `INSERT OR REPLACE INTO places (id, status, name, category_name, category_group, lat, lng, address, phone, photo_url,
          rating, review_count, price, menus_json, hours_json, strengths_json, tags_json, bookable, fail_reason, fetched_at,
@@ -577,7 +678,45 @@ export async function saveDetail(
       // R12: 목록 원소 조각을 같은 행에 같이 쓴다 (쓰기 행 수는 그대로)
       storedListJson(detailRow(id, s, d, now)),
     );
-  await db.batch([mark, insert]);
+}
+
+/** 실패 한 곳을 쓰는 문장 (표시 정보는 그대로 두고 상태만 바꾼다 — saveDetailFailure와 saveDetails가 같은 문장을 쓴다) */
+function detailFailureStmt(db: D1Database, id: string, reason: string, now: number): D1PreparedStatement {
+  return db
+    .prepare(
+      `INSERT INTO places (id, status, fail_reason, fetched_at) VALUES (?, 'failed', ?, ?)
+       ON CONFLICT(id) DO UPDATE SET status = 'failed', fail_reason = excluded.fail_reason, fetched_at = excluded.fetched_at`,
+    )
+    .bind(id, reason, now);
+}
+
+/** R56: 상세 저장·실패 기록은 같은 batch에서 그 가게가 보이는 거점의 스냅샷 표시를 올린다 (snapshotDirty.ts) */
+export async function saveDetail(
+  db: D1Database, id: string, s: PlaceSummary, d: PlaceDetail, now: number,
+): Promise<void> {
+  // 표시 문장을 먼저 둔다 — 옮기기 전 좌표(저장된 행)도 보게
+  const mark = markPlaceHubsDirtyStmt(db, id, { lat: s.lat, lng: s.lng }, now);
+  await db.batch([mark, detailInsertStmt(db, id, s, d, now)]);
+}
+
+/** 한 번의 보충에서 저장할 것: 상세(summary·detail) 또는 실패 사유 */
+export type DetailSave = { id: string; summary: PlaceSummary; detail: PlaceDetail } | { id: string; reason: string };
+
+/**
+ * Task 34: 한 번의 보충 결과를 D1 batch 하나로 쓴다 (한 곳씩 saveDetail·saveDetailFailure를 부른 것과 같은 행·같은 list_json).
+ * 거점 표시는 맨 앞 한 문장으로 — 저장 전 좌표나 새 좌표가 1000m 상자 안인 거점을 거점마다 한 번 올린다
+ * (한 곳씩이면 같은 거점을 곳마다 올린다. 표시는 "바뀌었다"만 뜻해서 오른 거점이 같으면 같다).
+ * batch는 한 트랜잭션이라 스냅샷 Cron이 반쯤 저장된 상태를 보지 않는다. 같은 id가 두 번 오지 않는다(후보는 중복 없음).
+ */
+export async function saveDetails(db: D1Database, saves: DetailSave[], now: number): Promise<void> {
+  if (saves.length === 0) return;
+  const mark = markPlacesHubsDirtyStmt(
+    db, saves.map((x) => ({ id: x.id, next: "summary" in x ? { lat: x.summary.lat, lng: x.summary.lng } : null })), now,
+  );
+  await db.batch([
+    mark,
+    ...saves.map((x) => ("summary" in x ? detailInsertStmt(db, x.id, x.summary, x.detail, now) : detailFailureStmt(db, x.id, x.reason, now))),
+  ]);
 }
 
 /** saveDetail이 저장했다가 다시 읽은 것과 같은 행 (저장하지 않고 보여줄 때) */
@@ -594,12 +733,7 @@ export function detailRow(id: string, s: PlaceSummary, d: PlaceDetail, now: numb
 
 export async function saveDetailFailure(db: D1Database, id: string, reason: string, now: number): Promise<void> {
   await db.batch([
-    db
-      .prepare(
-        `INSERT INTO places (id, status, fail_reason, fetched_at) VALUES (?, 'failed', ?, ?)
-         ON CONFLICT(id) DO UPDATE SET status = 'failed', fail_reason = excluded.fail_reason, fetched_at = excluded.fetched_at`,
-      )
-      .bind(id, reason, now),
+    detailFailureStmt(db, id, reason, now),
     // 표시 정보(좌표)가 남아 있는 행이면 그 거점 목록의 detailsNewestAt이 바뀔 수 있다 (좌표가 없으면 목록에 없다)
     markPlaceHubsDirtyStmt(db, id, null, now),
   ]);
