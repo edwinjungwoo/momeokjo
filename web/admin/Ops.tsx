@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import {
-  BUDGET_BLOCK_AT, D1_DAILY_READ_LIMIT, D1_DAILY_WRITE_LIMIT, budgetFraction, budgetLevel, type HubStatus, type OpsData,
+  BUDGET_BLOCK_AT, D1_DAILY_READ_LIMIT, overBlockAfter, D1_DAILY_WRITE_LIMIT, budgetFraction, budgetLevel, type HubStatus, type OpsData,
 } from "../../shared/dashboard";
 import { HUBS } from "../../shared/hubs";
 import type { Api } from "./AdminPage";
@@ -30,6 +30,12 @@ type Run = {
   msg?: string;
 };
 const KIND_LABEL: Record<Kind, string> = { warm: "수집(warm)", backfill: "상세 채우기(backfill)" };
+
+/** 계산하지 않은 거점 상태 (값은 –로 보인다) */
+const emptyStatus = (hub: string): HubStatus => ({
+  hub, places: Number.NaN, ok: Number.NaN, failed: 0, pending: Number.NaN, visible: Number.NaN, listReady: Number.NaN,
+  tiles: Number.NaN, incompleteTiles: Number.NaN, saturatedTiles: 0, oldestOkAt: null, lastTileAt: null,
+});
 
 const days = (ms: number | null, now: number) => (ms === null ? "–" : `${Math.max(0, Math.floor((now - ms) / 86_400_000))}일`);
 
@@ -154,6 +160,11 @@ export function Ops({ data, api }: { data: OpsData; api: Api }) {
           break;
         }
         const res = await api.call(path, { method: "POST" });
+        if (res.status === 403) {
+          const e = (await res.json().catch(() => ({}))) as { error?: string };
+          r = { ...r, state: "stopped", msg: e.error === "read_only" ? "개발 서버(읽기 전용)에서는 실행할 수 없어요" : "권한이 없어 멈췄어요" };
+          break;
+        }
         if (res.status === 429) {
           const e = (await res.json().catch(() => ({}))) as { error?: string };
           const msg =
@@ -180,6 +191,11 @@ export function Ops({ data, api }: { data: OpsData; api: Api }) {
               : `이번에 ${num(Number(j.filled ?? 0))}곳 채움 · 더 있음`;
         r = { ...r, calls: r.calls + 1, read: r.read + read, written: r.written + written, remaining };
         setRun(r);
+        // 이번 조작이 읽고 쓴 행까지 더하면 오늘 예산이 잠금선(90%)을 넘으면 서버 429를 기다리지 않고 멈춘다
+        if (!done && overBlockAfter(b, r.read, r.written)) {
+          r = { ...r, state: "stopped", msg: "이번 조작까지 더하면 오늘 예산이 90%를 넘어 멈췄어요" };
+          break;
+        }
         if (done) {
           r = { ...r, state: "done", msg: kind === "warm" ? "남은 격자·상세가 없어요" : "남은 조각이 없어요" };
           break;
@@ -308,14 +324,21 @@ export function Ops({ data, api }: { data: OpsData; api: Api }) {
       <section className="card">
         <div className="a-card-head">
           <h2 className="sec-title">거점별 데이터 상태</h2>
-          <span className="muted small">{ago(data.hubsComputedAt, now)} 계산 (15분마다)</span>
+          <span className="muted small">
+            {data.hubsComputedAt === null ? "계산하지 않음" : `${ago(data.hubsComputedAt, now)} 계산 (15분마다)`}
+          </span>
         </div>
         {blocked && (
           <p className="banner lv-crit" role="status">
             오늘 예산을 {pct(frac)} 써서 조작 버튼을 잠갔어요 (90% 이상).
           </p>
         )}
-        <HubTable hubs={data.hubs} now={now} blocked={blocked} running={running} onRun={(hub, kind) => setAsk({ hub, kind })} />
+        {data.hubs === null && (
+          <p className="banner lv-warn" role="status">
+            오늘 D1 읽기가 소프트 한도의 절반을 넘어 거점 상태를 새로 계산하지 않았어요 (수천 행을 읽어요).
+          </p>
+        )}
+        <HubTable hubs={data.hubs ?? HUBS.map((h) => emptyStatus(h.id))} now={now} blocked={blocked} running={running} onRun={(hub, kind) => setAsk({ hub, kind })} />
         {run && (
           <div className={`run-panel lv-${run.state === "running" ? "info" : run.state === "done" ? "ok" : "warn"}`} role="status" aria-live="polite">
             <div className="run-head">

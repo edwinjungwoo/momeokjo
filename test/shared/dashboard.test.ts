@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   CRON_STALE_MS, addDays, alertsOf, budgetFraction, budgetLevel, dayList, daysBetween, deltaOf, histogramMedian, isDay,
-  METRICS, METRIC_FAMILIES, mondayOf, weekdayOf, type HubStatus, type OpsSnapshot,
+  METRICS, METRIC_FAMILIES, mondayOf, overBlockAfter, weekdayOf, type HubStatus, type OpsSnapshot,
 } from "../../shared/dashboard";
 import spec from "../../docs/superpowers/specs/2026-10-05-momeokjo-design.md?raw";
 
@@ -31,6 +31,13 @@ describe("대시보드 순수 계산", () => {
   it("R60: 예산 사용률은 읽기·쓰기 중 소프트 한도에 더 가까운 쪽", () => {
     expect(budgetFraction(ops({ read: 1_500_000, written: 48_000 }).budget)).toBeCloseTo(0.8);
     expect(budgetFraction(ops({ read: 2_400_000, written: 6_000 }).budget)).toBeCloseTo(0.8);
+  });
+
+  it("R60: 운영 조작은 이번 조작이 읽고 쓴 행까지 더해 예산 90 %를 넘으면 멈춘다", () => {
+    const b = ops({ read: 2_400_000, written: 1000 }).budget; // 80 %
+    expect(overBlockAfter(b, 200_000, 0)).toBe(false); // 86.7 %
+    expect(overBlockAfter(b, 300_000, 0)).toBe(true); // 90 %
+    expect(overBlockAfter(b, 0, 53_000)).toBe(true); // 쓰기 90 %
   });
 
   it("R58: 결정 시간 중앙값은 구간 안에서 선형 보간한다 (열린 마지막 구간이면 아래 경계)", () => {

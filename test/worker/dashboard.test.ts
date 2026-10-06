@@ -174,7 +174,7 @@ describe("GET /api/admin/dashboard", () => {
     expect(d.ops.budget.read).toBeGreaterThanOrEqual(1000);
     expect(d.ops.kakao).toEqual({ blockedUntil: NOW + 60_000, frozen: null, blocksToday: 2 });
     expect(d.ops.cron).toMatchObject({ at: NOW - 120_000, enriched: 2, calls: 5 });
-    const p = d.hubs.find((h) => h.hub === "pangyo")!;
+    const p = d.hubs!.find((h) => h.hub === "pangyo")!;
     expect(p).toMatchObject({ places: 3, ok: 1, failed: 1, pending: 1, visible: 1, listReady: 1, tiles: keys.length });
     expect(p.incompleteTiles).toBe(keys.length - 1);
     expect(p.oldestOkAt).toBe(NOW - 2 * 24 * 3600_000);
@@ -245,5 +245,33 @@ describe("GET /api/admin/dashboard", () => {
     const d = await (await get(setup(), "tab=overview&from=2027-01-15&to=2027-01-15")).json<OverviewData>();
     expect(d.sources).toEqual({ [TODAY]: "missing" });
     expect(d.kpis.sessions.value).toBeNull();
+  });
+
+  it("R38/R59: 같은 가드로 거점별 데이터 상태(격자·가게 수천 행)도 캐시에 없으면 계산하지 않는다", async () => {
+    await env.DB.prepare("INSERT INTO meta VALUES (?, '1500000')").bind(`d1_read:${utcDay(NOW)}`).run();
+    const { db, log } = recordingDb(env.DB);
+    const res = await callApp(setup(), "/api/admin/dashboard?tab=ops", { headers: AUTH }, { ...env, DB: db });
+    const d = await res.json<OpsData>();
+    expect(d.hubs).toBeNull();
+    expect(d.hubsComputedAt).toBeNull();
+    expect(log.some((x) => x.sql.includes("tile_places"))).toBe(false);
+  });
+
+  it("R59: 실제 Workers 캐시(caches.default)에 들어가서, 같은 요청을 다시 열면 D1을 거의 읽지 않는다", async () => {
+    await seedEvents(day(TODAY, 100));
+    const app = setup({ cache: caches.default });
+    // 다른 테스트와 캐시 키가 겹치지 않게 이 테스트만 쓰는 기간·거점
+    const q = "tab=overview&from=2027-01-03&to=2027-01-15&hub=naebang";
+    const first = await get(app, q);
+    expect(first.status).toBe(200);
+    const { db, log } = recordingDb(env.DB);
+    const again = await callApp(app, `/api/admin/dashboard?${q}`, { headers: AUTH }, { ...env, DB: db });
+    expect(again.headers.get("cache-control")).toBe("no-store");
+    expect(await again.json()).toEqual(await first.json());
+    expect(log.reduce((s, x) => s + x.read, 0)).toBe(0);
+    // 응답 캐시가 아니어도(다른 비교 설정) 실시간·거점 상태는 캐시에서 온다
+    log.length = 0;
+    await callApp(app, `/api/admin/dashboard?${q}&compare=0`, { headers: AUTH }, { ...env, DB: db });
+    expect(log.some((x) => /FROM events|tile_places/.test(x.sql))).toBe(false);
   });
 });

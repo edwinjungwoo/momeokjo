@@ -271,8 +271,9 @@ export type OpsSnapshot = {
 export type OpsData = DashboardBase & {
   tab: "ops";
   ops: OpsSnapshot;
-  hubs: HubStatus[];
-  hubsComputedAt: number;
+  /** 거점별 데이터 상태 (오늘 읽기가 소프트 한도의 절반을 넘었고 캐시에도 없으면 null — 계산하지 않았다) */
+  hubs: HubStatus[] | null;
+  hubsComputedAt: number | null;
   /** 오늘(KST) 저장된 이벤트 수 (실시간 집계에서), 모르면 null */
   eventsToday: number | null;
   alerts: Alert[];
@@ -283,6 +284,10 @@ export type DashboardResponse = OverviewData | BehaviorData | OpsData;
 /** 예산 사용률: 읽기·쓰기 중 소프트 한도에 더 가까운 쪽 */
 export const budgetFraction = (b: OpsSnapshot["budget"]) =>
   Math.max(b.read / Math.max(1, b.readSoftCap), b.written / Math.max(1, b.writeSoftCap));
+
+/** R60 운영 조작 중: 이번 조작이 읽고 쓴 행까지 더하면 예산 사용률이 잠금선(90 %) 이상인가 */
+export const overBlockAfter = (b: OpsSnapshot["budget"], read: number, written: number) =>
+  budgetFraction({ ...b, read: b.read + read, written: b.written + written }) >= BUDGET_BLOCK_AT;
 
 /**
  * R57 "오늘의 이상 신호". 순서: 심각한 것 먼저.

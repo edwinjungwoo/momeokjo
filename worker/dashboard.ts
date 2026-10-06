@@ -61,7 +61,8 @@ export function putJson(deps: Pick<DashboardDeps, "cache" | "defer">, key: strin
   const res = new Response(body, {
     headers: {
       "content-type": "application/json",
-      "cache-control": `private, max-age=${Math.round(ttlMs / 1000)}`,
+      // Workers Cache API는 private 응답을 저장하지 않는다 — 내부 키(cache.mmj)라 public으로 둔다 (브라우저 응답은 따로 no-store)
+      "cache-control": `public, max-age=${Math.round(ttlMs / 1000)}, s-maxage=${Math.round(ttlMs / 1000)}`,
       [EXPIRES]: String(now + ttlMs),
     },
   });
@@ -236,11 +237,13 @@ export async function hubStatuses(db: D1Database, now: number): Promise<HubStatu
   });
 }
 
-async function cachedHubStatuses(deps: DashboardDeps): Promise<{ hubs: HubStatus[]; at: number }> {
-  if (!deps.fresh) {
+/** 거점 상태: 캐시에 있으면 그것, 없으면 계산 — 단 오늘 읽기가 실시간 가드(LIVE_BUDGET_SHARE)를 넘었으면 계산하지 않는다(null) */
+async function cachedHubStatuses(deps: DashboardDeps, allowed: boolean): Promise<{ hubs: HubStatus[] | null; at: number | null }> {
+  if (!deps.fresh || !allowed) {
     const hit = await cachedJson<{ hubs: HubStatus[]; at: number }>(deps.cache, HUBS_KEY, deps.now);
     if (hit) return hit;
   }
+  if (!allowed) return { hubs: null, at: null };
   const v = { hubs: await hubStatuses(deps.db, deps.now), at: deps.now };
   putJson(deps, HUBS_KEY, JSON.stringify(v), deps.now, HUB_STATUS_CACHE_MS);
   return v;
@@ -308,7 +311,7 @@ async function overview(deps: DashboardDeps, q: DashboardQuery, state: MetaState
       ],
       new Set(hubKeys),
     ),
-    cachedHubStatuses(deps),
+    cachedHubStatuses(deps, liveAllowed),
   ]);
 
   const cur = kpiValues(store, rangeDays, key, sources);
@@ -449,7 +452,7 @@ async function ops(deps: DashboardDeps, q: DashboardQuery, state: MetaState): Pr
   const today = kstDay(deps.now);
   const liveAllowed = liveAllowedBy(state, deps);
   const [hubs, count] = await Promise.all([
-    cachedHubStatuses(deps),
+    cachedHubStatuses(deps, liveAllowed),
     // 오늘 이벤트 수는 idx_events_day 색인만 센다 (실시간 집계보다 훨씬 싸다)
     liveAllowed
       ? deps.db.prepare("SELECT count(*) AS n FROM events WHERE day = ?").bind(today).first<{ n: number }>()
