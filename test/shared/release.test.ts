@@ -244,6 +244,36 @@ describe("R62 준비 중 거점 — 스모크", () => {
     expect(parseSmokeFails(out)).toEqual([]);
   });
 
+  it("R62: 준비 중 거점 목록이 200이면 코드 수준 FAIL이라(데이터 상태 아님) 기준에 없던 줄이면 롤백 판단이다", () => {
+    const leak = "준비 중 gangnam 목록 숨김 → 200 (기대 400)";
+    const pub = ALL_HUBS.filter((h) => h.ready).map((h) => h.id);
+    expect(isDataStateFail(leak)).toBe(false);
+    expect(classifySmokeFails([leak], pub)).toEqual({ code: [leak], data: [] });
+    const s = { requests: 25, fails: 1, warns: 0 };
+    expect(shouldRollback({ code: 1, summary: s, fails: [leak], baseline: [], hubIds: pub })).toMatchObject({ action: "rollback", newFails: [leak] });
+    // 같은 줄이 기준에도 있었으면(--accept-baseline-fails로 받아들임) 새 FAIL이 아니다
+    expect(shouldRollback({ code: 1, summary: s, fails: [leak], baseline: [leak], hubIds: pub })).toMatchObject({ action: "keep" });
+  });
+
+  it("R62: 배포 뒤 공개 거점의 400(코드 FAIL)은 롤백 판단이다 — 기준에서는 WARN이라 줄 자체가 없다", () => {
+    const pub = ALL_HUBS.filter((h) => h.ready).map((h) => h.id);
+    const f = "gangnam 500m → 400";
+    expect(isDataStateFail(f)).toBe(false);
+    expect(shouldRollback({ code: 1, summary: { requests: 25, fails: 1, warns: 0 }, fails: [f], baseline: [], hubIds: pub })).toMatchObject({ action: "rollback" });
+  });
+
+  it("R62: smoke.sh는 SMOKE_BASELINE=1(기준 실행)에서만 운영과 로컬 ready 차이를 WARN으로 낮추고, hubs.ts를 못 읽어 내장 목록을 쓰면 알린다", () => {
+    expect(smokeSh).toMatch(/\[ "\$\{SMOKE_BASELINE:-\}" = 1 \] && baseline=true/);
+    expect(smokeSh).toMatch(/if \$baseline && \[ "\$code" = 400 \]; then\n\s+# [^\n]*\n\s+warn "공개 예정 \$id: 운영은 아직 숨김 \(400\)"/);
+    expect(smokeSh).toMatch(/warn "숨김 예정 \$id: 운영은 아직 공개 중/);
+    // 기준 아닌 실행의 숨김 확인은 expect_code (FAIL)
+    expect(smokeSh).toMatch(/else\n\s+expect_code "hidden-\$id" 400 "준비 중 \$id 목록 숨김"/);
+    // 공개 예정 거점의 감사는 info
+    expect(smokeSh).toMatch(/info "감사 \$id\(공개 예정, 운영은 아직 숨김\)/);
+    // hubs.ts가 있는데 내장 목록으로 떨어지면 WARN
+    expect(smokeSh).toMatch(/if \[ -f "\$HUBS_TS" \]; then warn "shared\/hubs\.ts에서 거점을 읽지 못해 내장 목록으로/);
+  });
+
   it("R62: '모든 거점 0곳'(코드 수준) 판단은 스모크가 목록을 본 공개 거점 기준이다", () => {
     const pub = ALL_HUBS.filter((h) => h.ready).map((h) => h.id);
     const all = pub.map(emptyFail);

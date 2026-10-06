@@ -6,6 +6,9 @@
 #         (토큰이 있으면 거점마다 감사 Q1·Q2를 더 본다. 토큰 값은 출력하지 않고, curl 인자에도 넣지 않는다)
 # R62 준비 중 거점(shared/hubs.ts의 ready: false): 목록은 보지 않고 "공개 API가 400으로 숨기는지"만 본다.
 #   감사는 하되 결과를 info로만 찍는다 (FAIL·WARN이 아니라 release.mjs가 롤백·중단 사유로 보지 않는다)
+# SMOKE_BASELINE=1 (release의 배포 전 기준 실행에만 붙는다): 로컬 hubs.ts는 새 코드인데 운영은 아직 이전 코드다.
+#   ready인 거점이 운영에서 400이면 "공개 예정" WARN, ready가 아닌 거점이 운영에서 200이면 "숨김 예정" WARN으로만 알린다
+#   (거점을 공개·숨길 때 --accept-baseline-fails 없이 배포되게). 배포 뒤 스모크는 이 값 없이 돌아 같은 줄이 FAIL이다 → 롤백
 #
 # 요청 수: 기본 15번 + 거점마다 1번 (+ ADMIN_TOKEN이 있으면 거점 수만큼). 읽기 경로에는 IP 제한이 없지만, 목록 요청이 카카오 수집을
 #   새로 부르면 그 수집은 IP당 분당 10회 제한(RATE_LIMITER)과 카카오 쿼터를 쓴다. 관리자 요청(인증 실패 2번 +
@@ -17,9 +20,12 @@ set -uo pipefail
 
 B=${B:-https://mmj.itmz.me}
 B=${B%/}
+baseline=false
+[ "${SMOKE_BASELINE:-}" = 1 ] && baseline=true
 for c in curl jq; do command -v "$c" >/dev/null || { echo "$c이(가) 필요해요" >&2; exit 2; }; done
 
 fails=0 warns=0 reqs=0
+notyet=""   # 기준 실행에서 운영이 아직 숨기는 공개 예정 거점 (감사는 info로만)
 ok()   { printf "  ok    %s\n" "$1"; }
 bad()  { printf "  FAIL  %s\n" "$1"; fails=$((fails + 1)); }
 warn() { printf "  WARN  %s\n" "$1"; warns=$((warns + 1)); }
@@ -62,6 +68,9 @@ fi
 if [ ${#hubs[@]} -eq 0 ]; then
   hubs=("bongeunsa 37.514255 127.060234 true" "ddp 37.5651 127.00749 true" "pangyo 37.394777 127.11159 true"
     "naebang 37.487659 126.9936 true" "gwacheon 37.426505 126.989868 true")
+  # 저장소 안에서 이 목록으로 떨어졌다면 새 거점·ready 변경을 놓친 채 옛 목록으로 확인하는 것이다
+  if [ -f "$HUBS_TS" ]; then warn "shared/hubs.ts에서 거점을 읽지 못해 내장 목록으로 확인해요 (sed 식과 hubs.ts 모양 확인)"
+  else info "shared/hubs.ts 없음(저장소 밖) — 내장 거점 목록으로 확인"; fi
 fi
 
 echo "모먹죠 스모크 → $B"
@@ -113,13 +122,26 @@ for h in "${hubs[@]}"; do
   read -r id _ _ ready <<<"$h"
   if [ "$ready" != true ]; then
     # R62: 덜 모은 거점은 공개 API가 모르는 거점처럼 400이어야 한다 (200이면 화면 밖에서 덜 모은 목록이 보인다 — 코드 문제)
-    expect_code "hidden-$id" 400 "준비 중 $id 목록 숨김" "$B/api/places?hub=$id&radius=500"
+    if $baseline; then
+      req "hidden-$id" "$B/api/places?hub=$id&radius=500"
+      if [ "$CODE" = 400 ]; then ok "준비 중 $id 목록 숨김 → 400"
+      elif [ "$CODE" = 200 ]; then warn "숨김 예정 $id: 운영은 아직 공개 중 (배포 뒤에는 400이어야 함)"
+      else bad "준비 중 $id 목록 숨김 → $CODE (기대 400)"; fi
+    else
+      expect_code "hidden-$id" 400 "준비 중 $id 목록 숨김" "$B/api/places?hub=$id&radius=500"
+    fi
     continue
   fi
   r=500
   [ "$id" = bongeunsa ] && r=1000
   req "places-$id" "$B/api/places?hub=$id&radius=$r"
   code=$CODE ttfb=$TTFB size=$SIZE
+  if $baseline && [ "$code" = 400 ]; then
+    # 새로 공개할 거점: 이전 코드의 운영은 아직 모르는 거점이라 400이다
+    warn "공개 예정 $id: 운영은 아직 숨김 (400)"
+    notyet="$notyet $id "
+    continue
+  fi
   if [ "$code" != 200 ] || ! jq -e . "$tmp/places-$id.body" >/dev/null 2>&1; then
     bad "$id ${r}m → $code"
     continue
@@ -176,6 +198,10 @@ if [ -n "${ADMIN_TOKEN:-}" ]; then
     f="$tmp/audit-$id.body"
     if [ "$ready" != true ]; then
       info "감사 $id(준비 중) → $code $(jq -c '{pass, places, tiles, detail: (.detail // null)}' "$f" 2>/dev/null) — 공개 전 확인용, FAIL로 세지 않음"
+      continue
+    fi
+    if [[ "$notyet" == *" $id "* ]]; then
+      info "감사 $id(공개 예정, 운영은 아직 숨김) → $code — 기준 실행이라 FAIL로 세지 않음"
       continue
     fi
     if [ "$code" = 200 ] && jq -e '.pass.q1 and .pass.q2' "$f" >/dev/null 2>&1; then

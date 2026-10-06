@@ -206,9 +206,9 @@ export function smokeFailKey(line) {
 
 /**
  * 코드가 아니라 데이터 상태를 말하는 FAIL (줄 하나만 보고). 이것만으로는 롤백하지 않는다.
- * - 감사가 200으로 답했지만 Q1·Q2를 통과하지 못함: smoke.sh:172 `감사 <id> → 200 {"pass":{…},…}`
+ * - 감사가 200으로 답했지만 Q1·Q2를 통과하지 못함: smoke.sh의 `감사 <id> → 200 {"pass":{…},…}` 줄 (감사 단계의 bad)
  *   (감사 요청 자체의 실패 — 500·000·401, 200인데 JSON 없음 — 은 코드 수준)
- * - 목록이 200인데 0곳: smoke.sh:121 `<id> <r>m 200인데 0곳` (모든 거점이 그러면 classifySmokeFails가 코드 수준으로 올린다)
+ * - 목록이 200인데 0곳: smoke.sh의 `<id> <r>m 200인데 0곳` 줄 (목록 단계의 bad) (모든 거점이 그러면 classifySmokeFails가 코드 수준으로 올린다)
  */
 export function isDataStateFail(line) {
   const s = stripAnsi(line).trim();
@@ -435,7 +435,7 @@ const ROLLBACK_CAVEATS = [
  */
 export async function runRelease(opts, deps) {
   // R62: 스모크 FAIL 분류("모든 거점 0곳")는 스모크가 목록을 본 공개 거점 기준. 백필 훅은 모든 거점(deps.hubIds)
-  const smokeHubIds = deps.publicHubIds ?? deps.hubIds;
+  const smokeHubIds = deps.publicHubIds;
   const startedAt = deps.now();
   const log = deps.log;
   const summary = {
@@ -546,8 +546,10 @@ export async function runRelease(opts, deps) {
     if (head !== remote) throw new Stop(`HEAD(${head.slice(0, 7)})가 origin/${branch}(${remote.slice(0, 7)})와 달라요 — 푸시(또는 pull)해서 맞춘 뒤 다시 하세요`);
     return head;
   };
-  const runSmoke = async () => {
+  // 기준 실행에만 SMOKE_BASELINE=1: 로컬 hubs.ts(새 코드)와 운영(이전 코드)의 ready 차이를 FAIL이 아니라 WARN으로 (smoke.sh 머리말)
+  const runSmoke = async ({ baseline = false } = {}) => {
     const env = { B: PROD_URL };
+    if (baseline) env.SMOKE_BASELINE = "1";
     if (deps.adminToken) env.ADMIN_TOKEN = deps.adminToken;
     const r = await exec("bash", ["scripts/smoke.sh"], { echo: true, env });
     return { code: r.code, summary: parseSmokeSummary(r.all), fails: parseSmokeFails(r.all) };
@@ -662,7 +664,7 @@ export async function runRelease(opts, deps) {
 
     // 5. 기준 스모크 — 배포 전 지금 운영(이전 코드)의 FAIL. 배포 뒤에는 여기 없던 FAIL만 새 코드 탓으로 본다
     log("== 5. 기준 스모크 (배포 전, 지금 운영)");
-    const base = await runSmoke();
+    const base = await runSmoke({ baseline: true });
     if (!base.summary || base.summary.fails !== base.fails.length) {
       throw new Stop(`기준 스모크 결과를 읽지 못했어요 (종료 코드 ${base.code}) — 배포 뒤와 비교할 수 없어 배포하지 않아요`);
     }

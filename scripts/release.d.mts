@@ -28,8 +28,8 @@ export type ReleaseDeps = {
   adminToken: string | undefined;
   /** 모든 거점 id (마이그레이션 훅의 거점별 백필 — R62 준비 중 거점 포함) */
   hubIds: string[];
-  /** R62: 스모크가 목록을 보는 공개 거점 id ("모든 거점 0곳" 판단). 없으면 hubIds */
-  publicHubIds?: string[];
+  /** R62: 스모크가 목록을 보는 공개 거점 id ("모든 거점 0곳" 판단). hubIds의 부분집합 */
+  publicHubIds: string[];
 };
 export type SmokeSummary = { requests: number; fails: number; warns: number };
 export type HookResult = { migration: string; name: string; command: string; result: "ok" | "budget" | "failed" };

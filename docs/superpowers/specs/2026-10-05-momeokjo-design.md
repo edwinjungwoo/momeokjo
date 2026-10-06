@@ -336,7 +336,8 @@ CREATE TABLE hub_snapshots (
 - **R62 새 거점 "준비 중".** 데이터가 완전하고 안전한 게 우선이라, 새 거점은 수집·감사(Q1·Q2)가 끝날 때까지 사용자에게 보이지 않게 둔다. `shared/hubs.ts`의 `Hub`에 `ready: boolean`이 있고(지금 5곳 `true`, 강남역·여의도역·광화문역 `false`), `PUBLIC_HUBS`(ready만)와 `HUBS`(모두)를 나눠 쓴다.
   - 공개 거점만(`PUBLIC_HUBS`·`isPublicHubId`·`publicHubById`): 거점 칩 메뉴(R24), 첫 접속 질문(R61), 거점 짧은 링크·공유 링크의 경로 거점과 예전 `h`(R43 `parseHubPath`·`parseShareParams` — 준비 중 거점은 모르는 경로·모르는 거점처럼 무시), 설정 검증(R25 — 저장된 준비 중 거점은 기본 거점), 공개 목록 API `/api/places?hub=`(준비 중이면 모르는 거점처럼 400 `invalid_params` — 덜 모은 목록을 API로도 볼 수 없게), 이벤트 검증(R35 — 준비 중 거점 이벤트는 버림), 거점 스냅샷(R56 — 공개 거점만 만들고, 남은 준비 중 거점 행은 지운다). 화면 코드(관리 화면 밖)는 `HUBS`·`hubById`·`isHubId`를 쓰지 않는다(테스트로 고정).
   - 모든 거점(`HUBS`): 본 Cron 수집·보충(R11)과 미수집 커서, 스냅샷 더러움 표시, 관리자 warm·backfill·audit(`--hub gangnam`), `scripts/area.mjs`, 관리 화면(거점 고르기는 이름 뒤 "(준비 중)", 운영 탭 거점 표는 "준비 중" 표시 — 토큰 뒤라 공개가 아니다), release의 거점별 백필 훅.
-  - 스모크(`scripts/smoke.sh`가 `hubs.ts`에서 `ready`까지 읽는다): 공개 거점만 목록을 보고, 준비 중 거점은 `/api/places`가 400인지만 본다(200이면 코드 문제라 FAIL). 토큰이 있으면 준비 중 거점도 감사하지만 결과는 `info`로만 찍는다(FAIL·WARN이 아니라 release가 롤백·중단 사유로 보지 않음). release의 "모든 거점 0곳" 판단(코드 수준)은 스모크가 목록을 본 공개 거점 기준(`publicHubIds`).
+  - 스모크(`scripts/smoke.sh`가 `hubs.ts`에서 `ready`까지 읽는다): 공개 거점만 목록을 보고, 준비 중 거점은 `/api/places`가 400인지만 본다(200이면 코드 문제라 FAIL). 토큰이 있으면 준비 중 거점도 감사하지만 결과는 `info`로만 찍는다(FAIL·WARN이 아니라 release가 롤백·중단 사유로 보지 않음). release의 "모든 거점 0곳" 판단(코드 수준)은 스모크가 목록을 본 공개 거점 기준(`publicHubIds`, 필수). release의 배포 전 기준 스모크만 `SMOKE_BASELINE=1`이라, 로컬 hubs.ts(새 코드)와 운영(이전 코드)의 ready 차이(공개 예정 거점이 운영에서 400, 숨길 거점이 운영에서 200)는 WARN으로만 알려 `--accept-baseline-fails` 없이 공개·숨김이 된다. 배포 뒤 스모크는 같은 줄이 FAIL(코드 수준)이라 롤백한다.
+  - 의도적 예외: 단일 장소 조회 `/api/places/:id`는 거점으로 막지 않는다. 한 가게(상세 정보)를 돌려줄 뿐 덜 모은 목록이 아니고, 거점 밖 가게와 같게 동작한다.
   - 공개는 한 줄: 수집 → 감사 Q1·Q2 통과 → `ready: true` → release (docs/deploy.md "새 거점 공개 순서").
 - **R26 도보 시간.** `walkMinutes = ceil(직선거리 × 1.3 / 70)` (우회 계수 1.3, 분속 70m)
 

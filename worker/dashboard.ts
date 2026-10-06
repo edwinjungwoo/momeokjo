@@ -258,6 +258,8 @@ const KPI_METRICS = ["users", "new_users", "sessions", "decided", "draw_manual",
 const HOUR_METRICS = Array.from({ length: 24 }, (_, h) => `sessions_h${String(h).padStart(2, "0")}`);
 const SPARK_DAYS = 14;
 const hubName = (id: string) => (HUBS.some((h) => h.id === id) ? hubById(id).name : id);
+/** R62: 준비 중 거점 (모르는 id는 아님) — 이상 신호에서 "(준비 중)"으로 표시하고 뒤로 보낸다 */
+const isUnreadyHub = (id: string) => HUBS.some((h) => h.id === id && !h.ready);
 
 type CompareDays = { cur: string[]; prev: string[]; excludesToday: boolean };
 
@@ -409,7 +411,7 @@ async function overview(deps: DashboardDeps, q: DashboardQuery, state: MetaState
     })),
     heatmap,
     hubs: hubRows,
-    alerts: alertsOf(state.ops, hubs.hubs, deps.now, { through: state.rollupThrough, yesterday: addDays(today, -1) }, hubName),
+    alerts: alertsOf(state.ops, hubs.hubs, deps.now, { through: state.rollupThrough, yesterday: addDays(today, -1) }, hubName, isUnreadyHub),
   };
 }
 
@@ -560,7 +562,7 @@ async function ops(deps: DashboardDeps, q: DashboardQuery, state: MetaState): Pr
     hubs: hubs.hubs,
     hubsComputedAt: hubs.at,
     eventsToday: count ? Number(count.n) : null,
-    alerts: alertsOf(state.ops, hubs.hubs, deps.now, { through: state.rollupThrough, yesterday: addDays(today, -1) }, hubName),
+    alerts: alertsOf(state.ops, hubs.hubs, deps.now, { through: state.rollupThrough, yesterday: addDays(today, -1) }, hubName, isUnreadyHub),
   };
 }
 

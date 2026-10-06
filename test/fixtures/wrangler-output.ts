@@ -145,12 +145,12 @@ export const FAIL_ASSET_OLD = "/assets/index-CePFwRKS.js → 404, cache-control 
 export const FAIL_ASSET_NEW = "/assets/index-Zb9xQ2aa.js → 404, cache-control '' (immutable 1년 기대, public/_headers 확인)";
 export const FAIL_PLACES_500 = "ddp 500m → 500";
 export const FAIL_PLACES_000 = "ddp 500m → 000";
-/** smoke.sh:172 — 감사가 200으로 답했지만 Q1·Q2를 통과하지 못함 (데이터 상태) */
+/** smoke.sh 감사 단계 — 감사가 200으로 답했지만 Q1·Q2를 통과하지 못함 (데이터 상태) */
 export const FAIL_AUDIT = '감사 ddp → 200 {"pass":{"q1":false,"q2":true},"tiles":{"incomplete":2},"detail":{"coverage":0.8}}';
 /** 감사 요청 자체가 실패 (HTTP 오류·연결 실패·인증) — 코드 수준 */
 export const FAIL_AUDIT_500 = "감사 ddp → 500";
 export const FAIL_AUDIT_000 = "감사 pangyo → 000";
 export const FAIL_AUDIT_401 = '감사 naebang → 401 {"pass":null,"tiles":null,"detail":null}';
-/** smoke.sh:121 — 목록이 200인데 0곳 */
+/** smoke.sh 목록 단계 — 목록이 200인데 0곳 */
 export const FAIL_EMPTY = "pangyo 500m 200인데 0곳";
 export const emptyFail = (id: string) => `${id} ${id === "bongeunsa" ? 1000 : 500}m 200인데 0곳`;

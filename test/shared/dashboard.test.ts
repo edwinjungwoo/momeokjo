@@ -86,4 +86,20 @@ describe("대시보드 순수 계산", () => {
     const b = alertsOf(ops({ read: 2_800_000, frozen: { since: NOW - 1, until: NOW + 1 }, cronAt: null }), null, NOW, rollup);
     expect(b.map((x) => [x.level, x.code])).toEqual([["crit", "budget"], ["crit", "frozen"], ["warn", "cron"]]);
   });
+
+  it("R62: 준비 중 거점의 이상 신호는 이름 뒤에 \"(준비 중)\"이 붙고 참고 단계 안에서도 맨 뒤로 간다 (집계 밀림보다도 뒤)", () => {
+    const c = alertsOf(
+      ops(),
+      [hub({ hub: "gangnam", pending: 40 }), hub({ hub: "ddp", pending: 3 })],
+      NOW,
+      { through: "2027-01-10", yesterday: "2027-01-14" },
+      (id) => ({ gangnam: "강남역", ddp: "동대문" })[id as "gangnam" | "ddp"],
+      (id) => id === "gangnam",
+    );
+    expect(c.map((x) => [x.level, x.code, x.text])).toEqual([
+      ["info", "hub:ddp", "동대문: 미수집 3곳"],
+      ["info", "rollup", "지난 날 집계를 Cron이 채우는 중이에요"],
+      ["info", "hub:gangnam", "강남역 (준비 중): 미수집 40곳"],
+    ]);
+  });
 });

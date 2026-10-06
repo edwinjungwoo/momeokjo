@@ -112,7 +112,7 @@ function harness(
     isTTY: extra.isTTY ?? false,
     adminToken: extra.adminToken === null ? undefined : (extra.adminToken ?? TOKEN),
     hubIds: extra.hubIds ?? HUBS,
-    ...(extra.publicHubIds ? { publicHubIds: extra.publicHubIds } : {}),
+    publicHubIds: extra.publicHubIds ?? extra.hubIds ?? HUBS,
   };
   const ran = (prefix: string) => calls.filter((c) => c.line === prefix || c.line.startsWith(prefix + " "));
   return { deps, calls, logs, appended, written, files, sleeps, ran, output: () => logs.join("\n") };
@@ -517,6 +517,34 @@ describe("infra: npm run release — 기준 스모크와 자동 롤백", () => {
   /** [배포 전 기준, 배포 뒤] 스모크 응답 */
   const smokes = (before: string[], after: string[]) => ({
     "bash scripts/smoke.sh": [before.length ? fail("", 1, smokeOutput(before)) : ok(smokeOutput(0)), after.length ? fail("", 1, smokeOutput(after)) : ok(smokeOutput(0))],
+  });
+
+  it("R62: 거점을 공개하는 release(ready: true로 바꿈) — 기준 스모크에만 SMOKE_BASELINE=1이 붙고, 운영이 아직 400이어도 WARN뿐이라 플래그 없이 배포한다", async () => {
+    const baseWarn = smokeOutput([]).replace("== 정적 파일", "== 정적 파일\n  WARN  공개 예정 gangnam: 운영은 아직 숨김 (400)");
+    const h = harness({ "bash scripts/smoke.sh": [ok(baseWarn), ok(smokeOutput(0))] });
+    const res = await runRelease(opts({ acceptBaselineFails: false }), h.deps);
+    expect(res.code).toBe(0);
+    expect(h.ran("npm run deploy")).toHaveLength(1);
+    expect(h.ran("npx wrangler rollback")).toHaveLength(0);
+    const smokeCalls = h.ran("bash scripts/smoke.sh");
+    expect(smokeCalls).toHaveLength(2);
+    expect(smokeCalls[0].env.SMOKE_BASELINE).toBe("1");
+    expect(smokeCalls[1].env.SMOKE_BASELINE).toBeUndefined();
+  });
+
+  it("R62: 배포 뒤에도 공개한 거점이 400이면(코드 FAIL, 기준에는 없던 줄) 계속될 때 롤백한다 — 플래그 없는 스모크", async () => {
+    const h = harness(smokes([], ["gangnam 500m → 400"]));
+    const res = await runRelease(opts(), h.deps);
+    expect(res.code).toBe(2);
+    expect(h.ran("npx wrangler rollback")).toHaveLength(1);
+    // 기준·배포 뒤·다시 돌린 것 중 기준만 SMOKE_BASELINE
+    expect(h.ran("bash scripts/smoke.sh").map((c) => c.env.SMOKE_BASELINE)).toEqual(["1", undefined, undefined]);
+  });
+
+  it("R62: 준비 중 거점이 배포 뒤에 200이면(숨김이 새는 코드) 새 코드 FAIL이라 롤백한다", async () => {
+    const h = harness(smokes([], ["준비 중 gangnam 목록 숨김 → 200 (기대 400)"]), { hubIds: [...HUBS, "gangnam"], publicHubIds: HUBS });
+    expect((await runRelease(opts(), h.deps)).code).toBe(2);
+    expect(h.ran("npx wrangler rollback")).toHaveLength(1);
   });
 
   it("infra: 기준에 없던 코드 수준 FAIL이 새로 생기면 기록한 버전으로 비대화식 롤백(--message, --yes), 종료 코드 2", async () => {

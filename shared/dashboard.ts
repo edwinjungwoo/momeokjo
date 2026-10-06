@@ -310,10 +310,12 @@ export const overBlockAfter = (b: OpsSnapshot["budget"], read: number, written: 
 /**
  * R57 "오늘의 이상 신호". 순서: 심각한 것 먼저.
  * 예산 > 70 %(소프트 한도 대비), 상세 쿨다운·frozen, pending > 0이거나 미완료 격자가 있는 거점, 15분 넘게 Cron이 돌지 않음, 집계 밀림
+ * R62: 준비 중 거점은 아직 모으는 중이라 미수집·미완료가 당연하다 → 이름 뒤에 "(준비 중)"을 붙이고 참고 신호 중에서도 맨 뒤로 보낸다
  */
 export function alertsOf(
   ops: OpsSnapshot, hubs: HubStatus[] | null, now: number, rollup: { through: string | null; yesterday: string },
   hubName: (id: string) => string = (id) => id,
+  isUnready: (id: string) => boolean = () => false,
 ): Alert[] {
   const out: Alert[] = [];
   const f = budgetFraction(ops.budget);
@@ -334,12 +336,14 @@ export function alertsOf(
   for (const h of hubs ?? []) {
     if (h.pending > 0 || h.incompleteTiles > 0) {
       const parts = [h.pending > 0 ? `미수집 ${h.pending}곳` : "", h.incompleteTiles > 0 ? `미완료 격자 ${h.incompleteTiles}칸` : ""];
-      out.push({ level: "info", code: `hub:${h.hub}`, text: `${hubName(h.hub)}: ${parts.filter(Boolean).join(", ")}` });
+      const tag = isUnready(h.hub) ? " (준비 중)" : "";
+      out.push({ level: "info", code: `hub:${h.hub}`, text: `${hubName(h.hub)}${tag}: ${parts.filter(Boolean).join(", ")}` });
     }
   }
   if (rollup.through === null || rollup.through < addDays(rollup.yesterday, -1)) {
     out.push({ level: "info", code: "rollup", text: "지난 날 집계를 Cron이 채우는 중이에요" });
   }
   const rank = { crit: 0, warn: 1, info: 2 } as const;
-  return out.sort((a, b) => rank[a.level] - rank[b.level]);
+  const unreadyHub = (a: Alert) => (a.code.startsWith("hub:") && isUnready(a.code.slice(4)) ? 1 : 0);
+  return out.sort((a, b) => rank[a.level] - rank[b.level] || unreadyHub(a) - unreadyHub(b));
 }
