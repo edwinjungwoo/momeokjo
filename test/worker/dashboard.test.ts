@@ -95,10 +95,12 @@ describe("GET /api/admin/dashboard", () => {
     expect(res.headers.get("cache-control")).toBe("no-store");
     const d = await res.json<OverviewData>();
     expect(d.range).toEqual({ from: "2027-01-13", to: TODAY, days: 3, hub: "all", compare: true });
-    expect(d.prev).toEqual({ from: "2027-01-10", to: "2027-01-12" });
+    // 기간에 오늘(아직 끝나지 않은 날)이 있으면 비교는 오늘을 빼고 같은 길이로: 01-13~14 대 01-10~11
+    expect(d.prev).toEqual({ from: "2027-01-10", to: "2027-01-11" });
+    expect(d.compareExcludesToday).toBe(true);
     expect(d.rollupThrough).toBe("2027-01-14");
     expect(d.sources).toEqual({ "2027-01-13": "rollup", "2027-01-14": "rollup", [TODAY]: "live" });
-    expect(d.kpis.sessions).toMatchObject({ value: 6, prev: 0 });
+    expect(d.kpis.sessions).toMatchObject({ value: 6, cmp: 4, prev: 0 });
     expect(d.kpis.users.value).toBe(2); // 일평균
     expect(d.kpis.decisionRate.value).toBeCloseTo(0.5);
     expect(d.kpis.drawsPerSession.value).toBeCloseTo(0.5);
@@ -131,6 +133,43 @@ describe("GET /api/admin/dashboard", () => {
     });
     expect(d.kpis.sessions.value).toBe(4);
     expect(d.alerts.some((a) => a.code === "rollup")).toBe(true);
+  });
+
+  it("R57: 오늘이 없는 기간은 그대로 같은 길이의 앞 기간과 비교하고, 오늘만 고르면 비교하지 않는다", async () => {
+    await seedEvents([...day("2027-01-11", 100), ...day("2027-01-13", 200), ...day(TODAY, 300)]);
+    for (let i = 0; i < 5 && (await runRollups(env.DB, kst(TODAY, 5), { maxDaysPerUtcDay: 100 })) > 0; i++);
+    const a = await (await get(setup(), "tab=overview&from=2027-01-13&to=2027-01-14")).json<OverviewData>();
+    expect([a.prev, a.compareExcludesToday, a.kpis.sessions.cmp, a.kpis.sessions.prev]).toEqual([
+      { from: "2027-01-11", to: "2027-01-12" }, false, 2, 2,
+    ]);
+    const b = await (await get(setup(), "tab=overview&from=2027-01-15&to=2027-01-15")).json<OverviewData>();
+    expect([b.prev, b.compareExcludesToday, b.kpis.sessions.cmp, b.kpis.sessions.prev]).toEqual([null, true, null, null]);
+  });
+
+  it("R58: 새로 모으는 값(완화 뽑기·확정 공유 카드 번호)의 수집 시작일은 집계에서 처음 나온 날로 알려 준다", async () => {
+    await seedEvents([
+      { anon: anonN(1), session: sessN(1), hub: "ddp", type: "draw", ts: kst("2027-01-12", 12), props: { picks: ["1"], relaxed: true } },
+      { anon: anonN(1), session: sessN(1), hub: "ddp", type: "share", ts: kst("2027-01-13", 12), placeId: "1", props: { picks: ["1"], confirm: true, rank: 1 } },
+      { anon: anonN(1), session: sessN(1), hub: "ddp", type: "draw", ts: kst("2027-01-14", 12), props: { picks: ["1"], relaxed: true } },
+    ]);
+    for (let i = 0; i < 5 && (await runRollups(env.DB, kst(TODAY, 5), { maxDaysPerUtcDay: 100 })) > 0; i++);
+    const d = await (await get(setup(), "tab=behavior&from=2027-01-15&to=2027-01-15")).json<BehaviorData>();
+    expect(d.collectSince).toEqual({ relaxed: "2027-01-12", confirmRank: "2027-01-13" });
+  });
+
+  it("R59: 행태 탭은 집계를 SQL에서 합쳐 지표마다 한 행만 받는다 (90일이어도 일별 행을 Worker로 가져오지 않는다)", async () => {
+    await seedEvents([...day("2027-01-13", 100), ...day("2027-01-14", 200)]);
+    for (let i = 0; i < 5 && (await runRollups(env.DB, kst(TODAY, 5), { maxDaysPerUtcDay: 100 })) > 0; i++);
+    const { db, log } = recordingDb(env.DB);
+    const res = await callApp(setup(), "/api/admin/dashboard?tab=behavior&from=2026-10-18&to=2027-01-14&compare=0", { headers: AUTH }, { ...env, DB: db });
+    const d = await res.json<BehaviorData>();
+    expect(d.totals).toMatchObject({ sessions: 4, funnel_confirm: 2, auto_left: 2 });
+    expect(d.places.picked[0]).toEqual({ placeId: "101", name: null, count: 2 });
+    const stats = log.filter((x) => x.sql.includes("FROM daily_stats"));
+    expect(stats.length).toBeGreaterThan(0);
+    // 일별 행을 그대로 받는 질의(day, hub, metric, value)는 코호트(cohort_* 몇 행)만
+    expect(stats.filter((x) => /SELECT day, hub, metric, value/.test(x.sql) && !x.sql.includes("metric IN"))).toEqual([]);
+    expect(stats.some((x) => /sum\(value\)/i.test(x.sql))).toBe(true);
   });
 
   it("R58: 사용자 행태 — 기간 합계, 이전 기간, 재방문 코호트(관찰 못 한 칸은 null), 많이 뽑힌·공유된·빼진 가게(이름은 places)", async () => {

@@ -9,7 +9,7 @@ import { HUBS, hubById } from "../shared/hubs";
 import { kstDay, utcDay } from "../shared/kst";
 import { CRON_LAST_KEY } from "./d1Usage";
 import { usableListJsonSql } from "./present";
-import { ROLLUP_THROUGH_KEY, liveDayMetrics, type LivePart, type MetricRow } from "./rollup";
+import { COLLECT_SINCE_KEYS, ROLLUP_THROUGH_KEY, liveDayMetrics, type LivePart, type MetricRow } from "./rollup";
 
 /**
  * R57~R60 GET /api/admin/dashboard. 탭 하나에 필요한 것을 한 응답으로 준다.
@@ -71,13 +71,15 @@ export function putJson(deps: Pick<DashboardDeps, "cache" | "defer">, key: strin
 
 // ── meta ─────────────────────────────
 
-type MetaState = { ops: OpsSnapshot; rollupThrough: string | null };
+type MetaState = { ops: OpsSnapshot; rollupThrough: string | null; collectSince: BehaviorData["collectSince"] };
 
 async function readState(deps: DashboardDeps): Promise<MetaState> {
   const day = utcDay(deps.now);
   const keys = [
     `d1_read:${day}`, `d1_written:${day}`, "place_blocked_until", "detail_mode", `block_count:${kstDay(deps.now)}`, CRON_LAST_KEY,
     ROLLUP_THROUGH_KEY,
+    COLLECT_SINCE_KEYS.relaxed,
+    COLLECT_SINCE_KEYS.confirmRank,
   ];
   const r = await deps.db
     .prepare(`SELECT key, value FROM meta WHERE key IN (${keys.map(() => "?").join(", ")})`)
@@ -113,6 +115,7 @@ async function readState(deps: DashboardDeps): Promise<MetaState> {
       cron,
     },
     rollupThrough: get(ROLLUP_THROUGH_KEY) ?? null,
+    collectSince: { relaxed: get(COLLECT_SINCE_KEYS.relaxed) ?? null, confirmRank: get(COLLECT_SINCE_KEYS.confirmRank) ?? null },
   };
 }
 
@@ -256,13 +259,30 @@ const HOUR_METRICS = Array.from({ length: 24 }, (_, h) => `sessions_h${String(h)
 const SPARK_DAYS = 14;
 const hubName = (id: string) => (HUBS.some((h) => h.id === id) ? hubById(id).name : id);
 
-function base(q: DashboardQuery, now: number, through: string | null, sources: Map<string, DaySource>, rangeDays: string[]): DashboardBase {
+type CompareDays = { cur: string[]; prev: string[]; excludesToday: boolean };
+
+/**
+ * R57 이전 기간 비교에 쓰는 날: 기간에 오늘(아직 끝나지 않은 날)이 있으면 오늘을 빼고(cur), 같은 길이의 바로 앞 기간도 그만큼(prev).
+ * 오늘만 고른 기간은 비교하지 않는다 (cur·prev 모두 빈 목록)
+ */
+function compareDays(q: DashboardQuery, today: string, rangeDays: string[]): CompareDays {
+  if (!q.compare) return { cur: [], prev: [], excludesToday: false };
+  const excludesToday = q.to === today;
+  const cur = excludesToday ? rangeDays.slice(0, -1) : rangeDays;
+  const prev = dayList(addDays(q.from, -rangeDays.length), addDays(q.from, -1)).slice(0, cur.length);
+  return { cur, prev, excludesToday };
+}
+
+function base(
+  q: DashboardQuery, now: number, through: string | null, sources: Map<string, DaySource>, rangeDays: string[], cmp?: CompareDays,
+): DashboardBase {
   const days = rangeDays.length;
   const range: DashboardRange = { from: q.from, to: q.to, days, hub: q.hub, compare: q.compare };
   return {
     tab: q.tab,
     range,
-    prev: q.compare ? { from: addDays(q.from, -days), to: addDays(q.from, -1) } : null,
+    prev: cmp && cmp.prev.length > 0 ? { from: cmp.prev[0], to: cmp.prev[cmp.prev.length - 1] } : null,
+    compareExcludesToday: cmp?.excludesToday ?? false,
     now,
     today: kstDay(now),
     rollupThrough: through,
@@ -297,7 +317,8 @@ async function overview(deps: DashboardDeps, q: DashboardQuery, state: MetaState
   const liveAllowed = liveAllowedBy(state, deps);
   const rangeDays = dayList(q.from, q.to);
   const sparkDays = dayList(addDays(q.to, -(SPARK_DAYS - 1)), q.to);
-  const prevDays = q.compare ? dayList(addDays(q.from, -rangeDays.length), addDays(q.from, -1)) : [];
+  const cmp = compareDays(q, today, rangeDays);
+  const prevDays = cmp.prev;
   const key = hubKey(q.hub);
   const hubKeys = q.hub === "all" ? ["*", ...HUBS.map((h) => h.id)] : [key];
   const extra = [...new Set([...sparkDays, ...prevDays])].filter((d) => d < q.from || d > q.to);
@@ -316,6 +337,7 @@ async function overview(deps: DashboardDeps, q: DashboardQuery, state: MetaState
 
   const cur = kpiValues(store, rangeDays, key, sources);
   const prev = q.compare ? kpiValues(store, prevDays, key, sources) : null;
+  const cur2 = q.compare ? kpiValues(store, cmp.cur, key, sources) : null;
   const spark = (pick: (v: NonNullable<ReturnType<typeof kpiValues>>) => number | null) =>
     sparkDays.map((d) => {
       const v = kpiValues(store, [d], key, sources);
@@ -323,6 +345,7 @@ async function overview(deps: DashboardDeps, q: DashboardQuery, state: MetaState
     });
   const kpi = (pick: (v: NonNullable<ReturnType<typeof kpiValues>>) => number | null): Kpi => ({
     value: cur ? pick(cur) : null,
+    cmp: cur2 ? pick(cur2) : null,
     prev: prev ? pick(prev) : null,
     spark: spark(pick),
   });
@@ -348,7 +371,7 @@ async function overview(deps: DashboardDeps, q: DashboardQuery, state: MetaState
   });
 
   return {
-    ...base(q, deps.now, state.rollupThrough, sources, rangeDays),
+    ...base(q, deps.now, state.rollupThrough, sources, rangeDays, cmp),
     tab: "overview",
     kpis: {
       users: kpi((v) => v.users),
@@ -375,41 +398,90 @@ async function overview(deps: DashboardDeps, q: DashboardQuery, state: MetaState
 
 const PLACE_KINDS = { picked: "pick:", shared: "share:", excluded: "excl:" } as const;
 const isAggregate = (m: string) => m.startsWith("cohort_") || Object.values(PLACE_KINDS).some((p) => m.startsWith(p));
+/** Top 10을 고를 때 집계에서 가져오는 후보 수 (실시간 날 횟수를 더해 순위가 바뀔 여유) */
+const PLACE_CANDIDATES = 30;
 
+/** 집계한 날들의 지표 합 — SQL이 지표마다 한 행으로 합친다 (가게·코호트 행 제외) */
+const TOTALS_SQL = `SELECT metric, sum(value) AS value FROM daily_stats
+  WHERE day IN (SELECT value FROM json_each(?1)) AND hub = ?2
+    AND metric NOT LIKE 'pick:%' AND metric NOT LIKE 'share:%' AND metric NOT LIKE 'excl:%' AND substr(metric, 1, 7) <> 'cohort_'
+  GROUP BY metric`;
+/** 집계한 날들의 가게 횟수 상위 — 접두어 범위(pick: ~ pick;)로 PK를 콕 집어 읽고 SQL이 합쳐 순위를 매긴다 */
+const PLACES_TOP_SQL = `SELECT metric, sum(value) AS value FROM daily_stats
+  WHERE day IN (SELECT value FROM json_each(?1)) AND hub = ?2 AND metric >= ?3 AND metric < ?4
+  GROUP BY metric ORDER BY value DESC, metric LIMIT ${PLACE_CANDIDATES}`;
+const nextPrefix = (p: string) => p.slice(0, -1) + String.fromCharCode(p.charCodeAt(p.length - 1) + 1);
+
+type Agg = { metric: string; value: number };
+function addInto(out: Metrics, rows: Agg[], keep: (m: string) => boolean = () => true) {
+  for (const r of rows) if (keep(r.metric)) out[r.metric] = (out[r.metric] ?? 0) + Number(r.value);
+}
+
+/**
+ * R58 행태 탭. 90일이어도 일별 행을 Worker로 가져오지 않는다: 집계한 날은 SQL이 지표마다 합치고(TOTALS_SQL), 가게는 종류마다
+ * 상위 30곳만(PLACES_TOP_SQL), 아직 집계하지 않은 최근 날(실시간, 최대 2일)만 JS에서 더한다.
+ */
 async function behavior(deps: DashboardDeps, q: DashboardQuery, state: MetaState): Promise<BehaviorData> {
   const today = kstDay(deps.now);
   const liveAllowed = liveAllowedBy(state, deps);
   const rangeDays = dayList(q.from, q.to);
-  const prevDays = q.compare ? dayList(addDays(q.from, -rangeDays.length), addDays(q.from, -1)) : [];
+  const cmp = compareDays(q, today, rangeDays);
   const weeks: string[] = [];
   for (let w = mondayOf(q.from); w <= q.to; w = addDays(w, 7)) weeks.push(w);
   const key = hubKey(q.hub);
-  const sources = sourcesFor(rangeDays, today, state.rollupThrough, liveAllowed);
-  const prevSources = sourcesFor(prevDays, today, state.rollupThrough, liveAllowed);
+  const sources = sourcesFor([...rangeDays, ...cmp.prev], today, state.rollupThrough, liveAllowed);
+  const rolled = (days: string[]) => days.filter((d) => sources.get(d) === "rollup");
+  const live = (days: string[]) => days.filter((d) => sources.get(d) === "live");
+  const json = (days: string[]) => JSON.stringify(days);
+
+  const stmts: D1PreparedStatement[] = [deps.db.prepare(TOTALS_SQL).bind(json(rolled(rangeDays)), key)];
+  for (const prefix of Object.values(PLACE_KINDS)) {
+    stmts.push(deps.db.prepare(PLACES_TOP_SQL).bind(json(rolled(rangeDays)), key, prefix, nextPrefix(prefix)));
+  }
+  if (cmp.prev.length > 0) stmts.push(deps.db.prepare(TOTALS_SQL).bind(json(rolled(cmp.prev)), key));
   // 코호트 행은 Cron 집계에만 있다 (주 월요일 날짜) — 월요일은 언제나 rollup 질의로 읽는다
   const weekSources = new Map(weeks.map((w) => [w, "rollup" as DaySource]));
-  const [store, prevStore, cohortStore] = await Promise.all([
-    collect(deps, sources, [{ days: rangeDays, hubs: [key] }], new Set([key]), ["core", "detail"]),
-    q.compare
-      ? collect(deps, prevSources, [{ days: prevDays, hubs: [key], metrics: Object.keys(METRICS) }], new Set([key]))
-      : Promise.resolve(null),
+  const liveDays = [...new Set([...live(rangeDays), ...live(cmp.prev)])];
+  const [rs, cohortStore, lives] = await Promise.all([
+    deps.db.batch<Agg>(stmts),
     collect(deps, weekSources, [{ days: weeks, hubs: [key], metrics: COHORT_METRICS }], null),
+    Promise.all(
+      liveDays.map(async (d) => [d, (await Promise.all((["core", "detail"] as const).map((p) => liveRows(deps, d, p)))).flat()] as const),
+    ),
   ]);
-
-  const totalsOf = (s: Store, days: string[]) => {
+  const liveOf = new Map(lives.map(([d, rows]) => [d, rows.filter((r) => r.hub === key)]));
+  const liveSum = (days: string[], keep: (m: string) => boolean) => {
     const out: Metrics = {};
-    for (const d of days) {
-      for (const [m, v] of Object.entries(s.get(d)?.get(key) ?? {})) if (!isAggregate(m)) out[m] = (out[m] ?? 0) + v;
-    }
+    for (const d of days) addInto(out, liveOf.get(d) ?? [], keep);
     return out;
   };
+  const plain = (m: string) => !isAggregate(m);
+  const merge = (a: Metrics, b: Metrics) => {
+    const out = { ...a };
+    for (const [k, v] of Object.entries(b)) out[k] = (out[k] ?? 0) + v;
+    return out;
+  };
+
+  const rolledTotals: Metrics = {};
+  addInto(rolledTotals, rs[0].results);
+  const totals = merge(rolledTotals, liveSum(live(rangeDays), plain));
+  // 비교용 현재 값: 오늘(끝나지 않은 날)을 뺀 같은 날들 — 집계한 날은 언제나 오늘이 아니다
+  const cmpTotals = q.compare ? merge(rolledTotals, liveSum(live(cmp.cur), plain)) : null;
+  let prevTotals: Metrics | null = null;
+  if (cmp.prev.length > 0) {
+    prevTotals = {};
+    addInto(prevTotals, rs[4].results);
+    prevTotals = merge(prevTotals, liveSum(live(cmp.prev), plain));
+  }
+
   const places = {} as Record<keyof typeof PLACE_KINDS, TopPlace[]>;
   const ids = new Set<string>();
-  for (const [kind, prefix] of Object.entries(PLACE_KINDS) as [keyof typeof PLACE_KINDS, string][]) {
+  (Object.entries(PLACE_KINDS) as [keyof typeof PLACE_KINDS, string][]).forEach(([kind, prefix], i) => {
     const counts = new Map<string, number>();
-    for (const d of rangeDays) {
-      for (const [m, v] of Object.entries(store.get(d)?.get(key) ?? {})) {
-        if (m.startsWith(prefix)) counts.set(m.slice(prefix.length), (counts.get(m.slice(prefix.length)) ?? 0) + v);
+    for (const r of rs[1 + i].results) counts.set(r.metric.slice(prefix.length), Number(r.value));
+    for (const d of live(rangeDays)) {
+      for (const r of liveOf.get(d) ?? []) {
+        if (r.metric.startsWith(prefix)) counts.set(r.metric.slice(prefix.length), (counts.get(r.metric.slice(prefix.length)) ?? 0) + r.value);
       }
     }
     places[kind] = [...counts]
@@ -417,7 +489,7 @@ async function behavior(deps: DashboardDeps, q: DashboardQuery, state: MetaState
       .slice(0, TOP_PLACES_SHOWN)
       .map(([placeId, count]) => ({ placeId, name: null, count }));
     for (const p of places[kind]) ids.add(p.placeId);
-  }
+  });
   if (ids.size > 0) {
     const r = await deps.db
       .prepare("SELECT id, name FROM places WHERE id IN (SELECT value FROM json_each(?))")
@@ -441,12 +513,14 @@ async function behavior(deps: DashboardDeps, q: DashboardQuery, state: MetaState
     .filter((c) => c.size > 0);
 
   return {
-    ...base(q, deps.now, through, sources, rangeDays),
+    ...base(q, deps.now, through, sources, rangeDays, cmp),
     tab: "behavior",
-    totals: totalsOf(store, rangeDays),
-    prevTotals: prevStore ? totalsOf(prevStore, prevDays) : null,
+    totals,
+    cmpTotals,
+    prevTotals,
     cohorts,
     places,
+    collectSince: state.collectSince,
   };
 }
 

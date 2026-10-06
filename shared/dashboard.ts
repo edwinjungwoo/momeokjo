@@ -190,7 +190,10 @@ export type DaySource = "rollup" | "live" | "missing";
 export type DashboardBase = {
   tab: DashboardTab;
   range: DashboardRange;
+  /** 비교한 앞 기간 (비교 끔이거나 오늘만 고른 기간이면 null) */
   prev: { from: string; to: string } | null;
+  /** R57 기간에 오늘이 있어 비교에서 오늘(과 앞 기간의 같은 자리 하루)을 뺐다 */
+  compareExcludesToday: boolean;
   /** 서버 시각 (epoch ms) */
   now: number;
   today: string;
@@ -199,7 +202,8 @@ export type DashboardBase = {
   sources: Record<string, DaySource>;
 };
 
-export type Kpi = { value: number | null; prev: number | null; spark: (number | null)[] };
+/** value: 기간 값, cmp: 비교에 쓰는 현재 값(오늘 뺀 날들), prev: 앞 기간 값, spark: 기간 끝에서 14일 */
+export type Kpi = { value: number | null; cmp: number | null; prev: number | null; spark: (number | null)[] };
 export type Alert = { level: "info" | "warn" | "crit"; code: string; text: string };
 
 export type OverviewData = DashboardBase & {
@@ -228,7 +232,11 @@ export type BehaviorData = DashboardBase & {
   tab: "behavior";
   /** 기간 합계 지표 (cohort·가게 제외) */
   totals: Metrics;
+  /** 비교에 쓰는 현재 합계 (오늘을 뺀 날들, 비교 끔이면 null) */
+  cmpTotals: Metrics | null;
   prevTotals: Metrics | null;
+  /** 새로 모으는 값이 집계에 처음 나온 날 (없으면 null — 화면은 COLLECT_SINCE로 대신) */
+  collectSince: { relaxed: string | null; confirmRank: string | null };
   cohorts: Cohort[];
   places: { picked: TopPlace[]; shared: TopPlace[]; excluded: TopPlace[] };
 };

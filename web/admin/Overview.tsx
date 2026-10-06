@@ -32,10 +32,11 @@ export function AlertStrip({ alerts }: { alerts: Alert[] }) {
   );
 }
 
-function KpiCard({ label, kpi, format, sub, compare }: {
-  label: string; kpi: Kpi; format: (v: number | null) => string; sub?: string; compare: boolean;
+function KpiCard({ label, kpi, format, sub, compare, excl }: {
+  label: string; kpi: Kpi; format: (v: number | null) => string; sub?: string; compare: boolean; excl: boolean;
 }) {
-  const d = compare ? deltaOf(kpi.value, kpi.prev) : null;
+  // 증감은 끝나지 않은 오늘을 뺀 값(cmp)과 앞 기간의 같은 날 수를 비교한다
+  const d = compare ? deltaOf(kpi.cmp, kpi.prev) : null;
   const dir = d === null ? "" : d > 0.005 ? "up" : d < -0.005 ? "down" : "flat";
   return (
     <div className="card kpi">
@@ -43,7 +44,7 @@ function KpiCard({ label, kpi, format, sub, compare }: {
       <p className="kpi-value">{format(kpi.value)}</p>
       <div className="kpi-foot">
         {compare && (
-          <span className={`delta ${dir}`} title="이전 기간 대비">
+          <span className={`delta ${dir}`} title={excl ? "이전 기간 대비 (오늘 제외)" : "이전 기간 대비"}>
             {d === null ? "비교 없음" : (
               <>
                 <span aria-hidden="true">{dir === "up" ? "▲" : dir === "down" ? "▼" : "■"}</span> {delta(d)}
@@ -65,6 +66,18 @@ export function EmptyState({ title, body }: { title: string; body: string }) {
       <p className="a-state-title">{title}</p>
       <p className="muted small">{body}</p>
     </div>
+  );
+}
+
+/** R57 비교 기준 한 줄: 앞 기간, 오늘을 뺐는지 */
+export function CompareNote({ data }: { data: { range: { compare: boolean }; prev: { from: string; to: string } | null; compareExcludesToday: boolean } }) {
+  if (!data.range.compare) return null;
+  if (!data.prev) return <p className="source-note muted small">오늘만 고르면 이전 기간과 비교하지 않아요 (아직 끝나지 않은 날이라서).</p>;
+  return (
+    <p className="source-note muted small">
+      비교: {shortDay(data.prev.from)}~{shortDay(data.prev.to)}
+      {data.compareExcludesToday ? " — 오늘은 아직 끝나지 않아 빼고 같은 날 수로 비교해요" : ""}
+    </p>
   );
 }
 
@@ -97,13 +110,15 @@ export function Overview({ data }: { data: OverviewData }) {
             format={num}
             sub={k.newUsers.value !== null ? `신규 ${num(k.newUsers.value)}` : undefined}
             compare={compare}
+            excl={data.compareExcludesToday}
           />
-          <KpiCard label="세션" kpi={k.sessions} format={num} compare={compare} />
-          <KpiCard label="결정률" kpi={k.decisionRate} format={(v) => pct(v)} sub="공유·카카오맵·여기로 가요" compare={compare} />
-          <KpiCard label="뽑기 / 세션" kpi={k.drawsPerSession} format={(v) => (v === null ? "–" : v.toFixed(2))} sub="직접 뽑기만" compare={compare} />
-          <KpiCard label="공유 링크 열림" kpi={k.shareOpens} format={num} compare={compare} />
+          <KpiCard label="세션" kpi={k.sessions} format={num} compare={compare} excl={data.compareExcludesToday} />
+          <KpiCard label="결정률" kpi={k.decisionRate} format={(v) => pct(v)} sub="공유·카카오맵·여기로 가요" compare={compare} excl={data.compareExcludesToday} />
+          <KpiCard label="뽑기 / 세션" kpi={k.drawsPerSession} format={(v) => (v === null ? "–" : v.toFixed(2))} sub="직접 뽑기만" compare={compare} excl={data.compareExcludesToday} />
+          <KpiCard label="공유 링크 열림" kpi={k.shareOpens} format={num} compare={compare} excl={data.compareExcludesToday} />
         </div>
         <SourceNote sources={data.sources} />
+        <CompareNote data={data} />
       </section>
 
       {empty ? (

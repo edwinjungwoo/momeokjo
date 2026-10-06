@@ -6,7 +6,7 @@ import {
 } from "../../shared/dashboard";
 import { BarList, Funnel, type BarItem } from "./charts";
 import { delta, duration, num, pct, shortDay } from "./format";
-import { EmptyState, SourceNote } from "./Overview";
+import { CompareNote, EmptyState, SourceNote } from "./Overview";
 
 const v = (t: Metrics, k: string) => t[k] ?? 0;
 
@@ -15,8 +15,9 @@ function Since({ date }: { date: string }) {
   return <span className="since">수집 시작: {date}</span>;
 }
 
-function Rate({ label, value, prev, hint }: { label: string; value: number | null; prev?: number | null; hint?: string }) {
-  const d = prev === undefined ? null : deltaOf(value, prev);
+/** value: 기간 값, cmp: 비교에 쓰는 현재 값(오늘 뺀 날들), prev: 앞 기간 값 */
+function Rate({ label, value, cmp, prev, hint }: { label: string; value: number | null; cmp?: number | null; prev?: number | null; hint?: string }) {
+  const d = prev === undefined ? null : deltaOf(cmp === undefined ? value : cmp, prev);
   return (
     <div className="rate">
       <p className="rate-label">{label}</p>
@@ -145,6 +146,8 @@ function CohortGrid({ data }: { data: BehaviorData }) {
 export function Behavior({ data }: { data: BehaviorData }) {
   const t = data.totals;
   const p = data.prevTotals;
+  const c = data.cmpTotals;
+  const since = { relaxed: data.collectSince?.relaxed ?? COLLECT_SINCE.relaxed, confirmRank: data.collectSince?.confirmRank ?? COLLECT_SINCE.confirmRank };
   if (v(t, "sessions") === 0 && v(t, "events") === 0) {
     return (
       <div className="stack-lg">
@@ -167,6 +170,7 @@ export function Behavior({ data }: { data: BehaviorData }) {
   return (
     <div className="stack-lg">
       <SourceNote sources={data.sources} />
+      <CompareNote data={data} />
       <div className="grid-2">
         <section className="card">
           <div className="a-card-head">
@@ -190,10 +194,11 @@ export function Behavior({ data }: { data: BehaviorData }) {
             ]}
           />
           <div className="rates">
-            <Rate label="열기 → 결정 (깔때기 끝까지)" value={conv(t)} prev={p ? conv(p) : undefined} />
+            <Rate label="열기 → 결정 (깔때기 끝까지)" value={conv(t)} cmp={c ? conv(c) : undefined} prev={p ? conv(p) : undefined} />
             <Rate
               label="결정률 (펼침 없이 결정 포함)"
               value={ratio(v(t, "decided"), v(t, "sessions"))}
+              cmp={c ? ratio(v(c, "decided"), v(c, "sessions")) : undefined}
               prev={p ? ratio(v(p, "decided"), v(p, "sessions")) : undefined}
             />
           </div>
@@ -288,7 +293,7 @@ export function Behavior({ data }: { data: BehaviorData }) {
                     <td className="num" data-label="카카오맵">{num(v(t, `kakao_r${r}`))}</td>
                     <td className="num" data-label="여기로 가요">
                       {v(t, "share_confirm") > 0 && ranks.every((x) => v(t, `confirm_r${x}`) === 0) ? (
-                        <Since date={COLLECT_SINCE.confirmRank} />
+                        <Since date={since.confirmRank} />
                       ) : (
                         num(v(t, `confirm_r${r}`))
                       )}
@@ -314,7 +319,7 @@ export function Behavior({ data }: { data: BehaviorData }) {
             <div className="kv">
               <span>완화(R41)가 섞인 뽑기</span>
               {v(t, "draw_relaxed") === 0 ? (
-                <Since date={COLLECT_SINCE.relaxed} />
+                <Since date={since.relaxed} />
               ) : (
                 <b>
                   {pct(ratio(v(t, "draw_relaxed"), draws))} <small className="muted">({num(v(t, "draw_relaxed"))})</small>
@@ -350,12 +355,14 @@ export function Behavior({ data }: { data: BehaviorData }) {
           <Rate
             label="공유 → 링크 열림"
             value={ratio(v(t, "share_open"), v(t, "share"))}
+            cmp={c ? ratio(v(c, "share_open"), v(c, "share")) : undefined}
             prev={p ? ratio(v(p, "share_open"), v(p, "share")) : undefined}
             hint={`공유 ${num(v(t, "share"))} · 열림 ${num(v(t, "share_open"))}`}
           />
           <Rate
             label="받은 사람의 다시 공유"
             value={ratio(v(t, "reshare_sessions"), v(t, "link_sessions"))}
+            cmp={c ? ratio(v(c, "reshare_sessions"), v(c, "link_sessions")) : undefined}
             prev={p ? ratio(v(p, "reshare_sessions"), v(p, "link_sessions")) : undefined}
             hint={`링크로 연 세션 ${num(v(t, "link_sessions"))}`}
           />

@@ -232,6 +232,11 @@ SELECT wk, grp, metric, value FROM (
 
 const META_UPSERT = "INSERT INTO meta (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value";
 export const ROLLUP_THROUGH_KEY = "rollup_through";
+/** R58 새로 모으는 값이 집계에 처음 나온 날 (meta, 한 번만 쓴다 — 오래된 날부터 집계하므로 처음 쓴 날이 가장 이른 날) */
+export const COLLECT_SINCE_KEYS = { relaxed: "collect_since:relaxed", confirmRank: "collect_since:confirm_rank" } as const;
+const SINCE_INSERT = (key: string, metrics: string[]) =>
+  `INSERT OR IGNORE INTO meta (key, value) SELECT '${key}', ?1
+   WHERE EXISTS (SELECT 1 FROM daily_stats WHERE day = ?1 AND hub = '*' AND metric IN (${metrics.map((m) => `'${m}'`).join(", ")}))`;
 
 /** 하루를 집계해 쓰는 문장들 (batch 하나 — 중간에 실패하면 그날 전체가 되돌아가고 커서도 그대로다) */
 export function rollupDayStatements(db: D1Database, day: string): D1PreparedStatement[] {
@@ -239,6 +244,8 @@ export function rollupDayStatements(db: D1Database, day: string): D1PreparedStat
     db.prepare("DELETE FROM daily_stats WHERE day = ?1 AND metric NOT LIKE 'cohort\\_%' ESCAPE '\\'").bind(day),
     db.prepare(FIRST_SEEN_UPSERT).bind(day),
     ...DAY_METRIC_SQL.map((sql) => db.prepare(`INSERT INTO daily_stats (day, hub, metric, value) SELECT ?1, hub, metric, value FROM (${sql})`).bind(day)),
+    db.prepare(SINCE_INSERT(COLLECT_SINCE_KEYS.relaxed, ["draw_relaxed"])).bind(day),
+    db.prepare(SINCE_INSERT(COLLECT_SINCE_KEYS.confirmRank, ["confirm_r1", "confirm_r2", "confirm_r3"])).bind(day),
     db.prepare(META_UPSERT).bind(ROLLUP_THROUGH_KEY, day),
   ];
 }
