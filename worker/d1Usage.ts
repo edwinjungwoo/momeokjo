@@ -123,17 +123,24 @@ export async function recordD1Usage(db: D1Database, usage: D1Usage, now: number)
 
 /** R59 Cron 마지막 실행 요약을 두는 meta 키 */
 export const CRON_LAST_KEY = "cron_last";
+/** R63: 둘째 트리거의 상세만 실행(홀수 분)의 마지막 요약 */
+export const CRON_DETAIL_LAST_KEY = "cron_detail_last";
 
 /**
  * R38 + R59: Cron 실행의 사용량 기록과 마지막 실행 요약(cron_last)을 UPSERT 한 문장으로 쓴다 (요약 때문에 늘어나는 쓰기는 실행당 1행).
  * 사용량은 더하고, 요약은 바꿔 쓴다
  */
-export async function recordCronRun(db: D1Database, usage: D1Usage, now: number, summary: object): Promise<void> {
+export async function recordCronRun(
+  db: D1Database, usage: D1Usage, now: number, summary: object,
+  /** 요약을 둘 meta 키 (본 Cron cron_last, R63 상세만 실행 cron_detail_last) */
+  summaryKey: typeof CRON_LAST_KEY | typeof CRON_DETAIL_LAST_KEY = CRON_LAST_KEY,
+): Promise<void> {
   const day = utcDay(now);
   await db
     .prepare(
-      `INSERT INTO meta (key, value) VALUES (?, ?), (?, ?), ('${CRON_LAST_KEY}', ?)
-       ON CONFLICT(key) DO UPDATE SET value = CASE WHEN meta.key = '${CRON_LAST_KEY}' THEN excluded.value
+      // summaryKey는 코드의 상수 둘 중 하나다 (밖에서 오는 값이 아니다)
+      `INSERT INTO meta (key, value) VALUES (?, ?), (?, ?), ('${summaryKey}', ?)
+       ON CONFLICT(key) DO UPDATE SET value = CASE WHEN meta.key = '${summaryKey}' THEN excluded.value
          ELSE CAST(meta.value AS INTEGER) + CAST(excluded.value AS INTEGER) END`,
     )
     .bind(

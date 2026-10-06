@@ -297,6 +297,8 @@ export type OpsSnapshot = {
     blocksToday: number;
   };
   cron: CronSummary | null;
+  /** R63: 둘째 트리거의 상세만 실행(홀수 분) 마지막 요약 (격자·집계는 늘 0) */
+  cronDetail?: CronSummary | null;
 };
 
 export type OpsData = DashboardBase & {

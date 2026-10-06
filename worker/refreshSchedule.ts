@@ -54,15 +54,23 @@ export function okDueBefore(key: string, now: number): number {
   return tileRefreshStart(key, now) ?? now - DETAIL_OK_TTL_MS + 1;
 }
 
+/** 넘겨받은 거점들로 격자 → 그 격자를 덮는 거점들의 이번 시작(오름차순) (Cron 순서 — 전역 HUBS를 보지 않는다) */
+export function refreshStartsIndex(hubs: readonly Hub[], now: number): Map<string, number[]> {
+  const out = new Map<string, number[]>();
+  for (const h of hubs) {
+    const start = hubRefreshStart(h, now);
+    for (const k of tilesCoveringCircle(h, PREWARM_RADIUS)) out.set(k, [...(out.get(k) ?? []), start]);
+  }
+  for (const v of out.values()) v.sort((a, b) => a - b);
+  return out;
+}
+
 /**
- * 갱신 대상이 된 시각 (Cron 순서: 오래 기다린 것부터). ok는 fetchedAt 뒤의 가장 이른 시작(거점 격자) 또는
- * fetchedAt + 3일 + 지터(밖), 실패는 fetchedAt + 6시간. 대상인 것에만 부른다
+ * 갱신 대상이 된 시각 (Cron 순서: 오래 기다린 것부터). starts: 그 칸을 덮는 거점들의 이번 시작(오름차순, 거점 밖이면 빈 배열).
+ * ok는 fetchedAt 뒤의 가장 이른 시작(거점 격자) 또는 fetchedAt + 3일 + 지터(밖), 실패는 fetchedAt + 6시간. 대상인 것에만 부른다
  */
-export function dueSinceOf(
-  meta: { status: "ok" | "failed"; fetchedAt: number }, key: string, now: number, jitterMs: number, hubs?: readonly Hub[],
-): number {
+export function dueSinceOf(meta: { status: "ok" | "failed"; fetchedAt: number }, starts: readonly number[], jitterMs: number): number {
   if (meta.status !== "ok") return meta.fetchedAt + DETAIL_FAIL_TTL_MS;
-  const starts = tileRefreshStarts(key, now, hubs);
   if (starts.length === 0) return meta.fetchedAt + DETAIL_OK_TTL_MS + jitterMs;
   return starts.find((s) => meta.fetchedAt < s) ?? starts[starts.length - 1];
 }

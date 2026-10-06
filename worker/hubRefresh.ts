@@ -56,8 +56,9 @@ export async function readCronMeta(
 /**
  * 거점 격자(?1, 먼 칸부터)에 갱신할 가게가 하나라도 있나: 미수집(places 행 없음) 또는 ok인데 ?2(그 거점의 갱신 시작) 전에 가져옴.
  * 실패는 보지 않는다 (6시간마다 따로 다시 시도한다 — 계속 실패하는 가게가 완료를 영영 막지 않게).
- * CROSS JOIN으로 칸 순서를 고정한다 — Cron은 가까운 칸부터 갱신하므로 남은 대상은 먼 칸에 있어 처음 몇 행에서 멈춘다.
- * 대상이 없을 때만(완료 — 거점마다 주 1번) 거점 격자의 가게를 다 읽는다.
+ * CROSS JOIN으로 칸 순서를 먼 칸부터로 고정한다. Cron은 대체로 가까운 칸부터 갱신해서(만료 커서 쪽 안에서 시작·거리 순) 남은 대상이
+ * 먼 칸에 있으면 일찍 멈춘다 — 보장은 아니다: 남은 대상이 가까운 칸 몇 곳뿐이면 거점 가게를 거의 다 읽고(~2~5k행),
+ * 대상이 없을 때(완료 — 거점마다 주 1번)도 다 읽는다. 그래서 이번 보충 후보에 그 거점이 있으면 아예 묻지 않는다(maintenance.ts).
  */
 export const HUB_DUE_EXISTS_SQL = `SELECT EXISTS (
   SELECT 1 FROM json_each(?1) AS k CROSS JOIN tile_places tp ON tp.tile_key = k.value

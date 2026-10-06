@@ -6,7 +6,7 @@ import { tilesCoveringCircle } from "../../shared/geo";
 import { HUBS } from "../../shared/hubs";
 import { utcDay } from "../../shared/kst";
 import { createApp, type ResponseCache } from "../../worker/app";
-import { recordCronRun } from "../../worker/d1Usage";
+import { CRON_DETAIL_LAST_KEY, recordCronRun } from "../../worker/d1Usage";
 import { markTile, replaceTilePlaces, saveDetailFailure } from "../../worker/repo";
 import { dashboardCacheKey } from "../../worker/dashboard";
 import { readOnlyEnv } from "../../worker/readOnly";
@@ -212,12 +212,15 @@ describe("GET /api/admin/dashboard", () => {
       env.DB.prepare("INSERT INTO meta VALUES (?, '2')").bind(`block_count:${TODAY}`),
     ]);
     await recordCronRun(env.DB, { read: 1000, written: 10 }, NOW - 120_000, { at: NOW - 120_000, collected: 1, incomplete: 0, enriched: 2, failed: 0, calls: 5, rolled: 0 });
+    // R63: 상세만 실행(홀수 분)의 마지막 요약은 따로
+    await recordCronRun(env.DB, { read: 10, written: 1 }, NOW - 60_000, { at: NOW - 60_000, collected: 0, incomplete: 0, enriched: 4, failed: 0, calls: 4, rolled: 0 }, CRON_DETAIL_LAST_KEY);
     await seedEvents(day(TODAY, 100));
     const d = await (await get(setup(), "tab=ops")).json<OpsData>();
     expect(d.ops.budget).toMatchObject({ utcDay: utcDay(NOW), readSoftCap: 3_000_000, writeSoftCap: 60_000, resetAt: Date.UTC(2027, 0, 16) });
     expect(d.ops.budget.read).toBeGreaterThanOrEqual(1000);
     expect(d.ops.kakao).toEqual({ blockedUntil: NOW + 60_000, frozen: null, blocksToday: 2 });
     expect(d.ops.cron).toMatchObject({ at: NOW - 120_000, enriched: 2, calls: 5 });
+    expect(d.ops.cronDetail).toMatchObject({ at: NOW - 60_000, enriched: 4, calls: 4 });
     const p = d.hubs!.find((h) => h.hub === "pangyo")!;
     expect(p).toMatchObject({ places: 3, ok: 1, failed: 1, pending: 1, visible: 1, listReady: 1, tiles: keys.length });
     expect(p.incompleteTiles).toBe(keys.length - 1);

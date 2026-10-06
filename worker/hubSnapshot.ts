@@ -128,7 +128,7 @@ export async function buildHubSnapshot(db: D1Database, hub: Hub, now: number): P
 
   const { items, ...meta } = placesPayload(center, MAX_RADIUS, rows, {
     pending: 0, incompleteTiles: 0, stale: false, detailsPaused: !detailsAllowed(gate, now), detailsFrozenSince: frozen,
-    refreshedAt: refreshed?.at ?? null, refreshDay: hub.refreshDay,
+    refreshedAt: refreshed?.start ?? null, refreshDay: hub.refreshDay,
   });
   const raw = new TextEncoder().encode(placesBody(meta, items));
   const gz = await gzip(raw);

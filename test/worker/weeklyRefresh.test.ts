@@ -94,11 +94,13 @@ describe("R63 갱신 대상 판단", () => {
     expect(tileRefreshStart(KB, NOW, [mon, wed])).toBe(S_WED);
     expect(tileRefreshStart(KB, NOW, [mon])).toBe(S_BONG);
     // 월요일 전에 가져왔으면 월요일부터, 월~수 사이에 가져왔으면 수요일부터 대상
-    expect(dueSinceOf(ok(S_BONG - 1), KB, NOW, 0, [mon, wed])).toBe(S_BONG);
-    expect(dueSinceOf(ok(S_BONG + 1), KB, NOW, 0, [mon, wed])).toBe(S_WED);
-    expect(dueSinceOf(ok(S_BONG - 1), KB, NOW, 0)).toBe(S_BONG);
-    expect(dueSinceOf(failed(NOW - 7 * HOUR), KB, NOW, 0)).toBe(NOW - 7 * HOUR + DETAIL_FAIL_TTL_MS);
-    expect(dueSinceOf(ok(NOW - 4 * DAY), OUT, NOW, 1000)).toBe(NOW - 4 * DAY + DETAIL_OK_TTL_MS + 1000);
+    const both = tileRefreshStarts(KB, NOW, [mon, wed]);
+    expect(dueSinceOf(ok(S_BONG - 1), both, 0)).toBe(S_BONG);
+    expect(dueSinceOf(ok(S_BONG + 1), both, 0)).toBe(S_WED);
+    expect(dueSinceOf(ok(S_BONG - 1), tileRefreshStarts(KB, NOW), 0)).toBe(S_BONG);
+    expect(dueSinceOf(failed(NOW - 7 * HOUR), tileRefreshStarts(KB, NOW), 0)).toBe(NOW - 7 * HOUR + DETAIL_FAIL_TTL_MS);
+    // 거점 밖 칸(시작 없음): 3일 + 지터
+    expect(dueSinceOf(ok(NOW - 4 * DAY), [], 1000)).toBe(NOW - 4 * DAY + DETAIL_OK_TTL_MS + 1000);
   });
 
   it("R63/R3: 거점 격자는 그 거점 갱신 시작 전에 수집했으면 다시 수집하고(7일 TTL 대신), 밖은 7일 — SQL(dueTileKeys)과 isTileDue가 같다", async () => {
@@ -158,6 +160,20 @@ describe("R63 Cron 만료 후보 (거점마다 다른 기준)", () => {
   });
 });
 
+describe("R63 만료 커서 — 대상이 드문 쪽", () => {
+  it("R63/R38: 재설정이 아닌 실행도 읽은 쪽에 대상이 없으면 같은 실행에서 3쪽까지 이어 읽는다 — 갱신 창이 겹쳐 대상 아닌 행이 끼어 있어도 실행마다 나아간다", async () => {
+    // 동대문 d1(대상) → 봉은사 시작 뒤에 가져온 700행(대상 아님) → 동대문 d2(대상)
+    const bong = Array.from({ length: 700 }, (_, i) => [`b${String(i).padStart(3, "0")}`, S_BONG + 1 + i] as [string, number]);
+    await seedOk([["d1", S_BONG], ...bong, ["d2", S_BONG + 1000]]);
+    await replaceTilePlaces(env.DB, KB, bong.map(([id]) => id), NOW, false);
+    await replaceTilePlaces(env.DB, KD, ["d1", "d2"], NOW, false);
+    const ids = async () => (await expiredDetailStates(env.DB, [KB, KD], NOW)).map((t) => t.id);
+    expect(await ids()).toEqual(["d1"]); // 재설정: 첫 쪽에서 d1
+    await env.DB.prepare("UPDATE places SET fetched_at = ? WHERE id = 'd1'").bind(NOW).run(); // 갱신됨
+    expect(await ids()).toEqual(["d2"]); // 다음 실행이 같은 실행 안에서 700행을 지나 d2를 찾는다
+  });
+});
+
 describe("R63 Cron 순서", () => {
   it("R63: Cron은 미수집을 먼저, 그다음 갱신 시작이 오래된 거점부터, 같은 거점 안에서는 가까운 순(같으면 id순)으로 고른다", () => {
     const [bongFar] = farthest(BONG);
@@ -172,6 +188,29 @@ describe("R63 Cron 순서", () => {
     ];
     expect(pickCronIds(states, HUBS, NOW, 10)).toEqual(["new", "b-near1", "b-near2", "b-far", "d-near"]);
     expect(pickCronIds(states, HUBS, NOW, 2)).toEqual(["new", "b-near1"]);
+  });
+
+  it("R63: Cron 순서는 넘겨받은 거점들의 요일로 정한다 (전역 HUBS를 보지 않는다)", () => {
+    const states: TilePlaceState[] = [
+      { id: "b", tileKey: KB, meta: ok(S_BONG - 1) },
+      { id: "d", tileKey: KD, meta: ok(S_BONG - 1) },
+    ];
+    expect(pickCronIds(states, [BONG, DDP], NOW, 10)).toEqual(["b", "d"]); // 월 시작이 화 시작보다 오래됐다
+    // 봉은사를 수요일 거점으로 넘기면 동대문(화)이 먼저
+    expect(pickCronIds(states, [{ ...BONG, refreshDay: 3 }, DDP], NOW, 10)).toEqual(["d", "b"]);
+    // 봉은사를 목요일(10/1 시작) 거점으로 넘기면 b는 그 시작 뒤에 가져온 것이라 대상이 아니다
+    expect(pickCronIds(states, [{ ...BONG, refreshDay: 4 }, DDP], NOW, 10)).toEqual(["d"]);
+  });
+
+  it("R63/R9: 갱신이 밀려 있어도 실패 재시도 자리를 실행마다 하나 둔다 (배치 2 이상, 대상인 실패가 있을 때만)", () => {
+    const backlog: TilePlaceState[] = ["b1", "b2", "b3", "b4", "b5"].map((id) => ({ id, tileKey: KB, meta: ok(S_BONG - 1) }));
+    const fail: TilePlaceState = { id: "f1", tileKey: KB, meta: failed(NOW - 7 * HOUR) };
+    const notYet: TilePlaceState = { id: "f2", tileKey: KB, meta: failed(NOW - HOUR) };
+    expect(pickCronIds([...backlog, fail, notYet], HUBS, NOW, 4)).toEqual(["b1", "b2", "b3", "f1"]);
+    expect(pickCronIds([...backlog, fail], HUBS, NOW, 1)).toEqual(["b1"]);
+    expect(pickCronIds([...backlog, notYet], HUBS, NOW, 4)).toEqual(["b1", "b2", "b3", "b4"]);
+    // 이미 자리 안에 있으면 그대로
+    expect(pickCronIds([backlog[0], fail], HUBS, NOW, 4)).toEqual(["b1", "f1"]);
   });
 });
 
@@ -253,6 +292,18 @@ describe("R63 거점 갱신 완료 기록", () => {
     expect(done?.start).toBe(mon);
     expect(await dueTileKeys(env.DB, tilesCoveringCircle(BONG, PREWARM_RADIUS), t)).toEqual([]);
     expect(place.calls.map((c) => c.id).slice(1).filter((id) => id !== "bf").sort()).toEqual(["b1", "b2"]);
+  });
+
+  it("R63/R9: 남은 후보가 갱신 대상인 실패 행뿐이면 그 실행에서 완료로 기록한다 (실패는 완료를 막지 않는다 — 확인 질의와 같은 기준)", async () => {
+    await markFresh(ALL_KEYS, NOW - HOUR);
+    await seedOk([["b2", S_BONG + 1]]);
+    await replaceTilePlaces(env.DB, KB, ["b2", "bf"], NOW - HOUR, false);
+    await saveDetailFailure(env.DB, "bf", "http_500", NOW - 7 * HOUR); // 6시간 지나 다시 할 실패
+    const place = fakePlaceApi({ bf: 404 });
+    const r = await runScheduled(env, { fetcher: place.fetcher, now: NOW, sleep: async () => {}, hubs: [BONG] });
+    expect(place.calls.map((c) => c.id)).toEqual(["bf"]);
+    expect(r.refreshed).toBe("bongeunsa");
+    expect(await readHubRefreshed(env.DB, "bongeunsa")).toEqual({ start: S_BONG, at: NOW });
   });
 
   it("R63: 거점 격자에 아직 수집할 격자가 남았으면 가게가 없어도 완료로 기록하지 않는다", async () => {

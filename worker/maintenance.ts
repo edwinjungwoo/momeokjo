@@ -4,12 +4,15 @@ import { HUBS, PUBLIC_HUBS, type Hub } from "../shared/hubs";
 import type { LatLng } from "../shared/types";
 import { Budget } from "./budget";
 import { limitsFrom } from "./config";
-import { D1CallBudget, meteredDb, overReadBudget, readSoftCap, recordCronRun, recordD1Usage, type D1Usage } from "./d1Usage";
+import {
+  CRON_DETAIL_LAST_KEY, D1CallBudget, meteredDb, overReadBudget, readSoftCap, recordCronRun, recordD1Usage, type D1Usage,
+} from "./d1Usage";
 import { enrichCallReserve, enrichDetails } from "./detailEnricher";
 import { isRetentionWindow, pruneOldEvents } from "./events";
 import { pruneRollups, runRollups } from "./rollup";
 import type { FetchFn } from "./fetchFn";
 import { maintainSnapshots, type SnapshotRun } from "./hubSnapshot";
+import { isReadOnly } from "./readOnly";
 import { hubHasDue, readCronMeta, recordHubRefreshed } from "./hubRefresh";
 import { hubRefreshStart } from "./refreshSchedule";
 import {
@@ -221,9 +224,25 @@ export async function runScheduled(
   }
 }
 
-/** wrangler.jsonc triggers.crons — 본 Cron(수집·보충)과 R56 스냅샷 Cron(2분 어긋나게). 바꾸면 둘 다 바꾼다 */
+/**
+ * wrangler.jsonc triggers.crons — 본 Cron(5분마다: 격자·보충·완료·집계·보관)과 둘째 트리거(홀수 분). 바꾸면 둘 다 바꾼다.
+ * R63: 계정의 Cron 트리거 수를 늘리지 않으려고 예전 스냅샷 트리거(2-59/5)를 홀수 분 하나로 바꿔 분(UTC)으로 나눈다 — secondCronJob.
+ * 주의: R63 앞 버전으로 롤백하면 트리거를 2-59/5로 되돌려야 한다 (옛 코드는 모르는 cron을 본 Cron으로 돌린다 — docs/deploy.md)
+ */
 export const MAIN_CRON = "*/5 * * * *";
-export const SNAPSHOT_CRON = "2-59/5 * * * *";
+export const SECOND_CRON = "1-59/2 * * * *";
+
+export type SecondCronJob = "snapshot" | "skip" | "detail";
+/**
+ * 둘째 트리거의 예정 시각(UTC 분)으로 할 일: 7·17·…·57분은 R56 스냅샷(시간당 6번), 5의 배수(5·15·…·55)는 쉼 — 본 Cron이
+ * 도는 분이라 겹치지 않게, 나머지 홀수 분(시간당 18번)은 R63 상세만 보충
+ */
+export function secondCronJob(scheduledTime: number): SecondCronJob {
+  const m = new Date(scheduledTime).getUTCMinutes();
+  if (m % 10 === 7) return "snapshot";
+  if (m % 5 === 0) return "skip";
+  return "detail";
+}
 
 export type SnapshotCronResult = SnapshotRun | { status: "read_budget" };
 
@@ -244,14 +263,146 @@ export async function runSnapshotCron(env: Env, opts: { now: number; hubs?: Hub[
   }
 }
 
-export type CronRun = { cron: "maintain"; result: CronResult } | { cron: "snapshot"; result: SnapshotCronResult };
+export type CronRun =
+  | { cron: "maintain"; result: CronResult }
+  | { cron: "snapshot"; result: SnapshotCronResult }
+  | { cron: "detail"; result: DetailCronResult }
+  | { cron: "idle" };
 
-/** scheduled 입구: controller.cron으로 나눈다. 모르는 값(로컬 /__scheduled 등)은 본 Cron */
+/**
+ * scheduled 입구: controller.cron으로 나누고, 둘째 트리거는 예정 시각(controller.scheduledTime, 없으면 now)의 분으로 다시 나눈다.
+ * 모르는 값(로컬 /__scheduled 등)은 본 Cron
+ */
 export async function runCron(
-  cron: string, env: Env, opts: { fetcher: FetchFn; now: number; sleep?: (ms: number) => Promise<void>; hubs?: Hub[] },
+  cron: string, env: Env,
+  opts: { fetcher: FetchFn; now: number; scheduledTime?: number; sleep?: (ms: number) => Promise<void>; hubs?: Hub[] },
 ): Promise<CronRun> {
-  if (cron === SNAPSHOT_CRON) return { cron: "snapshot", result: await runSnapshotCron(env, opts) };
+  if (cron === SECOND_CRON) {
+    const job = secondCronJob(opts.scheduledTime ?? opts.now);
+    if (job === "snapshot") return { cron: "snapshot", result: await runSnapshotCron(env, opts) };
+    if (job === "skip") return { cron: "idle" };
+    return { cron: "detail", result: await runDetailCron(env, opts) };
+  }
   return { cron: "maintain", result: await runScheduled(env, opts) };
+}
+
+/** R63 상세만 실행의 결과 (마지막 요약 cron_detail_last에도 같은 값) */
+export type DetailCronResult = {
+  enriched: number;
+  failed: number;
+  deferred?: number;
+  chars?: number;
+  /** 외부 호출 수 */
+  calls: number;
+  batch?: number;
+  d1Calls?: number;
+  d1Skipped?: string[];
+  enrichError?: true;
+  /** read_budget: 오늘 읽기 소프트 한도, paused: 쿨다운·frozen(R10·R44), read_only: 개발 서버(R52) */
+  skipped?: "read_budget" | "paused" | "read_only";
+};
+
+/**
+ * R63 상세만 실행 (둘째 트리거의 홀수 분, 시간당 18번 — 주간 갱신 처리량을 늘린다).
+ * 본 Cron과 같은 순서로: 읽기 예산(R38) → 쿨다운·frozen(R10·R44) → 만료 후보 + 미수집 앞선 커서(같은 커서) → 유효 배치 →
+ * pickCronIds → enrichDetails. 격자 수집·집계·스냅샷·보관 정리·완료 기록은 하지 않는다(본 Cron 몫).
+ * 실행 하나의 D1 호출 예산도 본 Cron과 같다(끝의 기록 몫을 남긴다). 끝에 사용량과 cron_detail_last를 한 문장으로 쓴다.
+ * 본 Cron과는 다른 분에 돌고, 오래 걸려 겹쳐도 같은 상세를 두 번 쓸 뿐이다(저장은 같은 값, 커서는 언제나 대상 행이나 지나간 행).
+ * R52 읽기 전용이면 아무것도 하지 않는다 (worker/index.ts도 Cron 전체를 건너뛴다).
+ */
+export async function runDetailCron(
+  env: Env, opts: { fetcher: FetchFn; now: number; sleep?: (ms: number) => Promise<void>; hubs?: Hub[] },
+): Promise<DetailCronResult> {
+  if (isReadOnly(env)) return { enriched: 0, failed: 0, calls: 0, skipped: "read_only" };
+  const usage: D1Usage = { read: 0, written: 0 };
+  const db = meteredDb(env.DB, usage);
+  const calls = new D1CallBudget(usage, CRON_D1_CALL_LIMIT - CRON_D1_RESERVE);
+  const result: DetailCronResult = { enriched: 0, failed: 0, calls: 0 };
+  try {
+    if (await overReadBudget(db, env, opts.now)) {
+      result.skipped = "read_budget";
+      return result;
+    }
+    const { budgetSize, batchSize: configured, detailCharBudget } = limitsFrom(env);
+    const budget = new Budget(budgetSize);
+    const hubs = hubOrder(opts.hubs ?? HUBS, opts.now);
+    const keys = [...new Set(hubs.flatMap((h) => tilesCoveringCircle(h, PREWARM_RADIUS)))];
+    const batchSize = cronBatchFor(calls.left, configured);
+    result.batch = batchSize;
+    if (!detailsAllowed(await detailGate(db), opts.now)) {
+      result.skipped = "paused";
+      return result;
+    }
+    const { changedAt } = await readCronMeta(db, []);
+    await refreshDetails(db, {
+      fetcher: opts.fetcher, now: opts.now, sleep: opts.sleep, hubs, keys, calls, budget, batchSize, changedAt,
+      charBudget: detailCharBudget,
+    }, result);
+    result.calls = budgetSize - budget.left;
+    result.d1Calls = calls.used;
+    return result;
+  } finally {
+    const summary = {
+      at: opts.now, collected: 0, incomplete: 0, enriched: result.enriched, failed: result.failed, calls: result.calls, rolled: 0,
+      ...(result.skipped ? { skipped: result.skipped } : {}),
+      ...(result.enrichError ? { enrichError: true as const } : {}),
+      ...(result.d1Skipped ? { d1Skipped: result.d1Skipped } : {}),
+    };
+    await recordCronRun(env.DB, usage, opts.now, summary, CRON_DETAIL_LAST_KEY).catch((e) => console.error("d1 usage record failed", e));
+  }
+}
+
+/**
+ * 상세 보충 단계 (본 Cron과 상세만 실행이 같이 쓴다): 만료 후보(유효 배치가 0이면 읽지 않는다) + 미수집 앞선 커서 →
+ * pickCronIds(미수집 → 오래된 시작 → 가까운 순, 실패 자리 하나) → enrichDetails. 결과 수를 out에 쓰고 후보를 돌려준다(완료 확인용)
+ */
+async function refreshDetails(
+  db: D1Database,
+  ctx: {
+    fetcher: FetchFn; now: number; sleep?: (ms: number) => Promise<void>; hubs: Hub[]; keys: string[]; calls: D1CallBudget;
+    budget: Budget; batchSize: number; changedAt: number; charBudget: number;
+  },
+  out: {
+    enriched: number; failed: number; deferred?: number; chars?: number; enrichError?: true; d1Skipped?: string[];
+  },
+): Promise<TilePlaceState[]> {
+  const { calls, batchSize } = ctx;
+  const skip = (stage: string) => (out.d1Skipped ??= []).push(stage);
+  const tail = enrichCallReserve(batchSize) + ROLLUP_D1_CALLS;
+  const candidates: TilePlaceState[] = [];
+  if (batchSize <= 0) return candidates;
+  // 유효 배치가 0이면 고를 것도 없으니 만료 후보도 읽지 않는다 (Task 34 리뷰)
+  if (calls.has(EXPIRED_D1_CALLS + FRONTIER_MIN_CALLS + tail)) {
+    candidates.push(...(await expiredDetailStates(db, ctx.keys, ctx.now, ctx.changedAt)));
+  } else skip("expired");
+  // Task 34: 미수집은 앞선 커서부터 거점에 가까운 순 batchSize곳만 (만료 후보와 합쳐 고르는 결과는 전부 읽은 것과 같다).
+  // 커서가 끝이고 tiles_changed_at·지문이 같으면 묶음 질의 없이 끝난다 (따로 "다 채움" 표시를 두지 않는다)
+  const maxQueries = Math.min(2 + UNFETCHED_MAX_CHUNKS, calls.left - tail);
+  if (maxQueries >= FRONTIER_MIN_CALLS) {
+    const u = await nearestUnfetchedStates(db, ctx.keys, ctx.hubs, batchSize, { changedAt: ctx.changedAt, maxQueries });
+    candidates.push(...u.states);
+  } else skip("unfetched");
+  if (candidates.length === 0) return candidates;
+  // R63: 미수집 먼저, 그다음 갱신 시작이 오래된 거점부터, 거점 안에서는 가까운 순 (실패 재시도 자리 하나)
+  const ids = pickCronIds(candidates, ctx.hubs, ctx.now, batchSize);
+  const e = await enrichDetails(
+    {
+      db, fetcher: ctx.fetcher, budget: ctx.budget, now: ctx.now, batchSize, sleep: ctx.sleep, ids, charBudget: ctx.charBudget,
+      d1: calls,
+    },
+    ctx.hubs,
+    PREWARM_RADIUS,
+  );
+  out.enriched = e.enriched;
+  out.failed = e.failed;
+  out.deferred = e.deferred;
+  out.chars = e.chars;
+  if (e.error !== undefined) {
+    // 저장 오류가 있어도 센 수·집계·기록은 지킨다 (받은 결과는 enrichDetails가 묶음마다 이미 저장했다)
+    console.error("enrich failed", e.error);
+    out.enrichError = true;
+  }
+  return candidates;
 }
 
 async function maintain(
@@ -293,7 +444,6 @@ async function maintain(
     failed: 0,
     batch: batchSize,
   };
-  const skip = (stage: string) => (result.d1Skipped ??= []).push(stage);
   // R12: 목록 원소 조각이 없는 예전 행을 실행마다 최대 200행 채운다 (외부 호출 없음, 다 채우면 meta 1행만 읽는다)
   result.listJsonFilled = await backfillListJson(db).catch((e) => {
     console.error("list_json backfill failed", e);
@@ -309,46 +459,15 @@ async function maintain(
   // tiles_changed_at은 한 번만 읽어 두 커서(만료·미수집)에 넘긴다 — 이 값을 본 뒤의 격자 변화는 다음 실행이 알아본다.
   // R63 거점 완료 기록도 같은 질의로 읽는다 (D1 호출 수는 그대로)
   const { changedAt, refreshed } = await readCronMeta(db, hubs.map((h) => h.id));
-  const tail = enrichCallReserve(batchSize) + ROLLUP_D1_CALLS;
-  const candidates: TilePlaceState[] = [];
-  if (batchSize > 0) {
-    // 유효 배치가 0이면 고를 것도 없으니 만료 후보도 읽지 않는다 (Task 34 리뷰)
-    if (calls.has(EXPIRED_D1_CALLS + FRONTIER_MIN_CALLS + tail)) {
-      candidates.push(...(await expiredDetailStates(db, keys, opts.now, changedAt)));
-    } else skip("expired");
-    // Task 34: 미수집은 앞선 커서부터 거점에 가까운 순 batchSize곳만 (만료 후보와 합쳐 고르는 결과는 전부 읽은 것과 같다).
-    // 커서가 끝이고 tiles_changed_at·지문이 같으면 묶음 질의 없이 끝난다 (따로 "다 채움" 표시를 두지 않는다)
-    const maxQueries = Math.min(2 + UNFETCHED_MAX_CHUNKS, calls.left - tail);
-    if (maxQueries >= FRONTIER_MIN_CALLS) {
-      const u = await nearestUnfetchedStates(db, keys, hubs, batchSize, { changedAt, maxQueries });
-      candidates.push(...u.states);
-    } else skip("unfetched");
-  }
-  if (candidates.length > 0 && batchSize > 0) {
-    // R63: 미수집 먼저, 그다음 갱신 시작이 오래된 거점부터, 거점 안에서는 가까운 순
-    const ids = pickCronIds(candidates, hubs, opts.now, batchSize);
-    const e = await enrichDetails(
-      {
-        db, fetcher: opts.fetcher, budget, now: opts.now, batchSize, sleep: opts.sleep, ids, charBudget: detailCharBudget,
-        d1: calls,
-      },
-      hubs,
-      PREWARM_RADIUS,
-    );
-    result.enriched = e.enriched;
-    result.failed = e.failed;
-    result.deferred = e.deferred;
-    result.chars = e.chars;
-    if (e.error !== undefined) {
-      // 저장 오류가 있어도 센 수·집계·기록은 지킨다 (받은 결과는 enrichDetails가 묶음마다 이미 저장했다)
-      console.error("enrich failed", e.error);
-      result.enrichError = true;
-    }
-  }
+  const candidates = await refreshDetails(db, {
+    fetcher: opts.fetcher, now: opts.now, sleep: opts.sleep, hubs, keys, calls, budget, batchSize, changedAt,
+    charBudget: detailCharBudget,
+  }, result);
   if (batchSize > 0) {
     const done = await completeHubRefresh(db, hubs, opts.now, refreshed, {
       pendingTiles: new Set([...tiles.incomplete, ...tiles.failed]),
-      candidateTiles: new Set(candidates.map((c) => c.tileKey)),
+      // 완료 확인 질의(HUB_DUE_EXISTS_SQL)와 같은 기준 — 미수집·ok 후보만. 실패 행은 완료를 막지 않는다
+      candidateTiles: new Set(candidates.filter((c) => c.meta === null || c.meta.status === "ok").map((c) => c.tileKey)),
       canCheck: () => calls.has(REFRESH_CHECK_D1_CALLS + ROLLUP_D1_CALLS),
     }).catch((e) => {
       console.error("hub refresh check failed", e);
@@ -363,7 +482,7 @@ async function maintain(
  * R63: 갱신을 다 끝낸 거점을 하나 기록한다 (실행마다 많아야 한 거점 — 남은 대상 확인 1 + 기록 1).
  * 후보: 이번 시작으로 아직 기록하지 않았고, 거점 격자에 수집할 격자가 남지 않았고(이번 실행 뒤 incomplete·failed),
  * 이번 실행의 보충 후보(만료·미수집)에 그 거점 격자가 없는 거점 — 후보가 있으면 아직 대상이 남은 것이 확실하니 질의하지 않는다.
- * 그중 한 거점(갱신 시작 순으로 줄 세워 실행마다 하나씩 돌린다 — 아직 대상이 남은 거점이 다른 거점의 기록을 막지 않게)에
+ * 그중 한 거점(실행마다 하나씩 돌린다 — 아직 대상이 남은 거점이 다른 거점의 기록을 막지 않게)에
  * 남은 대상(미수집, 시작 전에 가져온 ok — hubHasDue)이 없으면 {start, at: now}를 쓰고 그 거점 스냅샷 표시를 올린다.
  * 기록한 거점 id, 아니면 null.
  */
@@ -376,8 +495,7 @@ export async function completeHubRefresh(
     .filter(({ hub, start }) => {
       if (refreshed.get(hub.id)?.start === start) return false;
       return !tilesCoveringCircle(hub, PREWARM_RADIUS).some((k) => seen.pendingTiles.has(k) || seen.candidateTiles.has(k));
-    })
-    .sort((a, b) => a.start - b.start);
+    });
   const first = open[Math.floor(now / CRON_INTERVAL_MS) % Math.max(1, open.length)];
   if (!first || !seen.canCheck()) return null;
   if (await hubHasDue(db, first.hub, now)) return null;

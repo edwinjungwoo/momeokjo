@@ -9,7 +9,7 @@ import { HUBS, hubById } from "../shared/hubs";
 import { HUB_REFRESHED_PREFIX, parseHubRefreshed } from "./hubRefresh";
 import { hubRefreshStart, tileFreshFrom } from "./refreshSchedule";
 import { kstDay, utcDay } from "../shared/kst";
-import { CRON_LAST_KEY } from "./d1Usage";
+import { CRON_DETAIL_LAST_KEY, CRON_LAST_KEY } from "./d1Usage";
 import { usableListJsonSql } from "./present";
 import { COLLECT_SINCE_KEYS, ROLLUP_THROUGH_KEY, liveDayMetrics, type LivePart, type MetricRow } from "./rollup";
 
@@ -78,7 +78,7 @@ type MetaState = { ops: OpsSnapshot; rollupThrough: string | null; collectSince:
 async function readState(deps: DashboardDeps): Promise<MetaState> {
   const day = utcDay(deps.now);
   const keys = [
-    `d1_read:${day}`, `d1_written:${day}`, "place_blocked_until", "detail_mode", `block_count:${kstDay(deps.now)}`, CRON_LAST_KEY,
+    `d1_read:${day}`, `d1_written:${day}`, "place_blocked_until", "detail_mode", `block_count:${kstDay(deps.now)}`, CRON_LAST_KEY, CRON_DETAIL_LAST_KEY,
     ROLLUP_THROUGH_KEY,
     COLLECT_SINCE_KEYS.relaxed,
     COLLECT_SINCE_KEYS.confirmRank,
@@ -100,12 +100,16 @@ async function readState(deps: DashboardDeps): Promise<MetaState> {
   } catch {
     /* 깨진 값은 없는 것으로 */
   }
-  try {
-    const c = JSON.parse(get(CRON_LAST_KEY) ?? "null") as CronSummary | null;
-    if (c && typeof c.at === "number") cron = c;
-  } catch {
-    /* 깨진 값은 없는 것으로 */
-  }
+  const summaryOf = (key: string): CronSummary | null => {
+    try {
+      const c = JSON.parse(get(key) ?? "null") as CronSummary | null;
+      return c && typeof c.at === "number" ? c : null;
+    } catch {
+      return null; // 깨진 값은 없는 것으로
+    }
+  };
+  cron = summaryOf(CRON_LAST_KEY);
+  const cronDetail = summaryOf(CRON_DETAIL_LAST_KEY);
   const nextUtcMidnight = Date.parse(`${day}T00:00:00Z`) + 86_400_000;
   return {
     ops: {
@@ -115,6 +119,7 @@ async function readState(deps: DashboardDeps): Promise<MetaState> {
       },
       kakao: { blockedUntil: num("place_blocked_until"), frozen, blocksToday: num(keys[4]) },
       cron,
+      cronDetail,
     },
     rollupThrough: get(ROLLUP_THROUGH_KEY) ?? null,
     collectSince: { relaxed: get(COLLECT_SINCE_KEYS.relaxed) ?? null, confirmRank: get(COLLECT_SINCE_KEYS.confirmRank) ?? null },

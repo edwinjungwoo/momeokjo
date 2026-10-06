@@ -58,10 +58,11 @@ export async function readListRows(
     .sort((a, b) => a.d - b.d || (a.row.id < b.row.id ? -1 : a.row.id > b.row.id ? 1 : 0));
 }
 
-/** 응답 메타 중 실행마다 정하는 것 (나머지 center·radius·detailsNewestAt은 placesPayload가 채운다) */
-export type PlacesState = Pick<
-  PlacesMeta, "pending" | "incompleteTiles" | "stale" | "detailsPaused" | "detailsFrozenSince" | "refreshedAt" | "refreshDay"
->;
+/** 응답 메타 중 실행마다 정하는 것 (나머지 center·radius·detailsNewestAt은 placesPayload가 채운다). R63 두 값은 서버가 언제나 싣는다 */
+export type PlacesState = Pick<PlacesMeta, "pending" | "incompleteTiles" | "stale" | "detailsPaused" | "detailsFrozenSince"> & {
+  refreshedAt: number | null;
+  refreshDay: number;
+};
 
 /** 응답을 만든다. 키 순서가 본문 글자를 정한다 — 요청 경로와 스냅샷이 이 함수 하나를 쓴다 */
 export function placesPayload(center: LatLng, radiusM: number, rows: ListRead["rows"], s: PlacesState): PlacesPayload {
@@ -147,7 +148,7 @@ export async function getPlaces(
   const refreshed = await readHubRefreshed(deps.db, hub.id);
   return placesPayload(center, radiusM, rows, {
     pending, incompleteTiles, stale, detailsPaused, detailsFrozenSince: frozenSince(gate, deps.now),
-    refreshedAt: refreshed?.at ?? null, refreshDay: hub.refreshDay,
+    refreshedAt: refreshed?.start ?? null, refreshDay: hub.refreshDay,
   });
 }
 

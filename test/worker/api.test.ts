@@ -290,7 +290,7 @@ describe("GET /api/places — 응답 캐시와 목록 원소", () => {
     }
   });
 
-  it("R63: 목록 응답 맨 뒤에 거점의 갱신 요일(refreshDay)과 마지막으로 다 갱신한 시각(refreshedAt, 없으면 null)을 싣는다", async () => {
+  it("R63: 목록 응답 맨 뒤에 거점의 갱신 요일(refreshDay)과 마지막으로 다 끝낸 주간 갱신의 날짜(refreshedAt = 그 갱신 시작, 없으면 null)를 싣는다", async () => {
     const s = setup();
     await callApp(s.app, Q);
     const first = await (await callApp(s.app, Q)).text();
@@ -298,10 +298,11 @@ describe("GET /api/places — 응답 캐시와 목록 원소", () => {
     const start = hubRefreshStart(HUB, NOW);
     await recordHubRefreshed(env.DB, "bongeunsa", start, start + 3600_000);
     const body = (await (await callApp(s.app, Q)).json()) as PlacesResponse;
-    expect(body).toMatchObject({ refreshedAt: start + 3600_000, refreshDay: 1 });
+    // 끝낸 시각이 아니라 끝낸 갱신의 시작(그 요일 00:00 KST) — 화면은 그 날짜를 보여준다
+    expect(body).toMatchObject({ refreshedAt: start, refreshDay: 1 });
     // 다른 거점의 기록은 싣지 않는다
-    await recordHubRefreshed(env.DB, "ddp", start, start + 7200_000);
-    expect(((await (await callApp(s.app, Q)).json()) as PlacesResponse).refreshedAt).toBe(start + 3600_000);
+    await recordHubRefreshed(env.DB, "ddp", start + 86_400_000, start + 7200_000);
+    expect(((await (await callApp(s.app, Q)).json()) as PlacesResponse).refreshedAt).toBe(start);
   });
 
   it("R12: 응답·목록 원소·detail에는 정해진 키만 싣는다 (목록 크기 회귀 방지)", async () => {

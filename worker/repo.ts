@@ -6,10 +6,10 @@ import {
 import { kstDay } from "../shared/kst";
 import { haversine, tileRect, tilesCoveringCircle } from "../shared/geo";
 import type { CategoryGroup, LatLng, Place, PlaceDetail, PlaceSummary, Rect, StoredDetail } from "../shared/types";
-import { HUBS } from "../shared/hubs";
+import { HUBS, type Hub } from "../shared/hubs";
 import { hubsOfTile } from "./hubTiles";
 import { listItemJson, storedListJson, usableListJson, usableListJsonSql } from "./present";
-import { dueSinceOf, okDueBefore, tileFreshFrom, tileRefreshStart } from "./refreshSchedule";
+import { dueSinceOf, okDueBefore, refreshStartsIndex, tileFreshFrom, tileRefreshStart } from "./refreshSchedule";
 import { deleteSnapshotsStmt, markHubsDirtyStmt, markPlaceHubsDirtyStmt, markPlacesHubsDirtyStmt } from "./snapshotDirty";
 
 export type DetailMeta = { status: "ok" | "failed"; fetchedAt: number; reason: string | null } | null;
@@ -258,7 +258,7 @@ export async function idsNeedingDetail(
 }
 
 /** 기준점(여럿이면 가장 가까운 곳)에서 격자 중심까지 거리 — pickDetailIds와 SQL 순위(rankGroups)가 같은 값을 쓴다 */
-function tileDistance(key: string, centers: LatLng[]): number {
+function tileDistance(key: string, centers: readonly LatLng[]): number {
   const r = tileRect(key);
   const mid = { lat: (r.minLat + r.maxLat) / 2, lng: (r.minLng + r.maxLng) / 2 };
   return Math.min(...centers.map((c) => haversine(c, mid)));
@@ -487,22 +487,40 @@ export function pickDetailIds(
  * R63 Cron 순서: 미수집(새 가게)을 먼저 가까운 순으로, 그다음 갱신 대상이 된 시각(dueSinceOf — 거점 격자는 갱신 시작)이
  * 오래된 것부터, 같으면 가장 가까운 거점까지 칸 거리 순, 같으면 id순. 한 가게가 여러 칸에 있으면 대상인 칸 중 (시각, 거리)가 가장 앞선 것.
  * 그래서 시작이 오래된 거점의 갱신이 먼저 끝나고, 한 거점 안에서는 예전처럼 가까운 순이다.
+ * 갱신 대상 판단·시작·거리는 넘겨받은 거점(hubs)으로만 본다 (거점 밖 칸은 3일 + 지터 — isDetailDue).
+ * R9: 배치가 2곳 이상이고 대상인 실패 행이 있는데 자리 안에 없으면, 마지막 자리를 가장 오래 기다린 실패 행에 준다 —
+ * 밀린 갱신 뒤로 6시간 재시도가 끝없이 밀리지 않게 (실패는 dueSince가 늦어서 그대로면 맨 뒤다).
  */
-export function pickCronIds(states: TilePlaceState[], centers: LatLng[], now: number, limit: number): string[] {
-  const best = new Map<string, { since: number; d: number }>();
+export function pickCronIds(states: TilePlaceState[], hubs: readonly Hub[], now: number, limit: number): string[] {
+  const startsOf = refreshStartsIndex(hubs, now);
+  const best = new Map<string, { since: number; d: number; failed: boolean }>();
   const distOf = new Map<string, number>();
   for (const t of states) {
-    if (!isPlaceDue(t.meta, t.tileKey, now, t.id)) continue;
-    const since = t.meta === null ? Number.NEGATIVE_INFINITY : dueSinceOf(t.meta, t.tileKey, now, detailJitterMs(t.id));
+    const starts = startsOf.get(t.tileKey) ?? [];
+    const due = !t.meta
+      ? true
+      : t.meta.status !== "ok" || starts.length === 0
+        ? isDetailDue(t.meta, now, t.id)
+        : t.meta.fetchedAt < starts[starts.length - 1];
+    if (!due) continue;
+    const since = t.meta === null ? Number.NEGATIVE_INFINITY : dueSinceOf(t.meta, starts, detailJitterMs(t.id));
     let d = distOf.get(t.tileKey);
-    if (d === undefined) distOf.set(t.tileKey, (d = tileDistance(t.tileKey, centers)));
+    if (d === undefined) distOf.set(t.tileKey, (d = tileDistance(t.tileKey, hubs)));
     const prev = best.get(t.id);
-    if (!prev || since < prev.since || (since === prev.since && d < prev.d)) best.set(t.id, { since, d });
+    if (!prev || since < prev.since || (since === prev.since && d < prev.d)) {
+      best.set(t.id, { since, d, failed: t.meta !== null && t.meta.status !== "ok" });
+    }
   }
-  return [...best.entries()]
-    .sort(([a, x], [b, y]) => x.since - y.since || x.d - y.d || (a < b ? -1 : a > b ? 1 : 0))
-    .slice(0, Math.max(0, Math.floor(limit)))
-    .map(([id]) => id);
+  const sorted = [...best.entries()].sort(
+    ([a, x], [b, y]) => x.since - y.since || x.d - y.d || (a < b ? -1 : a > b ? 1 : 0),
+  );
+  const n = Math.max(0, Math.floor(limit));
+  const picked = sorted.slice(0, n);
+  if (n >= 2 && sorted.length > n && !picked.some(([, x]) => x.failed)) {
+    const fail = sorted.slice(n).find(([, x]) => x.failed);
+    if (fail) picked[n - 1] = fail;
+  }
+  return picked.map(([id]) => id);
 }
 
 export async function countNeedingDetail(db: D1Database, center: LatLng, radiusM: number, now: number): Promise<number> {
@@ -518,7 +536,7 @@ export const countUnfetchedIn = (states: TilePlaceState[]) =>
 
 /** Cron 만료 후보를 상태(ok/failed)마다 이만큼까지만 읽는다 (한 실행이 갱신하는 건 DETAIL_BATCH_SIZE곳뿐) */
 export const EXPIRED_SCAN_LIMIT = 300;
-/** 커서를 처음부터 다시 읽을 때(재설정) 같은 실행에서 거점 행이 나올 때까지 더 읽는 쪽 수 — 상태마다 최대 3 × 300행 */
+/** 한 실행이 대상 행이 나올 때까지 읽는 쪽 수 (재설정 포함) — 상태마다 최대 3 × 300행 */
 export const EXPIRED_RESET_PAGES = 3;
 const EXPIRED_COLS = `SELECT p.rowid AS rid, p.id AS id, p.status AS status, p.fetched_at AS fetched_at,
     p.fail_reason AS fail_reason, tp.tile_key AS tile_key
@@ -585,7 +603,8 @@ type ExpiredRow = { rid: number; id: string; status: string; fetched_at: number;
  *   크기가 아니라 같은지로 본다 — 요청이 Cron보다 이른 시각으로 늦게 기록해도 놓치지 않는다.
  * - 거점 격자 집합(keys)의 지문이 다르다 (거점 추가·변경). ok는 칸마다의 갱신 시작도 지문에 넣는다 — 어느 거점이든 새 갱신
  *   요일이 되면(하루 한 번쯤) 커서 앞의 그 거점 행이 대상이 되므로 처음부터 다시 읽는다.
- * 재설정이면 같은 실행에서 대상 행이 나올 때까지 EXPIRED_RESET_PAGES쪽까지 이어 읽는다 (다음 실행은 한 쪽씩).
+ * 실행마다 대상 행이 나올 때까지 EXPIRED_RESET_PAGES쪽까지 이어 읽는다 (R63 — 예전에는 재설정 때만, 다음 실행은 한 쪽씩이었다.
+ * 거점마다 갱신 창이 겹치면 대상 행 사이에 대상 아닌 행이 끼어 있어서 실행마다 한 쪽만 나아가면 보충이 멈춘다).
  */
 export async function expiredDetailStates(
   db: D1Database, keys: string[], now: number, observedChangedAt?: number,
@@ -616,7 +635,8 @@ export async function expiredDetailStates(
     const reset = cursor === null || cursor.changedAt !== changedAt || cursor.keys !== fingerprint;
     let pos = reset ? { from: 0, rid: 0 } : { from: cursor.from, rid: cursor.rid };
     let next: { from: number; rid: number } | null = null;
-    for (let page = 0; page < (reset ? EXPIRED_RESET_PAGES : 1) && next === null; page++) {
+    // R63: 재설정이 아니어도 대상 행이 나올 때까지 EXPIRED_RESET_PAGES쪽까지 (갱신 창이 겹치면 대상 아닌 행이 끼어 있다 — 최악 호출 수는 그대로)
+    for (let page = 0; page < EXPIRED_RESET_PAGES && next === null; page++) {
       const r = await db
         .prepare(EXPIRED_SCAN_SQL)
         .bind(status, pos.from, pos.rid, before, EXPIRED_SCAN_LIMIT)

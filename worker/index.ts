@@ -13,7 +13,8 @@ export default {
     logReadOnlyOnce(env);
     return app.fetch(request, readOnlyEnv(env), ctx);
   },
-  // R56: controller.cron으로 본 Cron(수집·보충)과 스냅샷 Cron을 나눈다 (worker/maintenance.ts runCron).
+  // R56·R63: controller.cron으로 본 Cron과 둘째 트리거(홀수 분)를 나누고, 둘째는 예정 시각의 분으로 스냅샷·쉼·상세만 보충을 나눈다
+  // (worker/maintenance.ts runCron·secondCronJob).
   // R52: 읽기 전용 개발 모드면 두 Cron 모두 아무것도 하지 않는다
   async scheduled(controller, env, ctx) {
     if (isReadOnly(env)) {
@@ -21,8 +22,8 @@ export default {
       return;
     }
     ctx.waitUntil(
-      runCron(controller.cron, env, { fetcher: realFetch, now: Date.now() })
-        .then((r) => console.log(`cron ${r.cron}`, JSON.stringify(r.result)))
+      runCron(controller.cron, env, { fetcher: realFetch, now: Date.now(), scheduledTime: controller.scheduledTime })
+        .then((r) => console.log(`cron ${r.cron}`, "result" in r ? JSON.stringify(r.result) : ""))
         .catch((e) => console.error("cron failed", controller.cron, e)),
     );
   },

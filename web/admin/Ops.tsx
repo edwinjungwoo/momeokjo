@@ -155,6 +155,7 @@ export function Ops({ data, api }: { data: OpsData; api: Api }) {
   const k = data.ops.kakao;
   const frozen = k.frozen && now < k.frozen.until ? k.frozen : null;
   const cron = data.ops.cron;
+  const cronDetail = data.ops.cronDetail ?? null;
   const running = run?.state === "running";
 
   const start = async (hub: string, kind: Kind) => {
@@ -311,6 +312,19 @@ export function Ops({ data, api }: { data: OpsData; api: Api }) {
             <dt>그 실행 결과</dt>
             <dd>
               <CronResult cron={cron} />
+            </dd>
+          </div>
+          <div>
+            <dt>마지막 상세만 보충 <small className="muted">(홀수 분)</small></dt>
+            <dd>
+              {cronDetail ? (
+                <>
+                  {ago(cronDetail.at, now)} <small className="muted">({kstTime(cronDetail.at)})</small> ·{" "}
+                  <CronResult cron={cronDetail} detailOnly />
+                </>
+              ) : (
+                "기록 없음"
+              )}
             </dd>
           </div>
           <div>

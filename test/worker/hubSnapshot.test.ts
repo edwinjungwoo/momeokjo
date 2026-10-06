@@ -12,7 +12,7 @@ import {
   SNAPSHOT_SKIP_BACKOFF_MS, SNAPSHOT_SKIP_MAX_BACKOFF_MS, SNAPSHOT_SKIP_PREFIX, acceptsGzip, skipBackoffMs, buildHubSnapshot, etagMatches, maintainSnapshots, readHubSnapshot, snapshotEdgeTtlMs,
 } from "../../worker/hubSnapshot";
 import { hubsOfTile } from "../../worker/hubTiles";
-import { MAIN_CRON, SNAPSHOT_CRON, runCron, runSnapshotCron } from "../../worker/maintenance";
+import { MAIN_CRON, SECOND_CRON, runCron, runSnapshotCron } from "../../worker/maintenance";
 import { markTile, recordPlaceBlock, replaceTilePlaces, saveDetail, saveDetailFailure } from "../../worker/repo";
 import { SNAPSHOT_DIRTY_PREFIX, markHubsDirtyStmt } from "../../worker/snapshotDirty";
 import { callApp } from "../helpers/callApp";
@@ -127,7 +127,7 @@ describe("R56 거점 스냅샷 — 만들기와 내보내기", () => {
     const start = hubRefreshStart(HUB, NOW);
     await recordHubRefreshed(env.DB, "bongeunsa", start, start + 5 * 3600_000);
     const live = await seedHub();
-    expect(JSON.parse(live)).toMatchObject({ refreshedAt: start + 5 * 3600_000, refreshDay: HUB.refreshDay });
+    expect(JSON.parse(live)).toMatchObject({ refreshedAt: start, refreshDay: HUB.refreshDay });
     expect(await buildHubSnapshot(env.DB, HUB, NOW)).toMatchObject({ status: "built" });
     const res = await callApp(makeApp().app, Q, { headers: GZIP });
     expect(res.headers.get("x-mmj-source")).toBe("snapshot");
@@ -450,20 +450,20 @@ describe("R56 거점 스냅샷 — Cron", () => {
     expect(await maintainSnapshots(env.DB, hubs, t + 5)).toMatchObject({ status: "built", hub: "bongeunsa" });
   });
 
-  it("R56: 스냅샷 Cron은 따로 돈다 — 본 Cron(MAIN_CRON)은 수집·보충만, 스냅샷 Cron(SNAPSHOT_CRON)은 외부 호출 없이 한 거점만 만든다", async () => {
+  it("R56/R63: 스냅샷 Cron은 따로 돈다 — 본 Cron(MAIN_CRON)은 수집·보충만, 둘째 트리거(SECOND_CRON)의 7·17·…분은 외부 호출 없이 한 거점만 만든다", async () => {
     expect(wranglerConfig).toContain(`"${MAIN_CRON}"`);
-    expect(wranglerConfig).toContain(`"${SNAPSHOT_CRON}"`);
+    expect(wranglerConfig).toContain(`"${SECOND_CRON}"`);
     for (const h of HUBS) for (const k of tilesCoveringCircle(h, PREWARM_RADIUS)) await markTile(env.DB, k, NOW, 0, false);
     const local = fakeKakaoLocal([]);
     const opts = { fetcher: local.fetcher, now: NOW, sleep: async () => {} };
     const main = await runCron(MAIN_CRON, env, opts);
     expect(main.cron).toBe("maintain");
-    expect(main.result).toHaveProperty("order");
+    expect(main.cron === "maintain" && main.result).toHaveProperty("order");
     expect(await env.DB.prepare("SELECT count(*) AS c FROM hub_snapshots").first<{ c: number }>()).toEqual({ c: 0 });
     // 모르는 cron 문자열(로컬 /__scheduled 등)은 본 Cron
     expect((await runCron("* * * * *", env, opts)).cron).toBe("maintain");
     const fetchedBefore = local.calls.length;
-    const snap = await runCron(SNAPSHOT_CRON, env, opts);
+    const snap = await runCron(SECOND_CRON, env, { ...opts, scheduledTime: Date.UTC(2027, 0, 15, 8, 7) });
     expect(snap).toMatchObject({ cron: "snapshot", result: { status: "built" } });
     expect(local.calls.length).toBe(fetchedBefore);
     expect(await env.DB.prepare("SELECT count(*) AS c FROM hub_snapshots").first<{ c: number }>()).toEqual({ c: 1 });

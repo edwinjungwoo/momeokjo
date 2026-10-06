@@ -65,8 +65,9 @@ export function statusOf(data: PlacesResponse | null, polling: boolean, error: b
 }
 
 /**
- * R63: 상태 줄 아래 조용한 한 줄 — "가게 정보 10월 6일(월) 업데이트 · 매주 월요일" (완료한 적이 없으면 "매주 월요일 업데이트").
- * 갱신 중에는 서버가 지난 완료 시각을 준다. 예전 기기 저장본에 필드가 없으면 거점 설정의 요일(hubRefreshDay)로, 날짜 없이
+ * R63: 상태 줄 아래 조용한 한 줄 — "가게 정보 10월 9일(금) 업데이트 · 매주 금요일" (완료한 적이 없으면 "매주 금요일 업데이트").
+ * 날짜는 서버가 주는 refreshedAt = 마지막으로 끝낸 주간 갱신의 시작(갱신 요일)이다 — 갱신 중에는 지난번 것.
+ * 예전 기기 저장본에 필드가 없으면 거점 설정의 요일(hubRefreshDay)로, 날짜 없이
  */
 export function refreshNote(data: PlacesResponse | null, hubRefreshDay: number): string | null {
   if (!data) return null;

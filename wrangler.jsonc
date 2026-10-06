@@ -20,8 +20,10 @@
     // R36: 관리자 API 전용 (모든 /api/admin/* 요청을 토큰 비교 전에 IP별로 센다)
     { "name": "ADMIN_LIMITER", "namespace_id": "1002", "simple": { "limit": 120, "period": 60 } }
   ],
-  // 본 Cron(수집·보충)과 R56 거점 스냅샷 Cron(2분 어긋나게, 실행마다 한 거점) — worker/maintenance.ts MAIN_CRON·SNAPSHOT_CRON
-  "triggers": { "crons": ["*/5 * * * *", "2-59/5 * * * *"] },
+  // 본 Cron(5분마다: 격자·보충·완료·집계)과 둘째 트리거(홀수 분, R63) — UTC 분으로 7·17·…·57은 R56 스냅샷, 5의 배수는 쉼,
+  // 나머지는 상세만 보충 (worker/maintenance.ts MAIN_CRON·SECOND_CRON·secondCronJob). 트리거 수는 그대로 2개.
+  // 주의: R63 앞 버전으로 롤백하면 둘째 트리거를 "2-59/5 * * * *"로 되돌린다 (docs/deploy.md)
+  "triggers": { "crons": ["*/5 * * * *", "1-59/2 * * * *"] },
   // Task 34: 상세 보충은 보수적으로 (실행당 4곳, 본문 200,000자까지 — worker/config.ts). 운영 cpuTime을 보고 올린다
   "vars": {
     "SUBREQUEST_BUDGET": "40", "DETAIL_BATCH_SIZE": "4", "DETAIL_CHAR_BUDGET": "200000", "D1_READ_SOFT_CAP": "3000000",

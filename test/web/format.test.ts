@@ -37,6 +37,11 @@ describe("R63 가게 정보 업데이트 한 줄", () => {
     expect(refreshNote(null, 1)).toBeNull();
   });
 
+  it("R63: 서버는 끝낸 갱신의 시작(그 요일 00:00 KST)을 refreshedAt으로 준다 — 이틀 걸려 끝나도 갱신 요일 날짜로 보인다", () => {
+    const friStart = Date.UTC(2026, 9, 9) - KST; // 10월 9일(금) 00:00 KST
+    expect(refreshNote({ ...base, refreshedAt: friStart, refreshDay: 5 }, 5)).toBe("가게 정보 10월 9일(금) 업데이트 · 매주 금요일");
+  });
+
   it("R63: 예전 기기 저장본(필드 없음)은 거점 설정의 요일로, 완료 날짜 없이 보여준다", () => {
     const { refreshedAt: _a, refreshDay: _d, ...old } = base;
     expect(refreshNote(old as PlacesResponse, 4)).toBe("매주 목요일 업데이트");
