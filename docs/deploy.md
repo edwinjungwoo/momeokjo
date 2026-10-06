@@ -97,11 +97,16 @@ git add docs/deploys.md && git commit -m "docs(deploy): <날짜> 배포 기록" 
 
 | 버전 | 커밋 | 롤백해도 되나 | 메모 |
 |---|---|---|---|
-| `72a9f970` | `3a4cc93` | 네 | 2026-10-06 09:24 배포, 0003~0005 뒤, Cron `*/5` |
+| `72a9f970` | `3a4cc93` | 네 — 단 `2-59/5` 트리거를 지울 것 | 2026-10-06 09:24 배포, 0003~0005 뒤, Cron `*/5`. R56 앞 코드라 `controller.cron`을 보지 않아 두 트리거 모두 전체 수집을 돌려요(카카오 호출·D1 읽기 2배) |
 | `2f5adde0` | 0005 이전 | 네 (문서로 확인한 안전 대상) | `v1:` 조각을 견뎌요. Cron을 `*/10`으로 같이 바꿔야 해요 |
 | `cd11d71`(Task 28) ~ `8fce5cd` 사이 커밋으로 만든 버전 | — | **아니요** | 옛 읽기 코드가 `v1:` 조각에서 틀린 JSON을 내요 |
 
 롤백 명령: `npx wrangler rollback <버전 id> --message "<이유>"` (스크립트 밖에서는 확인 질문이 나와요).
+
+**R56(스냅샷) 앞 버전으로 되돌렸을 때 추가로 할 것**
+1. 대시보드 Workers → momeokjo → Triggers에서 `2-59/5`를 지워요 (또는 `*/5`만 둔 설정으로 `wrangler triggers deploy`).
+2. 이 버전(스냅샷 포함)을 다시 올리기 **전에** 남은 스냅샷을 비워요 — 되돌린 동안의 변화가 스냅샷에 빠져 있어요: `npx wrangler d1 execute momeokjo --remote --command "DELETE FROM hub_snapshots"`.
+3. `daily_stats`·`anon_first_seen`·`hub_snapshots` 표는 남아 있어도 옛 코드에 해가 없어요.
 
 ## D1 일일 한도
 

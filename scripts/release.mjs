@@ -424,6 +424,7 @@ const ROLLBACK_CAVEATS = [
   "  ⚠ 마이그레이션은 되돌리지 않아요 — 그래서 마이그레이션은 더하기만 해요 (이전 버전도 새 스키마에서 돌아야 해요).",
   "  ⚠ wrangler rollback은 Cron 트리거를 되돌리지 않아요 — 지금 wrangler.jsonc의 crons가 그대로 남아요. 이전 버전이 다른 주기를 기대하면 손으로 맞추세요 (docs/deploy.md).",
   "  ⚠ 롤백 대상은 이번 배포 직전에 운영 중이던 버전이에요. 다른 버전으로 손으로 롤백할 때는 docs/deploy.md의 '안전한 롤백 대상'을 보세요.",
+  "  ⚠ R56(스냅샷) 앞 버전으로 되돌렸다면: 대시보드 Triggers에서 `2-59/5`를 지우세요 (옛 코드는 두 트리거 모두 전체 수집을 돌려요). 이 버전을 다시 올리기 전에는 npx wrangler d1 execute momeokjo --remote --command \"DELETE FROM hub_snapshots\"",
 ];
 
 /**
