@@ -1,12 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { NEW_PLACE_MIN_SEEN, priceBand, trioReasons } from "../../shared/reasons";
+import { NEW_PLACE_MIN_SEEN, REASON_MIN_REVIEWS, priceBand, trioReasons } from "../../shared/reasons";
 import { markSeen, type Seen } from "../../shared/seen";
 import type { ApiPlace } from "../../shared/types";
 import { apiPlace } from "../helpers/apiPlace";
 
 const NOW = 1_800_000_000_000;
-const place = (id: string, walkMinutes: number | undefined, rating: number | null, price: number | null = null): ApiPlace =>
-  apiPlace(id, { walkMinutes }, { rating, price });
+const place = (
+  id: string, walkMinutes: number | undefined, rating: number | null, price: number | null = null, reviewCount: number | null = 90,
+): ApiPlace => apiPlace(id, { walkMinutes }, { rating, price, reviewCount });
 /** 이 기기에서 본 곳: ids + 다른 곳 n개 (결과를 띄우기 전 기록) */
 const seenOf = (ids: string[], n: number): Seen =>
   markSeen({}, [...ids, ...Array.from({ length: n }, (_, i) => `9${i}`)], NOW - 3600_000);
@@ -22,6 +23,24 @@ describe("R46 3곳에 \"왜\" 한 단어", () => {
   it("R46: 평점이 혼자 가장 높고 4.0 이상이면 \"평점 최고\" (4.0 미만이면 없음)", () => {
     expect(trioReasons([place("1", 5, 3.9), place("2", 5, 4.2), place("3", 5, 4.1)], none)).toEqual([null, "평점 최고", null]);
     expect(trioReasons([place("1", 5, 3.9), place("2", 5, 3.8), place("3", 5, 3.5)], none)).toEqual([null, null, null]);
+  });
+
+  it("R46: 리뷰가 20개 미만이면 평점이 혼자 가장 높아도 \"평점 최고\"를 붙이지 않는다 (평점을 믿기엔 표본이 적다)", () => {
+    expect(REASON_MIN_REVIEWS).toBe(20);
+    const withReviews = (n: number | null) => [place("1", 5, 3.9), place("2", 5, 4.6, null, n), place("3", 5, 4.1)];
+    expect(trioReasons(withReviews(20), none)).toEqual([null, "평점 최고", null]);
+    expect(trioReasons(withReviews(19), none)).toEqual([null, null, null]);
+    expect(trioReasons(withReviews(3), none)).toEqual([null, null, null]);
+    expect(trioReasons(withReviews(null), none)).toEqual([null, null, null]);
+    // 리뷰가 적은 곳이 1등이면 2등에게 넘기지 않는다 (2등은 가장 높지 않으니까)
+    expect(trioReasons([place("1", 5, 4.3, null, 200), place("2", 5, 4.9, null, 5), place("3", 5, 4.1, null, 200)], none)).toEqual([null, null, null]);
+  });
+
+  it("R46: 리뷰가 20개 미만이면 \"가성비\"도 붙이지 않는다 (평점 3.8 이상이라는 조건이 같은 표본에 기대므로)", () => {
+    const cheap = (n: number | null) => [place("1", 5, 3.9, 9000, n), place("2", 5, 3.85, 12000), place("3", 5, 3.85, 18000)];
+    expect(trioReasons(cheap(20), none)).toEqual(["가성비", null, null]);
+    expect(trioReasons(cheap(19), none)).toEqual([null, null, null]);
+    expect(trioReasons(cheap(null), none)).toEqual([null, null, null]);
   });
 
   it("R46: 가격대가 혼자 가장 낮고 평점 3.8 이상이면 \"가성비\" — 가격을 아는 곳이 2곳 이상일 때만", () => {

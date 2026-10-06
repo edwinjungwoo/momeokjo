@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { DEFAULT_FILTERS } from "../../shared/recommend";
-import { isAdminPath, parseHubPath, parseShareParams, shareConfirmText, shareText, shareUrl, toParticle } from "../../shared/share";
+import { isAdminPath, parseHubPath, parseShareParams, shareConfirmText, excludeToastText, shareText, shareUrl, toParticle, topicParticle } from "../../shared/share";
 import { HUBS } from "../../shared/hubs";
 import wranglerRaw from "../../wrangler.jsonc?raw";
 import { apiPlace } from "../helpers/apiPlace";
@@ -142,7 +142,7 @@ describe("R43 거점 짧은 링크", () => {
   });
 });
 
-describe("R47 \"여기로 가요\" 확정 공유", () => {
+describe("R47 \"여기로 가자고 공유\" 확정 공유", () => {
   it("R47: 한 곳 확정 문구 — 👉 이름(으)로 가요! 도보 N분, 카카오맵 링크, 그 한 곳의 t 링크", () => {
     expect(shareConfirmText(A, "bongeunsa", 700, ORIGIN)).toBe(
       ["👉 중앙해장으로 가요! 도보 4분", "http://place.map.kakao.com/27531028", "https://mmj.itmz.me/bongeunsa?t=27531028&r=700"].join("\n"),
@@ -186,5 +186,38 @@ describe("R47 \"여기로 가요\" 확정 공유", () => {
     expect(toParticle("Pizza Barn")).toBe("으로");
     expect(toParticle("Cafe")).toBe("로");
     expect(toParticle("BHC")).toBe("로");
+  });
+});
+
+describe("R37 \"다음부터 안 보기\" 알림 문구", () => {
+  it("R37: 조사 — 받침이 있으면(ㄹ 포함) '은', 없으면 '는'. 끝의 괄호·공백은 건너뛴다", () => {
+    expect(topicParticle("중앙해장")).toBe("은");
+    expect(topicParticle("만리장성")).toBe("은");
+    expect(topicParticle("스시하루")).toBe("는");
+    expect(topicParticle("카페 서울")).toBe("은"); // 울: ㄹ 받침도 받침이다
+    expect(topicParticle("중앙해장(본점)")).toBe("은");
+    expect(topicParticle("스시하루 (2호) ")).toBe("는");
+    expect(topicParticle("")).toBe("는");
+  });
+
+  it("R37: 끝이 숫자면 읽는 소리의 받침으로 — 0 영·1 일·3 삼·6 육·7 칠·8 팔은 '은', 2·4·5·9는 '는'", () => {
+    const want: Record<string, "은" | "는"> = {
+      0: "은", 1: "은", 2: "는", 3: "은", 4: "는", 5: "는", 6: "은", 7: "은", 8: "은", 9: "는",
+    };
+    for (const [d, particle] of Object.entries(want)) expect(topicParticle(`포차${d}`), `포차${d}`).toBe(particle);
+    expect(topicParticle("공방 1983")).toBe("은");
+    expect(topicParticle("스테이크 27")).toBe("은");
+    expect(topicParticle("Bar 30 (2F)")).toBe("는");
+  });
+
+  it("R37: 끝이 영문이면 L(엘)·M(엠)·N(엔)·R(알)은 '은', 나머지는 '는' (대소문자 같음)", () => {
+    for (const w of ["Hotel", "CAPITAL", "Gym", "SALON", "Pizza Barn", "Bar"]) expect(topicParticle(w), w).toBe("은");
+    for (const w of ["Cafe", "BHC", "Pizza", "TGIF", "Subway"]) expect(topicParticle(w), w).toBe("는");
+  });
+
+  it("R37: 알림 문구 — '{이름}은/는 다음부터 안 뽑아요'", () => {
+    expect(excludeToastText("중앙해장")).toBe("중앙해장은 다음부터 안 뽑아요");
+    expect(excludeToastText("스시하루")).toBe("스시하루는 다음부터 안 뽑아요");
+    expect(excludeToastText("Hotel 2")).toBe("Hotel 2는 다음부터 안 뽑아요");
   });
 });

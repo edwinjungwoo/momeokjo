@@ -189,7 +189,7 @@ export function Behavior({ data }: { data: BehaviorData }) {
               {
                 label: "결정",
                 value: v(t, "funnel_decide"),
-                detail: `공유 ${num(v(t, "funnel_share"))} · 카카오맵 ${num(v(t, "funnel_kakao"))} · 여기로 가요 ${num(v(t, "funnel_confirm"))}`,
+                detail: `공유 ${num(v(t, "funnel_share"))} · 카카오맵 ${num(v(t, "funnel_kakao"))} · 여기로 가자고 공유 ${num(v(t, "funnel_confirm"))}`,
               },
             ]}
           />
@@ -281,8 +281,8 @@ export function Behavior({ data }: { data: BehaviorData }) {
                   <th>카드</th>
                   <th className="num">펼침</th>
                   <th className="num">카카오맵</th>
-                  <th className="num">여기로 가요</th>
-                  <th className="num">빼줘</th>
+                  <th className="num">여기로 가자고 공유</th>
+                  <th className="num">다음부터 안 보기</th>
                 </tr>
               </thead>
               <tbody>
@@ -291,14 +291,14 @@ export function Behavior({ data }: { data: BehaviorData }) {
                     <td className="name">{r}번</td>
                     <td className="num" data-label="펼침">{num(v(t, `expand_r${r}`))}</td>
                     <td className="num" data-label="카카오맵">{num(v(t, `kakao_r${r}`))}</td>
-                    <td className="num" data-label="여기로 가요">
+                    <td className="num" data-label="여기로 가자고 공유">
                       {v(t, "share_confirm") > 0 && ranks.every((x) => v(t, `confirm_r${x}`) === 0) ? (
                         <Since date={since.confirmRank} />
                       ) : (
                         num(v(t, `confirm_r${r}`))
                       )}
                     </td>
-                    <td className="num" data-label="빼줘">{num(v(t, `exclude_r${r}`))}</td>
+                    <td className="num" data-label="다음부터 안 보기">{num(v(t, `exclude_r${r}`))}</td>
                   </tr>
                 ))}
               </tbody>
@@ -346,7 +346,7 @@ export function Behavior({ data }: { data: BehaviorData }) {
       <div className="grid-3">
         <PlaceList title="많이 뽑힌 가게" items={data.places.picked} empty="아직 없어요" />
         <PlaceList title="많이 공유된 가게" items={data.places.shared} empty="아직 없어요" />
-        <PlaceList title={'"여긴 빼줘"가 많은 가게'} items={data.places.excluded} empty="아직 없어요" />
+        <PlaceList title={'"다음부터 안 보기"가 많은 가게'} items={data.places.excluded} empty="아직 없어요" />
       </div>
 
       <section className="card">
@@ -369,7 +369,7 @@ export function Behavior({ data }: { data: BehaviorData }) {
           <Rate
             label="확정 공유 비율"
             value={ratio(v(t, "share_confirm"), v(t, "share"))}
-            hint={`여기로 가요 ${num(v(t, "share_confirm"))}`}
+            hint={`여기로 가자고 공유 ${num(v(t, "share_confirm"))}`}
           />
         </div>
       </section>

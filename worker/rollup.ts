@@ -156,7 +156,7 @@ y AS MATERIALIZED (
 SELECT hub, metric, n AS value FROM y
 UNION ALL SELECT '*', metric, sum(n) FROM y GROUP BY metric`;
 
-/** 가게별 횟수: 직접 뽑기 picks, 공유 picks, "여긴 빼줘" — 거점·종류마다 그날 상위 TOP_PLACES_PER_DAY곳만 */
+/** 가게별 횟수: 직접 뽑기 picks, 공유 picks, "다음부터 안 보기" — 거점·종류마다 그날 상위 TOP_PLACES_PER_DAY곳만 */
 const PLACES_SQL = `WITH p AS MATERIALIZED (
   SELECT e.hub AS hub, 'pick' AS k, j.value AS id, count(*) AS n FROM events AS e, json_each(e.props, '$.picks') AS j
     WHERE e.type IN ('draw', 'redraw') AND e.day = ?1 AND coalesce(json_extract(e.props, '$.auto'), 0) = 0 GROUP BY 1, 3

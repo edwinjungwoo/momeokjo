@@ -23,7 +23,7 @@ export const EventPropsSchema = z.strictObject({
   rank: z.number().int().min(1).max(3).optional(),
   /** R39 열자마자 자동으로 뽑은 draw */
   auto: z.literal(true).optional(),
-  /** R47 펼친 카드의 "여기로 가요"(한 곳 확정)로 보낸 share (R58: rank도 같이 보낸다) */
+  /** R47 펼친 카드의 "여기로 가자고 공유"(한 곳 확정)로 보낸 share (R58: rank도 같이 보낸다) */
   confirm: z.literal(true).optional(),
   /** R58 R41 완화로 조건 밖 가게가 섞인 draw·redraw */
   relaxed: z.literal(true).optional(),
@@ -100,14 +100,14 @@ export type StatsResponse = {
   daily: DayStats[];
   /**
    * draws·redraws는 사용자가 직접 한 뽑기만. autoDraws = R39 자동 뽑기 (뽑기 수·전환율·시간대·거점·상위 가게에는 넣지 않는다).
-   * confirmShares = R47 "여기로 가요" 확정 공유 (shares에도 들어 있다)
+   * confirmShares = R47 "여기로 가자고 공유" 확정 공유 (shares에도 들어 있다)
    */
   totals: Omit<DayStats, "day"> & { expands: number; excludes: number; autoDraws: number; confirmShares: number };
   /** KST 시(0–23)별 직접 한 뽑기(draw + redraw, 자동 뽑기 제외) */
   hourly: number[];
   hubs: { hub: string; users: number; sessions: number; draws: number; shares: number }[];
   top: { placeId: string; name: string | null; count: number }[];
-  /** 결과 카드 번호(1~3)별: 펼침, 카카오맵 열기, 빼줘 */
+  /** 결과 카드 번호(1~3)별: 펼침, 카카오맵 열기, 다음부터 안 보기 */
   ranks: { expand: number[]; kakao: number[]; exclude: number[] };
   /** 뽑기한 세션 중 공유 / 카카오맵까지 간 세션 비율 (뽑기 세션이 없으면 null) */
   conversion: { drawSessions: number; toShare: number | null; toKakao: number | null };

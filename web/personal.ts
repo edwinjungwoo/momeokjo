@@ -17,7 +17,7 @@ function read(): PersonalState {
 
 /**
  * R37: 자동 개인화 상태. 이 기기의 localStorage에만 둔다 (읽기·쓰기 실패 시 이번 세션만).
- * 관리 화면은 없고, 카드의 "여긴 빼줘"와 5초 "되돌리기"만 있다.
+ * 관리 화면은 없고, 카드의 "다음부터 안 보기"와 8초 "되돌리기"만 있다.
  */
 export function usePersonal() {
   const [state, setState] = useState<PersonalState>(read);

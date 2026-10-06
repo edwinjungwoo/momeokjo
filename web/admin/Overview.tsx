@@ -130,7 +130,7 @@ export function Overview({ data }: { data: OverviewData }) {
             excl={data.compareExcludesToday}
           />
           <KpiCard label="세션" kpi={k.sessions} format={num} compare={compare} excl={data.compareExcludesToday} />
-          <KpiCard label="결정률" kpi={k.decisionRate} format={(v) => pct(v)} sub="공유·카카오맵·여기로 가요" compare={compare} excl={data.compareExcludesToday} />
+          <KpiCard label="결정률" kpi={k.decisionRate} format={(v) => pct(v)} sub="공유·카카오맵·여기로 가자고 공유" compare={compare} excl={data.compareExcludesToday} />
           <KpiCard label="뽑기 / 세션" kpi={k.drawsPerSession} format={(v) => (v === null ? "–" : v.toFixed(2))} sub="직접 뽑기만" compare={compare} excl={data.compareExcludesToday} />
           <KpiCard label="공유 링크 열림" kpi={k.shareOpens} format={num} compare={compare} excl={data.compareExcludesToday} />
         </div>

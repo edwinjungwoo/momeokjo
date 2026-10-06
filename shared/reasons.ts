@@ -3,6 +3,7 @@ import type { ApiPlace } from "./types";
 
 /**
  * R46: 결과 3곳에 붙이는 "왜" 한 단어. 3곳(보여주는 곳들) 안에서 글자 그대로 참일 때만 붙인다.
+ * 평점이 근거인 "평점 최고"·"가성비"는 리뷰가 REASON_MIN_REVIEWS개 이상인 곳에만.
  * 카드당 최대 하나, 같은 말은 한 카드에만. 동점이면 붙이지 않는다.
  */
 export type Reason = "제일 가까워요" | "평점 최고" | "가성비" | "처음 보는 곳";
@@ -11,6 +12,8 @@ export type Reason = "제일 가까워요" | "평점 최고" | "가성비" | "�
 export const NEW_PLACE_MIN_SEEN = 15;
 export const TOP_RATING_MIN = 4.0;
 export const VALUE_RATING_MIN = 3.8;
+/** "평점 최고"·"가성비"는 평점을 근거로 하니, 리뷰가 이만큼은 있어야 붙인다 (리뷰 몇 개짜리 5.0은 믿기 어려워서) */
+export const REASON_MIN_REVIEWS = 20;
 /** 예산 필터(R18)와 같은 경계: 1만 이하 / 1.5만 이하 / 2만 이하 / 그 위 */
 const PRICE_BANDS = [10000, 15000, 20000];
 
@@ -54,8 +57,10 @@ export function trioReasons(
   for (const [reason, i] of candidates) {
     if (i === null || out[i] !== null) continue;
     const r = rating(places[i]);
-    if (reason === "평점 최고" && (r === null || r < TOP_RATING_MIN)) continue;
-    if (reason === "가성비" && (r === null || r < VALUE_RATING_MIN)) continue;
+    const reviews = places[i].detail?.reviewCount ?? null;
+    const reliable = reviews !== null && reviews >= REASON_MIN_REVIEWS;
+    if (reason === "평점 최고" && (r === null || r < TOP_RATING_MIN || !reliable)) continue;
+    if (reason === "가성비" && (r === null || r < VALUE_RATING_MIN || !reliable)) continue;
     out[i] = reason;
   }
   return out.map((r, i) => (ctx.outside?.has(places[i].id) ? null : r));
