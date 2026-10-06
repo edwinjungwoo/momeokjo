@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { areasFromArgs } from "./area.mjs";
-import { on429, RATE_LIMIT_RETRIES } from "./warmRetry.mjs";
+import { nextTruncatedStreak, on429, RATE_LIMIT_RETRIES, TRUNCATED_STOP_AFTER } from "./warmRetry.mjs";
 
 const base = process.env.MMJ_BASE ?? "https://mmj.itmz.me";
 const fromDevVars = () => {
@@ -20,6 +20,7 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 async function warm({ label, lat, lng, radius }) {
   console.log(`== ${label} · 반경 ${radius}m`);
   let rateLimited = 0; // 연속으로 rate_limited를 받은 횟수
+  let truncated = 0; // 후보 고르기가 쪽 상한에서 멈춰 아무것도 못 한 응답이 이어진 횟수 (Task 34)
   for (let i = 1; i <= 300; i++) {
     const res = await fetch(`${base}/api/admin/warm?lat=${lat}&lng=${lng}&radius=${radius}`, {
       method: "POST",
@@ -54,10 +55,16 @@ async function warm({ label, lat, lng, radius }) {
     }
     const r = await res.json();
     // deferred: 글자 예산으로 남긴 곳(다음 호출이 이어 한다), chars: 읽은 상세 본문 글자 수 (Task 34)
-    console.log(`#${i} incompleteTiles=${r.incompleteTiles} pending=${r.pending} enriched=${r.enriched} failed=${r.failed} deferred=${r.deferred ?? 0} chars=${r.chars ?? 0}`);
+    console.log(`#${i} incompleteTiles=${r.incompleteTiles} pending=${r.pending} enriched=${r.enriched} failed=${r.failed} deferred=${r.deferred ?? 0} chars=${r.chars ?? 0}${r.truncated ? " truncated" : ""}`);
     if (r.incompleteTiles === 0 && r.pending === 0) {
       console.log("완료");
       return true;
+    }
+    truncated = nextTruncatedStreak(r, truncated);
+    if (truncated >= TRUNCATED_STOP_AFTER) {
+      // 가까운 칸에 아직 만료되지 않은(지터 창 안) 상세가 많아 후보를 못 골랐다 — 다시 두드려도 읽기만 쓴다
+      console.error(`#${i} 후보 고르기가 ${TRUNCATED_STOP_AFTER}번 연속 쪽 상한에서 멈춰 아무것도 못 했어요. 몇 시간 뒤(상세가 만료된 뒤) 다시 실행하거나 ?count=1로 남은 수를 확인하세요.`);
+      return false;
     }
     await wait(1000);
   }

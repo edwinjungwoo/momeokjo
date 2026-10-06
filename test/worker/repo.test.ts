@@ -207,9 +207,10 @@ describe("repo", () => {
     await seedOutsideAndHub(400);
     await scan([KA]);
     expect((await scan([KA])).ids).toEqual(["h1", "h2"]);
-    // 요청 하나가 Cron보다 먼저 시각을 잡고 늦게 격자를 기록했다 (tiles_changed_at < 커서를 쓴 시각)
+    // 요청 하나가 Cron보다 먼저 시각을 잡고 늦게 격자를 기록했다 (now < 커서를 쓴 시각) — tiles_changed_at은 그래도 커진다(Task 34)
+    const before = await tilesChangedAt(env.DB);
     await replaceTilePlaces(env.DB, KA, ["h1", "h2", "o5"], NOW - 60_000, false);
-    expect(await tilesChangedAt(env.DB)).toBe(NOW - 60_000);
+    expect(await tilesChangedAt(env.DB)).toBeGreaterThan(before);
     expect((await scan([KA])).ids).toEqual(["o5"]);
   });
 
@@ -313,6 +314,20 @@ describe("repo", () => {
     expect(await tilesChangedAt(env.DB)).toBe(0);
     await replaceTilePlaces(env.DB, KA, ["1"], NOW, false);
     expect(await tilesChangedAt(env.DB)).toBe(NOW);
+  });
+
+  it("R11/R4: 격자 ID가 바뀔 때마다 tiles_changed_at은 반드시 커진다 — 같은 now로 두 번 바뀌어도, 더 이른 now가 늦게 와도 (커서가 같은 값으로 속지 않게)", async () => {
+    await replaceTilePlaces(env.DB, KA, ["1"], NOW, false);
+    const a = await tilesChangedAt(env.DB);
+    await replaceTilePlaces(env.DB, KA, ["1", "2"], NOW, false);
+    const b = await tilesChangedAt(env.DB);
+    expect(b).toBeGreaterThan(a);
+    await replaceTilePlaces(env.DB, KA, ["1", "2", "3"], NOW - 60_000, false);
+    const c = await tilesChangedAt(env.DB);
+    expect(c).toBeGreaterThan(b);
+    // ID가 그대로면(수집 시각만) 바꾸지 않는다
+    await replaceTilePlaces(env.DB, KA, ["1", "2", "3"], NOW + 5_000, false);
+    expect(await tilesChangedAt(env.DB)).toBe(c);
   });
 
   it("R11: 0003 마이그레이션은 places(status, fetched_at) 인덱스를 만든다", async () => {
@@ -641,6 +656,23 @@ describe("Task 34: 보충 후보를 SQL에서 가까운 순으로 고르기", ()
     const fourth = await run();
     expect(fourth.r).toEqual({ states: [], cleared: true });
     expect(fourth.queries).toBe(0);
+  });
+
+  it("R11/R4: 커서를 쓴 뒤 같은 now로 격자 ID가 또 들어와도 커서를 버린다 (tiles_changed_at이 같은 값으로 머물지 않는다)", async () => {
+    const byDist = [...KEYS].sort((a, b) => tileDist(a) - tileDist(b));
+    const far = byDist[byDist.length - 1];
+    await seedFrontier(KEYS, {});
+    // 앱 길로 먼 칸에 미수집을 넣고(tiles_changed_at = NOW) 커서를 그 값으로 쓴다
+    const farIds = (await env.DB.prepare("SELECT place_id FROM tile_places WHERE tile_key = ?").bind(far).all<{ place_id: string }>())
+      .results.map((x) => x.place_id);
+    await replaceTilePlaces(env.DB, far, [...farIds, "u1"], NOW, false);
+    expect(ids(await nearestUnfetchedStates(env.DB, KEYS, [ASEM], 4))).toEqual(["u1"]);
+    // 같은 now로 가까운 칸에 새 ID
+    const near = byDist[0];
+    const cur = (await env.DB.prepare("SELECT place_id FROM tile_places WHERE tile_key = ?").bind(near).all<{ place_id: string }>())
+      .results.map((x) => x.place_id);
+    await replaceTilePlaces(env.DB, near, [...cur, "newnear"], NOW, false);
+    expect(ids(await nearestUnfetchedStates(env.DB, KEYS, [ASEM], 4))).toEqual(["newnear", "u1"]);
   });
 
   it("R11/R4: 격자에 ID가 새로 들어오면(replaceTilePlaces → tiles_changed_at) 커서를 버리고 처음부터 읽는다 — 가까운 새 ID를 놓치지 않는다", async () => {

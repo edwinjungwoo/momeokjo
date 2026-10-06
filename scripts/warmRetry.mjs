@@ -24,3 +24,15 @@ export function on429(bodyText, retries) {
   if (error === "write_budget") return { action: "stop", reason: "write_budget" };
   return { action: "stop", reason: "unknown" };
 }
+
+/** Task 34: warm 후보 고르기가 쪽 상한에서 멈췄는데(truncated) 아무것도 못 한 응답이 이만큼 이어지면 warm.mjs가 멈춘다 */
+export const TRUNCATED_STOP_AFTER = 3;
+
+/**
+ * @param {{ truncated?: boolean, enriched?: number, failed?: number }} r warm 응답
+ * @param {number} streak 지금까지 이어진 횟수
+ * @returns {number} 이 응답 뒤의 횟수 (하나라도 했거나 truncated가 아니면 0)
+ */
+export function nextTruncatedStreak(r, streak) {
+  return r.truncated === true && !r.enriched && !r.failed ? streak + 1 : 0;
+}

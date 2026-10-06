@@ -6,7 +6,11 @@ import { UpstreamError, type FetchFn } from "./fetchFn";
 import { searchRect } from "./kakaoLocal";
 import { dueTileKeys, isTileDue, replaceTilePlaces, type TileState } from "./repo";
 
-export type CollectDeps = { db: D1Database; fetcher: FetchFn; restKey: string; budget: Budget; now: number };
+export type CollectDeps = {
+  db: D1Database; fetcher: FetchFn; restKey: string; budget: Budget; now: number;
+  /** Task 34: 다음 격자를 시작해도 되는가 (D1 호출 예산 — 격자마다 2번). 아니면 남은 격자는 incomplete */
+  canStartTile?: () => boolean;
+};
 export type CollectResult = { collected: string[]; incomplete: string[]; failed: string[] };
 
 type RectResult = { ids: string[]; saturated: boolean } | "budget";
@@ -50,6 +54,10 @@ export async function collectTiles(
   const result: CollectResult = { collected: [], incomplete: [], failed: [] };
   for (let i = 0; i < due.length; i++) {
     const key = due[i];
+    if (deps.canStartTile && !deps.canStartTile()) {
+      result.incomplete.push(...due.slice(i));
+      break;
+    }
     try {
       const r = await collectRect(deps, tileRect(key), 0);
       if (r === "budget") {

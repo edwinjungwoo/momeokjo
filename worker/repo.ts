@@ -20,7 +20,9 @@ const CHUNK = 90;
 const META_UPSERT = "INSERT INTO meta (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value";
 const BLOCKED_KEY = "place_blocked_until";
 const TILES_CHANGED_KEY = "tiles_changed_at";
-const UNFETCHED_CLEARED_KEY = "unfetched_cleared_at";
+/** tiles_changed_at 올리기: MAX(이전 값 + 1, now) */
+const TILES_CHANGED_BUMP = `INSERT INTO meta (key, value) VALUES (?, ?)
+  ON CONFLICT(key) DO UPDATE SET value = MAX(CAST(meta.value AS INTEGER) + 1, CAST(excluded.value AS INTEGER))`;
 const DETAIL_MODE_KEY = "detail_mode";
 const BLOCK_COUNT_PREFIX = "block_count:";
 const chunked = <T>(items: T[]): T[][] =>
@@ -149,7 +151,8 @@ export async function replaceTilePlaces(
   }
   stmts.push(db.prepare(TILE_UPSERT).bind(key, now, unique.length, saturated ? 1 : 0));
   if (stmts.length > 1) {
-    stmts.push(db.prepare(META_UPSERT).bind(TILES_CHANGED_KEY, String(now)));
+    // 언제나 커진다 (같은 now로 두 번, 더 이른 now가 늦게 와도) — 커서들이 "본 값과 같은지"로 격자 변화를 알아보므로 (Task 34)
+    stmts.push(db.prepare(TILES_CHANGED_BUMP).bind(TILES_CHANGED_KEY, String(now)));
     const hubs = hubsOfTile(key);
     if (hubs.length > 0) {
       if (added.length > 0) stmts.push(deleteSnapshotsStmt(db, hubs));
@@ -305,11 +308,13 @@ type NearestRow = {
  */
 async function readNearest(
   db: D1Database, ranked: string, now: number, want: number, scope: DetailScope, seen: Set<string>, out: TilePlaceState[],
-): Promise<{ firstRank: number | null; truncated: boolean }> {
+  maxPages = DETAIL_PICK_MAX_PAGES,
+): Promise<{ firstRank: number | null; truncated: boolean; pages: number }> {
   let firstRank: number | null = null;
   let offset = 0;
   let page = Math.max(want, DETAIL_PICK_FIRST_PAGE);
-  for (let i = 0; i < DETAIL_PICK_MAX_PAGES; i++) {
+  const pages = Math.min(maxPages, DETAIL_PICK_MAX_PAGES);
+  for (let i = 0; i < pages; i++) {
     const stmt = scope === "unfetched"
       ? db.prepare(NEAREST_UNFETCHED_SQL).bind(ranked, page, offset)
       : db.prepare(NEAREST_DUE_SQL).bind(ranked, page, offset, now - DETAIL_OK_TTL_MS, now - DETAIL_FAIL_TTL_MS);
@@ -323,11 +328,11 @@ async function readNearest(
       const meta = metaOf(x.status, x.fetched_at, x.fail_reason);
       if (scope === "unfetched" || isDetailDue(meta, now, x.id)) out.push({ id: x.id, tileKey: x.tile_key, meta });
     }
-    if (out.length >= want || r.results.length < page) return { firstRank, truncated: false };
+    if (out.length >= want || r.results.length < page) return { firstRank, truncated: false, pages: i + 1 };
     offset += page;
     page *= DETAIL_PICK_GROWTH;
   }
-  return { firstRank, truncated: true };
+  return { firstRank, truncated: true, pages };
 }
 
 /**
@@ -383,22 +388,29 @@ export type UnfetchedPick = { states: TilePlaceState[]; cleared: boolean };
  * 격자·기준점 지문이 다르다(거점 추가·변경). 미수집은 그 밖에는 생기지 않는다 — places 행을 손으로 지우면 unfetched_from도
  * 지운다(docs/deploy.md).
  * 실행마다 많아야 UNFETCHED_MAX_CHUNKS묶음 — 다 못 읽으면 다음 실행이 이어 읽는다.
- * cleared: 끝까지 읽었고 미수집이 없다 (Cron이 markUnfetchedCleared). limit이 0이면 읽지 않고 cleared도 아니다.
+ * cleared: 끝까지 읽었고 미수집이 없다. limit이 0이면 읽지 않고 cleared도 아니다. 커서가 끝(마지막 순위 + 1)이고 tiles_changed_at·지문이
+ * 같으면 묶음 질의 없이 cleared다 — 그래서 Cron은 따로 "미수집 확인 끝" 표시를 두지 않는다 (tiles_changed_at은 바뀔 때마다 커진다).
+ * opts.changedAt: 호출하는 쪽이 한 번 읽은 tiles_changed_at (다시 읽지 않는다). opts.maxQueries: 이번에 쓸 D1 호출 수 상한
+ * (커서 읽기·쓰기 포함 — 3보다 적으면 읽지 않는다. 묶음·쪽을 다 못 읽으면 다음 실행이 커서부터 이어 읽는다).
  */
 export async function nearestUnfetchedStates(
-  db: D1Database, keys: string[], centers: LatLng[], limit: number,
+  db: D1Database, keys: string[], centers: LatLng[], limit: number, opts: { changedAt?: number; maxQueries?: number } = {},
 ): Promise<UnfetchedPick> {
   const want = Math.max(0, Math.floor(limit));
   if (want === 0) return { states: [], cleared: false };
   if (keys.length === 0) return { states: [], cleared: true };
+  // D1 호출: 커서 읽기 1 + 묶음 질의 1 이상 + 커서 쓰기 1 — 그만큼 없으면 이번에는 읽지 않는다
+  const maxQueries = opts.maxQueries ?? Number.POSITIVE_INFINITY;
+  if (maxQueries < 3) return { states: [], cleared: false };
+  const walkQueries = maxQueries - 2;
   const groups = rankGroups(keys, centers);
   const fingerprint = frontierFingerprint(keys, centers);
   const m = await db
     .prepare("SELECT key, value FROM meta WHERE key IN (?, ?)")
-    .bind(TILES_CHANGED_KEY, UNFETCHED_FROM_KEY)
+    .bind(UNFETCHED_FROM_KEY, opts.changedAt === undefined ? TILES_CHANGED_KEY : UNFETCHED_FROM_KEY)
     .all<{ key: string; value: string }>();
   const get = (k: string) => m.results.find((x) => x.key === k)?.value;
-  const changedNum = Number(get(TILES_CHANGED_KEY) ?? 0);
+  const changedNum = opts.changedAt ?? Number(get(TILES_CHANGED_KEY) ?? 0);
   const changedAt = Number.isFinite(changedNum) ? changedNum : 0;
   const cursor = parseFrontier(get(UNFETCHED_FROM_KEY));
   const startRank = cursor !== null && cursor.changedAt === changedAt && cursor.keys === fingerprint ? cursor.rank : 0;
@@ -408,13 +420,15 @@ export async function nearestUnfetchedStates(
   const seen = new Set<string>();
   const out: TilePlaceState[] = [];
   let frontier: number | null = null;
-  for (let chunks = 0; gi < groups.length && out.length < want && chunks < UNFETCHED_MAX_CHUNKS; chunks++) {
+  let used = 0;
+  for (let chunks = 0; gi < groups.length && out.length < want && chunks < UNFETCHED_MAX_CHUNKS && used < walkQueries; chunks++) {
     const chunk: RankGroup[] = [];
     for (let tiles = 0; gi < groups.length && (chunk.length === 0 || tiles < UNFETCHED_CHUNK_TILES); gi++) {
       chunk.push(groups[gi]);
       tiles += groups[gi].keys.length;
     }
-    const r = await readNearest(db, rankedJson(chunk), 0, want, "unfetched", seen, out);
+    const r = await readNearest(db, rankedJson(chunk), 0, want, "unfetched", seen, out, walkQueries - used);
+    used += r.pages;
     frontier ??= r.firstRank;
     if (r.truncated) break;
   }
@@ -526,10 +540,13 @@ type ExpiredRow = { rid: number; id: string; status: string; fetched_at: number;
  * - 거점 격자 집합(keys)의 지문이 다르다 (거점 추가·변경).
  * 재설정이면 같은 실행에서 거점 행이 나올 때까지 EXPIRED_RESET_PAGES쪽까지 이어 읽는다 (다음 실행은 한 쪽씩).
  */
-export async function expiredDetailStates(db: D1Database, keys: string[], now: number): Promise<TilePlaceState[]> {
+export async function expiredDetailStates(
+  db: D1Database, keys: string[], now: number, observedChangedAt?: number,
+): Promise<TilePlaceState[]> {
   const wanted = new Set(keys);
   const fingerprint = tileSetFingerprint(wanted);
-  const changedAt = await tilesChangedAt(db);
+  // Cron은 한 번 읽은 tiles_changed_at을 넘겨서 다시 읽지 않는다 (Task 34 D1 호출 예산)
+  const changedAt = observedChangedAt ?? (await tilesChangedAt(db));
   const statuses = [
     ["ok", now - DETAIL_OK_TTL_MS],
     ["failed", now - DETAIL_FAIL_TTL_MS],
@@ -850,16 +867,10 @@ async function metaNumber(db: D1Database, key: string): Promise<number> {
   const v = Number(r?.value ?? 0);
   return Number.isFinite(v) ? v : 0;
 }
-const setMetaNumber = (db: D1Database, key: string, v: number) =>
-  db.prepare(META_UPSERT).bind(key, String(v)).run();
 
 /** 마지막으로 격자 ID가 바뀐 시각. Cron은 이 값이 마지막 미수집 확인 뒤일 때만 미수집 ID를 훑는다 */
 export const tilesChangedAt = (db: D1Database) => metaNumber(db, TILES_CHANGED_KEY);
 /** Cron이 모든 거점의 미수집 ID를 다 채웠다고 확인한 시각 */
-export const unfetchedClearedAt = (db: D1Database) => metaNumber(db, UNFETCHED_CLEARED_KEY);
-export const markUnfetchedCleared = async (db: D1Database, at: number) => {
-  await setMetaNumber(db, UNFETCHED_CLEARED_KEY, at);
-};
 
 /** R44 강등 모드. frozen이면 until 전까지 상세 후보를 읽지도 부르지도 않는다 */
 export type DetailGate = { blockedUntil: number; frozen: { since: number; until: number } | null };

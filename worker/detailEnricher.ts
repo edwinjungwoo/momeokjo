@@ -27,7 +27,15 @@ export type EnrichDeps = {
   candidates?: TilePlaceState[];
   /** 한 번에 풀 상세 JSON 글자 수 (없으면 DEFAULT_DETAIL_CHAR_BUDGET) — Task 34 */
   charBudget?: number;
+  /** Task 34: 실행의 D1 호출 예산. 새 상세는 저장·차단 기록 몫이 남았을 때만 시작하고, 한 곳씩 다시 저장은 그만큼 남았을 때만 */
+  d1?: { has(n: number): boolean };
 };
+
+/** 새 상세를 시작하려면 남아 있어야 하는 D1 호출: 마지막 묶음 저장 1 + 차단 기록(최악 3) */
+export const ENRICH_START_CALLS = 4;
+/** 보충 한 번이 쓰는 D1 호출 최악: 게이트 1 + 묶음 저장(첫 곳 1 + 3곳씩) + 한 곳씩 다시(곳마다 1) + 차단 기록 3 */
+export const enrichCallReserve = (batchSize: number) =>
+  1 + 1 + Math.ceil(Math.max(0, batchSize - 1) / DETAIL_CONCURRENCY) + Math.max(0, batchSize) + 3;
 /**
  * deferred: 글자 예산을 다 써서 이번에 시작하지 않고 남긴 곳 (실패가 아니다 — 다음 실행이 이어 한다).
  * chars: 이번에 읽은 상세 본문 글자 수. truncated: 후보 고르기가 쪽 상한에서 멈췄다 (남은 후보가 있을 수 있다)
@@ -75,6 +83,12 @@ export async function enrichDetails(
     try {
       await saveDetails(deps.db, group, deps.now);
     } catch (e) {
+      if (deps.d1 && !deps.d1.has(group.length + 1)) {
+        // D1 호출 예산이 모자라면 한 곳씩 다시는 하지 않는다 — 이 묶음은 다음 실행이 다시 가져온다
+        console.error("detail batch save failed — one-by-one skipped (D1 call budget)", e);
+        keep(e);
+        return;
+      }
       console.error("detail batch save failed — saving one by one", e);
       for (const x of group) {
         try {
@@ -98,7 +112,7 @@ export async function enrichDetails(
   await mapLimit(ids, DETAIL_CONCURRENCY, async (id) => {
     try {
       if (blocked) return;
-      if (result.chars >= charBudget) {
+      if (result.chars >= charBudget || (deps.d1 && !deps.d1.has(ENRICH_START_CALLS))) {
         result.deferred += 1;
         return;
       }

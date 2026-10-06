@@ -139,15 +139,15 @@ describe("D1 읽기 예산", () => {
     const { app } = setup(B + 2);
     const warm = async (q = "") =>
       (await callApp(app, `/api/admin/warm?${AREA}${q}`, { method: "POST", headers: AUTH })).json<any>();
-    expect(await warm()).toEqual({ incompleteTiles: 0, pending: "more", enriched: B, failed: 0, deferred: 0, chars: expect.any(Number), ...ROWS });
-    expect(await warm()).toEqual({ incompleteTiles: 0, pending: 0, enriched: 2, failed: 0, deferred: 0, chars: expect.any(Number), ...ROWS });
+    expect(await warm()).toEqual({ incompleteTiles: 0, pending: "more", enriched: B, failed: 0, deferred: 0, chars: expect.any(Number), truncated: false, ...ROWS });
+    expect(await warm()).toEqual({ incompleteTiles: 0, pending: 0, enriched: 2, failed: 0, deferred: 0, chars: expect.any(Number), truncated: false, ...ROWS });
   });
 
   it("R31: ?count=1이면 남은 수를 정확히 센다", async () => {
     const B = limitsFrom(env).batchSize;
     const { app } = setup(B + 2);
     const r = await (await callApp(app, `/api/admin/warm?${AREA}&count=1`, { method: "POST", headers: AUTH })).json<any>();
-    expect(r).toEqual({ incompleteTiles: 0, pending: 2, enriched: B, failed: 0, deferred: 0, chars: expect.any(Number), ...ROWS });
+    expect(r).toEqual({ incompleteTiles: 0, pending: 2, enriched: B, failed: 0, deferred: 0, chars: expect.any(Number), truncated: false, ...ROWS });
   });
 
   it("R31: 예산이 바닥나 상세를 못 고르면 pending은 more다 (끝났다고 보고하지 않는다)", async () => {

@@ -4,15 +4,15 @@ import { HUBS, PUBLIC_HUBS, type Hub } from "../shared/hubs";
 import type { LatLng } from "../shared/types";
 import { Budget } from "./budget";
 import { limitsFrom } from "./config";
-import { meteredDb, overReadBudget, readSoftCap, recordCronRun, recordD1Usage, type D1Usage } from "./d1Usage";
-import { enrichDetails } from "./detailEnricher";
+import { D1CallBudget, meteredDb, overReadBudget, readSoftCap, recordCronRun, recordD1Usage, type D1Usage } from "./d1Usage";
+import { enrichCallReserve, enrichDetails } from "./detailEnricher";
 import { isRetentionWindow, pruneOldEvents } from "./events";
 import { pruneRollups, runRollups } from "./rollup";
 import type { FetchFn } from "./fetchFn";
 import { maintainSnapshots, type SnapshotRun } from "./hubSnapshot";
 import {
-  backfillListJson, countNeedingDetail, detailGate, detailsAllowed, expiredDetailStates, markUnfetchedCleared,
-  nearestUnfetchedStates, tilesChangedAt, unfetchedClearedAt, type TilePlaceState,
+  backfillListJson, countNeedingDetail, detailGate, detailsAllowed, EXPIRED_RESET_PAGES, expiredDetailStates,
+  nearestUnfetchedStates, tilesChangedAt, UNFETCHED_MAX_CHUNKS, type TilePlaceState,
 } from "./repo";
 import { collectTiles } from "./tileCollector";
 
@@ -24,6 +24,8 @@ export type WarmDeps = {
   batchSize: number;
   /** Task 34: 한 번에 풀 상세 JSON 글자 수 (없으면 기본값) */
   detailCharBudget?: number;
+  /** Task 34: 이 요청의 D1 호출 예산 (없으면 보지 않는다) */
+  d1?: D1CallBudget;
   now: number;
   sleep?: (ms: number) => Promise<void>;
 };
@@ -33,6 +35,8 @@ export type WarmDeps = {
  */
 export type WarmResult = {
   incompleteTiles: number; pending: number | "more"; enriched: number; failed: number; deferred: number; chars: number;
+  /** 후보 고르기가 쪽 상한에서 멈췄다 (warm.mjs는 아무것도 못 한 채 3번 이어지면 멈춘다) */
+  truncated: boolean;
 };
 
 /**
@@ -44,14 +48,20 @@ export async function warmOnce(
   deps: WarmDeps, center: LatLng, radiusM: number, opts: { count?: boolean } = {},
 ): Promise<WarmResult> {
   const budget = new Budget(deps.budgetSize);
+  // 격자 하나 = D1 2번. 보충(후보 고르기 ≤ 3쪽 + 보충 최악)과 pending 게이트 몫을 남긴다
+  const d1 = deps.d1;
+  const afterCollect = 3 + enrichCallReserve(deps.batchSize) + 1;
   const tiles = await collectTiles(
-    { db: deps.db, fetcher: deps.fetcher, restKey: deps.restKey, budget, now: deps.now },
+    {
+      db: deps.db, fetcher: deps.fetcher, restKey: deps.restKey, budget, now: deps.now,
+      canStartTile: d1 ? () => d1.has(2 + afterCollect) : undefined,
+    },
     tilesCoveringCircle(center, radiusM),
   );
   const e = await enrichDetails(
     {
       db: deps.db, fetcher: deps.fetcher, budget, now: deps.now, batchSize: deps.batchSize, sleep: deps.sleep,
-      charBudget: deps.detailCharBudget,
+      charBudget: deps.detailCharBudget, d1,
     },
     center,
     radiusM,
@@ -59,17 +69,40 @@ export async function warmOnce(
   let pending: WarmResult["pending"];
   if (opts.count) pending = await countNeedingDetail(deps.db, center, radiusM, deps.now);
   else {
-    // 글자 예산으로 남긴 곳(deferred)이 있거나 후보 고르기가 쪽 상한에서 멈췄으면(truncated) 끝나지 않았다
+    // 글자·D1 호출 예산으로 남긴 곳(deferred)이 있거나 후보 고르기가 쪽 상한에서 멈췄거나(truncated)
+    // D1 호출 예산으로 격자를 다 모으지 못했으면(새 ID가 더 있을 수 있다) 끝나지 않았다
     const done =
-      e.enriched + e.failed < deps.batchSize && e.deferred === 0 && !e.truncated && budget.left > 0 &&
+      e.enriched + e.failed < deps.batchSize && e.deferred === 0 && !e.truncated && tiles.incomplete.length === 0 &&
+      budget.left > 0 &&
       detailsAllowed(await detailGate(deps.db), deps.now);
     pending = done ? 0 : "more";
   }
   return {
     incompleteTiles: tiles.incomplete.length + tiles.failed.length, pending, enriched: e.enriched, failed: e.failed,
-    deferred: e.deferred, chars: e.chars,
+    deferred: e.deferred, chars: e.chars, truncated: e.truncated,
   };
 }
+
+/**
+ * 무료 플랜: Worker 실행 하나의 D1 질의 50개 (batch()는 왕복 하나로 센다) — 본 Cron·warm이 이 안에서 끝나게 단계마다 남은 수를 본다.
+ * CRON_D1_RESERVE: 끝의 사용량·요약 기록(recordCronRun / 요청 미들웨어의 recordD1Usage) 1번과 여유
+ */
+export const CRON_D1_CALL_LIMIT = 50;
+export const CRON_D1_RESERVE = 5;
+/** 집계(R59) 한 번의 최악 D1 호출: meta 1 + 첫 날 찾기 1 + 하루 batch × 3 + 실패 기록 2 */
+export const ROLLUP_D1_CALLS = 7;
+/** 만료 후보 한 번의 최악: meta 1 + 상태마다 재설정 쪽 수 + 커서 쓰기 1 */
+const EXPIRED_D1_CALLS = 1 + 2 * EXPIRED_RESET_PAGES + 1;
+/** 미수집 후보를 찾는 최소: 커서 읽기 1 + 묶음 1 + 커서 쓰기 1 */
+const FRONTIER_MIN_CALLS = 3;
+/** list_json 백필 최악: 커서 읽기 1 + 행 읽기 1 + 쓰기 batch 1 */
+const BACKFILL_D1_CALLS = 3;
+/**
+ * 격자 수집 뒤에 남겨 둘 D1 호출 (격자 하나 = 2번): 백필 + 게이트 1 + tiles_changed_at 1 + 미수집 최소 + 보충 최악 + 집계.
+ * 격자 수집이 많은 실행에서도 미수집 보충은 언제나 한다. 만료 후보(최악 8번)는 남은 것이 넉넉할 때만 한다 (다음 실행)
+ */
+export const afterCollectCalls = (batchSize: number) =>
+  BACKFILL_D1_CALLS + 1 + 1 + FRONTIER_MIN_CALLS + enrichCallReserve(batchSize) + ROLLUP_D1_CALLS;
 
 // Cron 주기: wrangler.jsonc의 5분 간격 스케줄과 맞춘다
 export const CRON_INTERVAL_MS = 5 * 60_000;
@@ -87,9 +120,15 @@ export type CronResult = {
   tiles: { total: number; collected: number; incomplete: number };
   enriched: number;
   failed: number;
-  /** Task 34: 글자 예산으로 남긴 곳과 읽은 상세 본문 글자 수 (보충을 했을 때만) */
+  /** Task 34: 글자 예산·D1 호출 예산으로 남긴 곳과 읽은 상세 본문 글자 수 (보충을 했을 때만) */
   deferred?: number;
   chars?: number;
+  /** Task 34: 이번 실행의 D1 호출 수 (끝의 사용량 기록 1번은 빼고) */
+  d1Calls?: number;
+  /** Task 34: D1 호출 예산 때문에 건너뛴 단계 */
+  d1Skipped?: string[];
+  /** Task 34: 보충 중 저장 오류가 있었다 (로그에 원인) */
+  enrichError?: true;
   /** 0005 전 행에 채운 list_json 수 (다 채운 뒤에는 0) */
   listJsonFilled?: number;
   /** R38: 오늘 D1 읽기가 소프트 한도를 넘어 수집·보충을 건너뛰었다 */
@@ -114,16 +153,21 @@ export async function runScheduled(
   // R38: 이번 실행이 읽고 쓴 행 수를 모아 끝에 한 번 기록한다
   const usage: D1Usage = { read: 0, written: 0 };
   const db = meteredDb(env.DB, usage);
+  // Task 34: 실행 하나의 D1 호출 예산 (끝의 recordCronRun 몫은 남긴다)
+  const calls = new D1CallBudget(usage, CRON_D1_CALL_LIMIT - CRON_D1_RESERVE);
   let result: CronResult | null = null;
   try {
-    result = await maintain(env, db, opts);
+    result = await maintain(env, db, { ...opts, calls });
     // R59: 밀린 일별 집계 (따라잡았으면 meta 한 문장, 4키). 읽기 예산을 넘은 날은 건너뛴다(R59 30% 가드는 runRollups 안). 실패해도 수집 결과는 그대로 둔다
-    result.rolled = result.skipped
+    // Task 34: D1 호출이 모자라면 다음 실행으로 미룬다
+    if (!result.skipped && !calls.has(ROLLUP_D1_CALLS)) (result.d1Skipped ??= []).push("rollup");
+    result.rolled = result.skipped || !calls.has(ROLLUP_D1_CALLS)
       ? 0
       : await runRollups(db, opts.now, { readSoftCap: readSoftCap(env) }).catch((e) => {
           console.error("rollup failed", e);
           return 0;
         });
+    result.d1Calls = calls.used;
     return result;
   } finally {
     // R38 사용량 + R59 마지막 실행 요약을 한 문장으로 (관리 화면 운영 탭의 "마지막 Cron")
@@ -176,9 +220,11 @@ export async function runCron(
 }
 
 async function maintain(
-  env: Env, db: D1Database, opts: { fetcher: FetchFn; now: number; sleep?: (ms: number) => Promise<void>; hubs?: Hub[] },
+  env: Env, db: D1Database,
+  opts: { fetcher: FetchFn; now: number; sleep?: (ms: number) => Promise<void>; hubs?: Hub[]; calls: D1CallBudget },
 ): Promise<CronResult> {
   const { budgetSize, batchSize, detailCharBudget } = limitsFrom(env);
+  const calls = opts.calls;
   const budget = new Budget(budgetSize);
   const hubs = hubOrder(opts.hubs ?? HUBS, opts.now);
   const keys = [...new Set(hubs.flatMap((h) => tilesCoveringCircle(h, PREWARM_RADIUS)))];
@@ -194,13 +240,22 @@ async function maintain(
     };
   }
 
-  const tiles = await collectTiles({ db, fetcher: opts.fetcher, restKey: env.KAKAO_REST_KEY, budget, now: opts.now }, keys);
+  // Task 34: 격자 하나 = D1 2번 (지금 ID 읽기 + 바꾸기). 뒤 단계 몫(afterCollectCalls)이 남을 때만 다음 격자를 시작한다
+  const reserve = afterCollectCalls(batchSize);
+  const tiles = await collectTiles(
+    {
+      db, fetcher: opts.fetcher, restKey: env.KAKAO_REST_KEY, budget, now: opts.now,
+      canStartTile: () => calls.has(2 + reserve),
+    },
+    keys,
+  );
   const result: CronResult = {
     order: hubs.map((h) => h.id),
     tiles: { total: keys.length, collected: tiles.collected.length, incomplete: tiles.incomplete.length + tiles.failed.length },
     enriched: 0,
     failed: 0,
   };
+  const skip = (stage: string) => (result.d1Skipped ??= []).push(stage);
   // R12: 목록 원소 조각이 없는 예전 행을 실행마다 최대 200행 채운다 (외부 호출 없음, 다 채우면 meta 1행만 읽는다)
   result.listJsonFilled = await backfillListJson(db).catch((e) => {
     console.error("list_json backfill failed", e);
@@ -213,30 +268,41 @@ async function maintain(
   };
   if (budget.left <= 0 || !detailsAllowed(await detailGate(db), opts.now)) return spent();
 
-  const candidates: TilePlaceState[] = await expiredDetailStates(db, keys, opts.now);
-  // 격자가 바뀐 적이 없으면(마지막 확인 이후) 미수집 ID가 생길 수 없으니 훑지 않는다
-  const checkUnfetched = (await tilesChangedAt(db)) >= (await unfetchedClearedAt(db));
-  let cleared = false;
-  if (checkUnfetched && batchSize > 0) {
-    // Task 34: 미수집은 거점에 가까운 순 batchSize곳만, 앞선 커서부터 읽는다 (만료 후보와 합쳐 고르는 결과는 전부 읽은 것과 같다)
-    const u = await nearestUnfetchedStates(db, keys, hubs, batchSize);
-    cleared = u.cleared;
-    candidates.push(...u.states);
+  // tiles_changed_at은 한 번만 읽어 두 커서(만료·미수집)에 넘긴다 — 이 값을 본 뒤의 격자 변화는 다음 실행이 알아본다
+  const changedAt = await tilesChangedAt(db);
+  const tail = enrichCallReserve(batchSize) + ROLLUP_D1_CALLS;
+  const candidates: TilePlaceState[] = [];
+  if (calls.has(EXPIRED_D1_CALLS + FRONTIER_MIN_CALLS + tail)) {
+    candidates.push(...(await expiredDetailStates(db, keys, opts.now, changedAt)));
+  } else skip("expired");
+  if (batchSize > 0) {
+    // Task 34: 미수집은 앞선 커서부터 거점에 가까운 순 batchSize곳만 (만료 후보와 합쳐 고르는 결과는 전부 읽은 것과 같다).
+    // 커서가 끝이고 tiles_changed_at·지문이 같으면 묶음 질의 없이 끝난다 (따로 "다 채움" 표시를 두지 않는다)
+    const maxQueries = Math.min(2 + UNFETCHED_MAX_CHUNKS, calls.left - tail);
+    if (maxQueries >= FRONTIER_MIN_CALLS) {
+      const u = await nearestUnfetchedStates(db, keys, hubs, batchSize, { changedAt, maxQueries });
+      candidates.push(...u.states);
+    } else skip("unfetched");
   }
   if (candidates.length > 0) {
-    const e = await enrichDetails(
-      {
-        db, fetcher: opts.fetcher, budget, now: opts.now, batchSize, sleep: opts.sleep, candidates, charBudget: detailCharBudget,
-      },
-      hubs,
-      PREWARM_RADIUS,
-    );
-    result.enriched = e.enriched;
-    result.failed = e.failed;
-    result.deferred = e.deferred;
-    result.chars = e.chars;
+    try {
+      const e = await enrichDetails(
+        {
+          db, fetcher: opts.fetcher, budget, now: opts.now, batchSize, sleep: opts.sleep, candidates, charBudget: detailCharBudget,
+          d1: calls,
+        },
+        hubs,
+        PREWARM_RADIUS,
+      );
+      result.enriched = e.enriched;
+      result.failed = e.failed;
+      result.deferred = e.deferred;
+      result.chars = e.chars;
+    } catch (e) {
+      // 저장 오류가 있어도 집계·기록은 한다 (받은 결과는 enrichDetails가 묶음마다 이미 저장했다)
+      console.error("enrich failed", e);
+      result.enrichError = true;
+    }
   }
-  // 끝까지 읽었고 미수집이 없을 때만 (batchSize가 0이면 읽지 않았으니 표시하지 않는다)
-  if (cleared) await markUnfetchedCleared(db, opts.now);
   return spent();
 }

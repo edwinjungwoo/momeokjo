@@ -10,7 +10,7 @@ import type { PlacesResponse } from "../shared/types";
 import { auditArea } from "./audit";
 import { limitsFrom } from "./config";
 import {
-  d1UsageOn, meteredDb, overReadBudget, overWriteBudget, readSoftCap, recordD1Usage, writeSoftCap, type D1Usage,
+  D1CallBudget, d1UsageOn, meteredDb, overReadBudget, overWriteBudget, readSoftCap, recordD1Usage, writeSoftCap, type D1Usage,
 } from "./d1Usage";
 import { DASHBOARD_CACHE_MS, buildDashboard, cachedJson, dashboardCacheKey, putJson, type DashboardQuery } from "./dashboard";
 import { eventStats, insertEvents } from "./events";
@@ -19,7 +19,7 @@ import {
   acceptsGzip, etagMatches, notModifiedResponse, readHubSnapshot, snapshotEdgeTtlMs, snapshotResponse,
 } from "./hubSnapshot";
 import { hubTileKeys } from "./hubTiles";
-import { warmOnce } from "./maintenance";
+import { CRON_D1_CALL_LIMIT, CRON_D1_RESERVE, warmOnce } from "./maintenance";
 import { getPlace, getPlaces, type ServiceDeps } from "./placesService";
 import { placesBody, type PlacesMeta } from "./present";
 import { isReadOnly } from "./readOnly";
@@ -349,6 +349,8 @@ export function createApp(deps: AppDeps) {
       {
         db: meteredDb(c.var.db, usage), fetcher: deps.fetcher, restKey: c.env.KAKAO_REST_KEY, ...limitsFrom(c.env), now: now(),
         sleep: deps.sleep,
+        // Task 34: 요청 하나의 D1 호출 예산 (앞의 읽기 예산 확인과 미들웨어의 사용량 기록 몫은 남긴다)
+        d1: new D1CallBudget(usage, CRON_D1_CALL_LIMIT - CRON_D1_RESERVE),
       },
       { lat: q.data.lat, lng: q.data.lng },
       q.data.radius,

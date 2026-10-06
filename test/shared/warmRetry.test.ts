@@ -21,3 +21,19 @@ describe("R36: warm.mjs의 429 처리", () => {
     expect(on429(JSON.stringify({ error: "write_budget" }), 0)).toEqual({ action: "stop", reason: "write_budget" });
   });
 });
+
+describe("warm.mjs: 후보 고르기가 쪽 상한에서 멈춘 응답", () => {
+  it("R31: truncated인데 아무것도 못 한(enriched·failed 0) 응답이 TRUNCATED_STOP_AFTER(3)번 이어지면 멈춘다 — 하나라도 하면 다시 센다", async () => {
+    const { TRUNCATED_STOP_AFTER, nextTruncatedStreak } = await import("../../scripts/warmRetry.mjs");
+    expect(TRUNCATED_STOP_AFTER).toBe(3);
+    const stuck = { truncated: true, enriched: 0, failed: 0 };
+    let streak = 0;
+    for (let i = 0; i < 3; i++) streak = nextTruncatedStreak(stuck, streak);
+    expect(streak).toBe(3);
+    expect(nextTruncatedStreak({ truncated: true, enriched: 1, failed: 0 }, 2)).toBe(0);
+    expect(nextTruncatedStreak({ truncated: true, enriched: 0, failed: 1 }, 2)).toBe(0);
+    expect(nextTruncatedStreak({ truncated: false, enriched: 0, failed: 0 }, 2)).toBe(0);
+    // 예전 서버(필드 없음)는 truncated가 아니다
+    expect(nextTruncatedStreak({ enriched: 0, failed: 0 }, 2)).toBe(0);
+  });
+});

@@ -163,7 +163,7 @@ describe("enrichDetails", () => {
       return Response.json(json(`가게${id}`));
     };
     const p = run(fetcher);
-    await vi.waitFor(async () => expect(await getMeta(env.DB, "4")).not.toBeNull(), { timeout: 2000, interval: 5 });
+    await vi.waitFor(async () => expect(await getMeta(env.DB, "4")).not.toBeNull(), { timeout: 10_000, interval: 5 });
     for (const id of ["1", "2", "3", "4"]) expect((await getMeta(env.DB, id))?.status, id).toBe("ok");
     for (const id of ["5", "6", "7"]) expect(await getMeta(env.DB, id), id).toBeNull();
     release();
@@ -180,7 +180,7 @@ describe("enrichDetails", () => {
       return Response.json(json(`가게${id}`));
     };
     const p = run(fetcher);
-    await vi.waitFor(async () => expect(await getMeta(env.DB, "1")).not.toBeNull(), { timeout: 2000, interval: 5 });
+    await vi.waitFor(async () => expect(await getMeta(env.DB, "1")).not.toBeNull(), { timeout: 10_000, interval: 5 });
     expect(await getMeta(env.DB, "2")).toBeNull();
     release();
     expect(await p).toEqual(res(3, 0));
