@@ -28,7 +28,7 @@ function scenario(): Seed[] {
     e(1, 1, "bongeunsa", "draw", kst(D, 12, 0, 5), { props: { picks: ["1", "2", "3"], auto: true } }),
     e(1, 1, "bongeunsa", "expand_card", kst(D, 12, 0, 20), { placeId: "1", props: { rank: 1 } }),
     e(1, 1, "bongeunsa", "open_kakao", kst(D, 12, 0, 25), { placeId: "1", props: { rank: 1 } }),
-    // s2 (id 2, 봉은사): 직접 뽑기(완화 섞임) + 다시 뽑기 3번 → 2번 카드 펼침 → "여기로 가요" (3분)
+    // s2 (id 2, 봉은사): 직접 뽑기(완화 섞임) + 다시 뽑기 3번 → 2번 카드 펼침 → "여기로 가자고 공유" (3분)
     e(2, 2, "bongeunsa", "app_open", kst(D, 12, 10, 0)),
     e(2, 2, "bongeunsa", "filter_change", kst(D, 12, 10, 1), {
       props: { radius: 300, party: 2, groups: ["korean", "japanese"], priceCap: "10000", minRating: 3.5, openOnly: true },

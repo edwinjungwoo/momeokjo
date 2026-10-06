@@ -10,7 +10,7 @@ import {
   TRIO_SIZE, drawTrio, filterPlaces, relaxNotice, relaxToFill, relaxedBy, sortPlaces, type Filters,
 } from "../shared/recommend";
 import { showHubPicker, urlAfterHubChange } from "../shared/settings";
-import { shareConfirmText, shareText, toParticle } from "../shared/share";
+import { excludeToastText, shareConfirmText, shareText, toParticle } from "../shared/share";
 import { createTapGate } from "../shared/tapGate";
 import type { ApiDetail, ApiPlace, LatLng } from "../shared/types";
 import { filterProps, setTrackingHub, startTracking, track, trackFilters } from "./analytics";
@@ -110,7 +110,7 @@ export default function App() {
     startTracking(hub.id, { radius: filters.radius, party: filters.party });
   }, [hub.id, filters.radius, filters.party, deferTracking]);
 
-  // R37: "여긴 빼줘"한 곳은 후보(목록·지도·뽑기)에 나오지 않는다
+  // R37: "다음부터 안 보기"한 곳은 후보(목록·지도·뽑기)에 나오지 않는다
   const candidates = useMemo(
     () =>
       sortPlaces(filterPlaces(data?.places ?? [], filters, now), filters.sort).filter((p) => !isExcluded(p.id)),
@@ -456,7 +456,7 @@ export default function App() {
     else if (outcome === "failed") toast.show("복사하지 못했어요");
   };
   const onShare = (ps: ApiPlace[]) => shareOut(shareText(ps, filters, hub.id, window.location.origin), ps, false);
-  /** R47: 펼친 카드의 "여기로 가요" — 그 한 곳을 확정해서 보낸다 (R37에는 그 한 곳만 shared) */
+  /** R47: 펼친 카드의 "여기로 가자고 공유" — 그 한 곳을 확정해서 보낸다 (R37에는 그 한 곳만 shared) */
   const onConfirm = (p: ApiPlace) =>
     shareOut(shareConfirmText(p, hub.id, filters.radius, window.location.origin), [p], true);
   /** 결과 3곳 중 몇 번째 카드인지 (아니면 없음) */
@@ -472,13 +472,13 @@ export default function App() {
     if (id !== null) track("expand_card", { placeId: id, props: rankOf(id) });
     expand(id);
   };
-  // R37: "여긴 빼줘" → 되돌리기 5초
+  // R37: "다음부터 안 보기" → "{이름}은/는 다음부터 안 뽑아요" + 되돌리기
   const onExclude = (p: ApiPlace) => {
     track("exclude_place", { placeId: p.id, props: rankOf(p.id) });
     personal.exclude(p.id);
     setFocusId(null);
     // 받은 후보는 친구가 고른 곳이라 카드는 그대로 두고, 다음 뽑기부터만 뺀다
-    toast.show(trio?.source === "received" ? "다음 뽑기부터 빼둘게요" : "다음부터 빼고 골라요", undefined, {
+    toast.show(excludeToastText(p.name), undefined, {
       ms: 8000,
       action: {
         label: "되돌리기",

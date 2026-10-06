@@ -55,7 +55,7 @@ export function budgetLevel(fraction: number): BudgetLevel {
 
 /**
  * R58 하루 지표 (거점별 + '*' 모든 거점). 이름 → 정의. 스펙 R58 표와 같아야 한다 (test/shared/dashboard.test.ts).
- * "세션"은 탭 세션 id, "결정"은 share(공유·복사, "여기로 가요" 포함) 또는 open_kakao(카카오맵 열기)다.
+ * "세션"은 탭 세션 id, "결정"은 share(공유·복사, "여기로 가자고 공유" 포함) 또는 open_kakao(카카오맵 열기)다.
  */
 export const METRICS = {
   users: "그날 app_open을 보낸 익명 id 수",
@@ -69,7 +69,7 @@ export const METRICS = {
   funnel_decide: "funnel_expand 중 결정이 있는 세션 수",
   funnel_share: "funnel_expand 중 share가 있는 세션 수",
   funnel_kakao: "funnel_expand 중 open_kakao가 있는 세션 수",
-  funnel_confirm: "funnel_expand 중 \"여기로 가요\"(share, confirm)가 있는 세션 수",
+  funnel_confirm: "funnel_expand 중 \"여기로 가자고 공유\"(share, confirm)가 있는 세션 수",
   redraws_0: "뽑기가 있는 세션 중 직접 다시 뽑기(redraw)가 0번인 세션 수",
   redraws_1: "같은 기준, 1번",
   redraws_2: "같은 기준, 2번",
@@ -92,11 +92,11 @@ export const METRICS = {
   draw_auto: "자동 뽑기(props.auto) 이벤트 수",
   draw_relaxed: "R41 완화가 섞인 뽑기(props.relaxed) 이벤트 수",
   share: "share 이벤트 수 (확정 공유 포함)",
-  share_confirm: "\"여기로 가요\" 확정 공유(props.confirm) 이벤트 수",
+  share_confirm: "\"여기로 가자고 공유\" 확정 공유(props.confirm) 이벤트 수",
   open_kakao: "open_kakao 이벤트 수",
   share_open: "받은 공유 링크 열림(share_open) 이벤트 수",
   expand: "expand_card 이벤트 수",
-  exclude: "exclude_place(\"여긴 빼줘\") 이벤트 수",
+  exclude: "exclude_place(\"다음부터 안 보기\") 이벤트 수",
   undo_exclude: "undo_exclude 이벤트 수",
   select_place: "select_place 이벤트 수",
   hub_change: "hub_change 이벤트 수",
@@ -113,7 +113,7 @@ export const METRIC_FAMILIES = {
   expand_r: "expand_r{1~3}: 결과 카드 번호별 expand_card 수",
   kakao_r: "kakao_r{1~3}: 결과 카드 번호별 open_kakao 수",
   exclude_r: "exclude_r{1~3}: 결과 카드 번호별 exclude_place 수",
-  confirm_r: "confirm_r{1~3}: 결과 카드 번호별 \"여기로 가요\" 수 (props.rank, 이번 배포부터)",
+  confirm_r: "confirm_r{1~3}: 결과 카드 번호별 \"여기로 가자고 공유\" 수 (props.rank, 이번 배포부터)",
   f_party_: "f_party_{1~4}: filter_change 스냅숏의 인원",
   f_group_: "f_group_{그룹 id | all}: 스냅숏에 고른 종류 (all = 아무것도 고르지 않음 = 전체)",
   f_price_: "f_price_{all|10000|15000|20000}: 스냅숏의 예산",
@@ -122,7 +122,7 @@ export const METRIC_FAMILIES = {
   f_radius_: "f_radius_{300|500|700|1000}: 스냅숏 반경 구간 (≤300, ≤500, ≤700, ≤1000m)",
   "pick:": "pick:{가게 id}: 직접 뽑기 결과(picks)에 나온 횟수 — 거점마다 그날 상위 20곳만",
   "share:": "share:{가게 id}: share의 picks에 나온 횟수 — 상위 20곳만",
-  "excl:": "excl:{가게 id}: \"여긴 빼줘\" 횟수 — 상위 20곳만",
+  "excl:": "excl:{가게 id}: \"다음부터 안 보기\" 횟수 — 상위 20곳만",
   cohort_: "cohort_{size|d1|d7|d14|d28}: day = 첫 방문 주 월요일, 그 주에 처음 온 id 수와 그중 Dn 재방문 수",
 } as const;
 

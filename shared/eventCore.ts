@@ -9,14 +9,14 @@ export const EVENT_TYPES = [
   "app_open", // 세션마다 한 번
   "draw", // 첫 뽑기 (결과가 없을 때). R39 자동 뽑기는 props.auto = true
   "redraw", // 결과가 떠 있는 상태에서 다시 뽑기
-  "share", // 공유·복사 성공 (picks = 공유한 곳). R47 "여기로 가요"는 props.confirm = true
+  "share", // 공유·복사 성공 (picks = 공유한 곳). R47 "여기로 가자고 공유"는 props.confirm = true
   "open_kakao", // 카카오맵 열기 (rank = 결과 3곳 중 몇 번째인지)
   "select_place", // 목록·지도 핀에서 한 곳을 엶
   "hub_change", // 거점 칩으로 거점을 바꿈. R61 첫 접속 질문에서 고른 것은 props.onboarding = true
   "filter_change", // 1초 디바운스, 바뀐 뒤의 필터 스냅숏
   "empty_result", // 필터를 바꾼 뒤 후보가 0곳이 됨
   "expand_card", // 결과 카드를 펼침 (rank)
-  "exclude_place", // "여긴 빼줘"
+  "exclude_place", // "다음부터 안 보기"
   "undo_exclude", // "되돌리기"
   "share_open", // 받은 공유 링크(t=)를 엶 (picks)
 ] as const;

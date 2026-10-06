@@ -36,7 +36,7 @@ type Props = {
   onFocus: (id: string | null) => void;
   onClose: () => void;
   onShare: (places: ApiPlace[]) => void;
-  /** R47: 펼친 카드의 "여기로 가요" (한 곳 확정 공유) */
+  /** R47: 펼친 카드의 "여기로 가자고 공유" (한 곳 확정 공유) */
   onConfirm: (p: ApiPlace) => void;
   onKakao: (p: ApiPlace) => void;
   onExclude: (p: ApiPlace) => void;
@@ -158,10 +158,10 @@ function TrioCard(props: {
               카카오맵에서 보기
             </a>
             <button type="button" className="trio-go" onClick={() => onConfirm(p)}>
-              여기로 가요
+              여기로 가자고 공유
             </button>
             <button type="button" className="trio-hide" onClick={() => onExclude(p)}>
-              여긴 빼줘
+              다음부터 안 보기
             </button>
           </div>
           {/* R48: 단건 응답을 받으면 그 정보를 언제 확인했는지. 출처("정보 출처: 카카오맵")는 시트 아래 줄에 이미 있어서 시점만 */}
@@ -174,7 +174,7 @@ function TrioCard(props: {
 
 /**
  * R22′: 뽑기 결과 3곳. 셔플 중에는 이름이 바뀌는 자리만 보여주고, 멈추면 작은 카드 3장이 쌓인다.
- * 카드를 누르면 그 자리에서 펼쳐(아코디언) 메뉴·영업시간·카카오맵·"여기로 가요"(R47)·"여긴 빼줘"를 보여준다.
+ * 카드를 누르면 그 자리에서 펼쳐(아코디언) 메뉴·영업시간·카카오맵·"여기로 가자고 공유"(R47)·"다음부터 안 보기"를 보여준다.
  * 아래 한 줄: [다시 뽑기](보조) + [공유](3곳 모두, 주 행동). 시트가 떠 있는 동안 화면 아래 뽑기 바는 숨는다 (styles.css .has-trio)
  */
 export function TrioSheet(props: Props) {
@@ -199,7 +199,7 @@ export function TrioSheet(props: Props) {
     if (!shuffling && firstId) closeBtn.current?.focus({ preventScroll: true });
   }, [shuffling, firstId]);
 
-  // "여긴 빼줘" 뒤: 눌렀던 버튼이 사라지므로 다음 카드(없으면 제목)로 포커스를 옮긴다
+  // "다음부터 안 보기" 뒤: 눌렀던 버튼이 사라지므로 다음 카드(없으면 제목)로 포커스를 옮긴다
   const afterExclude = useRef<string | null>(null);
   const onExclude = (p: ApiPlace) => {
     const next = places[places.findIndex((x) => x.id === p.id) + 1];

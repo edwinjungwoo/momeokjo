@@ -116,7 +116,7 @@ export const TRIO_SIZE = 3;
 
 export type TrioResult = { places: ApiPlace[]; reset: boolean };
 export type DrawOptions = {
-  /** R37 개인화 배수. 0이면 후보에서 뺀다 ("여긴 빼줘") */
+  /** R37 개인화 배수. 0이면 후보에서 뺀다 ("다음부터 안 보기") */
   multiplier?: (p: ApiPlace) => number;
   /** R41 완화로 들어온 곳. 원래 후보를 먼저 넣고 모자란 만큼만 여기서 채운다 */
   extra?: ApiPlace[];

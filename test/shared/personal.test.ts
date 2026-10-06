@@ -54,7 +54,7 @@ describe("R37 개인화 (기기 안에서만)", () => {
     expect(groupBoost(state(sig("kakao_open", 31 * D, "9")), "korean", NOW)).toBe(1);
   });
 
-  it("R37: 최종 배수 = 최근 신호 배수 × 그룹 가산, '여긴 빼줘'면 0", () => {
+  it("R37: 최종 배수 = 최근 신호 배수 × 그룹 가산, '다음부터 안 보기'면 0", () => {
     const s = state(sig("kakao_open", 0, "1"), sig("shared", H, "2")); // 서로 다른 때 = 취향 신호 2번
     // 1번: 0.15 × (1 + 0.15 × 2)
     expect(personalMultiplier(s, place("1"), NOW)).toBeCloseTo(0.15 * 1.3, 9);

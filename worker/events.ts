@@ -37,7 +37,7 @@ export async function pruneOldEvents(db: D1Database, now: number): Promise<void>
 const DRAWS = "('draw', 'redraw')";
 /** R39 자동 뽑기(props.auto = true)인가 */
 const IS_AUTO = "json_extract(props, '$.auto') = 1";
-/** R47 "여기로 가요" 확정 공유(props.confirm = true)인가 */
+/** R47 "여기로 가자고 공유" 확정 공유(props.confirm = true)인가 */
 const IS_CONFIRM = "json_extract(props, '$.confirm') = 1";
 /** 사용자가 직접 한 뽑기: 뽑기·시간대·거점·많이 뽑힌 가게·전환율·세션당 뽑기는 이것만 센다 */
 const manualDraw = (t = "") => `(${t}type IN ${DRAWS} AND coalesce(json_extract(${t}props, '$.auto'), 0) = 0)`;

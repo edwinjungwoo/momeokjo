@@ -23,7 +23,7 @@ export const EventPropsSchema = z.strictObject({
   rank: z.number().int().min(1).max(3).optional(),
   /** R39 열자마자 자동으로 뽑은 draw */
   auto: z.literal(true).optional(),
-  /** R47 펼친 카드의 "여기로 가요"(한 곳 확정)로 보낸 share (R58: rank도 같이 보낸다) */
+  /** R47 펼친 카드의 "여기로 가자고 공유"(한 곳 확정)로 보낸 share (R58: rank도 같이 보낸다) */
   confirm: z.literal(true).optional(),
   /** R58 R41 완화로 조건 밖 가게가 섞인 draw·redraw */
   relaxed: z.literal(true).optional(),
@@ -99,7 +99,7 @@ export type StatsResponse = {
   daily: DayStats[];
   /**
    * draws·redraws는 사용자가 직접 한 뽑기만. autoDraws = R39 자동 뽑기 (뽑기 수·전환율·시간대·거점·상위 가게에는 넣지 않는다).
-   * confirmShares = R47 "여기로 가요" 확정 공유 (shares에도 들어 있다)
+   * confirmShares = R47 "여기로 가자고 공유" 확정 공유 (shares에도 들어 있다)
    */
   totals: Omit<DayStats, "day"> & { expands: number; excludes: number; autoDraws: number; confirmShares: number };
   /** KST 시(0–23)별 직접 한 뽑기(draw + redraw, 자동 뽑기 제외) */

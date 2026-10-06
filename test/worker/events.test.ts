@@ -397,7 +397,7 @@ describe("GET /api/admin/stats", () => {
     expect(r.drawsPerSession).toBe(0.5);
   });
 
-  it("R36/R47: \"여기로 가요\" 확정 공유(props.confirm)는 공유 수에 그대로 들어가고 totals.confirmShares로 따로도 센다", async () => {
+  it("R36/R47: \"여기로 가자고 공유\" 확정 공유(props.confirm)는 공유 수에 그대로 들어가고 totals.confirmShares로 따로도 센다", async () => {
     await seed([
       { anon: A, session: s(6), ts: noonToday, hub: "bongeunsa", type: "app_open" },
       { anon: A, session: s(6), ts: noonToday, hub: "bongeunsa", type: "draw", props: { picks: ["1", "2", "3"] } },

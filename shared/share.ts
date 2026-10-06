@@ -45,31 +45,51 @@ export function shareText(places: ApiPlace[], f: Filters, hubId: string, origin:
   ].join("\n");
 }
 
-/** 끝 숫자를 읽는 소리(영 일 이 삼 사 오 육 칠 팔 구)에 ㄹ 아닌 받침이 있는가 — 0·3·6 */
-const DIGIT_WITH_FINAL = new Set(["0", "3", "6"]);
-/** 끝 영문자를 읽는 소리(엠·엔)에 ㄹ 아닌 받침이 있는가 — 엘(L)은 ㄹ이라 "로" */
-const LATIN_WITH_FINAL = new Set(["m", "n"]);
+/** 끝소리의 받침: 없음 / ㄹ / 그 밖의 받침 */
+type Final = "none" | "rieul" | "other";
+/** 끝 숫자를 읽는 소리(영 일 이 삼 사 오 육 칠 팔 구)의 받침 — 영·삼·육은 ㅇ·ㅁ·ㄱ, 일·칠·팔은 ㄹ */
+const DIGIT_FINAL: Record<string, Final> = { 0: "other", 1: "rieul", 3: "other", 6: "other", 7: "rieul", 8: "rieul" };
+/** 끝 영문자를 읽는 소리의 받침 — 엠·엔은 ㅁ·ㄴ, 엘·알은 ㄹ */
+const LATIN_FINAL: Record<string, Final> = { m: "other", n: "other", l: "rieul", r: "rieul" };
 
 /**
- * R47: 이름 뒤 조사 "(으)로". 끝에서부터 첫 글자(한글·영문·숫자)를 보고, 그 글자(숫자·영문은 읽는 소리)에
- * ㄹ이 아닌 받침이 있으면 "으로", 아니면 "로". 괄호·공백 같은 기호는 건너뛴다 ("중앙해장(본점)" → 점 → "으로").
- * 숫자: 0 영·3 삼·6 육 → "으로", 나머지(1 일·7 칠·8 팔은 ㄹ) → "로". 영문: M·N → "으로", 나머지(L 엘 포함) → "로".
+ * 이름의 끝소리 받침. 끝에서부터 첫 글자(한글·영문·숫자)를 보고, 그 글자(숫자·영문은 읽는 소리)의 받침을 돌려준다.
+ * 괄호·공백 같은 기호는 건너뛴다 ("중앙해장(본점)" → 점 → "other"). 읽을 글자가 없으면 "none".
  */
-export function toParticle(name: string): "으로" | "로" {
+function finalOf(name: string): Final {
   for (let i = name.length - 1; i >= 0; i--) {
     const ch = name[i];
     const code = name.charCodeAt(i);
     if (code >= 0xac00 && code <= 0xd7a3) {
       const jong = (code - 0xac00) % 28;
-      return jong !== 0 && jong !== 8 ? "으로" : "로";
+      return jong === 0 ? "none" : jong === 8 ? "rieul" : "other";
     }
-    if (/[0-9]/.test(ch)) return DIGIT_WITH_FINAL.has(ch) ? "으로" : "로";
-    if (/[A-Za-z]/.test(ch)) return LATIN_WITH_FINAL.has(ch.toLowerCase()) ? "으로" : "로";
+    if (/[0-9]/.test(ch)) return DIGIT_FINAL[ch] ?? "none";
+    if (/[A-Za-z]/.test(ch)) return LATIN_FINAL[ch.toLowerCase()] ?? "none";
   }
-  return "로";
+  return "none";
 }
 
-/** R47: 펼친 결과 카드의 "여기로 가요" — 한 곳을 확정해서 보내는 문구 (카카오맵 링크 + 그 한 곳의 공유 링크) */
+/**
+ * R47: 이름 뒤 조사 "(으)로" — ㄹ이 아닌 받침이 있으면 "으로", 없거나 ㄹ이면 "로".
+ * 숫자: 0 영·3 삼·6 육 → "으로", 나머지(1 일·7 칠·8 팔은 ㄹ) → "로". 영문: M·N → "으로", 나머지(L 엘 포함) → "로".
+ */
+export function toParticle(name: string): "으로" | "로" {
+  return finalOf(name) === "other" ? "으로" : "로";
+}
+
+/**
+ * R37: 이름 뒤 조사 "은/는" — ㄹ을 포함해 받침이 있으면 "은", 없으면 "는".
+ * 숫자: 0 영·1 일·3 삼·6 육·7 칠·8 팔 → "은", 2 이·4 사·5 오·9 구 → "는". 영문: L 엘·M 엠·N 엔·R 알 → "은", 나머지 → "는".
+ */
+export function topicParticle(name: string): "은" | "는" {
+  return finalOf(name) === "none" ? "는" : "은";
+}
+
+/** R37: "다음부터 안 보기"를 누른 뒤 되돌리기와 함께 띄우는 알림 문구 */
+export const excludeToastText = (name: string): string => `${name}${topicParticle(name)} 다음부터 안 뽑아요`;
+
+/** R47: 펼친 결과 카드의 "여기로 가자고 공유" — 한 곳을 확정해서 보내는 문구 (카카오맵 링크 + 그 한 곳의 공유 링크) */
 export function shareConfirmText(p: ApiPlace, hubId: string, radius: number, origin: string): string {
   const walk = p.walkMinutes !== undefined ? ` 도보 ${p.walkMinutes}분` : "";
   return [`👉 ${p.name}${toParticle(p.name)} 가요!${walk}`, p.url, shareUrl(origin, [p.id], hubId, radius)].join("\n");
