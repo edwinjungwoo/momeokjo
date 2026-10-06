@@ -16,6 +16,8 @@ import { placeJson } from "../helpers/places";
 
 const NOW = 1_800_000_000_000; // 2027-01-15 17:00 KST
 const TODAY = "2027-01-15";
+/** R55: warm 응답의 D1 행 수 */
+const ROWS = { rowsRead: expect.any(Number), rowsWritten: expect.any(Number) };
 const AUTH = { Authorization: "Bearer test-admin-token" };
 const AREA = `lat=${ASEM.lat}&lng=${ASEM.lng}&radius=300`;
 const at = (dLat: number) => ASEM.lat + dLat;
@@ -135,14 +137,14 @@ describe("D1 읽기 예산", () => {
     const { app } = setup(12);
     const warm = async (q = "") =>
       (await callApp(app, `/api/admin/warm?${AREA}${q}`, { method: "POST", headers: AUTH })).json<any>();
-    expect(await warm()).toEqual({ incompleteTiles: 0, pending: "more", enriched: 10, failed: 0 });
-    expect(await warm()).toEqual({ incompleteTiles: 0, pending: 0, enriched: 2, failed: 0 });
+    expect(await warm()).toEqual({ incompleteTiles: 0, pending: "more", enriched: 10, failed: 0, ...ROWS });
+    expect(await warm()).toEqual({ incompleteTiles: 0, pending: 0, enriched: 2, failed: 0, ...ROWS });
   });
 
   it("R31: ?count=1이면 남은 수를 정확히 센다", async () => {
     const { app } = setup(12);
     const r = await (await callApp(app, `/api/admin/warm?${AREA}&count=1`, { method: "POST", headers: AUTH })).json<any>();
-    expect(r).toEqual({ incompleteTiles: 0, pending: 2, enriched: 10, failed: 0 });
+    expect(r).toEqual({ incompleteTiles: 0, pending: 2, enriched: 10, failed: 0, ...ROWS });
   });
 
   it("R31: 예산이 바닥나 상세를 못 고르면 pending은 more다 (끝났다고 보고하지 않는다)", async () => {

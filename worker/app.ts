@@ -4,13 +4,15 @@ import { MAX_RADIUS, MIN_RADIUS, PREWARM_RADIUS, isValidRadius } from "../shared
 import { MAX_EVENT_BODY_BYTES, parseEventBatch } from "../shared/events";
 import { tilesCoveringCircle } from "../shared/geo";
 import { HUBS, isHubId } from "../shared/hubs";
-import { utcDay } from "../shared/kst";
+import { DASHBOARD_MAX_DAYS, addDays, daysBetween, isDay } from "../shared/dashboard";
+import { kstDay, utcDay } from "../shared/kst";
 import type { PlacesResponse } from "../shared/types";
 import { auditArea } from "./audit";
 import { limitsFrom } from "./config";
 import {
   d1UsageOn, meteredDb, overReadBudget, overWriteBudget, readSoftCap, recordD1Usage, writeSoftCap, type D1Usage,
 } from "./d1Usage";
+import { DASHBOARD_CACHE_MS, buildDashboard, cachedJson, dashboardCacheKey, putJson, type DashboardQuery } from "./dashboard";
 import { eventStats, insertEvents } from "./events";
 import type { FetchFn } from "./fetchFn";
 import { hubTileKeys } from "./hubTiles";
@@ -46,6 +48,28 @@ export const StatsQuery = z.object({
   days: z.coerce.number().int().min(1).max(30).default(7),
   hub: z.string().refine((h) => h === "all" || isHubId(h)).default("all"),
 });
+
+/** R52 대시보드: 탭, 기간(KST, 기본 최근 7일), 거점, 이전 기간 비교(기본 켬), fresh=1이면 캐시를 건너뛴다 */
+export const DashboardParams = z.object({
+  tab: z.enum(["overview", "behavior", "ops"]).default("overview"),
+  from: z.string().refine(isDay).optional(),
+  to: z.string().refine(isDay).optional(),
+  hub: z.string().refine((h) => h === "all" || isHubId(h)).default("all"),
+  compare: z.enum(["0", "1"]).default("1"),
+  fresh: z.enum(["0", "1"]).default("0"),
+});
+/** 일별 집계를 두는 기간 안에서만 고른다 (from ≥ 오늘 − 365일) */
+const DASHBOARD_OLDEST_DAYS = 365;
+
+/** 기간을 정한다: to 기본 오늘, from 기본 to − 6일. 미래, 뒤집힘, 90일 초과, 1년 전보다 앞이면 null */
+export function dashboardQuery(p: z.infer<typeof DashboardParams>, now: number): DashboardQuery | null {
+  const today = kstDay(now);
+  const to = p.to ?? today;
+  const from = p.from ?? addDays(to, -6);
+  if (to > today || from > to || daysBetween(from, to) + 1 > DASHBOARD_MAX_DAYS) return null;
+  if (from < addDays(today, -DASHBOARD_OLDEST_DAYS)) return null;
+  return { tab: p.tab, from, to, hub: p.hub, compare: p.compare === "1" };
+}
 
 /** 카카오 장소 ID: 숫자만, 최대 15자리 */
 export const PLACE_ID = /^\d{1,15}$/;
@@ -268,13 +292,18 @@ export function createApp(deps: AppDeps) {
     if (!q.success) return c.json({ error: "invalid_params" }, 400);
     // R38: 오늘 D1 읽기가 소프트 한도를 넘었으면 더 수집하지 않는다 (scripts/warm.mjs는 429에서 멈춘다)
     if (await overReadBudget(c.var.db, c.env, now())) return c.json({ error: "read_budget" }, 429);
+    // R55: 이 호출이 읽고 쓴 행 수 (관리 화면 진행 표시; 요청 전체 사용량은 미들웨어가 따로 기록한다)
+    const usage: D1Usage = { read: 0, written: 0 };
     const r = await warmOnce(
-      { db: c.var.db, fetcher: deps.fetcher, restKey: c.env.KAKAO_REST_KEY, ...limitsFrom(c.env), now: now(), sleep: deps.sleep },
+      {
+        db: meteredDb(c.var.db, usage), fetcher: deps.fetcher, restKey: c.env.KAKAO_REST_KEY, ...limitsFrom(c.env), now: now(),
+        sleep: deps.sleep,
+      },
       { lat: q.data.lat, lng: q.data.lng },
       q.data.radius,
       { count: c.req.query("count") === "1" },
     );
-    return c.json(r);
+    return c.json({ ...r, rowsRead: usage.read, rowsWritten: usage.written });
   });
 
   // R12: 배포 직후 0005 전 행의 list_json을 빨리 채운다 (Cron은 실행마다 200행뿐이라 2~3.5시간 걸린다). scripts/backfill.mjs가 부른다.
@@ -300,6 +329,30 @@ export function createApp(deps: AppDeps) {
     const q = StatsQuery.safeParse(c.req.query());
     if (!q.success) return c.json({ error: "invalid_params" }, 400);
     return c.json(await eventStats(c.var.db, { ...q.data, now: now(), readSoftCap: readSoftCap(c.env) }));
+  });
+
+  // R52~R55 관리자 대시보드 v2. 탭 하나에 필요한 것을 한 응답으로, 같은 (탭, 기간, 거점, 비교)는 60초 엣지 캐시
+  app.get("/api/admin/dashboard", async (c) => {
+    c.header("Cache-Control", "no-store");
+    const p = DashboardParams.safeParse(c.req.query());
+    if (!p.success) return c.json({ error: "invalid_params" }, 400);
+    const q = dashboardQuery(p.data, now());
+    if (!q) return c.json({ error: "invalid_params" }, 400);
+    const t = now();
+    const key = dashboardCacheKey(q);
+    const fresh = p.data.fresh === "1";
+    const hit = fresh ? null : await cachedJson<unknown>(deps.cache, key, t);
+    if (hit) return c.json(hit);
+    const deferred = { cache: deps.cache, defer: (x: Promise<unknown>) => c.var.defer(x) };
+    const data = await buildDashboard(
+      {
+        db: c.var.db, ...deferred, now: t, readSoftCap: readSoftCap(c.env), writeSoftCap: writeSoftCap(c.env), fresh,
+      },
+      q,
+    );
+    const body = JSON.stringify(data);
+    putJson(deferred, key, body, t, DASHBOARD_CACHE_MS);
+    return c.body(body, 200, { "content-type": "application/json" });
   });
 
   app.get("/api/admin/audit", async (c) => {

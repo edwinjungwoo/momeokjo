@@ -145,6 +145,15 @@ describe("R54 하루 지표 (liveDayMetrics)", () => {
     expect([a["* sessions"], a["* sessions_h23"], b["* sessions"], b["* sessions_h00"]]).toEqual([1, 1, 1, 1]);
   });
 
+  it("R54: 실시간 집계는 core(세션·이벤트 수)와 detail(필터·가게)로 나눠 셀 수 있고, 둘을 합치면 전체와 같다", async () => {
+    await seedEvents(scenario());
+    const core = await liveDayMetrics(env.DB, D, "core");
+    const detail = await liveDayMetrics(env.DB, D, "detail");
+    expect(core.some((r) => r.metric.startsWith("f_") || r.metric.includes(":"))).toBe(false);
+    expect(detail.every((r) => r.metric.startsWith("f_") || r.metric.includes(":"))).toBe(true);
+    expect([...core, ...detail]).toEqual(await liveDayMetrics(env.DB, D));
+  });
+
   it("R53: 나오는 지표 이름은 모두 정의돼 있다 (shared/dashboard.ts METRICS·METRIC_FAMILIES)", async () => {
     await seedEvents(scenario());
     const rows = await liveDayMetrics(env.DB, D);

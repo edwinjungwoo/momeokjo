@@ -14,6 +14,8 @@ import { placeJson, seedPlace } from "../helpers/places";
 
 const NOW = 1_800_000_000_000;
 const AUTH = { Authorization: "Bearer test-admin-token" };
+/** R55: warm 응답의 D1 행 수 */
+const ROWS = { rowsRead: expect.any(Number), rowsWritten: expect.any(Number) };
 const AREA = `lat=${ASEM.lat}&lng=${ASEM.lng}&radius=300`;
 const at = (dLat: number) => ASEM.lat + dLat;
 
@@ -119,8 +121,15 @@ describe("admin", () => {
   it("R31: warm은 격자 수집과 상세 보충을 한 번 수행하고, 반복하면 0으로 수렴한다", async () => {
     const { app } = setup();
     const warm = async () => (await callApp(app, `/api/admin/warm?${AREA}`, { method: "POST", headers: AUTH })).json<any>();
-    expect(await warm()).toEqual({ incompleteTiles: 0, pending: 0, enriched: 2, failed: 0 });
-    expect(await warm()).toEqual({ incompleteTiles: 0, pending: 0, enriched: 0, failed: 0 });
+    expect(await warm()).toEqual({ incompleteTiles: 0, pending: 0, enriched: 2, failed: 0, ...ROWS });
+    expect(await warm()).toEqual({ incompleteTiles: 0, pending: 0, enriched: 0, failed: 0, ...ROWS });
+  });
+
+  it("R55: warm 응답에 이번 호출이 읽고 쓴 D1 행 수를 싣는다 (관리 화면 진행 표시)", async () => {
+    const { app } = setup();
+    const r = await (await callApp(app, `/api/admin/warm?${AREA}`, { method: "POST", headers: AUTH })).json<any>();
+    expect(r.rowsRead).toBeGreaterThan(0);
+    expect(r.rowsWritten).toBeGreaterThan(0);
   });
 
   it("R11: 실행(5분)마다 시작 거점을 돌려서 모든 거점이 차례로 먼저 예산을 쓴다", () => {

@@ -61,7 +61,7 @@ const SESSION_COLUMNS: [string, string][] = [
   ["reshare_sessions", "count(CASE WHEN via_link AND shared THEN 1 END)"],
 ];
 
-const SESSIONS_SQL = `WITH ev AS MATERIALIZED (
+const SESSIONS_SQL = `WITH ev AS NOT MATERIALIZED (
   SELECT session, anon, hub, hour, type, ts,
     CASE WHEN type IN ('draw', 'redraw') THEN ${AUTO} END AS auto,
     CASE WHEN type = 'share' THEN coalesce(json_extract(props, '$.confirm'), 0) = 1 END AS confirm
@@ -132,9 +132,11 @@ SELECT hub, metric, sum(n) AS value FROM y GROUP BY hub, metric
 UNION ALL SELECT '*', metric, sum(n) FROM y GROUP BY metric`;
 
 /** 필터 분포: filter_change 스냅숏(바뀐 뒤의 필터)마다 값 하나씩 센다 */
-const FILTERS_SQL = `WITH f AS MATERIALIZED (SELECT hub, props FROM events WHERE type = 'filter_change' AND day = ?1),
-y AS (
-  SELECT f.hub, j.value AS metric FROM f, json_each(json_array(
+const FILTERS_SQL = `WITH f AS MATERIALIZED (
+  SELECT hub, props, count(*) AS n FROM events WHERE type = 'filter_change' AND day = ?1 GROUP BY hub, props
+),
+y AS MATERIALIZED (
+  SELECT f.hub AS hub, j.value AS metric, sum(f.n) AS n FROM f, json_each(json_array(
     'f_total',
     'f_party_' || json_extract(props, '$.party'),
     'f_price_' || json_extract(props, '$.priceCap'),
@@ -143,32 +145,42 @@ y AS (
     'f_radius_' || CASE WHEN json_extract(props, '$.radius') IS NULL THEN NULL WHEN json_extract(props, '$.radius') <= 300 THEN 300
       WHEN json_extract(props, '$.radius') <= 500 THEN 500 WHEN json_extract(props, '$.radius') <= 700 THEN 700 ELSE 1000 END,
     CASE WHEN json_type(props, '$.groups') = 'array' AND json_array_length(props, '$.groups') = 0 THEN 'f_group_all' END
-  )) AS j WHERE j.value IS NOT NULL
-  UNION ALL SELECT f.hub, 'f_group_' || g.value FROM f, json_each(f.props, '$.groups') AS g
+  )) AS j WHERE j.value IS NOT NULL GROUP BY 1, 2
+  UNION ALL SELECT f.hub, 'f_group_' || g.value, sum(f.n) FROM f, json_each(f.props, '$.groups') AS g GROUP BY 1, 2
 )
-SELECT hub, metric, count(*) AS value FROM y GROUP BY hub, metric
-UNION ALL SELECT '*', metric, count(*) FROM y GROUP BY metric`;
+SELECT hub, metric, n AS value FROM y
+UNION ALL SELECT '*', metric, sum(n) FROM y GROUP BY metric`;
 
 /** 가게별 횟수: 직접 뽑기 picks, 공유 picks, "여긴 빼줘" — 거점·종류마다 그날 상위 TOP_PLACES_PER_DAY곳만 */
 const PLACES_SQL = `WITH p AS MATERIALIZED (
-  SELECT e.hub, 'pick' AS k, j.value AS id FROM events AS e, json_each(e.props, '$.picks') AS j
-    WHERE e.type IN ('draw', 'redraw') AND e.day = ?1 AND coalesce(json_extract(e.props, '$.auto'), 0) = 0
-  UNION ALL SELECT e.hub, 'share', j.value FROM events AS e, json_each(e.props, '$.picks') AS j WHERE e.type = 'share' AND e.day = ?1
-  UNION ALL SELECT hub, 'excl', place_id FROM events WHERE type = 'exclude_place' AND day = ?1 AND place_id IS NOT NULL
+  SELECT e.hub AS hub, 'pick' AS k, j.value AS id, count(*) AS n FROM events AS e, json_each(e.props, '$.picks') AS j
+    WHERE e.type IN ('draw', 'redraw') AND e.day = ?1 AND coalesce(json_extract(e.props, '$.auto'), 0) = 0 GROUP BY 1, 3
+  UNION ALL SELECT e.hub, 'share', j.value, count(*) FROM events AS e, json_each(e.props, '$.picks') AS j
+    WHERE e.type = 'share' AND e.day = ?1 GROUP BY 1, 3
+  UNION ALL SELECT hub, 'excl', place_id, count(*) FROM events WHERE type = 'exclude_place' AND day = ?1 AND place_id IS NOT NULL
+    GROUP BY 1, 3
 ),
-c AS (
-  SELECT hub, k, id, count(*) AS n FROM p GROUP BY hub, k, id
-  UNION ALL SELECT '*', k, id, count(*) FROM p GROUP BY k, id
-),
+c AS (SELECT hub, k, id, n FROM p UNION ALL SELECT '*', k, id, sum(n) FROM p GROUP BY k, id),
 r AS (SELECT hub, k, id, n, row_number() OVER (PARTITION BY hub, k ORDER BY n DESC, id) AS rn FROM c)
 SELECT hub, k || ':' || id AS metric, n AS value FROM r WHERE rn <= ${TOP_PLACES_PER_DAY}`;
 
 /** 하루 지표를 계산하는 문장들 (실시간 집계와 Cron 집계가 같은 것을 쓴다) */
 export const DAY_METRIC_SQL = [SESSIONS_SQL, EVENTS_SQL, FILTERS_SQL, PLACES_SQL] as const;
 
+/**
+ * 실시간 집계를 나눠 세는 단위: core = 세션·이벤트 수(개요·행태), detail = 필터·가게(행태만).
+ * 읽기는 그날 이벤트 수에 비례한다 (로컬 측정: core ≈ 이벤트 × 5.7행, detail ≈ × 7.3행 — json_each·정렬도 읽기로 센다)
+ */
+export type LivePart = "core" | "detail" | "all";
+const PART_SQL: Record<LivePart, readonly string[]> = {
+  core: [SESSIONS_SQL, EVENTS_SQL],
+  detail: [FILTERS_SQL, PLACES_SQL],
+  all: DAY_METRIC_SQL,
+};
+
 /** 아직 집계하지 않은 날(오늘)의 지표를 센다 — D1 batch 한 번 */
-export async function liveDayMetrics(db: D1Database, day: string): Promise<MetricRow[]> {
-  const rs = await db.batch<MetricRow>(DAY_METRIC_SQL.map((sql) => db.prepare(sql).bind(day)));
+export async function liveDayMetrics(db: D1Database, day: string, part: LivePart = "all"): Promise<MetricRow[]> {
+  const rs = await db.batch<MetricRow>(PART_SQL[part].map((sql) => db.prepare(sql).bind(day)));
   return rs.flatMap((r) => r.results.map((x) => ({ hub: String(x.hub), metric: String(x.metric), value: Number(x.value) })));
 }
 
