@@ -5,9 +5,10 @@ import { HUBS, type Hub } from "../../shared/hubs";
 import { tileKeyOf, tilesCoveringCircle } from "../../shared/geo";
 import { createApp } from "../../worker/app";
 import { auditArea } from "../../worker/audit";
+import { limitsFrom } from "../../worker/config";
 import { hubOrder, runScheduled } from "../../worker/maintenance";
 import { DETAIL_JITTER_MS, DETAIL_OK_TTL_MS } from "../../shared/constants";
-import { getMeta, getTiles, markTile, recordPlaceBlock, replaceTilePlaces, saveDetailFailure } from "../../worker/repo";
+import { detailJitterMs, getMeta, getTiles, markTile, recordPlaceBlock, replaceTilePlaces, saveDetailFailure } from "../../worker/repo";
 import { callApp } from "../helpers/callApp";
 import { doc, fakeKakaoLocal, fakePlaceApi, routeFetch } from "../helpers/fakeKakao";
 import { placeJson, seedPlace } from "../helpers/places";
@@ -31,6 +32,14 @@ function setup() {
 }
 
 describe("admin", () => {
+  it("R10: 운영 기본값은 보수적으로 둔다 — wrangler.jsonc vars DETAIL_BATCH_SIZE 4·DETAIL_CHAR_BUDGET 200000 (설정만 바꿔 올릴 수 있다)", () => {
+    expect(limitsFrom(env)).toEqual({ budgetSize: 40, batchSize: 4, detailCharBudget: 200_000 });
+    // 변수가 없거나 양수가 아니면 코드 기본값
+    expect(limitsFrom({ ...env, DETAIL_BATCH_SIZE: undefined, DETAIL_CHAR_BUDGET: "0" } as unknown as Env)).toEqual({
+      budgetSize: 40, batchSize: 10, detailCharBudget: 600_000,
+    });
+  });
+
   it("R31: 토큰이 없거나 틀리면 401", async () => {
     const { app } = setup();
     expect((await callApp(app, `/api/admin/warm?${AREA}`, { method: "POST" })).status).toBe(401);
@@ -121,8 +130,8 @@ describe("admin", () => {
   it("R31: warm은 격자 수집과 상세 보충을 한 번 수행하고, 반복하면 0으로 수렴한다", async () => {
     const { app } = setup();
     const warm = async () => (await callApp(app, `/api/admin/warm?${AREA}`, { method: "POST", headers: AUTH })).json<any>();
-    expect(await warm()).toEqual({ incompleteTiles: 0, pending: 0, enriched: 2, failed: 0, ...ROWS });
-    expect(await warm()).toEqual({ incompleteTiles: 0, pending: 0, enriched: 0, failed: 0, ...ROWS });
+    expect(await warm()).toEqual({ incompleteTiles: 0, pending: 0, enriched: 2, failed: 0, deferred: 0, chars: expect.any(Number), ...ROWS });
+    expect(await warm()).toEqual({ incompleteTiles: 0, pending: 0, enriched: 0, failed: 0, deferred: 0, chars: expect.any(Number), ...ROWS });
   });
 
   it("R31/R10: warm은 상세 JSON 글자 예산(DETAIL_CHAR_BUDGET)을 다 쓰면 남은 곳을 남기고 pending은 more — 다음 warm이 이어 하고 끝나면 0", async () => {
@@ -130,7 +139,7 @@ describe("admin", () => {
     const local = fakeKakaoLocal(ids.map((id, k) => doc(id, at(0.0002 * (k + 1)), ASEM.lng)));
     const place = fakePlaceApi(Object.fromEntries(ids.map((id, k) => [id, placeJson({ name: id, lat: at(0.0002 * (k + 1)), lng: ASEM.lng })])));
     const app = createApp({ fetcher: routeFetch(local.fetcher, place.fetcher), now: () => NOW, sleep: async () => {}, rateLimit: async () => true });
-    const tight = { ...env, DETAIL_CHAR_BUDGET: "1" } as Env;
+    const tight = { ...env, DETAIL_CHAR_BUDGET: "1" } as unknown as Env;
     const warm = async () => {
       const ctx = createExecutionContext();
       const res = await app.fetch(new Request(`http://localhost/api/admin/warm?${AREA}`, { method: "POST", headers: AUTH }), tight, ctx);
@@ -138,8 +147,11 @@ describe("admin", () => {
       return res.json<any>();
     };
     // 동시에 시작한 3곳만 하고 2곳은 남긴다 (실패로 기록하지 않는다)
-    expect(await warm()).toEqual({ incompleteTiles: 0, pending: "more", enriched: 3, failed: 0, ...ROWS });
-    expect(await warm()).toEqual({ incompleteTiles: 0, pending: 0, enriched: 2, failed: 0, ...ROWS });
+    const B = limitsFrom(env).batchSize; // 이번에 고르는 곳 수 (운영 설정)
+    expect(await warm()).toEqual({
+      incompleteTiles: 0, pending: "more", enriched: 3, failed: 0, deferred: Math.min(ids.length, B) - 3, chars: expect.any(Number), ...ROWS,
+    });
+    expect(await warm()).toEqual({ incompleteTiles: 0, pending: 0, enriched: 2, failed: 0, deferred: 0, chars: expect.any(Number), ...ROWS });
     expect(place.calls.map((c) => c.id).sort()).toEqual(ids);
   });
 
@@ -148,9 +160,10 @@ describe("admin", () => {
     const ids = ["3001", "3002", "3003", "3004", "3005"];
     await replaceTilePlaces(env.DB, tileKeyOf(HUBS[0]), ids, NOW, false);
     const place = fakePlaceApi(Object.fromEntries(ids.map((id) => [id, placeJson({ name: id, lat: HUBS[0].lat, lng: HUBS[0].lng })])));
-    const tight = { ...env, DETAIL_CHAR_BUDGET: "1" } as Env;
+    const tight = { ...env, DETAIL_CHAR_BUDGET: "1" } as unknown as Env;
     const r1 = await runScheduled(tight, { fetcher: place.fetcher, now: NOW + 1, sleep: async () => {} });
-    expect(r1).toMatchObject({ enriched: 3, failed: 0, calls: 3 });
+    // Cron 결과(로그 줄)에 남긴 곳과 읽은 본문 글자 수를 싣는다
+    expect(r1).toMatchObject({ enriched: 3, failed: 0, calls: 3, deferred: Math.min(ids.length, limitsFrom(env).batchSize) - 3, chars: 3 * JSON.stringify(placeJson({ name: "3001", lat: HUBS[0].lat, lng: HUBS[0].lng })).length });
     expect(place.calls.map((c) => c.id)).toEqual(ids.slice(0, 3));
     const r2 = await runScheduled(tight, { fetcher: place.fetcher, now: NOW + 2, sleep: async () => {} });
     expect(r2).toMatchObject({ enriched: 2, failed: 0 });
@@ -159,6 +172,41 @@ describe("admin", () => {
     const r3 = await runScheduled(tight, { fetcher: place.fetcher, now: NOW + 3, sleep: async () => {} });
     expect(r3).toMatchObject({ enriched: 0, failed: 0, calls: 0 });
     expect(place.calls).toHaveLength(ids.length);
+  });
+
+  it("R11: DETAIL_BATCH_SIZE가 0이면 Cron은 미수집을 읽지 않고 \"미수집 다 채움\"으로 표시하지도 않는다", async () => {
+    for (const h of HUBS) for (const k of tilesCoveringCircle(h, PREWARM_RADIUS)) await markTile(env.DB, k, NOW, 0, false);
+    await replaceTilePlaces(env.DB, tileKeyOf(HUBS[0]), ["4001"], NOW, false);
+    const place = fakePlaceApi({ "4001": placeJson({ name: "x", lat: HUBS[0].lat, lng: HUBS[0].lng }) });
+    const zero = { ...env, DETAIL_BATCH_SIZE: "0" } as unknown as Env;
+    expect(await runScheduled(zero, { fetcher: place.fetcher, now: NOW + 1, sleep: async () => {} })).toMatchObject({ enriched: 0 });
+    const cleared = await env.DB.prepare("SELECT value FROM meta WHERE key = 'unfetched_cleared_at'").first<{ value: string }>();
+    expect(cleared).toBeNull();
+    // 배치가 있으면 채우고, 그 뒤 실행들이 앞선 커서부터 끝까지 읽으면(실행마다 많아야 UNFETCHED_MAX_CHUNKS묶음) 표시한다
+    await runScheduled(env, { fetcher: place.fetcher, now: NOW + 2, sleep: async () => {} });
+    expect(place.calls.map((c) => c.id)).toEqual(["4001"]);
+    for (let t = 3; t <= 8; t++) await runScheduled(env, { fetcher: place.fetcher, now: NOW + t, sleep: async () => {} });
+    const after = await env.DB.prepare("SELECT value FROM meta WHERE key = 'unfetched_cleared_at'").first<{ value: string }>();
+    expect(Number(after?.value)).toBeGreaterThan(NOW + 2);
+    expect(place.calls).toHaveLength(1);
+  });
+
+  it("R31/R38: warm 후보 고르기가 쪽 상한에서 멈추면(truncated) 고른 곳이 배치보다 적어도 pending은 more", async () => {
+    const keys = tilesCoveringCircle(ASEM, 300);
+    for (const k of keys) await markTile(env.DB, k, NOW, 0, false);
+    // 가장 가까운 칸에 아직 만료되지 않은(지터 창 안) 행을 쪽 상한(100 + 400 + 1600행)보다 많이 → 후보를 하나도 못 고른다
+    const ids = Array.from({ length: 2200 }, (_, i) => `w${String(i).padStart(5, "0")}`);
+    const rows = ids.map((id) => [id, NOW - DETAIL_OK_TTL_MS - detailJitterMs(id) + 1]);
+    for (let i = 0; i < rows.length; i += 200) {
+      await env.DB.prepare(
+        `INSERT INTO places (id, status, fetched_at) SELECT json_extract(value, '$[0]'), 'ok', json_extract(value, '$[1]') FROM json_each(?)`,
+      ).bind(JSON.stringify(rows.slice(i, i + 200))).run();
+    }
+    await replaceTilePlaces(env.DB, tileKeyOf(ASEM), [...ids, "zzfar"], NOW, false);
+    const { app, place } = setup();
+    const r = await (await callApp(app, `/api/admin/warm?${AREA}`, { method: "POST", headers: AUTH })).json<any>();
+    expect(r).toMatchObject({ enriched: 0, failed: 0, pending: "more" });
+    expect(place.calls).toHaveLength(0);
   });
 
   it("R60: warm 응답에 이번 호출이 읽고 쓴 D1 행 수를 싣는다 (관리 화면 진행 표시)", async () => {

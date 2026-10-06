@@ -22,6 +22,10 @@
   ],
   // 본 Cron(수집·보충)과 R56 거점 스냅샷 Cron(2분 어긋나게, 실행마다 한 거점) — worker/maintenance.ts MAIN_CRON·SNAPSHOT_CRON
   "triggers": { "crons": ["*/5 * * * *", "2-59/5 * * * *"] },
-  "vars": { "SUBREQUEST_BUDGET": "40", "DETAIL_BATCH_SIZE": "10", "D1_READ_SOFT_CAP": "3000000", "D1_WRITE_SOFT_CAP": "60000" },
+  // Task 34: 상세 보충은 보수적으로 (실행당 4곳, 본문 200,000자까지 — worker/config.ts). 운영 cpuTime을 보고 올린다
+  "vars": {
+    "SUBREQUEST_BUDGET": "40", "DETAIL_BATCH_SIZE": "4", "DETAIL_CHAR_BUDGET": "200000", "D1_READ_SOFT_CAP": "3000000",
+    "D1_WRITE_SOFT_CAP": "60000"
+  },
   "routes": [{ "pattern": "mmj.itmz.me", "custom_domain": true }]
 }

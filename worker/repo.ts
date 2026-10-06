@@ -230,44 +230,55 @@ export async function tilePlaceStates(db: D1Database, keys: string[]): Promise<T
 
 /**
  * 보충할 ID (격자 중심이 기준점에 가까운 순, 같으면 id순).
- * limit이 없으면(warm count=1) 격자-장소 상태를 다 읽어 고른다. limit이 있으면(보충) SQL이 같은 순서로 줄 세워
- * 쪽(DETAIL_PICK_PAGE행)씩만 돌려준다 — Task 34: 거점 격자 상태 수천 행을 Worker로 받아 오는 CPU를 아낀다. 결과는 같다(테스트).
+ * limit이 없으면(warm count=1) 격자-장소 상태를 다 읽어 고른다. limit이 있으면 nearestDetailIds (쪽 상한에서 멈추면 그때까지 고른 것).
  */
 export async function idsNeedingDetail(
   db: D1Database, center: LatLng, radiusM: number, now: number, limit?: number, scope: DetailScope = "due",
 ): Promise<string[]> {
-  const keys = tilesCoveringCircle(center, radiusM);
-  if (limit === undefined) return pickDetailIds(await tilePlaceStates(db, keys), center, now, limit, scope);
-  return (await nearestStates(db, keys, [center], now, limit, scope)).map((t) => t.id);
+  if (limit === undefined) return pickDetailIds(await tilePlaceStates(db, tilesCoveringCircle(center, radiusM)), center, now, limit, scope);
+  return (await nearestDetailIds(db, center, radiusM, now, limit, scope)).ids;
 }
 
-/** 기준점(여럿이면 가장 가까운 곳)에서 격자 중심까지 거리 — pickDetailIds와 SQL 순위(rankTiles)가 같은 값을 쓴다 */
+/** 기준점(여럿이면 가장 가까운 곳)에서 격자 중심까지 거리 — pickDetailIds와 SQL 순위(rankGroups)가 같은 값을 쓴다 */
 function tileDistance(key: string, centers: LatLng[]): number {
   const r = tileRect(key);
   const mid = { lat: (r.minLat + r.maxLat) / 2, lng: (r.minLng + r.maxLng) / 2 };
   return Math.min(...centers.map((c) => haversine(c, mid)));
 }
 
+/** 거리 순위가 같은 격자들 (rank 0부터 빈틈없이, 오름차순) */
+type RankGroup = { rank: number; keys: string[] };
+
 /**
- * 격자마다 거리 순위(거리가 같으면 같은 순위)를 매긴 [key, rank] JSON.
+ * 격자마다 거리 순위를 매겨(거리가 같으면 같은 순위) 순위별로 묶는다.
  * SQL은 (칸 순위, id)로 줄 세우고 Worker가 id마다 처음 나온 행만 쓴다 — 처음 나온 행이 가장 가까운 칸이라
  * pickDetailIds의 (가장 가까운 칸 거리, id) 순서와 같다.
  */
-function rankTiles(keys: string[], centers: LatLng[]): string {
+function rankGroups(keys: string[], centers: LatLng[]): RankGroup[] {
   const dist = new Map<string, number>();
   for (const k of keys) if (!dist.has(k)) dist.set(k, tileDistance(k, centers));
-  const rank = new Map([...new Set(dist.values())].sort((a, b) => a - b).map((d, i) => [d, i] as const));
-  return JSON.stringify([...dist].map(([k, d]) => [k, rank.get(d)]));
+  const ds = [...new Set(dist.values())].sort((a, b) => a - b);
+  const groups: RankGroup[] = ds.map((_, rank) => ({ rank, keys: [] }));
+  const rankOf = new Map(ds.map((d, i) => [d, i] as const));
+  for (const [k, d] of dist) groups[rankOf.get(d) as number].keys.push(k);
+  return groups;
 }
+/** SQL ?1: [key, rank] JSON */
+const rankedJson = (groups: RankGroup[]) => JSON.stringify(groups.flatMap((g) => g.keys.map((k) => [k, g.rank])));
 
-/** 보충 후보를 SQL에서 줄 세워 쪽씩 읽을 때 한 쪽의 행 수 (limit이 더 크면 limit) */
-export const DETAIL_PICK_PAGE = 100;
+/**
+ * 후보를 SQL에서 줄 세워 쪽씩 읽는다: 첫 쪽 max(limit, DETAIL_PICK_FIRST_PAGE)행, 다음 쪽은 DETAIL_PICK_GROWTH배씩,
+ * 많아야 DETAIL_PICK_MAX_PAGES쪽 (쪽마다 D1이 후보를 다시 훑으므로 상한을 둔다 — R38). 보통은 첫 쪽에서 끝난다
+ */
+export const DETAIL_PICK_FIRST_PAGE = 100;
+export const DETAIL_PICK_GROWTH = 4;
+export const DETAIL_PICK_MAX_PAGES = 3;
 
 /**
  * ?1 [key, rank] JSON, ?2 쪽 크기, ?3 offset (+ 조건의 바인드). (가게, 칸)마다 한 행 — GROUP BY보다 D1 읽기 행이 적다.
  * 정렬 키에 tile_key까지 넣어 쪽 경계가 실행마다 같다
  */
-const nearestSql = (where: string) => `SELECT tp.place_id AS id, tp.tile_key AS tile_key,
+const nearestSql = (where: string) => `SELECT tp.place_id AS id, tp.tile_key AS tile_key, json_extract(k.value, '$[1]') AS r,
     p.status AS status, p.fetched_at AS fetched_at, p.fail_reason AS fail_reason
   FROM json_each(?1) AS k
   JOIN tile_places tp ON tp.tile_key = json_extract(k.value, '$[0]')
@@ -283,27 +294,28 @@ export const NEAREST_UNFETCHED_SQL = nearestSql("p.id IS NULL");
 export const NEAREST_DUE_SQL = nearestSql(
   "(p.id IS NULL OR (p.status = 'ok' AND p.fetched_at <= ?4) OR (p.status <> 'ok' AND p.fetched_at <= ?5))",
 );
-type NearestRow = { id: string; tile_key: string; status: string | null; fetched_at: number | null; fail_reason: string | null };
+type NearestRow = {
+  id: string; tile_key: string; r: number; status: string | null; fetched_at: number | null; fail_reason: string | null;
+};
 
 /**
- * pickDetailIds(tilePlaceStates(keys), centers, now, limit, scope)와 같은 가게를 같은 순서로 고른다 (상태는 가장 가까운 칸 기준).
- * ok 행의 지터는 SQL에서 볼 수 없어서 쪽을 읽고 isDetailDue로 거른다 — limit곳을 채우거나 후보가 끝날 때까지 다음 쪽을 읽는다.
+ * ranked 격자의 후보를 (순위, id) 순서로 읽어 out을 want곳까지 채운다 (seen: 이미 본 id — 여러 칸에 기록된 가게는 처음 칸만).
+ * ok 행의 지터는 SQL에서 볼 수 없어서 Worker가 isDetailDue로 거른다. firstRank: 처음 나온 행의 순위(없으면 null).
+ * truncated: 쪽 상한까지 읽었는데 want곳을 못 채웠고 행이 더 있다.
  */
-async function nearestStates(
-  db: D1Database, keys: string[], centers: LatLng[], now: number, limit: number, scope: DetailScope,
-): Promise<TilePlaceState[]> {
-  const want = Math.max(0, Math.floor(limit));
-  if (want === 0 || keys.length === 0) return [];
-  const ranked = rankTiles(keys, centers);
-  const page = Math.max(want, DETAIL_PICK_PAGE);
-  const seen = new Set<string>();
-  const out: TilePlaceState[] = [];
-  for (let offset = 0; ; offset += page) {
+async function readNearest(
+  db: D1Database, ranked: string, now: number, want: number, scope: DetailScope, seen: Set<string>, out: TilePlaceState[],
+): Promise<{ firstRank: number | null; truncated: boolean }> {
+  let firstRank: number | null = null;
+  let offset = 0;
+  let page = Math.max(want, DETAIL_PICK_FIRST_PAGE);
+  for (let i = 0; i < DETAIL_PICK_MAX_PAGES; i++) {
     const stmt = scope === "unfetched"
       ? db.prepare(NEAREST_UNFETCHED_SQL).bind(ranked, page, offset)
       : db.prepare(NEAREST_DUE_SQL).bind(ranked, page, offset, now - DETAIL_OK_TTL_MS, now - DETAIL_FAIL_TTL_MS);
     const r = await stmt.all<NearestRow>();
     for (const x of r.results) {
+      firstRank ??= x.r;
       if (out.length >= want) break;
       // 한 가게가 여러 칸에 기록됐으면 처음(가장 가까운 칸) 것만 — 상태는 칸과 상관없이 같다
       if (seen.has(x.id)) continue;
@@ -311,16 +323,110 @@ async function nearestStates(
       const meta = metaOf(x.status, x.fetched_at, x.fail_reason);
       if (scope === "unfetched" || isDetailDue(meta, now, x.id)) out.push({ id: x.id, tileKey: x.tile_key, meta });
     }
-    if (out.length >= want || r.results.length < page) return out;
+    if (out.length >= want || r.results.length < page) return { firstRank, truncated: false };
+    offset += page;
+    page *= DETAIL_PICK_GROWTH;
   }
+  return { firstRank, truncated: true };
 }
 
 /**
- * R11 Cron: 주어진 격자에 기록됐지만 상세가 없는 장소 중 기준점에 가까운 순 limit곳 (unfetchedStates는 전부).
- * Cron은 만료 후보와 이것을 합쳐 pickDetailIds로 limit곳을 고른다 — 미수집 전부를 합친 것과 같은 ID다(테스트).
+ * pickDetailIds(tilePlaceStates(덮는 격자), center, now, limit, scope)와 같은 ID를 같은 순서로 고른다 (Task 34 —
+ * 덮는 격자의 상태 수천 행을 Worker로 받아 오지 않는다). truncated면 쪽 상한에서 멈춰 그때까지 고른 것이다(앞부분은 같다).
  */
-export const nearestUnfetchedStates = (db: D1Database, keys: string[], centers: LatLng[], limit: number) =>
-  nearestStates(db, keys, centers, 0, limit, "unfetched");
+export async function nearestDetailIds(
+  db: D1Database, center: LatLng, radiusM: number, now: number, limit: number, scope: DetailScope = "due",
+): Promise<{ ids: string[]; truncated: boolean }> {
+  const want = Math.max(0, Math.floor(limit));
+  const keys = tilesCoveringCircle(center, radiusM);
+  if (want === 0 || keys.length === 0) return { ids: [], truncated: false };
+  const out: TilePlaceState[] = [];
+  const { truncated } = await readNearest(db, rankedJson(rankGroups(keys, [center])), now, want, scope, new Set(), out);
+  return { ids: out.map((t) => t.id), truncated };
+}
+
+/** Cron 미수집 앞선(frontier) 커서 — meta unfetched_from */
+export const UNFETCHED_FROM_KEY = "unfetched_from";
+/** 미수집을 찾을 때 한 질의가 읽는 칸 수 (순위 묶음은 쪼개지 않는다) */
+export const UNFETCHED_CHUNK_TILES = 30;
+/** 한 실행이 미수집을 찾으며 읽는 묶음 수 상한 (D1 질의 수·읽기 — 다음 실행이 이어 읽는다) */
+export const UNFETCHED_MAX_CHUNKS = 6;
+/** rank: 이 순위 앞 묶음에는 미수집이 없다. changedAt·keys: 그때의 tiles_changed_at과 격자·기준점 지문 */
+type FrontierCursor = { rank: number; changedAt: number; keys: string };
+
+function parseFrontier(raw: string | undefined): FrontierCursor | null {
+  if (!raw) return null;
+  try {
+    const o = JSON.parse(raw) as Partial<Record<keyof FrontierCursor, unknown>>;
+    return typeof o.rank === "number" && typeof o.changedAt === "number" && typeof o.keys === "string"
+      ? { rank: o.rank, changedAt: o.changedAt, keys: o.keys }
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+/** 순위가 격자 집합과 기준점에 달려 있어서 둘 다 지문에 넣는다 (순서 무관) */
+const frontierFingerprint = (keys: string[], centers: LatLng[]) =>
+  `${tileSetFingerprint(keys)}|${tileSetFingerprint(centers.map((c) => `${c.lat},${c.lng}`))}`;
+
+export type UnfetchedPick = { states: TilePlaceState[]; cleared: boolean };
+
+/**
+ * R11 Cron: 주어진 격자에 기록됐지만 상세가 없는 장소 중 기준점에 가까운 순 limit곳.
+ * Cron은 만료 후보와 이것을 합쳐 pickDetailIds로 limit곳을 고른다 — 미수집 전부를 합친 것과 같은 ID다(테스트).
+ *
+ * R38 읽기: 미수집은 가까운 칸부터 채워지므로 커서(meta unfetched_from = {rank, changedAt, keys})로 "이 순위 앞에는 미수집이
+ * 없다"를 기억하고 다음 실행은 거기서부터 읽는다. 순위 묶음을 UNFETCHED_CHUNK_TILES칸쯤씩(묶음은 쪼개지 않는다) 읽다가
+ * limit곳을 채우면 멈춘다. 새 커서 = 미수집이 처음 나온 순위 묶음(없으면 읽은 데까지).
+ * 처음부터 다시 읽는 때: 커서가 없거나, tiles_changed_at이 커서의 값과 다르거나(격자에 ID가 들어왔을 수 있다 — R4),
+ * 격자·기준점 지문이 다르다(거점 추가·변경). 미수집은 그 밖에는 생기지 않는다 — places 행을 손으로 지우면 unfetched_from도
+ * 지운다(docs/deploy.md).
+ * 실행마다 많아야 UNFETCHED_MAX_CHUNKS묶음 — 다 못 읽으면 다음 실행이 이어 읽는다.
+ * cleared: 끝까지 읽었고 미수집이 없다 (Cron이 markUnfetchedCleared). limit이 0이면 읽지 않고 cleared도 아니다.
+ */
+export async function nearestUnfetchedStates(
+  db: D1Database, keys: string[], centers: LatLng[], limit: number,
+): Promise<UnfetchedPick> {
+  const want = Math.max(0, Math.floor(limit));
+  if (want === 0) return { states: [], cleared: false };
+  if (keys.length === 0) return { states: [], cleared: true };
+  const groups = rankGroups(keys, centers);
+  const fingerprint = frontierFingerprint(keys, centers);
+  const m = await db
+    .prepare("SELECT key, value FROM meta WHERE key IN (?, ?)")
+    .bind(TILES_CHANGED_KEY, UNFETCHED_FROM_KEY)
+    .all<{ key: string; value: string }>();
+  const get = (k: string) => m.results.find((x) => x.key === k)?.value;
+  const changedNum = Number(get(TILES_CHANGED_KEY) ?? 0);
+  const changedAt = Number.isFinite(changedNum) ? changedNum : 0;
+  const cursor = parseFrontier(get(UNFETCHED_FROM_KEY));
+  const startRank = cursor !== null && cursor.changedAt === changedAt && cursor.keys === fingerprint ? cursor.rank : 0;
+
+  let gi = groups.findIndex((g) => g.rank >= startRank);
+  if (gi < 0) gi = groups.length;
+  const seen = new Set<string>();
+  const out: TilePlaceState[] = [];
+  let frontier: number | null = null;
+  for (let chunks = 0; gi < groups.length && out.length < want && chunks < UNFETCHED_MAX_CHUNKS; chunks++) {
+    const chunk: RankGroup[] = [];
+    for (let tiles = 0; gi < groups.length && (chunk.length === 0 || tiles < UNFETCHED_CHUNK_TILES); gi++) {
+      chunk.push(groups[gi]);
+      tiles += groups[gi].keys.length;
+    }
+    const r = await readNearest(db, rankedJson(chunk), 0, want, "unfetched", seen, out);
+    frontier ??= r.firstRank;
+    if (r.truncated) break;
+  }
+  const end = groups.length; // 마지막 순위 + 1
+  const nextRank = frontier ?? (gi < groups.length ? groups[gi].rank : end);
+  const cleared = frontier === null && gi >= groups.length;
+  if (cursor === null || cursor.rank !== nextRank || cursor.changedAt !== changedAt || cursor.keys !== fingerprint) {
+    const value: FrontierCursor = { rank: nextRank, changedAt, keys: fingerprint };
+    await db.prepare(META_UPSERT).bind(UNFETCHED_FROM_KEY, JSON.stringify(value)).run();
+  }
+  return { states: out, cleared };
+}
 
 /**
  * 이미 읽어 둔 격자-장소 상태에서 보충할 ID를 고른다 (ID 중복 제거).

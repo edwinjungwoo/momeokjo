@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import {
   ASEM, DETAIL_FAIL_TTL_MS, DETAIL_JITTER_MS, DETAIL_OK_TTL_MS, PLACE_BLOCK_COOLDOWN_MS, TILE_TTL_MS,
 } from "../../shared/constants";
-import { boundingBox, tileKeyOf, tileRect, tilesCoveringCircle } from "../../shared/geo";
+import { boundingBox, haversine, tileKeyOf, tileRect, tilesCoveringCircle } from "../../shared/geo";
 import { HUBS } from "../../shared/hubs";
 import type { LatLng } from "../../shared/types";
 import {
@@ -11,14 +11,14 @@ import {
   tilesChangedAt, unfetchedStates, getTiles, idsNeedingDetail, isDetailDue, isTileDue, markTile,
   placeById, placesByIds, placesInBox, replaceTilePlaces, saveDetail, saveDetailFailure, tilePlaceStates,
   EXPIRED_RESET_PAGES, EXPIRED_SCAN_LIMIT, EXPIRED_SCAN_SQL, LIST_BACKFILL_LIMIT, backfillListJson,
-  DETAIL_PICK_PAGE, NEAREST_DUE_SQL, NEAREST_UNFETCHED_SQL, dueTileKeys, nearestUnfetchedStates, pickDetailIds, saveDetails,
-  type DetailSave,
+  DETAIL_PICK_FIRST_PAGE, DETAIL_PICK_GROWTH, DETAIL_PICK_MAX_PAGES, NEAREST_DUE_SQL, NEAREST_UNFETCHED_SQL,
+  UNFETCHED_CHUNK_TILES, UNFETCHED_FROM_KEY, UNFETCHED_MAX_CHUNKS, dueTileKeys, nearestDetailIds, nearestUnfetchedStates,
+  pickDetailIds, saveDetails, type DetailSave,
 } from "../../worker/repo";
 import { parseDetail } from "../../worker/detailParser";
 import { readList, placesPayload } from "../../worker/placesService";
-import { placesBody } from "../../worker/present";
-import { SNAPSHOT_DIRTY_PREFIX } from "../../worker/snapshotDirty";
-import { LIST_JSON_PREFIX, storedListJson } from "../../worker/present";
+import { LIST_JSON_PREFIX, placesBody, storedListJson } from "../../worker/present";
+import { MARK_PLACES_DIRTY_SQL, SNAPSHOT_DIRTY_PREFIX } from "../../worker/snapshotDirty";
 import { makeSummary, placeJson, sampleDetail, seedPlace } from "../helpers/places";
 import { recordingDb } from "../helpers/recordDb";
 
@@ -415,6 +415,11 @@ describe("QA D-8: 깨진 JSON 열 경고", () => {
 
 describe("Task 34: 보충 후보를 SQL에서 가까운 순으로 고르기", () => {
   const KEYS = tilesCoveringCircle(ASEM, 1000);
+  /** 칸 중심까지 거리 (repo의 순위와 같은 계산) */
+  const tileDist = (k: string, c: LatLng = ASEM) => {
+    const r = tileRect(k);
+    return haversine(c, { lat: (r.minLat + r.maxLat) / 2, lng: (r.minLng + r.maxLng) / 2 });
+  };
   /** 결정적인 난수 (테스트마다 같은 데이터) */
   const lcg = (seed: number) => () => ((seed = (Math.imul(seed, 1103515245) + 12345) >>> 0) / 0x1_0000_0000);
 
@@ -470,7 +475,8 @@ describe("Task 34: 보충 후보를 SQL에서 가까운 순으로 고르기", ()
 
   it("R10/R38: 가까운 칸에 아직 만료되지 않은(지터 창 안) 행이 한 쪽보다 많아도 다음 쪽을 읽어 같은 ID를 고르고, 읽어 오는 행은 쪽 단위다", async () => {
     // 가장 가까운 칸(KA)에 지터 창 안·아직 아닌 ok 행을 한 쪽보다 많이, 그 뒤 칸에 미수집 몇 곳
-    const near = Array.from({ length: DETAIL_PICK_PAGE + 30 }, (_, i) => `n${String(i).padStart(4, "0")}`);
+    // 첫 두 쪽보다 많이 — 세 번째 쪽에서 찾는다
+    const near = Array.from({ length: DETAIL_PICK_FIRST_PAGE * (1 + DETAIL_PICK_GROWTH) + 30 }, (_, i) => `n${String(i).padStart(4, "0")}`);
     const far = tilesCoveringCircle(ASEM, 1000).find((k) => k !== KA)!;
     await seedStates([
       ...near.map((id) => ({ id, tiles: [KA], status: "ok" as const, fetchedAt: NOW - DETAIL_OK_TTL_MS - detailJitterMs(id) + 1 })),
@@ -494,10 +500,10 @@ describe("Task 34: 보충 후보를 SQL에서 가까운 순으로 고르기", ()
     const two = [KA, `${i}:${j + 1}`];
     await seedStates(Array.from({ length: 80 }, (_, k) => ({ id: `m${String(k).padStart(3, "0")}`, tiles: [...two, `${i + 2}:${j}`] })));
     const limit = 60;
-    expect(limit * two.length).toBeGreaterThan(DETAIL_PICK_PAGE); // 첫 쪽(100행)에는 서로 다른 가게가 50곳뿐
+    expect(limit * two.length).toBeGreaterThan(Math.max(limit, DETAIL_PICK_FIRST_PAGE)); // 첫 쪽(100행)에는 서로 다른 가게가 50곳뿐
     const all = await tilePlaceStates(env.DB, keys);
     expect(await idsNeedingDetail(env.DB, center, 1000, NOW, limit)).toEqual(pickDetailIds(all, center, NOW, limit, "due"));
-    const nearest = await nearestUnfetchedStates(env.DB, keys, [center], limit);
+    const { states: nearest } = await nearestUnfetchedStates(env.DB, keys, [center], limit);
     expect(nearest).toHaveLength(limit);
     expect(nearest.map((t) => t.id)).toEqual(pickDetailIds(all, center, NOW, limit, "unfetched"));
     // 돌려준 칸은 그 가게가 기록된 칸 중 가장 가까운 칸 (같은 순위 둘 중 하나)
@@ -537,7 +543,7 @@ describe("Task 34: 보충 후보를 SQL에서 가까운 순으로 고르기", ()
     });
     expect(await idsNeedingDetail(counting, ASEM, 1000, NOW, 10)).toHaveLength(10);
     expect(log.length).toBeGreaterThan(0);
-    expect(rowsBack.reduce((a, b) => a + b, 0)).toBeLessThanOrEqual(DETAIL_PICK_PAGE);
+    expect(rowsBack.reduce((a, b) => a + b, 0)).toBeLessThanOrEqual(DETAIL_PICK_FIRST_PAGE);
   });
 
   it("R11: Cron은 미수집 ID를 가까운 순 limit개만 읽어 만료 후보와 합쳐도, 미수집 전부를 합쳐 고른 것과 같은 ID를 고른다 (여러 거점 기준)", async () => {
@@ -547,7 +553,7 @@ describe("Task 34: 보충 후보를 SQL에서 가까운 순으로 고르기", ()
     const expired = await expiredDetailStates(env.DB, keys, NOW);
     const unfetched = await unfetchedStates(env.DB, keys);
     for (const limit of [1, 4, 10, 60]) {
-      const nearest = await nearestUnfetchedStates(env.DB, keys, centers, limit);
+      const { states: nearest } = await nearestUnfetchedStates(env.DB, keys, centers, limit);
       expect(nearest.length).toBeLessThanOrEqual(limit);
       expect(nearest.every((t) => t.meta === null)).toBe(true);
       expect(pickDetailIds([...expired, ...nearest], centers, NOW, limit, "due"), String(limit)).toEqual(
@@ -556,7 +562,23 @@ describe("Task 34: 보충 후보를 SQL에서 가까운 순으로 고르기", ()
     }
     // 미수집이 없으면 빈 배열 (Cron의 "미수집 다 채움" 표시)
     await env.DB.prepare("DELETE FROM tile_places WHERE place_id NOT IN (SELECT id FROM places)").run();
-    expect(await nearestUnfetchedStates(env.DB, keys, centers, 10)).toEqual([]);
+    expect(await nearestUnfetchedStates(env.DB, keys, centers, 10)).toEqual({ states: [], cleared: true });
+  });
+
+  it("R10/R38: 후보 쪽은 커지며 많아야 DETAIL_PICK_MAX_PAGES쪽만 읽는다 — 못 채우면 truncated로 알리고 그때까지 고른 것을 돌려준다", async () => {
+    let total = 0;
+    for (let i = 0, page = Math.max(3, DETAIL_PICK_FIRST_PAGE); i < DETAIL_PICK_MAX_PAGES; i++, page *= DETAIL_PICK_GROWTH) total += page;
+    const near = Array.from({ length: total + 5 }, (_, i) => `n${String(i).padStart(5, "0")}`);
+    const far = [...KEYS].sort((a, b) => tileDist(b) - tileDist(a))[0];
+    await seedStates([
+      ...near.map((id) => ({ id, tiles: [KA], status: "ok" as const, fetchedAt: NOW - DETAIL_OK_TTL_MS - detailJitterMs(id) + 1 })),
+      { id: "zfar", tiles: [far] },
+    ]);
+    const { db, log } = recordingDb(env.DB);
+    expect(await nearestDetailIds(db, ASEM, 1000, NOW, 3)).toEqual({ ids: [], truncated: true });
+    expect(log.filter((x) => x.sql === NEAREST_DUE_SQL)).toHaveLength(DETAIL_PICK_MAX_PAGES);
+    // 전체를 읽는 길(warm count=1)은 상한이 없다
+    expect(await idsNeedingDetail(env.DB, ASEM, 1000, NOW)).toEqual(["zfar"]);
   });
 
   it("R11: 수집할 격자(없음·만료)만 SQL로 고른 결과가 getTiles + isTileDue와 같고 keys 순서를 지킨다", async () => {
@@ -575,6 +597,103 @@ describe("Task 34: 보충 후보를 SQL에서 가까운 순으로 고르기", ()
     expect(await dueTileKeys(env.DB, keys, NOW)).toEqual(want);
     expect(await dueTileKeys(env.DB, [...keys].reverse(), NOW)).toEqual([...want].reverse());
     expect(await dueTileKeys(env.DB, [], NOW)).toEqual([]);
+  });
+
+  /** Cron 앞선 커서 테스트용: 거점 1000m 칸마다 상세가 있는 가게 3곳 + 가장 먼 칸에 미수집 */
+  async function seedFrontier(keys: string[], unfetched: Record<string, string>) {
+    await seedStates([
+      ...keys.flatMap((k, i) => [0, 1, 2].map((n) => ({ id: `ok${i}_${n}`, tiles: [k], status: "ok" as const, fetchedAt: NOW - 1000 }))),
+      ...Object.entries(unfetched).map(([id, k]) => ({ id, tiles: [k] })),
+    ]);
+  }
+  const readsOf = (log: { read: number }[]) => log.reduce((n, x) => n + x.read, 0);
+  const oracle = async (keys: string[], centers: LatLng[], limit: number) =>
+    pickDetailIds(await unfetchedStates(env.DB, keys), centers, NOW, limit, "unfetched");
+  const ids = (p: { states: { id: string }[] }) => p.states.map((t) => t.id);
+
+  it("R11/R38: Cron 미수집은 앞선 커서(unfetched_from)부터 읽는다 — 다음 실행은 앞선 묶음만 읽고, 다 채우면 cleared 뒤로는 후보 조회를 하지 않는다", async () => {
+    const byDist = [...KEYS].sort((a, b) => tileDist(a) - tileDist(b));
+    const far = byDist[byDist.length - 1];
+    expect(KEYS.length).toBeGreaterThan(UNFETCHED_CHUNK_TILES); // 묶음이 두 개 이상
+    await seedFrontier(KEYS, { u1: far, u2: far });
+    const run = async () => {
+      const { db, log } = recordingDb(env.DB);
+      const r = await nearestUnfetchedStates(db, KEYS, [ASEM], 4);
+      return { r, read: readsOf(log), queries: log.filter((x) => x.sql === NEAREST_UNFETCHED_SQL).length };
+    };
+    const first = await run();
+    expect(ids(first.r)).toEqual(await oracle(KEYS, [ASEM], 4));
+    expect(ids(first.r)).toEqual(["u1", "u2"]);
+    expect(first.r.cleared).toBe(false);
+    expect(first.queries).toBeGreaterThan(1);
+    const cursor = await env.DB.prepare("SELECT value FROM meta WHERE key = ?").bind(UNFETCHED_FROM_KEY).first<{ value: string }>();
+    expect(JSON.parse(cursor!.value)).toMatchObject({ rank: expect.any(Number), changedAt: 0, keys: expect.any(String) });
+
+    const second = await run();
+    expect(second.r).toEqual(first.r);
+    expect(second.queries).toBe(1);
+    expect(second.read).toBeLessThan(first.read / 2);
+
+    // 채우면 끝까지 읽고 cleared, 그 뒤로는 후보 조회 없이 cleared
+    for (const id of ["u1", "u2"]) await seedPlace(env.DB, id, ASEM.lat, ASEM.lng, { now: NOW });
+    const third = await run();
+    expect(third.r).toEqual({ states: [], cleared: true });
+    const fourth = await run();
+    expect(fourth.r).toEqual({ states: [], cleared: true });
+    expect(fourth.queries).toBe(0);
+  });
+
+  it("R11/R4: 격자에 ID가 새로 들어오면(replaceTilePlaces → tiles_changed_at) 커서를 버리고 처음부터 읽는다 — 가까운 새 ID를 놓치지 않는다", async () => {
+    const byDist = [...KEYS].sort((a, b) => tileDist(a) - tileDist(b));
+    await seedFrontier(KEYS, { u1: byDist[byDist.length - 1] });
+    expect(ids(await nearestUnfetchedStates(env.DB, KEYS, [ASEM], 4))).toEqual(["u1"]);
+    const near = byDist[0];
+    const cur = (await env.DB.prepare("SELECT place_id FROM tile_places WHERE tile_key = ?").bind(near).all<{ place_id: string }>())
+      .results.map((x) => x.place_id);
+    await replaceTilePlaces(env.DB, near, [...cur, "newnear"], NOW + 1, false);
+    const r = await nearestUnfetchedStates(env.DB, KEYS, [ASEM], 4);
+    expect(ids(r)).toEqual(["newnear", "u1"]);
+    expect(ids(r)).toEqual(await oracle(KEYS, [ASEM], 4));
+  });
+
+  it("R11: 거점(격자 집합·기준점)이 바뀌면 커서를 버리고 처음부터 읽는다", async () => {
+    const gangnam = HUBS.find((h) => h.id === "gangnam")!;
+    const byDist = [...KEYS].sort((a, b) => tileDist(a) - tileDist(b));
+    await seedFrontier(KEYS, { u1: byDist[byDist.length - 1] });
+    await seedStates([{ id: "g0", tiles: [tileKeyOf(gangnam)] }]);
+    expect(ids(await nearestUnfetchedStates(env.DB, KEYS, [ASEM], 4))).toEqual(["u1"]);
+    // 거점 추가: 격자 집합이 바뀐다
+    const both = [...new Set([...KEYS, ...tilesCoveringCircle(gangnam, 1000)])];
+    const r = await nearestUnfetchedStates(env.DB, both, [ASEM, gangnam], 4);
+    expect(ids(r)).toEqual(await oracle(both, [ASEM, gangnam], 4));
+    expect(ids(r)[0]).toBe("g0");
+    // 격자 집합은 같고 기준점만 바뀌어도 순위가 바뀌므로 처음부터
+    const north = { lat: ASEM.lat + 0.008, lng: ASEM.lng };
+    expect(ids(await nearestUnfetchedStates(env.DB, both, [ASEM, gangnam], 4))).toEqual(await oracle(both, [ASEM, gangnam], 4));
+    expect(ids(await nearestUnfetchedStates(env.DB, both, [north, gangnam], 4))).toEqual(await oracle(both, [north, gangnam], 4));
+  });
+
+  it("R11/R38: 한 실행은 많아야 UNFETCHED_MAX_CHUNKS묶음만 읽고(순위 묶음은 쪼개지 않는다) 못 찾으면 다음 실행이 이어 읽는다 — cleared는 끝까지 읽었을 때만", async () => {
+    const hubs = HUBS.filter((h) => ["bongeunsa", "ddp", "pangyo", "naebang"].includes(h.id));
+    const keys = [...new Set(hubs.flatMap((h) => tilesCoveringCircle(h, 1000)))];
+    expect(keys.length).toBeGreaterThan(UNFETCHED_CHUNK_TILES * UNFETCHED_MAX_CHUNKS);
+    const dist = (k: string) => Math.min(...hubs.map((h) => tileDist(k, h)));
+    const far = [...keys].sort((a, b) => dist(b) - dist(a))[0];
+    await seedStates([{ id: "lonely", tiles: [far] }]);
+    const run = async () => {
+      const { db, log } = recordingDb(env.DB);
+      const r = await nearestUnfetchedStates(db, keys, hubs, 4);
+      return { r, queries: log.filter((x) => x.sql === NEAREST_UNFETCHED_SQL).length };
+    };
+    const first = await run();
+    expect(first).toEqual({ r: { states: [], cleared: false }, queries: UNFETCHED_MAX_CHUNKS });
+    const second = await run();
+    expect(ids(second.r)).toEqual(["lonely"]);
+    expect(second.r.cleared).toBe(false);
+    await seedPlace(env.DB, "lonely", ASEM.lat, ASEM.lng, { now: NOW });
+    expect((await run()).r).toEqual({ states: [], cleared: true });
+    // limit 0이면 읽지 않고 cleared도 아니다 (Cron batchSize 0)
+    expect(await nearestUnfetchedStates(env.DB, keys, hubs, 0)).toEqual({ states: [], cleared: false });
   });
 
   it("R10: 칸 중심 거리가 같은 두 칸의 가게는 id순 — SQL 순위와 pickDetailIds가 같은 동점 처리를 한다", async () => {
@@ -668,6 +787,17 @@ describe("Task 34: 상세 저장을 batch 하나로", () => {
     await saveDetails(env.DB, saves().slice(0, 3), NOW);
     const v = await env.DB.prepare("SELECT value FROM meta WHERE key = ?").bind(`${SNAPSHOT_DIRTY_PREFIX}bongeunsa`).first<{ value: string }>();
     expect(Number(v?.value)).toBe(NOW + 501);
+  });
+
+  it("R56/R38: 여러 곳의 거점 표시 문장은 가게를 기본 키로 찾는다 (좌표 인덱스 idx_places_lat_lng로 훑지 않는다)", async () => {
+    // 좌표 인덱스가 유리해 보이게 행을 넣고 통계를 만든 뒤에도
+    await seedMany(Array.from({ length: 300 }, (_, i) => [`s${i}`, NOW] as [string, number]));
+    await env.DB.prepare("ANALYZE").run();
+    const r = await env.DB.prepare(`EXPLAIN QUERY PLAN ${MARK_PLACES_DIRTY_SQL}`)
+      .bind("1", '[["bongeunsa",37,38,127,128]]', "[]", '["s1","s2"]').all<{ detail: string }>();
+    const plan = r.results.map((x) => x.detail).join("\n");
+    expect(plan).toMatch(/SEARCH p USING INDEX sqlite_autoindex_places_1 \(id=\?\)/);
+    expect(plan).not.toMatch(/idx_places_lat_lng/);
   });
 
   it("R10: 저장할 것이 없으면 D1을 부르지 않는다", async () => {

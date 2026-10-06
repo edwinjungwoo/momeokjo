@@ -53,7 +53,8 @@ async function warm({ label, lat, lng, radius }) {
       continue;
     }
     const r = await res.json();
-    console.log(`#${i} incompleteTiles=${r.incompleteTiles} pending=${r.pending} enriched=${r.enriched} failed=${r.failed}`);
+    // deferred: 글자 예산으로 남긴 곳(다음 호출이 이어 한다), chars: 읽은 상세 본문 글자 수 (Task 34)
+    console.log(`#${i} incompleteTiles=${r.incompleteTiles} pending=${r.pending} enriched=${r.enriched} failed=${r.failed} deferred=${r.deferred ?? 0} chars=${r.chars ?? 0}`);
     if (r.incompleteTiles === 0 && r.pending === 0) {
       console.log("완료");
       return true;

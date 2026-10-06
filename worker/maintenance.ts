@@ -27,8 +27,13 @@ export type WarmDeps = {
   now: number;
   sleep?: (ms: number) => Promise<void>;
 };
-/** pending: 남은 상세 수. 세지 않을 때는 0(끝) 또는 "more"(더 있을 수 있음) */
-export type WarmResult = { incompleteTiles: number; pending: number | "more"; enriched: number; failed: number };
+/**
+ * pending: 남은 상세 수. 세지 않을 때는 0(끝) 또는 "more"(더 있을 수 있음).
+ * deferred: 글자 예산으로 남긴 곳, chars: 읽은 상세 본문 글자 수 (Task 34 — 운영 CPU를 맞춰 보는 값)
+ */
+export type WarmResult = {
+  incompleteTiles: number; pending: number | "more"; enriched: number; failed: number; deferred: number; chars: number;
+};
 
 /**
  * R31: 한 번 수집·보충한다. 남은 수(pending)를 세려고 격자 전체를 다시 훑지 않는다(R38) —
@@ -54,13 +59,16 @@ export async function warmOnce(
   let pending: WarmResult["pending"];
   if (opts.count) pending = await countNeedingDetail(deps.db, center, radiusM, deps.now);
   else {
-    // 글자 예산으로 남긴 곳(deferred)이 있으면 끝나지 않았다
+    // 글자 예산으로 남긴 곳(deferred)이 있거나 후보 고르기가 쪽 상한에서 멈췄으면(truncated) 끝나지 않았다
     const done =
-      e.enriched + e.failed < deps.batchSize && e.deferred === 0 && budget.left > 0 &&
+      e.enriched + e.failed < deps.batchSize && e.deferred === 0 && !e.truncated && budget.left > 0 &&
       detailsAllowed(await detailGate(deps.db), deps.now);
     pending = done ? 0 : "more";
   }
-  return { incompleteTiles: tiles.incomplete.length + tiles.failed.length, pending, enriched: e.enriched, failed: e.failed };
+  return {
+    incompleteTiles: tiles.incomplete.length + tiles.failed.length, pending, enriched: e.enriched, failed: e.failed,
+    deferred: e.deferred, chars: e.chars,
+  };
 }
 
 // Cron 주기: wrangler.jsonc의 5분 간격 스케줄과 맞춘다
@@ -79,6 +87,9 @@ export type CronResult = {
   tiles: { total: number; collected: number; incomplete: number };
   enriched: number;
   failed: number;
+  /** Task 34: 글자 예산으로 남긴 곳과 읽은 상세 본문 글자 수 (보충을 했을 때만) */
+  deferred?: number;
+  chars?: number;
   /** 0005 전 행에 채운 list_json 수 (다 채운 뒤에는 0) */
   listJsonFilled?: number;
   /** R38: 오늘 D1 읽기가 소프트 한도를 넘어 수집·보충을 건너뛰었다 */
@@ -204,12 +215,12 @@ async function maintain(
   const candidates: TilePlaceState[] = await expiredDetailStates(db, keys, opts.now);
   // 격자가 바뀐 적이 없으면(마지막 확인 이후) 미수집 ID가 생길 수 없으니 훑지 않는다
   const checkUnfetched = (await tilesChangedAt(db)) >= (await unfetchedClearedAt(db));
-  let unfetched = 0;
-  if (checkUnfetched) {
-    // Task 34: 미수집은 거점에 가까운 순 batchSize곳만 받아 온다 (만료 후보와 합쳐 고르는 결과는 전부 받아 온 것과 같다)
+  let cleared = false;
+  if (checkUnfetched && batchSize > 0) {
+    // Task 34: 미수집은 거점에 가까운 순 batchSize곳만, 앞선 커서부터 읽는다 (만료 후보와 합쳐 고르는 결과는 전부 읽은 것과 같다)
     const u = await nearestUnfetchedStates(db, keys, hubs, batchSize);
-    unfetched = u.length;
-    candidates.push(...u);
+    cleared = u.cleared;
+    candidates.push(...u.states);
   }
   if (candidates.length > 0) {
     const e = await enrichDetails(
@@ -221,7 +232,10 @@ async function maintain(
     );
     result.enriched = e.enriched;
     result.failed = e.failed;
+    result.deferred = e.deferred;
+    result.chars = e.chars;
   }
-  if (checkUnfetched && unfetched === 0) await markUnfetchedCleared(db, opts.now);
+  // 끝까지 읽었고 미수집이 없을 때만 (batchSize가 0이면 읽지 않았으니 표시하지 않는다)
+  if (cleared) await markUnfetchedCleared(db, opts.now);
   return spent();
 }

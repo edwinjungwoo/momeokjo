@@ -10,7 +10,8 @@
 // 실행: node scripts/bench-enrich.mjs [미수집 곳 수=1300] [반복=20]
 //   BENCH_ROOT=<다른 체크아웃>이면 그 코드로 잰다 (전/후 비교: git worktree add --detach <폴더> <커밋> 뒤 node_modules 링크.
 //     앞 코드에 없는 조각은 건너뛴다)
-//   BENCH_CHAR_BUDGET=<글자 수>면 DETAIL_CHAR_BUDGET 변수로 넘긴다. BENCH_PAYLOAD=max면 모든 상세가 가장 큰 픽스처다 (최악)
+//   BENCH_BATCH=<곳 수>면 DETAIL_BATCH_SIZE (기본 10 — 전/후 비교용. 운영 값은 wrangler.jsonc).
+//   BENCH_CHAR_BUDGET=<글자 수>면 DETAIL_CHAR_BUDGET 변수로 넘긴다 (없으면 코드 기본값). BENCH_PAYLOAD=max면 모든 상세가 가장 큰 픽스처다 (최악)
 //   BENCH_PARTS=a,b로 조각을 고른다(빈 값이면 조각을 건너뛴다). BENCH_COLD=<횟수>는 새 isolate 측정 횟수 (0이면 건너뛴다)
 // 의존성: miniflare·esbuild는 wrangler·vite가 설치한 것(node_modules 최상위)을 쓴다. 없으면 `npm i --no-save miniflare esbuild`.
 import { build as esbuild } from "esbuild";
@@ -149,7 +150,8 @@ const options = (variant) => ({
       manifest: { mainModule: "index.js", modules: { "index.js": { type: "esm", contents: `${worker}\n// ${variant}` } } },
       env: {
         DB: { type: "d1", id: "bench-enrich" },
-        KAKAO_REST_KEY: text("x"), ADMIN_TOKEN: text("bench"), SUBREQUEST_BUDGET: text("40"), DETAIL_BATCH_SIZE: text("10"),
+        KAKAO_REST_KEY: text("x"), ADMIN_TOKEN: text("bench"), SUBREQUEST_BUDGET: text("40"),
+        DETAIL_BATCH_SIZE: text(process.env.BENCH_BATCH ?? "10"),
         ...(process.env.BENCH_CHAR_BUDGET ? { DETAIL_CHAR_BUDGET: text(process.env.BENCH_CHAR_BUDGET) } : {}),
       },
     },
@@ -220,7 +222,7 @@ const wall = async (url, init) => {
 const pendingNow = async () => (await (await mf.dispatchFetch("http://localhost/__bench/pending")).json()).n;
 
 console.log(JSON.stringify({
-  root, pendingGangnam: PENDING, doneGangnam: DONE, otherHubOk: OTHER_OK, runs: RUNS,
+  root, batch: process.env.BENCH_BATCH ?? "10", pendingGangnam: PENDING, doneGangnam: DONE, otherHubOk: OTHER_OK, runs: RUNS,
   charBudget: process.env.BENCH_CHAR_BUDGET ?? "default", payloadChars: { mean: Math.round(payloads.reduce((a, b) => a + b.length, 0) / payloads.length), max: Math.max(...payloads.map((p) => p.length)) },
   payloadKB: { min: round(Math.min(...payloadBytes) / 1024), max: round(Math.max(...payloadBytes) / 1024), mean: round(payloadBytes.reduce((a, b) => a + b, 0) / payloadBytes.length / 1024) },
 }));

@@ -4,6 +4,7 @@ import { ASEM, PREWARM_RADIUS } from "../../shared/constants";
 import { tileKeyOf, tilesCoveringCircle } from "../../shared/geo";
 import { HUBS } from "../../shared/hubs";
 import { kstDay, utcDay } from "../../shared/kst";
+import { limitsFrom } from "../../worker/config";
 import { createApp } from "../../worker/app";
 import {
   d1UsageOn, meteredDb, overReadBudget, readSoftCap, recordD1Usage, writeSoftCap, type D1Usage,
@@ -134,17 +135,19 @@ describe("D1 읽기 예산", () => {
   });
 
   it("R31: warm의 pending은 전체 스캔 없이 이번 선택으로 판단한다 (배치를 다 채우면 more, 덜 채우면 0)", async () => {
-    const { app } = setup(12);
+    const B = limitsFrom(env).batchSize; // 운영 설정(wrangler.jsonc DETAIL_BATCH_SIZE)
+    const { app } = setup(B + 2);
     const warm = async (q = "") =>
       (await callApp(app, `/api/admin/warm?${AREA}${q}`, { method: "POST", headers: AUTH })).json<any>();
-    expect(await warm()).toEqual({ incompleteTiles: 0, pending: "more", enriched: 10, failed: 0, ...ROWS });
-    expect(await warm()).toEqual({ incompleteTiles: 0, pending: 0, enriched: 2, failed: 0, ...ROWS });
+    expect(await warm()).toEqual({ incompleteTiles: 0, pending: "more", enriched: B, failed: 0, deferred: 0, chars: expect.any(Number), ...ROWS });
+    expect(await warm()).toEqual({ incompleteTiles: 0, pending: 0, enriched: 2, failed: 0, deferred: 0, chars: expect.any(Number), ...ROWS });
   });
 
   it("R31: ?count=1이면 남은 수를 정확히 센다", async () => {
-    const { app } = setup(12);
+    const B = limitsFrom(env).batchSize;
+    const { app } = setup(B + 2);
     const r = await (await callApp(app, `/api/admin/warm?${AREA}&count=1`, { method: "POST", headers: AUTH })).json<any>();
-    expect(r).toEqual({ incompleteTiles: 0, pending: 2, enriched: 10, failed: 0, ...ROWS });
+    expect(r).toEqual({ incompleteTiles: 0, pending: 2, enriched: B, failed: 0, deferred: 0, chars: expect.any(Number), ...ROWS });
   });
 
   it("R31: 예산이 바닥나 상세를 못 고르면 pending은 more다 (끝났다고 보고하지 않는다)", async () => {
