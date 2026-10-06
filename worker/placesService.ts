@@ -8,7 +8,7 @@ import { fetchPlaceDetail } from "./kakaoPlace";
 import { toApiPlace, withDistance, type PlacesMeta } from "./present";
 import {
   countUnfetchedIn, detailGate, detailRow, detailsAllowed, frozenSince, getMeta, isInTiles, getTiles, isDetailDue, isTileDue,
-  listRowsInBox, placeById, recordPlaceBlock, saveDetail, saveDetailFailure, tilePlaceStates,
+  listRowsInBox, placeById, recordPlaceBlock, saveDetail, saveDetailFailure, tilePlaceStates, type ListRow, type TilePlaceState,
 } from "./repo";
 import { collectTiles } from "./tileCollector";
 
@@ -28,6 +28,52 @@ export type ServiceDeps = {
 
 /** R12 응답: 메타 필드 + 거리순 목록 원소 JSON 조각 (본문은 present.ts placesBody로 이어 붙인다) */
 export type PlacesPayload = PlacesMeta & { items: string[] };
+
+/** 격자-장소 상태와 반경 안 목록 행(거리순) — 요청 경로(getPlaces)와 R56 스냅샷 만들기가 같은 읽기를 쓴다 */
+export type ListRead = { tileStates: TilePlaceState[]; rows: { row: ListRow; d: number }[] };
+
+/**
+ * D1만 읽는다 (수집·보충 없음). 격자-장소 상태는 한 번만 읽어서 목록 필터·pending·보충 대상 고르기에 같이 쓴다.
+ * 거리가 같으면 id순 — D1이 행을 주는 순서와 상관없이 같은 데이터면 같은 본문 (같은 건물의 가게는 좌표가 같다)
+ */
+export async function readList(db: D1Database, center: LatLng, radiusM: number, keys: string[]): Promise<ListRead> {
+  const tileStates = await tilePlaceStates(db, keys);
+  return { tileStates, rows: await readListRows(db, center, radiusM, tileStates) };
+}
+
+/** 이미 읽은 격자-장소 상태로 반경 안 목록 행만 읽는다 (R56 스냅샷은 pending을 먼저 보고 필요할 때만 부른다) */
+export async function readListRows(
+  db: D1Database, center: LatLng, radiusM: number, tileStates: TilePlaceState[],
+): Promise<ListRead["rows"]> {
+  const inTiles = new Set(tileStates.map((t) => t.id));
+  // 미리 만든 목록 원소 조각(list_json)을 쓴다 — 행마다 JSON 열 4개를 parse·stringify하지 않는다 (0005)
+  return (await listRowsInBox(db, boundingBox(center, radiusM), inTiles))
+    .filter((r) => r.group !== "dessert")
+    .map((row) => ({ row, d: haversine(center, row) }))
+    .filter((x) => x.d <= radiusM)
+    .sort((a, b) => a.d - b.d || (a.row.id < b.row.id ? -1 : a.row.id > b.row.id ? 1 : 0));
+}
+
+/** 응답 메타 중 실행마다 정하는 것 (나머지 center·radius·detailsNewestAt은 placesPayload가 채운다) */
+export type PlacesState = Pick<PlacesMeta, "pending" | "incompleteTiles" | "stale" | "detailsPaused" | "detailsFrozenSince">;
+
+/** 응답을 만든다. 키 순서가 본문 글자를 정한다 — 요청 경로와 스냅샷이 이 함수 하나를 쓴다 */
+export function placesPayload(center: LatLng, radiusM: number, rows: ListRead["rows"], s: PlacesState): PlacesPayload {
+  // R44: 실린 가게 중 가장 최근에 상세를 가져온 시각 (실패 기록 시각은 빼고)
+  let newest: number | null = null;
+  for (const x of rows) if (x.row.status === "ok" && (newest === null || x.row.fetchedAt > newest)) newest = x.row.fetchedAt;
+  return {
+    center: { lat: center.lat, lng: center.lng },
+    radius: radiusM,
+    items: rows.map((x) => withDistance(x.row.json, x.d)),
+    pending: s.pending,
+    incompleteTiles: s.incompleteTiles,
+    stale: s.stale,
+    detailsPaused: s.detailsPaused,
+    detailsFrozenSince: s.detailsFrozenSince,
+    detailsNewestAt: newest,
+  };
+}
 
 export async function getPlaces(
   deps: ServiceDeps, center: LatLng, radiusM: number,
@@ -58,15 +104,7 @@ export async function getPlaces(
     }
   }
 
-  // 격자-장소 상태는 요청마다 한 번만 읽어서 목록 필터, pending, 보충 대상 고르기에 같이 쓴다
-  const tileStates = await tilePlaceStates(deps.db, keys);
-  const inTiles = new Set(tileStates.map((t) => t.id));
-  // 미리 만든 목록 원소 조각(list_json)을 쓴다 — 행마다 JSON 열 4개를 parse·stringify하지 않는다 (0005)
-  const rows = (await listRowsInBox(deps.db, boundingBox(center, radiusM), inTiles))
-    .filter((r) => r.group !== "dessert")
-    .map((row) => ({ row, d: haversine(center, row) }))
-    .filter((x) => x.d <= radiusM)
-    .sort((a, b) => a.d - b.d);
+  const { tileStates, rows } = await readList(deps.db, center, radiusM, keys);
 
   if (failedTiles > 0 && rows.length === 0) return { error: "upstream" };
 
@@ -91,21 +129,9 @@ export async function getPlaces(
     );
   }
 
-  // R44: 실린 가게 중 가장 최근에 상세를 가져온 시각 (실패 기록 시각은 빼고)
-  let newest: number | null = null;
-  for (const x of rows) if (x.row.status === "ok" && (newest === null || x.row.fetchedAt > newest)) newest = x.row.fetchedAt;
-
-  return {
-    center,
-    radius: radiusM,
-    items: rows.map((x) => withDistance(x.row.json, x.d)),
-    pending,
-    incompleteTiles,
-    stale,
-    detailsPaused,
-    detailsFrozenSince: frozenSince(gate, deps.now),
-    detailsNewestAt: newest,
-  };
+  return placesPayload(center, radiusM, rows, {
+    pending, incompleteTiles, stale, detailsPaused, detailsFrozenSince: frozenSince(gate, deps.now),
+  });
 }
 
 /** R13 단건: stored=false면 거점 격자 밖 id라 D1에 저장하지 않고 보여주기만 한 응답 (app.ts가 엣지에 잠깐 둔다) */

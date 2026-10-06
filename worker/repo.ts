@@ -6,7 +6,10 @@ import {
 import { kstDay } from "../shared/kst";
 import { haversine, tileRect, tilesCoveringCircle } from "../shared/geo";
 import type { CategoryGroup, LatLng, Place, PlaceDetail, PlaceSummary, Rect, StoredDetail } from "../shared/types";
+import { HUBS } from "../shared/hubs";
+import { hubsOfTile } from "./hubTiles";
 import { listItemJson, storedListJson, usableListJson, usableListJsonSql } from "./present";
+import { deleteSnapshotsStmt, markHubsDirtyStmt, markPlaceHubsDirtyStmt } from "./snapshotDirty";
 
 export type DetailMeta = { status: "ok" | "failed"; fetchedAt: number; reason: string | null } | null;
 export type PlaceRow = { place: Place; detail: StoredDetail; meta: NonNullable<DetailMeta> };
@@ -117,6 +120,8 @@ export async function markTile(db: D1Database, key: string, now: number, placeCo
  * 로컬 API 결과 중 장소 ID만 기록한다 (카카오 정책: 로컬 API 응답 저장 금지, ID 기록은 허용).
  * D1 쓰기를 아끼려고 지금 기록된 ID를 읽어서 바뀐 것만 쓴다: 빠진 ID만 DELETE, 새 ID만 INSERT OR IGNORE (각각 한 문장).
  * 격자 상태(수집 시각)는 언제나 갱신하고, ID가 바뀌었을 때만 tiles_changed_at을 올린다 (Cron의 미수집 확인을 깨우는 값).
+ * R56: ID가 바뀌면 이 격자를 덮는 거점의 스냅샷 표시를 올린다. 새 ID가 들어왔으면(상세가 없어 pending이 생긴다)
+ * 그 거점 스냅샷을 지운다 — pending 0이라고 말하는 스냅샷이 남지 않게.
  */
 export async function replaceTilePlaces(
   db: D1Database, key: string, ids: string[], now: number, saturated: boolean,
@@ -143,7 +148,14 @@ export async function replaceTilePlaces(
     );
   }
   stmts.push(db.prepare(TILE_UPSERT).bind(key, now, unique.length, saturated ? 1 : 0));
-  if (stmts.length > 1) stmts.push(db.prepare(META_UPSERT).bind(TILES_CHANGED_KEY, String(now)));
+  if (stmts.length > 1) {
+    stmts.push(db.prepare(META_UPSERT).bind(TILES_CHANGED_KEY, String(now)));
+    const hubs = hubsOfTile(key);
+    if (hubs.length > 0) {
+      if (added.length > 0) stmts.push(deleteSnapshotsStmt(db, hubs));
+      stmts.push(markHubsDirtyStmt(db, hubs, now));
+    }
+  }
   await db.batch(stmts);
 }
 
@@ -545,10 +557,13 @@ export async function getMeta(db: D1Database, id: string): Promise<DetailMeta> {
   return r ? metaOf(r.status, r.fetched_at, r.fail_reason) : null;
 }
 
+/** R56: 상세 저장·실패 기록은 같은 batch에서 그 가게가 보이는 거점의 스냅샷 표시를 올린다 (snapshotDirty.ts) */
 export async function saveDetail(
   db: D1Database, id: string, s: PlaceSummary, d: PlaceDetail, now: number,
 ): Promise<void> {
-  await db
+  // 표시 문장을 먼저 둔다 — 옮기기 전 좌표(저장된 행)도 보게
+  const mark = markPlaceHubsDirtyStmt(db, id, { lat: s.lat, lng: s.lng }, now);
+  const insert = db
     .prepare(
       `INSERT OR REPLACE INTO places (id, status, name, category_name, category_group, lat, lng, address, phone, photo_url,
          rating, review_count, price, menus_json, hours_json, strengths_json, tags_json, bookable, fail_reason, fetched_at,
@@ -561,8 +576,8 @@ export async function saveDetail(
       JSON.stringify(d.strengths), JSON.stringify(d.tags), d.bookable === null ? null : d.bookable ? 1 : 0, now,
       // R12: 목록 원소 조각을 같은 행에 같이 쓴다 (쓰기 행 수는 그대로)
       storedListJson(detailRow(id, s, d, now)),
-    )
-    .run();
+    );
+  await db.batch([mark, insert]);
 }
 
 /** saveDetail이 저장했다가 다시 읽은 것과 같은 행 (저장하지 않고 보여줄 때) */
@@ -578,13 +593,16 @@ export function detailRow(id: string, s: PlaceSummary, d: PlaceDetail, now: numb
 }
 
 export async function saveDetailFailure(db: D1Database, id: string, reason: string, now: number): Promise<void> {
-  await db
-    .prepare(
-      `INSERT INTO places (id, status, fail_reason, fetched_at) VALUES (?, 'failed', ?, ?)
-       ON CONFLICT(id) DO UPDATE SET status = 'failed', fail_reason = excluded.fail_reason, fetched_at = excluded.fetched_at`,
-    )
-    .bind(id, reason, now)
-    .run();
+  await db.batch([
+    db
+      .prepare(
+        `INSERT INTO places (id, status, fail_reason, fetched_at) VALUES (?, 'failed', ?, ?)
+         ON CONFLICT(id) DO UPDATE SET status = 'failed', fail_reason = excluded.fail_reason, fetched_at = excluded.fetched_at`,
+      )
+      .bind(id, reason, now),
+    // 표시 정보(좌표)가 남아 있는 행이면 그 거점 목록의 detailsNewestAt이 바뀔 수 있다 (좌표가 없으면 목록에 없다)
+    markPlaceHubsDirtyStmt(db, id, null, now),
+  ]);
 }
 
 async function metaNumber(db: D1Database, key: string): Promise<number> {
@@ -641,6 +659,7 @@ export const detailsAllowed = (g: DetailGate, now: number): boolean => now >= g.
  * 지난 날의 차단 횟수는 이때 함께 지운다 (차단이 있는 날만 한 행).
  * 쿨다운이 이미 걸려 있는 동안의 보고(요청 보충·Cron·R13이 겹친 같은 사고)는 쿨다운만 늘리고 횟수에는 넣지 않는다 —
  * 그래서 횟수 UPSERT가 쿨다운 기록보다 먼저, 이전 쿨다운이 끝났을 때만 돈다.
+ * R56: 모든 거점 스냅샷을 지우고 표시를 올린다 (detailsPaused·detailsFrozenSince가 바뀐다).
  */
 export async function recordPlaceBlock(db: D1Database, now: number): Promise<void> {
   const key = `${BLOCK_COUNT_PREFIX}${kstDay(now)}`;
@@ -654,6 +673,8 @@ export async function recordPlaceBlock(db: D1Database, now: number): Promise<voi
       .bind(key, BLOCKED_KEY, now),
     db.prepare("DELETE FROM meta WHERE key LIKE ? AND key < ?").bind(`${BLOCK_COUNT_PREFIX}%`, key),
     db.prepare(META_UPSERT).bind(BLOCKED_KEY, String(now + PLACE_BLOCK_COOLDOWN_MS)),
+    deleteSnapshotsStmt(db),
+    markHubsDirtyStmt(db, HUBS.map((h) => h.id), now),
   ]);
   const count = Number(counted.results[0]?.value ?? 0);
   if (count < DETAIL_FREEZE_AFTER_BLOCKS) return;

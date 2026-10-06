@@ -20,7 +20,8 @@
     // R36: 관리자 API 전용 (모든 /api/admin/* 요청을 토큰 비교 전에 IP별로 센다)
     { "name": "ADMIN_LIMITER", "namespace_id": "1002", "simple": { "limit": 120, "period": 60 } }
   ],
-  "triggers": { "crons": ["*/5 * * * *"] },
+  // 본 Cron(수집·보충)과 R56 거점 스냅샷 Cron(2분 어긋나게, 실행마다 한 거점) — worker/maintenance.ts MAIN_CRON·SNAPSHOT_CRON
+  "triggers": { "crons": ["*/5 * * * *", "2-59/5 * * * *"] },
   "vars": { "SUBREQUEST_BUDGET": "40", "DETAIL_BATCH_SIZE": "10", "D1_READ_SOFT_CAP": "3000000", "D1_WRITE_SOFT_CAP": "60000" },
   "routes": [{ "pattern": "mmj.itmz.me", "custom_domain": true }]
 }

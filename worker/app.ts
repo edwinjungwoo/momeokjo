@@ -13,6 +13,9 @@ import {
 } from "./d1Usage";
 import { eventStats, insertEvents } from "./events";
 import type { FetchFn } from "./fetchFn";
+import {
+  acceptsGzip, etagMatches, notModifiedResponse, readHubSnapshot, snapshotEdgeTtlMs, snapshotResponse,
+} from "./hubSnapshot";
 import { hubTileKeys } from "./hubTiles";
 import { warmOnce } from "./maintenance";
 import { getPlace, getPlaces, type ServiceDeps } from "./placesService";
@@ -78,9 +81,15 @@ export function placesCacheTtl(res: PlacesResponse | PlacesMeta): number | null 
   if (res.pending === 0 || res.detailsPaused || res.detailsFrozenSince !== null) return PLACES_CACHE_MS;
   return PLACES_PENDING_CACHE_MS;
 }
-/** 응답 형식이 바뀌면 올린다 (예전 형식의 캐시를 쓰지 않게). 6: list_json 판(LIST_JSON_VERSION) 도입 */
-export const PLACES_CACHE_VERSION = "6";
+/**
+ * 응답 형식이 바뀌면 올린다 (예전 형식의 캐시를 쓰지 않게). 6: list_json 판(LIST_JSON_VERSION) 도입,
+ * 7: R56 스냅샷 — 엣지 항목이 gzip 바이트일 수 있다, 거리가 같으면 id순.
+ * 주의: 본문이 바뀌면 HUB_SNAPSHOT_VERSION(worker/hubSnapshot.ts)도 올린다
+ */
+export const PLACES_CACHE_VERSION = "7";
 const EXPIRES_HEADER = "x-mmj-expires";
+/** R56: 스냅샷에서 온 엣지 항목 표시 — 본문은 gzip 바이트, 값은 ETag (Content-Encoding·ETag 헤더는 Cache API가 따로 다뤄서 쓰지 않는다) */
+const SNAPSHOT_ETAG_HEADER = "x-mmj-snapshot-etag";
 const NEGATIVE_HEADER = "x-mmj-negative";
 /** R42: 거점마다 키 하나 (반경은 키에 넣지 않는다 — 본문은 언제나 1000m) */
 export const placesCacheKey = (hub: string) =>
@@ -167,9 +176,40 @@ export function createApp(deps: AppDeps) {
     // 거점이 몇 개뿐이라 같은 요청이 반복된다. 응답을 잠깐 캐시해서 D1 읽기와 CPU를 아낀다 (placesCacheTtl).
     // R42: 어떤 반경이 와도 1000m 하나만 계산·캐시한다 (거점당 키 하나)
     const key = new Request(placesCacheKey(hub.id));
+    const ifNoneMatch = c.req.header("if-none-match");
+    // 운영 Cloudflare는 Worker로 오는 Accept-Encoding을 바꿀 수 있다 — 바꿨으면 원래 값이 cf.clientAcceptEncoding에 있다
+    const cf = c.req.raw.cf as { clientAcceptEncoding?: string } | undefined;
+    const gzipOk = acceptsGzip(cf?.clientAcceptEncoding ?? c.req.header("accept-encoding"));
     const hit = await deps.cache?.match(key);
     if (hit && Number(hit.headers.get(EXPIRES_HEADER)) > now()) {
-      return new Response(hit.body, { headers: { "content-type": "application/json", "cache-control": "no-store" } });
+      const etag = hit.headers.get(SNAPSHOT_ETAG_HEADER);
+      if (etag && hit.body) {
+        if (!etagMatches(ifNoneMatch, etag)) return snapshotResponse(hit.body, etag, gzipOk, "edge");
+        await hit.body.cancel();
+        return notModifiedResponse(etag, "edge");
+      }
+      return new Response(hit.body, {
+        headers: { "content-type": "application/json", "cache-control": "no-store", "x-mmj-source": "edge" },
+      });
+    }
+    // R56: 엣지 미스는 먼저 Cron이 만든 거점 스냅샷 한 행으로 답한다 (없거나 오래됐거나 판이 다르면 아래 지금 경로)
+    const snap = await readHubSnapshot(c.var.db, hub.id, now(), ifNoneMatch);
+    if (snap?.notModified) return notModifiedResponse(snap.etag, "snapshot");
+    if (snap?.body) {
+      if (deps.cache) {
+        // 다른 요청들이 10분(SNAPSHOT_EDGE_CACHE_MS) 동안 D1 없이 같은 바이트를 받는다 — 다시 만든 스냅샷은 늦어도 그 뒤에 보인다
+        const ttl = snapshotEdgeTtlMs(snap.builtAt, now()) / 1000;
+        const stored = new Response(snap.body.slice(), {
+          headers: {
+            "content-type": "application/octet-stream",
+            "cache-control": `public, max-age=${ttl}, s-maxage=${ttl}`,
+            [EXPIRES_HEADER]: String(now() + ttl * 1000),
+            [SNAPSHOT_ETAG_HEADER]: snap.etag,
+          },
+        });
+        c.executionCtx.waitUntil(deps.cache.put(key, stored).catch((e) => console.error("cache put failed", e)));
+      }
+      return snapshotResponse(snap.body, snap.etag, gzipOk, "snapshot");
     }
     const res = await getPlaces(serviceDeps(c), { lat: hub.lat, lng: hub.lng }, MAX_RADIUS);
     if ("error" in res) return c.json(res, 502);
@@ -186,7 +226,7 @@ export function createApp(deps: AppDeps) {
       });
       c.executionCtx.waitUntil(deps.cache.put(key, stored).catch((e) => console.error("cache put failed", e)));
     }
-    return c.body(body, 200, { "content-type": "application/json" });
+    return c.body(body, 200, { "content-type": "application/json", "x-mmj-source": "live" });
   });
 
   app.get("/api/places/:id", async (c) => {

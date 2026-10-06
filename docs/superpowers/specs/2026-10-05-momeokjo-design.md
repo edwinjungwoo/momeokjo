@@ -155,6 +155,15 @@ CREATE TABLE events (
 );
 CREATE INDEX idx_events_day ON events(day);
 CREATE INDEX idx_events_type_day ON events(type, day);
+
+-- R56 거점 스냅샷 (0007; 0006은 feat/admin-ops). Cron이 만든 거점 1000m 목록 응답 본문(/api/places와 글자까지 같음)의 gzip을 base64로 둔다.
+-- version = HUB_SNAPSHOT_VERSION, source_at = 만들기 전에 읽은 거점 표시(meta snapshot_dirty:{hub}), etag = 본문(gzip)의 SHA-256 앞 16자로 정한 ETag.
+-- body는 BLOB이 아니라 base64 텍스트다 (D1은 BLOB을 숫자 배열로 돌려줘서 읽는 쪽 CPU가 4배 넘게 든다)
+CREATE TABLE hub_snapshots (
+  hub TEXT PRIMARY KEY, version INTEGER NOT NULL, built_at INTEGER NOT NULL, source_at INTEGER NOT NULL,
+  encoding TEXT NOT NULL, etag TEXT NOT NULL, body TEXT NOT NULL
+);
+-- meta snapshot_dirty:{hub} = 그 거점 목록이 바뀐 표시 (바뀔 때마다 커지는 정수, R56)
 ```
 
 카카오맵 링크는 `https://place.map.kakao.com/{id}`로 만든다.
@@ -219,7 +228,7 @@ CREATE INDEX idx_events_type_day ON events(type, day);
 - **R12 `GET /api/places?hub&radius`.**
   - 검증: `hub`는 `shared/hubs.ts`의 거점 id, `radius`는 100~1000m의 50m 배수. 위반하거나(모르는 거점 포함) 임의 lat/lng를 보내면 400과 `{error: "invalid_params"}`를 반환한다. 좌표는 서버가 거점 목록에서 찾는다(남용과 비용 방지; 임의 좌표는 관리용 R31/R32만).
   - 화면은 반경과 상관없이 항상 `radius=1000`을 요청하고 반경은 브라우저에서 거른다(R42). 서버는 50m 단위 반경을 계속 검증하지만(호환), 어떤 반경이 와도 거점의 1000m 목록 하나만 계산·캐시해서 같은 본문(`radius: 1000`)을 준다 — 캐시 키가 거점당 하나라 반경을 바꾼 요청으로 캐시를 우회해 D1을 읽게 할 수 없다.
-  - 캐시: Workers Cache API(`caches.default`)에 `https://cache.mmj/places?hub&v={응답 형식 버전}` 키(거점당 하나)로 저장하고, 다음 요청은 D1을 읽지 않고 캐시로 답한다. 시간은 `placesCacheTtl`: 공식 API 실패가 섞인 응답(`stale`)만 저장하지 않는다. `incompleteTiles > 0`(예산·요청 제한으로 격자를 다 못 모음)이면 10초. 그 밖에 `pending === 0`이거나 상세 가져오기가 멈췄으면(`detailsPaused` — R10 쿨다운·R44 frozen, 아무도 pending을 줄일 수 없다) 60초(`Cache-Control: public, max-age=60, s-maxage=60`), pending만 남았으면 10초 — 같은 거점을 폴링하는 여러 화면이 계산(과 요청 보충 시작) 하나를 나눠 쓴다. 요청 제한에 걸린 요청도 10초 캐시를 받으므로, IP 하나를 함께 쓰는 사무실이 분당 10회를 넘겨도 매번 D1을 읽지 않는다. 브라우저에 주는 응답은 항상 `no-store`다. 키는 거점 수(5개)뿐이다(예전에는 거점 × 반경 19단계 = 95개). 응답 형식 버전은 6(4: 반경을 키에서 뺌·`detailsPaused` 추가, 5: `list_json` 조각, 6: `list_json` 판).
+  - 캐시: Workers Cache API(`caches.default`)에 `https://cache.mmj/places?hub&v={응답 형식 버전}` 키(거점당 하나)로 저장하고, 다음 요청은 D1을 읽지 않고 캐시로 답한다. 시간은 `placesCacheTtl`: 공식 API 실패가 섞인 응답(`stale`)만 저장하지 않는다. `incompleteTiles > 0`(예산·요청 제한으로 격자를 다 못 모음)이면 10초. 그 밖에 `pending === 0`이거나 상세 가져오기가 멈췄으면(`detailsPaused` — R10 쿨다운·R44 frozen, 아무도 pending을 줄일 수 없다) 60초(`Cache-Control: public, max-age=60, s-maxage=60`), pending만 남았으면 10초 — 같은 거점을 폴링하는 여러 화면이 계산(과 요청 보충 시작) 하나를 나눠 쓴다. 요청 제한에 걸린 요청도 10초 캐시를 받으므로, IP 하나를 함께 쓰는 사무실이 분당 10회를 넘겨도 매번 D1을 읽지 않는다. 브라우저에 주는 응답은 항상 `no-store`다. 키는 거점 수(5개)뿐이다(예전에는 거점 × 반경 19단계 = 95개). 응답 형식 버전은 7(4: 반경을 키에서 뺌·`detailsPaused` 추가, 5: `list_json` 조각, 6: `list_json` 판, 7: R56 스냅샷 — 엣지 항목이 gzip 바이트일 수 있고 거리가 같으면 id순). 엣지 캐시 미스는 먼저 R56 거점 스냅샷(D1 1행)으로 답하고, 그 응답은 엣지에 10분 둔다.
   - 처리: `tilesCoveringCircle`로 격자를 구하고, 만료/미수집 격자를 예산 안에서 동기적으로 수집한다(ID만 기록). 격자-장소 상태(`tile_places` + places 메타)는 요청마다 한 번만 읽어서 목록 필터, `pending`, 보충 대상 고르기에 같이 쓴다. 그다음 D1에서 덮는 격자에 기록된 가게 중 상세가 있고 거리 ≤ radius인 것을 조회한다. R13 단건 조회로만 저장된 가게는 목록에 넣지 않는다. 목록 원소는 `places.list_json`(0005, 상세를 저장할 때 같이 만든 조각)에 거리·도보 분만 앞에 붙여 이어 붙인다 — 행마다 JSON 열 4개를 parse하고 다시 stringify하지 않는다(동대문 1000m 2,000곳: node 중앙값 8.8ms → 0.65ms, Workers는 ×3으로 어림잡아 ~26ms → ~2ms). 지금 판(`LIST_JSON_VERSION`)의 `list_json`이 없는 행(NULL·예전 판·깨진 값)만 열에서 만들고 본문은 글자까지 같다. 지금 판 조각이 있는 행은 D1에서 무거운 열을 받지 않는다(`CASE WHEN substr(list_json, 1, 4) = 'v1:{'`). 상세가 아직 없는 장소는 좌표를 모르므로 응답에 넣지 않고 `pending`으로만 센다. 상세를 한 번도 가져오지 않은 가게가 있으면(쿨다운 중이 아니면) `ctx.waitUntil`로 그 가게들만 R10 배치를 시작한다. 만료된 상세는 그대로 보여주고 갱신은 Cron(R11)에 맡긴다.
   - 응답:
     ```ts
@@ -245,6 +254,17 @@ CREATE INDEX idx_events_type_day ON events(type, day);
     ```
   - `Cache-Control: no-store`
 - **R13 `GET /api/places/:id`.** 단일 가게 정보를 반환한다(형식은 R12의 원소와 같고, distance와 walkMinutes는 빠지며 address·phone과 메뉴 전부(최대 20개), 상세를 가져온 시각 `fetchedAt`(epoch ms, R48)을 준다 — 목록 원소에는 없다). 거점 격자(모든 거점의 1000m 격자)에 기록되지 않은 ID는 상세를 가져와 보여주기만 하고 저장하지 않는다(성공이든 실패든 — 임의 숫자로 D1을 키울 수 없고, Cron이 갱신하지 않는 행이 만료 조회에 쌓이지 않게). 대신 성공한 응답은 Workers Cache API에 id별 키(`https://cache.mmj/place?id&v={응답 형식 버전}`)로 60초(`PLACE_TRANSIENT_CACHE_MS`) 두어서, 같은 공유 링크를 여럿이 연달아 열어도 상세 API는 60초에 한 번(R15 제한 안)만 부른다. 거점 격자 안의 id는 D1에 저장하므로 엣지에 두지 않는다. 브라우저에 주는 응답은 언제나 `no-store`다. 화면은 카드를 열 때 이것을 한 번 불러 목록 원소의 상세와 바꾼다. id는 숫자 1~15자리만 허용하고 아니면 404다. 표시 정보가 없으면 R15 제한 안에서 동기적으로 한 번 상세를 가져온다(최근 6시간 안에 실패했거나 R10 쿨다운 중이면 시도하지 않음). 그래도 없으면 404다.
+- **R56 거점 스냅샷.** 엣지 캐시 미스의 CPU·D1 읽기를 줄인다(운영 측정: 미스 CPU 22~53ms, 읽기 2~6천 행).
+  - 만들기(스냅샷 Cron `2-59/5 * * * *`, 실행마다 한 거점): 본 Cron(`*/5`, 수집·보충)과 다른 실행이라 CPU 한도와 D1 사용량 기록을 따로 쓴다 — 만들다 CPU 초과로 죽어도 본 Cron 기록은 잃지 않는다(scheduled가 `controller.cron`으로 나눈다, 모르는 값은 본 Cron). 외부 호출은 없다. 요청 경로와 같은 읽기·조립(`readListRows`, `placesPayload`, `placesBody`)으로 거점 1000m 본문을 만들어 gzip(`CompressionStream`) → base64로 `hub_snapshots`에 한 행 둔다. 거리가 같은 가게는 id순으로 정해서(R12도 같다) 같은 데이터면 본문이 글자까지 같다. 만들지 않는 때: 상세가 없는 가게가 있음(`pending > 0` — 지금 경로가 보충을 시작하고 알린다. 격자-장소 상태만 보고 판단해서 무거운 목록 조회 전에 멈춘다), 거점 격자 중 만료·미수집 격자가 있음(`incompleteTiles`·`stale`은 수집하는 지금 경로가 정한다), 쿨다운·frozen이 쓰는 동안(2시간) 안에 끝남(`detailsPaused`·`detailsFrozenSince`가 틀린 채로 남지 않게), base64가 1.5MB 초과.
+  - 고르는 순서: 스냅샷이 없거나 판이 다른 거점(실행마다 돌아가는 거점 순서) → 더러운데 만든 지 60분이 지났거나, 깨끗해도 만료 15분 전인 것 중 가장 오래된 것. 할 일이 없으면 메타 몇 행만 읽는다. R38 읽기 예산을 넘은 날에는 만들지 않는다(그날은 미스가 지금 경로로 답한다).
+  - 비용 상한: 만들기 전에 `meta snapshot_skip:{hub}` = `{until, attempts}`(attempts = 이어서 끝나지 못한 시도 수 + 1)를 써 두고, until 전의 거점은 고르지 않는다. 시도가 CPU 초과로 죽으면 표시가 남고, 이어서 죽을수록 기다림이 두 배씩 는다(20 → 40 → 80분 … 최대 6시간 — 죽은 실행은 사용량도 기록하지 못해서 이것이 헛읽기의 유일한 상한이다). 만들었거나 기다릴 필요가 없는 건너뜀(쿨다운·경쟁 — 무거운 읽기 전에 판단해서 싸다)이면 지우고, pending·만료 격자면 20분, 크기 초과면 2시간을 attempts 0으로 쓴다 — 만들 수 없는 거점(예: R44 frozen 동안 pending이 줄지 않음)이 실행마다 수천 행을 다시 읽지 않는다. 쓸 수 있는 스냅샷이 있는 거점은 그 만료 5분 전 너머로 기다리지 않는다(스냅샷이 끊기기 전에 한 번 더 해 본다). 실행마다 처음에 그 실행이 넘겨받은 거점 목록(운영은 `shared/hubs.ts` 전체)에 없는 거점과 2시간이 지난 행을 지운다.
+  - 더러움 표시(`meta snapshot_dirty:{hub}`, 바뀔 때마다 커지는 정수): 상세 저장·실패 기록은 같은 batch에서 그 가게의 옮기기 전·후 좌표가 거점 1000m 상자 안인 거점을, 격자 ID 변경(R4)은 그 격자를 덮는 거점을 올린다. 스냅샷은 만들기 전에 읽은 표시를 `source_at`에 두고, 저장은 표시가 그대로일 때만 한다(만드는 사이 바뀌면 다음 실행이 다시 만든다).
+  - 무효화(행 삭제 + 표시): 격자에 새 ID가 들어오면(pending이 생긴다) 그 격자를 덮는 거점, R10 쿨다운이 새로 걸리면(R44 frozen 포함) 모든 거점.
+  - 내보내기: 엣지 캐시 미스면 먼저 스냅샷 한 행을 읽는다(D1 1행). 판이 같고 만든 지 2시간 안이면 그대로 답한다 — gzip을 받는 화면에는 `Content-Encoding: gzip` + `encodeBody: "manual"`(Workers가 다시 압축하지 않는다), gzip을 받지 않으면(값이 없거나 거절) `DecompressionStream`으로 풀어서 준다. 판단은 `request.cf.clientAcceptEncoding`(운영 Cloudflare가 Worker로 오는 `Accept-Encoding`을 바꿨을 때 남기는 원래 값)을 먼저, 없으면 `Accept-Encoding` 헤더를 본다. 스냅샷 200 응답에는 `Vary: Accept-Encoding`을 싣는다. 판·인코딩·나이(2시간)는 SQL `WHERE`에서 걸러 쓸 수 없는 행의 본문은 받지 않는다. 아니면 지금 경로(R12)로 답한다. 응답 헤더 `x-mmj-source`: `edge` | `snapshot` | `live`.
+  - ETag와 304: 스냅샷 응답은 약한 ETag `W/"{판}-{거점}-{gzip SHA-256 앞 16자}"`를 싣는다(본문이 같으면 다시 만들어도 같다). `If-None-Match`가 같으면(약한 비교, 목록, `*`) 본문 없이 304 — 스냅샷 경로는 본문 열을 받지 않고(`CASE WHEN`), 엣지 적중도 304로 답한다. 지금 경로 응답에는 ETag가 없다. 화면(R45)은 기기 저장본과 함께 ETag를 두고, ETag만 localStorage 작은 키(`mmj-places-etag:{hub}`)에도 둬서 첫 요청을 저장본(~1MB) 읽기·해석을 기다리지 않고 바로 `If-None-Match`로 보낸다. 304면 그때 저장본의 ETag가 같은지 보고 새 목록으로 쓰고(전송 ~0바이트), 저장본이 없거나 다르면 조건 없이 다시 받는다. 폴링에는 보내지 않는다.
+  - 엣지 캐시: 스냅샷으로 답한 응답은 gzip 바이트로 10분(스냅샷을 쓸 수 있는 남은 시간이 더 짧으면 그만큼) 둔다. 지금 경로 응답의 10초/60초 규칙(R12)은 그대로다. Cache API 삭제는 Cron이 도는 콜로 하나에만 듣기 때문에 쓰지 않는다 — 다시 만들거나 무효화한 스냅샷은 늦어도 10분 뒤 모든 콜로에 보인다(무효화된 pending·쿨다운 상태도 최대 10분 늦다).
+  - 늦게 보이는 최대 시간: 상세 갱신(평점·메뉴) 약 60분 + Cron 5분 + 엣지 10분. 새 가게는 격자 변경이 스냅샷을 지우므로 엣지 10분 뒤 지금 경로로 바로 보인다.
+  - 판: `HUB_SNAPSHOT_VERSION`(worker/hubSnapshot.ts). 주의: `/api/places` 본문이 바뀌면(`PLACES_CACHE_VERSION`·`LIST_JSON_VERSION`을 올리는 변화) 같이 올린다.
 - **R14 장애 대응.** 공식 API가 실패하고(쿼터 초과, 5xx, 타임아웃) 해당 격자에 만료된 캐시가 있으면 그 캐시로 응답하고 `stale: true`를 준다. 캐시도 없으면 502와 `{error: "upstream"}`을 반환한다.
 - **R15 남용 방지.** 외부 호출을 일으키는 요청(만료/미수집 격자가 있는 R12, 동기 보충이 필요한 R13)은 IP당 분당 10회로 제한한다(Workers Rate Limiting 바인딩). 초과하면 외부 호출 없이 캐시로만 응답한다 — 못 모은 격자는 `incompleteTiles`, 못 채운 상세는 `pending`으로 남고 `stale`은 주지 않는다(`stale`은 R14 실패만). 이 응답은 10초 캐시된다(R12). 캐시로만 응답할 수 있는 요청은 제한하지 않는다.
 
@@ -427,8 +447,9 @@ Q1, Q2, Q5를 통과해야 UI 마일스톤으로 넘어간다.
 - `compatibility_date`는 `2026-08-01`(로컬 workerd가 지원하는 최신 날짜 이하)
 - 프론트엔드 환경 변수: `VITE_KAKAO_JS_KEY` (공개 키)
 - Custom Domain: `mmj.itmz.me`
-- D1 마이그레이션 `0001`~`0005`는 배포 전에 운영 D1에 적용한다(`npm run db:migrate:remote`). `0005`(places.list_json)는 열 추가뿐이고, 코드는 값이 NULL인 행을 그대로 처리한다(열 자체는 있어야 한다).
+- D1 마이그레이션 `0001`~`0005`와 `0007`(R56 `hub_snapshots`; `0006`은 feat/admin-ops)은 배포 전에 운영 D1에 적용한다(`npm run db:migrate:remote`). `0005`(places.list_json)는 열 추가뿐이고, 코드는 값이 NULL인 행을 그대로 처리한다(열 자체는 있어야 한다). `0007`은 표 추가뿐이다 — 표가 없으면 상세 저장(같은 batch의 표시)과 목록 미스가 실패하므로 코드보다 먼저 적용한다. 배포 뒤 스냅샷은 스냅샷 Cron(`2-59/5`, wrangler.jsonc `triggers.crons`의 두 번째 — 무료 플랜 계정당 Cron 5개 중 하나를 더 쓴다)이 실행마다 한 거점씩 채운다(거점 5곳이면 약 25분).
 - **R52 개발 서버는 운영 D1을 읽기만 한다.** D1 바인딩이 `"remote": true`라서 `npm run dev`(vite dev)도 운영 D1에 붙는다. `vite.config.ts`가 dev 서버(`command === "serve"`)에서만 Worker 변수 `READ_ONLY=1`을 더하고(`wrangler.jsonc` `vars`에는 없다 — `vite build` 결과 `dist/momeokjo/wrangler.json`과 운영에는 이 값이 없다), Worker 입구(`worker/index.ts`)가 그때 `DB`를 `readOnlyDb`(`worker/readOnly.ts`)로 감싼다. 감싸개는 문장의 첫 키워드(주석·공백·`WITH ...` CTE를 건너뛰고)가 SELECT·VALUES·EXPLAIN·읽기 PRAGMA가 아니면 `prepare`·`batch`에서 실행 전에 오류를 낸다(빠뜨린 쓰기의 안전망). `exec`는 분류하지 않고 항상 막는다 — D1 `exec`는 줄바꿈으로 문장을 나눠 실행하므로 SQL 분류를 믿을 수 없고, 앱은 `exec`를 쓰지 않는다. `READ_ONLY`는 비어 있지 않고 `0`·`false`가 아닌 값이면 켠다(실패하면 닫힘). 켜져 있으면 격리(isolate)마다 첫 요청에서 `[read-only] 운영 D1 읽기 전용 모드`를 한 번 로그에 남긴다. 앱은 쓰기 경로를 먼저 건너뛴다: 목록은 만료된 격자를 수집하지 않고 상세 보충도 하지 않으며(`incompleteTiles` 0, `detailsPaused` true — 화면이 폴링하지 않는다), 단건은 저장된 행이 없으면 상세를 받아 보여주기만 하고 성공·실패를 저장하지 않는다. 요청별 D1 사용량 UPSERT(R38)를 하지 않고, `/api/events`는 아무것도 저장하지 않고 204, 관리자 쓰기(`/api/admin/warm`·`/api/admin/backfill`)는 403 `{error: "read_only"}`, Cron은 로그 한 줄만 남기고 아무것도 하지 않는다. 목록·단건·통계 읽기와 응답 캐시는 그대로다. **dev 서버가 읽은 행도 운영 계정의 하루 읽기 한도(5,000,000행)에 그대로 들어가고, 사용량 기록을 하지 않으므로 R38 소프트 한도 집계에는 잡히지 않는다.** `vite preview`는 빌드 결과 설정을 쓰므로 이 값이 없고, 그대로면 `"remote": true`로 운영 D1에 쓰기까지 붙으므로 `vite.config.ts`가 preview(`isPreview`)에서 `cloudflare({ remoteBindings: false })`로 원격 바인딩을 끈다(비어 있는 로컬 D1을 쓴다; 플러그인은 preview 분기보다 먼저 `remoteBindings`를 읽는다). 옵션 선택은 `scripts/cloudflareOptions.mjs`에 있고 단위 테스트한다(serve=READ_ONLY, build=없음, preview=원격 끔). **`wrangler dev`는 이 설정을 거치지 않고 `"remote": true` 그대로 운영 D1에 읽기·쓰기로 붙는다 — `--local`을 붙여서만 쓰거나 아예 쓰지 않고, 개발은 `npm run dev`로 한다.**
+- **되돌릴 때(R56):** 스냅샷 전 판으로 되돌리면 그 판은 상세 저장·격자 변경에서 더러움 표시를 올리지 않아서, 다시 이 판으로 올리면 되돌린 동안 만들어진 변화가 남은 스냅샷(최대 2시간)에 빠져 있다. 되돌린 뒤(또는 다시 올리기 전)에 스냅샷을 비운다: `npx wrangler d1 execute momeokjo --remote --command "DELETE FROM hub_snapshots"` (지우면 엣지 10분 뒤부터 지금 경로로 답하고 스냅샷 Cron이 다시 채운다).
 - **카카오 개발자 콘솔 (2026-10-05 완료):** 앱 "모먹죠"(ID 1597800) 생성, JavaScript SDK 도메인에 `http://localhost:5173`·`https://mmj.itmz.me` 등록, 카카오맵 활성화(계정의 무료 쿼터가 이 앱에 귀속됨). 키는 `.dev.vars`(REST)와 `.env.local`(JS)에 있고 git에서 제외된다.
 
 ## 9.1 무료 플랜 운영 예산
@@ -437,8 +458,8 @@ Q1, Q2, Q5를 통과해야 UI 마일스톤으로 넘어간다.
 
 | 항목 | 예상 사용량 (거점 3곳, 반경 1000m) | 한도 대비 |
 |---|---|---|
-| Cron | 하루 288회. 만료 후보 조회는 상태(ok/failed)마다 오래된 순 300행까지 + 커서(R11) → 실행당 ~900행(로컬 측정, 봉은사 1.1k + 동대문 2.0k + 거점 밖 ASEM 고리 1.4k행: 전에는 평소 8,800행, 3일 파도 때 18,000행) → 하루 ~0.26M행. 미수집 확인은 격자 ID가 실제로 바뀐 뒤에만(R4) 실행당 +5,000행 안팎. `list_json` 채우기(0005)는 배포 뒤 몇 시간만 실행당 읽기 ~200행·쓰기 ≤200행, 끝나면 meta 1행 | 읽기 5~10% |
-| `/api/places` 캐시 미스 | 봉은사역 1000m 응답 ~0.6MB(gzip ~110KB), 읽기 ~3,600행. 동대문 1000m ~1.0MB(gzip ~180KB), ~6,200행. CPU는 `list_json` 조각을 이어 붙여 동대문도 ~2ms 어림(node 0.65ms × 3; 전에는 ~26ms). 키는 거점당 하나(5개)뿐이고, 요청 제한·격자 수집 중 응답은 10초, 쿨다운·frozen 응답은 60초 캐시해서 미스는 거점마다 분당 최대 6번 안팎 | 미스 하루 500회면 ~2.5M행 |
+| Cron | 본 Cron 하루 288회 + R56 스냅샷 Cron 하루 288회(따로 실행). 스냅샷은 실행마다 최대 한 거점(필요할 때만 — 보통 시간당 5~6번): 그 거점 미스 한 번과 같은 읽기(동대문 ~7.7k행)와 CPU(+gzip 4.6ms, 운영 어림 40ms 안팎 — 10ms 한도를 넘는다), 쓰기 1행 + 시작 표시 2행. 만들 수 없는 거점은 20분 기다려서 실행마다 다시 읽지 않는다. 할 일이 없는 실행은 ~15행. 붐비는 거점 3곳은 60분마다, 작은 거점은 105분마다라 읽기 ~0.3~0.6M행/일. 표시 쓰기는 상세 저장마다 +1행(읽기 ~11행).  만료 후보 조회는 상태(ok/failed)마다 오래된 순 300행까지 + 커서(R11) → 실행당 ~900행(로컬 측정, 봉은사 1.1k + 동대문 2.0k + 거점 밖 ASEM 고리 1.4k행: 전에는 평소 8,800행, 3일 파도 때 18,000행) → 하루 ~0.26M행. 미수집 확인은 격자 ID가 실제로 바뀐 뒤에만(R4) 실행당 +5,000행 안팎. `list_json` 채우기(0005)는 배포 뒤 몇 시간만 실행당 읽기 ~200행·쓰기 ≤200행, 끝나면 meta 1행 | 읽기 5~10% |
+| `/api/places` 캐시 미스 | R56 스냅샷이 있으면 D1 1행(본문 gzip ~0.1~0.2MB를 base64로 받음), 로컬 workerd 벽시계 동대문 2,000곳 34ms → 3ms. 304면 본문 열도 받지 않는다. 스냅샷이 없을 때(배포 직후·pending·만료 격자·쿨다운)만 지금 경로: 봉은사역 1000m 응답 ~0.6MB, 읽기 ~3,600행, 동대문 ~1.0MB, ~6,200행(운영 CPU 22~53ms). 스냅샷 응답은 엣지에 10분, 지금 경로 응답은 10초/60초 | 스냅샷이면 미스 하루 500회여도 500행 |
 | `/api/places` 캐시 적중 | D1 0행, CPU 최소 (서버가 반경과 상관없이 거점의 1000m만 계산해서 키 5개, 60초; 전에는 거점 × 반경 19단계 = 95개) | — |
 | 상세 갱신 쓰기 | 장소 ~4,500곳 × (3일 + 평균 12시간)마다 1번 → 하루 ~1,300곳, 인덱스 포함 수천 행(`list_json`은 같은 행이라 쓰기 행 수는 그대로). 갱신한 상세도 id별 지터가 붙어 3일 파도가 다시 몰리지 않는다. 격자 재수집은 바뀐 ID만 쓴다(R4 — 바뀌지 않은 격자는 `tile_places` 쓰기 0, 전에는 격자마다 DELETE + ID 수만큼 INSERT). R13 단건은 거점 격자 밖 ID를 저장하지 않는다 | 쓰기 5% 안팎 |
 | 외부 호출 | 실행당 최대 40회(`SUBREQUEST_BUDGET`), 상세 보충 10곳(`DETAIL_BATCH_SIZE`) | 50회 한도 안 |
@@ -450,6 +471,7 @@ Q1, Q2, Q5를 통과해야 UI 마일스톤으로 넘어간다.
 | Rate Limiting | `RATE_LIMITER`(화면, 분당 10회)와 `ADMIN_LIMITER`(관리자, 분당 120회) 두 바인딩. 별도 요금 없음(Workers 요청 수에는 포함), 콜로마다 따로 센다. warm.mjs는 분당 ~60회라 `ADMIN_LIMITER` 안이고, 걸려도 30초 기다렸다 다시 한다 | — |
 
 R38 가드는 그날 읽기가 3,000,000행(60%)을 넘으면 수집을 멈춰서 목록 서비스에 2,000,000행을 남긴다. 집계는 요청이 끝난 뒤에 더하므로 동시에 도는 warm 몇 회만큼 넘칠 수 있다.
+R38 읽기 예산을 넘은 날에는 R56 스냅샷도 다시 만들지 않는다 — 남은 스냅샷이 만료(2시간)되면 그날 캐시 미스는 지금 경로(미스마다 수천 행)로 답한다.
 
 캐시 미스 응답의 CPU는 예전에는 JSON 열 parse·stringify가 대부분이라 큰 거점(동대문)에서 10ms를 넘기 쉬웠다. 지금은 상세를 저장할 때 만든 목록 조각(`places.list_json`, 0005)을 이어 붙여 ~2ms로 어림한다(측정: `scripts/bench-places.mjs`, `docs/perf/2026-10-06-perf.md`). 0005 전 행이 남은 배포 직후 몇 시간은 예전 경로가 섞여 느리다. 처리하지 못한 오류는 JSON `{error: "internal"}` 500으로 답하고 원인은 Workers 로그에만 남긴다. D1 한도는 매일 00:00 UTC(09:00 KST)에 초기화된다.
 
