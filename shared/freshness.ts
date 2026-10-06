@@ -1,8 +1,9 @@
 /**
- * R44: 평점·메뉴가 얼마나 지난 정보인지. 강등 모드(frozen)이거나 가장 최근 상세가 4일보다 오래됐으면 지난 날 수,
+ * R44: 평점·메뉴가 얼마나 지난 정보인지. 강등 모드(frozen)이거나 가장 최근 상세가 8일보다 오래됐으면 지난 날 수,
  * 아니면 null(표시하지 않음). frozen이면 최소 1일로 보여준다 (갱신이 멈췄다는 뜻이라서).
+ * R63: 거점마다 주 1회 갱신이라 갱신 요일 직전에는 가장 최근 상세도 5~7일 전이다 — 그때는 알리지 않고, 갱신이 하루 넘게 밀렸을 때만
  */
-export const STALE_DETAIL_DAYS = 4;
+export const STALE_DETAIL_DAYS = 8;
 const DAY = 24 * 3600_000;
 
 export function detailAgeDays(frozenSince: number | null, newestAt: number | null, now: number): number | null {

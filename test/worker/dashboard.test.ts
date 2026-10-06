@@ -16,6 +16,8 @@ import { anonN, seedEvents, sessN, type Seed } from "../helpers/events";
 import { fakeKakaoLocal, fakePlaceApi, routeFetch } from "../helpers/fakeKakao";
 import { recordingDb } from "../helpers/recordDb";
 import { seedPlace } from "../helpers/places";
+import { recordHubRefreshed } from "../../worker/hubRefresh";
+import { hubRefreshStart } from "../../worker/refreshSchedule";
 
 const kst = (day: string, h: number, m = 0, s = 0) => {
   const [y, mo, d] = day.split("-").map(Number);
@@ -225,6 +227,27 @@ describe("GET /api/admin/dashboard", () => {
     expect(d.alerts.map((a) => a.code)).toEqual(expect.arrayContaining(["cooldown", "hub:pangyo"]));
   });
 
+  it("R63/R60: 운영 거점 표 — 갱신 요일·이번 시작·지난 완료(시각·시작)·남은 갱신(시작 전에 가져온 ok), 미완료 격자도 갱신 시작 기준", async () => {
+    const hub = HUBS.find((h) => h.id === "bongeunsa")!;
+    const keys = tilesCoveringCircle(hub, PREWARM_RADIUS);
+    const start = hubRefreshStart(hub, NOW);
+    const DAY = 24 * 3600_000;
+    for (const k of keys) await markTile(env.DB, k, start, 0, false);
+    await markTile(env.DB, keys[1], start - 1, 0, false); // 시작 전에 수집 → 다시 모을 칸
+    await replaceTilePlaces(env.DB, keys[0], ["a", "b", "c"], start, false);
+    await seedPlace(env.DB, "a", hub.lat, hub.lng, { now: start - 1 }); // 갱신 대상
+    await seedPlace(env.DB, "b", hub.lat, hub.lng, { now: start + 1 });
+    await saveDetailFailure(env.DB, "c", "http_500", start - DAY); // 실패는 남은 갱신에 세지 않는다
+    await recordHubRefreshed(env.DB, "bongeunsa", start - 7 * DAY, start - 6 * DAY);
+    const d = await (await get(setup(), "tab=ops")).json<OpsData>();
+    const p = d.hubs!.find((h) => h.hub === "bongeunsa")!;
+    expect(p).toMatchObject({
+      refreshDay: 1, refreshStart: start, refreshedAt: start - 6 * DAY, refreshedStart: start - 7 * DAY, due: 1, incompleteTiles: 1,
+    });
+    const g = d.hubs!.find((h) => h.hub === "gangnam")!;
+    expect(g).toMatchObject({ refreshDay: 5, refreshedAt: null, refreshedStart: null, due: 0 });
+  });
+
   it("R59/R60: 같은 요청은 60초 동안 엣지 캐시에서 D1을 읽지 않고 답한다 (매개변수가 다르면 새로 계산, fresh=1이면 다시 계산)", async () => {
     await seedEvents(day(TODAY, 100));
     const cache = memCache();
@@ -353,7 +376,7 @@ describe("GET /api/admin/dashboard", () => {
     expect(d.kpis.sessions.value).toBe(4);
   });
 
-  it("R59: 응답 형식이 바뀌어 캐시 판을 2로 올렸다", () => {
-    expect(dashboardCacheKey({ tab: "ops", from: TODAY, to: TODAY, hub: "all", compare: true })).toContain("&v=2");
+  it("R59/R63: 응답 형식이 바뀌어 캐시 판을 3으로 올렸다 (R63 거점 표의 주간 갱신 필드)", () => {
+    expect(dashboardCacheKey({ tab: "ops", from: TODAY, to: TODAY, hub: "all", compare: true })).toContain("&v=3");
   });
 });

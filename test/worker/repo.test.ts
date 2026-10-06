@@ -807,7 +807,7 @@ describe("Task 34: 상세 저장을 batch 하나로", () => {
   const listBody = async () => {
     const { rows } = await readList(env.DB, BONG, 1000, keys);
     const { items, ...meta } = placesPayload(BONG, 1000, rows, {
-      pending: 0, incompleteTiles: 0, stale: false, detailsPaused: false, detailsFrozenSince: null,
+      pending: 0, incompleteTiles: 0, stale: false, detailsPaused: false, detailsFrozenSince: null, refreshedAt: null, refreshDay: 1,
     });
     return placesBody(meta, items);
   };

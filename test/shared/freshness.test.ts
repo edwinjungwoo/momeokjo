@@ -12,11 +12,12 @@ describe("R44 정보 기준 시점", () => {
     expect(detailAgeDays(NOW - 3 * D, null, NOW)).toBe(3);
   });
 
-  it("R44: frozen이 아니면 가장 최근 상세가 4일보다 오래됐을 때만", () => {
-    expect(STALE_DETAIL_DAYS).toBe(4);
-    expect(detailAgeDays(null, NOW - 4 * D, NOW)).toBeNull();
-    expect(detailAgeDays(null, NOW - 4 * D - 1, NOW)).toBe(4);
-    expect(detailAgeDays(null, NOW - 6.2 * D, NOW)).toBe(6);
+  it("R44/R63: frozen이 아니면 가장 최근 상세가 8일(주 1회 갱신 + 하루 여유)보다 오래됐을 때만 — 갱신 요일 직전(5~7일)에는 보이지 않는다", () => {
+    expect(STALE_DETAIL_DAYS).toBe(8);
+    expect(detailAgeDays(null, NOW - 7 * D, NOW)).toBeNull();
+    expect(detailAgeDays(null, NOW - 8 * D, NOW)).toBeNull();
+    expect(detailAgeDays(null, NOW - 8 * D - 1, NOW)).toBe(8);
+    expect(detailAgeDays(null, NOW - 9.2 * D, NOW)).toBe(9);
     expect(detailAgeDays(null, null, NOW)).toBeNull();
   });
 

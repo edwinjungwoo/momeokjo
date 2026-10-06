@@ -12,7 +12,10 @@ export const PLACES_CACHE_MAX_HUBS = 3;
 export const PLACES_CACHE_MAX_CHARS = 3_000_000;
 /** 이보다 오래된 저장본은 흐리게 보여주고, 자동 뽑기는 새 목록을 기다린다 */
 export const PLACES_CACHE_FRESH_MS = 24 * HOUR;
-/** 이보다 오래된 저장본은 보여주지 않는다. 서버의 상세 유지 기간(DETAIL_OK_TTL_MS, 3일)과 같다 (스펙 §3.1을 보수적으로 읽음) */
+/**
+ * 이보다 오래된 저장본은 보여주지 않는다 (스펙 §3.1을 보수적으로 읽음). 예전 서버 상세 유지 기간(3일)에 맞춘 값이고,
+ * R63 주 1회 갱신 뒤에도 그대로 둔다 — 기기 저장본은 서버보다 짧게 쓴다
+ */
 export const PLACES_CACHE_MAX_AGE_MS = 3 * 24 * HOUR;
 
 /** R56: 저장본과 함께 두는 응답 ETag의 최대 길이 (서버 ETag는 40자 안팎) */

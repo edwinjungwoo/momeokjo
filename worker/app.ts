@@ -108,10 +108,10 @@ export function placesCacheTtl(res: PlacesResponse | PlacesMeta): number | null 
 }
 /**
  * 응답 형식이 바뀌면 올린다 (예전 형식의 캐시를 쓰지 않게). 6: list_json 판(LIST_JSON_VERSION) 도입,
- * 7: R56 스냅샷 — 엣지 항목이 gzip 바이트일 수 있다, 거리가 같으면 id순.
+ * 7: R56 스냅샷 — 엣지 항목이 gzip 바이트일 수 있다, 거리가 같으면 id순. 8: R63 refreshedAt·refreshDay.
  * 주의: 본문이 바뀌면 HUB_SNAPSHOT_VERSION(worker/hubSnapshot.ts)도 올린다
  */
-export const PLACES_CACHE_VERSION = "7";
+export const PLACES_CACHE_VERSION = "8";
 const EXPIRES_HEADER = "x-mmj-expires";
 /** R56: 스냅샷에서 온 엣지 항목 표시 — 본문은 gzip 바이트, 값은 ETag (Content-Encoding·ETag 헤더는 Cache API가 따로 다뤄서 쓰지 않는다) */
 const SNAPSHOT_ETAG_HEADER = "x-mmj-snapshot-etag";
@@ -236,7 +236,7 @@ export function createApp(deps: AppDeps) {
       }
       return snapshotResponse(snap.body, snap.etag, gzipOk, "snapshot");
     }
-    const res = await getPlaces(serviceDeps(c), { lat: hub.lat, lng: hub.lng }, MAX_RADIUS);
+    const res = await getPlaces(serviceDeps(c), hub, MAX_RADIUS);
     if ("error" in res) return c.json(res, 502);
     const { items, ...meta } = res;
     const body = placesBody(meta, items);

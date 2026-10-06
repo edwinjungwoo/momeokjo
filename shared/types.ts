@@ -84,4 +84,11 @@ export type PlacesResponse = {
   detailsFrozenSince: number | null;
   /** R44 실린 가게 중 가장 최근 상세 시각 (없으면 null) */
   detailsNewestAt: number | null;
+  /**
+   * R63 이 거점의 가게 정보를 마지막으로 다 갱신한 시각 (epoch ms, 한 번도 끝내지 않았으면 null). 갱신 중에는 지난 완료 시각.
+   * 예전 응답(기기 저장본)에는 없을 수 있다
+   */
+  refreshedAt: number | null;
+  /** R63 거점의 주 1회 갱신 요일 (KST, 0=일 ~ 6=토 — shared/hubs.ts). 예전 응답에는 없을 수 있다 */
+  refreshDay: number;
 };

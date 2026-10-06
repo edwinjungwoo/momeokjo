@@ -1,4 +1,5 @@
 // R57 관리 화면 숫자·시간 표기 (KST, 한국어). 화면 전용 — 서버는 부르지 않는다.
+import { REFRESH_DAY_NAMES } from "../../shared/refresh";
 
 const KST = 9 * 3600_000;
 
@@ -78,4 +79,18 @@ export function ago(ms: number | null | undefined, now: number): string {
   if (s < 3600) return `${Math.max(1, Math.round(s / 60))}분 전`;
   if (s < 86_400) return `${Math.round(s / 3600)}시간 전`;
   return `${Math.round(s / 86_400)}일 전`;
+}
+
+/** R63 운영 거점 표: 갱신 요일과 이번 시작 날짜 "월 10/5" (시작을 모르면 요일만) */
+export function refreshStartLabel(day: number, start: number): string {
+  const name = REFRESH_DAY_NAMES[day] ?? "–";
+  return Number.isFinite(start) ? `${name} ${kstTime(start).split(" ")[0]}` : name;
+}
+
+/** R63: 이번 갱신을 끝냈으면 완료 시각, 아니면 "진행 중"(지난 완료가 있으면 같이) */
+export function refreshDoneLabel(h: { refreshStart: number; refreshedStart: number | null; refreshedAt: number | null }): {
+  done: boolean; text: string;
+} {
+  if (h.refreshedAt !== null && h.refreshedStart === h.refreshStart) return { done: true, text: kstTime(h.refreshedAt) };
+  return { done: false, text: h.refreshedAt === null ? "진행 중" : `진행 중 · 지난 완료 ${kstTime(h.refreshedAt)}` };
 }

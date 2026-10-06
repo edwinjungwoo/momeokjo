@@ -11,6 +11,8 @@ import {
 } from "../../worker/app";
 import { detailGate, getMeta, markTile, recordPlaceBlock, replaceTilePlaces, resetCorruptWarnings } from "../../worker/repo";
 import { callApp } from "../helpers/callApp";
+import { recordHubRefreshed } from "../../worker/hubRefresh";
+import { hubRefreshStart } from "../../worker/refreshSchedule";
 import { doc, fakeKakaoLocal, fakePlaceApi, routeFetch } from "../helpers/fakeKakao";
 import { markOuterTilesFresh, placeJson, seedPlace } from "../helpers/places";
 
@@ -161,7 +163,7 @@ describe("GET /api/places — 응답 캐시와 목록 원소", () => {
   it("R12: 캐시 시간 — 다 찬 응답·frozen·쿨다운(detailsPaused)이면 60초, pending이나 수집 중 격자가 남으면 10초, 외부 실패(stale)만 두지 않는다", () => {
     const base: PlacesResponse = {
       center: HUB_CENTER, radius: 1000, places: [], pending: 0, incompleteTiles: 0, stale: false, detailsPaused: false,
-      detailsFrozenSince: null, detailsNewestAt: null,
+      detailsFrozenSince: null, detailsNewestAt: null, refreshedAt: null, refreshDay: 1,
     };
     expect(PLACES_CACHE_MS).toBe(60_000);
     expect(PLACES_PENDING_CACHE_MS).toBe(10_000);
@@ -288,12 +290,27 @@ describe("GET /api/places — 응답 캐시와 목록 원소", () => {
     }
   });
 
+  it("R63: 목록 응답 맨 뒤에 거점의 갱신 요일(refreshDay)과 마지막으로 다 갱신한 시각(refreshedAt, 없으면 null)을 싣는다", async () => {
+    const s = setup();
+    await callApp(s.app, Q);
+    const first = await (await callApp(s.app, Q)).text();
+    expect(first.endsWith(`,"refreshedAt":null,"refreshDay":${HUB.refreshDay}}`)).toBe(true);
+    const start = hubRefreshStart(HUB, NOW);
+    await recordHubRefreshed(env.DB, "bongeunsa", start, start + 3600_000);
+    const body = (await (await callApp(s.app, Q)).json()) as PlacesResponse;
+    expect(body).toMatchObject({ refreshedAt: start + 3600_000, refreshDay: 1 });
+    // 다른 거점의 기록은 싣지 않는다
+    await recordHubRefreshed(env.DB, "ddp", start, start + 7200_000);
+    expect(((await (await callApp(s.app, Q)).json()) as PlacesResponse).refreshedAt).toBe(start + 3600_000);
+  });
+
   it("R12: 응답·목록 원소·detail에는 정해진 키만 싣는다 (목록 크기 회귀 방지)", async () => {
     const s = setup();
     await callApp(s.app, Q);
     const body = (await (await callApp(s.app, Q)).json()) as PlacesResponse;
     expect(Object.keys(body).sort()).toEqual(
-      ["center", "detailsFrozenSince", "detailsNewestAt", "detailsPaused", "incompleteTiles", "pending", "places", "radius", "stale"],
+      ["center", "detailsFrozenSince", "detailsNewestAt", "detailsPaused", "incompleteTiles", "pending", "places", "radius",
+        "refreshDay", "refreshedAt", "stale"],
     );
     expect(body.places.length).toBeGreaterThan(0);
     for (const p of body.places) {

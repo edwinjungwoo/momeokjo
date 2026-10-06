@@ -2,11 +2,11 @@ import { useEffect, useRef, useState } from "react";
 import {
   BUDGET_BLOCK_AT, D1_DAILY_READ_LIMIT, overBlockAfter, D1_DAILY_WRITE_LIMIT, budgetFraction, budgetLevel, type HubStatus, type OpsData,
 } from "../../shared/dashboard";
-import { HUBS } from "../../shared/hubs";
+import { HUBS, hubById } from "../../shared/hubs";
 import type { Api } from "./AdminPage";
 import { Meter } from "./charts";
 import { CronResult } from "./CronResult";
-import { ago, kstTime, num, pct, until } from "./format";
+import { ago, kstTime, num, pct, refreshDoneLabel, refreshStartLabel, until } from "./format";
 import { AlertStrip, HubName, hubName } from "./Overview";
 
 /** 대시보드 링크 (계정은 Cloudflare가 고르게 한다 — API 토큰 없음) */
@@ -36,6 +36,7 @@ const KIND_LABEL: Record<Kind, string> = { warm: "수집(warm)", backfill: "상�
 const emptyStatus = (hub: string): HubStatus => ({
   hub, places: Number.NaN, ok: Number.NaN, failed: 0, pending: Number.NaN, visible: Number.NaN, listReady: Number.NaN,
   tiles: Number.NaN, incompleteTiles: Number.NaN, saturatedTiles: 0, oldestOkAt: null, lastTileAt: null,
+  refreshDay: hubById(hub).refreshDay, refreshStart: Number.NaN, refreshedAt: null, refreshedStart: null, due: Number.NaN,
 });
 
 const days = (ms: number | null, now: number) => (ms === null ? "–" : `${Math.max(0, Math.floor((now - ms) / 86_400_000))}일`);
@@ -81,6 +82,9 @@ function HubTable({ hubs, now, blocked, onRun, running }: {
           <th className="num">목록 조각</th>
           <th className="num">가장 오래된 상세</th>
           <th className="num">마지막 격자 수집</th>
+          <th>주간 갱신</th>
+          <th>완료</th>
+          <th className="num">남은 갱신</th>
           <th>조작</th>
         </tr>
       </thead>
@@ -109,6 +113,14 @@ function HubTable({ hubs, now, blocked, onRun, running }: {
               <td className="num" data-label="목록 조각">{pct(h.visible > 0 ? h.listReady / h.visible : null)}</td>
               <td className="num" data-label="가장 오래된 상세">{days(h.oldestOkAt, now)}</td>
               <td className="num" data-label="마지막 격자 수집">{ago(h.lastTileAt, now)}</td>
+              <td data-label="주간 갱신">{refreshStartLabel(h.refreshDay, h.refreshStart)}</td>
+              <td data-label="완료">
+                {(() => {
+                  const r = refreshDoneLabel(h);
+                  return <span className={r.done ? "" : "muted"}>{r.text}</span>;
+                })()}
+              </td>
+              <td className="num" data-label="남은 갱신">{num(h.due)}</td>
               <td className="act-cell">
                 <div className="action-row">
                   <button type="button" className="btn btn-sm" disabled={blocked || running} onClick={() => onRun(h.hub, "warm")}>

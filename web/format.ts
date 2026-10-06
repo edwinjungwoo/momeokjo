@@ -1,5 +1,6 @@
 import { detailAgeDays, freshnessText } from "../shared/freshness";
 import { isOpenDuring, kstParts } from "../shared/hours";
+import { isRefreshDay, refreshNoteText } from "../shared/refresh";
 import type { Filters, Party } from "../shared/recommend";
 import type { ApiPlace, PlacesResponse } from "../shared/types";
 
@@ -61,6 +62,16 @@ export function statusOf(data: PlacesResponse | null, polling: boolean, error: b
       : { text: `${data.pending}곳은 아직 정보를 못 불러왔어요`, tone: "info", busy: false };
   }
   return ageStatus;
+}
+
+/**
+ * R63: 상태 줄 아래 조용한 한 줄 — "가게 정보 10월 6일(월) 업데이트 · 매주 월요일" (완료한 적이 없으면 "매주 월요일 업데이트").
+ * 갱신 중에는 서버가 지난 완료 시각을 준다. 예전 기기 저장본에 필드가 없으면 거점 설정의 요일(hubRefreshDay)로, 날짜 없이
+ */
+export function refreshNote(data: PlacesResponse | null, hubRefreshDay: number): string | null {
+  if (!data) return null;
+  const day = isRefreshDay(data.refreshDay) ? data.refreshDay : hubRefreshDay;
+  return refreshNoteText(data.refreshedAt ?? null, day);
 }
 
 const hhmm = (m: number) => {

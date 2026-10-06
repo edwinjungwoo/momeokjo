@@ -16,7 +16,8 @@ const ops = (o: Partial<{ read: number; written: number; blockedUntil: number; f
 });
 const hub = (h: Partial<HubStatus>): HubStatus => ({
   hub: "ddp", places: 10, ok: 10, failed: 0, pending: 0, visible: 10, listReady: 10, tiles: 4, incompleteTiles: 0,
-  saturatedTiles: 0, oldestOkAt: NOW, lastTileAt: NOW, ...h,
+  saturatedTiles: 0, oldestOkAt: NOW, lastTileAt: NOW, refreshDay: 2, refreshStart: NOW - 3600_000, refreshedAt: null,
+  refreshedStart: null, due: 0, ...h,
 });
 const rollup = { through: "2027-01-14", yesterday: "2027-01-14" };
 

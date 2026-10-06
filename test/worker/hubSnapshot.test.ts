@@ -16,6 +16,8 @@ import { MAIN_CRON, SNAPSHOT_CRON, runCron, runSnapshotCron } from "../../worker
 import { markTile, recordPlaceBlock, replaceTilePlaces, saveDetail, saveDetailFailure } from "../../worker/repo";
 import { SNAPSHOT_DIRTY_PREFIX, markHubsDirtyStmt } from "../../worker/snapshotDirty";
 import { callApp } from "../helpers/callApp";
+import { recordHubRefreshed } from "../../worker/hubRefresh";
+import { hubRefreshStart } from "../../worker/refreshSchedule";
 import { recordingDb } from "../helpers/recordDb";
 import { doc, fakeKakaoLocal, fakePlaceApi, routeFetch } from "../helpers/fakeKakao";
 import { makeSummary, markOuterTilesFresh, placeJson, sampleDetail } from "../helpers/places";
@@ -119,6 +121,17 @@ describe("R56 거점 스냅샷 — 만들기와 내보내기", () => {
     const { app } = makeApp();
     const ids = ((await (await callApp(app, Q)).json()) as { places: { id: string }[] }).places.map((p) => p.id);
     expect(ids.slice(0, 2)).toEqual(["1000", "1001"]);
+  });
+
+  it("R56/R63: 거점 갱신 완료 기록(refreshedAt)이 있어도 스냅샷 본문은 지금 경로 본문과 글자까지 같다", async () => {
+    const start = hubRefreshStart(HUB, NOW);
+    await recordHubRefreshed(env.DB, "bongeunsa", start, start + 5 * 3600_000);
+    const live = await seedHub();
+    expect(JSON.parse(live)).toMatchObject({ refreshedAt: start + 5 * 3600_000, refreshDay: HUB.refreshDay });
+    expect(await buildHubSnapshot(env.DB, HUB, NOW)).toMatchObject({ status: "built" });
+    const res = await callApp(makeApp().app, Q, { headers: GZIP });
+    expect(res.headers.get("x-mmj-source")).toBe("snapshot");
+    expect(await gunzip(res)).toBe(live);
   });
 
   it("R56: gzip은 풀면 원래 본문으로 돌아온다 (왕복)", async () => {
@@ -688,7 +701,8 @@ describe("R56 Fix wave 11 — 만들 수 없는 거점의 비용 상한", () => 
 describe("R56 판과 마이그레이션", () => {
   it("R56: 판 상수 — 응답 형식(PLACES_CACHE_VERSION)·목록 조각(LIST_JSON_VERSION)을 올리면 스냅샷 판도 같이 본다", () => {
     // 주의: 이 셋 중 하나를 바꾸면 나머지도 볼 것 — /api/places 본문이 바뀌면 HUB_SNAPSHOT_VERSION도 올린다
-    expect({ cache: PLACES_CACHE_VERSION, list: LIST_JSON_VERSION, snapshot: HUB_SNAPSHOT_VERSION }).toEqual({ cache: "7", list: 1, snapshot: 1 });
+    // 8·2: R63 refreshedAt·refreshDay를 본문 끝에 더했다
+    expect({ cache: PLACES_CACHE_VERSION, list: LIST_JSON_VERSION, snapshot: HUB_SNAPSHOT_VERSION }).toEqual({ cache: "8", list: 1, snapshot: 2 });
   });
 
   it("R56: 0007은 데이터가 있는 DB에 적용된다 (기존 행은 그대로)", async () => {

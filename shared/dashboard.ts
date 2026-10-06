@@ -257,6 +257,15 @@ export type HubStatus = {
   saturatedTiles: number;
   oldestOkAt: number | null;
   lastTileAt: number | null;
+  /** R63 갱신 요일 (KST, 0=일 ~ 6=토) */
+  refreshDay: number;
+  /** R63 이번 갱신 시작 (그 요일 00:00 KST, epoch ms) */
+  refreshStart: number;
+  /** R63 마지막 완료 시각과 그때 끝낸 갱신의 시작 (없으면 null) — refreshedStart가 refreshStart와 같으면 이번 갱신을 끝냈다 */
+  refreshedAt: number | null;
+  refreshedStart: number | null;
+  /** R63 남은 갱신: 이번 시작 전에 가져온 ok 상세 수 (미수집은 pending, 실패는 failed로 따로) */
+  due: number;
 };
 export type CronSummary = {
   at: number;

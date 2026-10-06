@@ -30,7 +30,7 @@ import { SkeletonList } from "./components/Skeleton";
 import { StatusLine } from "./components/StatusLine";
 import { Toast, useToast } from "./components/Toast";
 import { TrioSheet } from "./components/TrioSheet";
-import { statusOf } from "./format";
+import { refreshNote, statusOf } from "./format";
 import { usePersonal } from "./personal";
 import { recordSeen, seenSnapshot } from "./seen";
 import { shareOrCopy } from "./shareAction";
@@ -500,6 +500,8 @@ export default function App() {
   }, [settled, empty, filters]);
 
   const status = statusOf(data, polling, error, now.getTime());
+  // R63: 마지막 업데이트 날짜와 갱신 요일 (다른 거점 목록이 남아 있는 동안은 숨긴다)
+  const note = data && data.center.lat === hub.lat && data.center.lng === hub.lng ? refreshNote(data, hub.refreshDay) : null;
   /** 셔플 중(고르는 중 시트)이거나 결과 3곳 시트가 떠 있음 — 시트 아래 줄이 뽑기 바를 대신한다 (.has-trio) */
   const trioOpen = selected === null && (shuffle.display !== null || trioPlaces.length > 0);
   const drawLabel = shuffle.running ? "고르는 중…" : trio?.source === "drawn" ? "다시 뽑기" : "모먹죠?";
@@ -596,6 +598,7 @@ export default function App() {
           {tip.open && !askHub && <FirstTip onClose={tip.dismiss} />}
           <FilterPanel filters={filters} onChange={setFilters} />
           {status && <StatusLine status={status} onRetry={error ? reload : undefined} />}
+          {note && <p className="refresh-note">{note}</p>}
           {list}
           <div className="draw-bar">
             <button

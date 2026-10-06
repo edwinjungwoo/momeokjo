@@ -6,7 +6,7 @@ import { HUB_CHANGE_DEBOUNCE_MS, MAX_POLLS, loadDelayMs, pollDelayMs, shouldPoll
 const PLACES_PENDING_CACHE_MS = 10_000;
 const base: PlacesResponse = {
   center: { lat: 37.5, lng: 127 }, radius: 1000, places: [], pending: 0, incompleteTiles: 0, stale: false,
-  detailsPaused: false, detailsFrozenSince: null, detailsNewestAt: null,
+  detailsPaused: false, detailsFrozenSince: null, detailsNewestAt: null, refreshedAt: null, refreshDay: 1,
 };
 
 describe("R29 목록 폴링 간격", () => {

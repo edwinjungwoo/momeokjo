@@ -59,7 +59,7 @@ describe("present", () => {
     const r = row("음식점 > 한식", []);
     const meta = {
       center: ASEM, radius: 1000, pending: 1, incompleteTiles: 0, stale: false, detailsPaused: false,
-      detailsFrozenSince: null, detailsNewestAt: 123,
+      detailsFrozenSince: null, detailsNewestAt: 123, refreshedAt: 456, refreshDay: 3,
     };
     const body = placesBody(meta, [withDistance(listItemJson(r), 111), withDistance(listItemJson(r), 222)]);
     const parsed = JSON.parse(body);

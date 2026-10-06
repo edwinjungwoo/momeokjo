@@ -14,7 +14,7 @@ const BACKFILL = process.argv[2] === "backfill";
 const args = BACKFILL ? process.argv.slice(3) : process.argv.slice(2);
 const N = BACKFILL ? 2000 : Number(args[0] ?? 2000);
 const RUNS = Number((BACKFILL ? args[0] : args[1]) ?? 60);
-const HUB = { lat: 37.5651, lng: 127.00749 }; // 동대문역사문화공원역
+const HUB = { id: "ddp", name: "동대문역사문화공원역", lat: 37.5651, lng: 127.00749, ready: true, refreshDay: 2 }; // getPlaces는 거점을 받는다 (R63)
 const RADIUS = 1000;
 const NOW = 1_800_000_000_000;
 
@@ -148,6 +148,11 @@ const fakeDb = {
         }
         if (sql.includes(`CASE WHEN ${mod.usableListJsonSql("list_json")} THEN list_json END`)) return { results: rows.map((r) => (withJson ? { ...r } : { ...r, list_json: null })) };
         if (sql.includes("FROM meta")) return { results: [] };
+        throw new Error(`unexpected sql: ${sql}`);
+      },
+      // R63 거점 완료 기록 (meta 1행) — 없음
+      async first() {
+        if (sql.includes("FROM meta")) return null;
         throw new Error(`unexpected sql: ${sql}`);
       },
     };

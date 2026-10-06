@@ -1,8 +1,10 @@
 import { boundingBox, haversine, tilesCoveringCircle } from "../shared/geo";
+import type { Hub } from "../shared/hubs";
 import type { ApiPlace, LatLng } from "../shared/types";
 import { Budget } from "./budget";
 import { BLOCK_SIGNALS, enrichDetails } from "./detailEnricher";
 import type { FetchFn } from "./fetchFn";
+import { readHubRefreshed } from "./hubRefresh";
 import { hubTileKeys } from "./hubTiles";
 import { fetchPlaceDetail } from "./kakaoPlace";
 import { toApiPlace, withDistance, type PlacesMeta } from "./present";
@@ -57,7 +59,9 @@ export async function readListRows(
 }
 
 /** 응답 메타 중 실행마다 정하는 것 (나머지 center·radius·detailsNewestAt은 placesPayload가 채운다) */
-export type PlacesState = Pick<PlacesMeta, "pending" | "incompleteTiles" | "stale" | "detailsPaused" | "detailsFrozenSince">;
+export type PlacesState = Pick<
+  PlacesMeta, "pending" | "incompleteTiles" | "stale" | "detailsPaused" | "detailsFrozenSince" | "refreshedAt" | "refreshDay"
+>;
 
 /** 응답을 만든다. 키 순서가 본문 글자를 정한다 — 요청 경로와 스냅샷이 이 함수 하나를 쓴다 */
 export function placesPayload(center: LatLng, radiusM: number, rows: ListRead["rows"], s: PlacesState): PlacesPayload {
@@ -74,12 +78,17 @@ export function placesPayload(center: LatLng, radiusM: number, rows: ListRead["r
     detailsPaused: s.detailsPaused,
     detailsFrozenSince: s.detailsFrozenSince,
     detailsNewestAt: newest,
+    // R63: 거점 갱신 완료 시각과 요일 (본문 맨 뒤)
+    refreshedAt: s.refreshedAt,
+    refreshDay: s.refreshDay,
   };
 }
 
+/** 거점 목록 (R12). R63: 응답에 그 거점의 갱신 요일과 마지막 완료 시각(meta hub_refreshed, 1행)을 싣는다 */
 export async function getPlaces(
-  deps: ServiceDeps, center: LatLng, radiusM: number,
+  deps: ServiceDeps, hub: Hub, radiusM: number,
 ): Promise<PlacesPayload | { error: "upstream" }> {
+  const center = { lat: hub.lat, lng: hub.lng };
   const keys = tilesCoveringCircle(center, radiusM);
   const states = await getTiles(deps.db, keys);
   const due = keys.filter((k) => isTileDue(k, states.get(k), deps.now));
@@ -135,8 +144,10 @@ export async function getPlaces(
     );
   }
 
+  const refreshed = await readHubRefreshed(deps.db, hub.id);
   return placesPayload(center, radiusM, rows, {
     pending, incompleteTiles, stale, detailsPaused, detailsFrozenSince: frozenSince(gate, deps.now),
+    refreshedAt: refreshed?.at ?? null, refreshDay: hub.refreshDay,
   });
 }
 

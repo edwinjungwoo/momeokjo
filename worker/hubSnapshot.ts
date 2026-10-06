@@ -1,6 +1,7 @@
 import { MAX_RADIUS } from "../shared/constants";
 import { tilesCoveringCircle } from "../shared/geo";
 import type { Hub } from "../shared/hubs";
+import { readHubRefreshed } from "./hubRefresh";
 import { placesPayload, readListRows } from "./placesService";
 import { placesBody } from "./present";
 import { countUnfetchedIn, detailGate, detailsAllowed, frozenSince, getTiles, isTileDue, tilePlaceStates } from "./repo";
@@ -13,7 +14,7 @@ import { SNAPSHOT_DIRTY_PREFIX } from "./snapshotDirty";
  * 주의: /api/places 본문이 바뀌면(PLACES_CACHE_VERSION을 올리는 변화, LIST_JSON_VERSION 변화 포함) 이 값을 올린다 —
  * 예전 판 스냅샷은 쓰지 않고 Cron이 다시 만든다.
  */
-export const HUB_SNAPSHOT_VERSION = 1;
+export const HUB_SNAPSHOT_VERSION = 2;
 
 const MIN = 60_000;
 /** 만든 지 이만큼 지난 스냅샷은 쓰지 않는다 (Cron이 멈춰도 오래된 목록이 계속 나가지 않게) */
@@ -122,9 +123,12 @@ export async function buildHubSnapshot(db: D1Database, hub: Hub, now: number): P
   const tileStates = await tilePlaceStates(db, keys);
   if (countUnfetchedIn(tileStates) > 0) return skip("pending");
   const rows = await readListRows(db, center, MAX_RADIUS, tileStates);
+  // R63: 지금 경로와 같은 완료 기록 (기록이 바뀌면 recordHubRefreshed가 표시를 올려 다시 만든다)
+  const refreshed = await readHubRefreshed(db, hub.id);
 
   const { items, ...meta } = placesPayload(center, MAX_RADIUS, rows, {
     pending: 0, incompleteTiles: 0, stale: false, detailsPaused: !detailsAllowed(gate, now), detailsFrozenSince: frozen,
+    refreshedAt: refreshed?.at ?? null, refreshDay: hub.refreshDay,
   });
   const raw = new TextEncoder().encode(placesBody(meta, items));
   const gz = await gzip(raw);

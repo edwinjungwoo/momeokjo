@@ -1,4 +1,4 @@
-import { PREWARM_RADIUS, TILE_TTL_MS } from "../shared/constants";
+import { PREWARM_RADIUS } from "../shared/constants";
 import {
   COHORT_METRICS, LIVE_MAX_DAYS, METRICS, RETENTION_DAYS, TOP_PLACES_SHOWN, addDays, alertsOf, dayList, mondayOf, ratio,
   weekdayOf, type BehaviorData, type Cohort, type CronSummary, type DashboardBase, type DashboardRange, type DashboardTab,
@@ -6,6 +6,8 @@ import {
 } from "../shared/dashboard";
 import { tilesCoveringCircle } from "../shared/geo";
 import { HUBS, hubById } from "../shared/hubs";
+import { HUB_REFRESHED_PREFIX, parseHubRefreshed } from "./hubRefresh";
+import { hubRefreshStart, tileFreshFrom } from "./refreshSchedule";
 import { kstDay, utcDay } from "../shared/kst";
 import { CRON_LAST_KEY } from "./d1Usage";
 import { usableListJsonSql } from "./present";
@@ -33,7 +35,7 @@ export type DashboardDeps = {
 export type DashboardQuery = { tab: DashboardTab; from: string; to: string; hub: string; compare: boolean };
 
 /** 응답 형식이 바뀌면 올린다 */
-export const DASHBOARD_CACHE_VERSION = "2";
+export const DASHBOARD_CACHE_VERSION = "3";
 export const DASHBOARD_CACHE_MS = 60_000;
 /**
  * 실시간 집계(그날 events를 이벤트당 수 행씩 읽는다)는 탭·거점이 함께 쓰고 5분 둔다 — 자동 새로고침(60초)이 매번 다시 세지 않게.
@@ -201,10 +203,13 @@ const metricOf = (store: Store, day: string, hub: string, m: string) => store.ge
 
 // ── 거점별 데이터 상태 ─────────────────────────────
 
-const HUB_TILES = `WITH k AS (SELECT json_extract(value, '$[0]') AS hub, json_extract(value, '$[1]') AS key FROM json_each(?1))`;
+/** ?1: [hub, key, 격자 기준(R63 tileFreshFrom), 거점 갱신 시작] */
+const HUB_TILES = `WITH k AS (SELECT json_extract(value, '$[0]') AS hub, json_extract(value, '$[1]') AS key,
+  json_extract(value, '$[2]') AS fresh_from, json_extract(value, '$[3]') AS start FROM json_each(?1))`;
 const HUB_PLACES_SQL = `${HUB_TILES},
-tp AS MATERIALIZED (SELECT DISTINCT k.hub AS hub, t.place_id AS id FROM k JOIN tile_places t ON t.tile_key = k.key)
+tp AS MATERIALIZED (SELECT DISTINCT k.hub AS hub, k.start AS start, t.place_id AS id FROM k JOIN tile_places t ON t.tile_key = k.key)
 SELECT tp.hub AS hub, count(*) AS places,
+  count(CASE WHEN p.status = 'ok' AND p.fetched_at < tp.start THEN 1 END) AS due,
   count(CASE WHEN p.status = 'ok' THEN 1 END) AS ok,
   count(CASE WHEN p.status = 'failed' THEN 1 END) AS failed,
   count(CASE WHEN p.id IS NULL THEN 1 END) AS pending,
@@ -214,28 +219,38 @@ SELECT tp.hub AS hub, count(*) AS places,
 FROM tp LEFT JOIN places p ON p.id = tp.id GROUP BY tp.hub`;
 const HUB_TILES_SQL = `${HUB_TILES}
 SELECT k.hub AS hub, count(*) AS tiles,
-  count(CASE WHEN t.key IS NULL OR t.collected_at <= ?2 THEN 1 END) AS incompleteTiles,
+  count(CASE WHEN t.key IS NULL OR t.collected_at < k.fresh_from THEN 1 END) AS incompleteTiles,
   count(CASE WHEN t.saturated = 1 THEN 1 END) AS saturatedTiles,
   max(t.collected_at) AS lastTileAt
 FROM k LEFT JOIN tiles t ON t.key = k.key GROUP BY k.hub`;
 
-/** R60 거점마다: 가게 수, 상세 성공·실패·미수집, 목록에 보이는 곳·list_json 준비, 가장 오래된 상세, 격자 수·미완료(없거나 7일 지남)·포화, 마지막 격자 수집 */
+/**
+ * R60 거점마다: 가게 수, 상세 성공·실패·미수집, 목록에 보이는 곳·list_json 준비, 가장 오래된 상세, 격자 수·미완료(없거나
+ * R63 갱신 시작 전에 수집)·포화, 마지막 격자 수집. R63: 갱신 요일·이번 시작·마지막 완료(meta hub_refreshed)·남은 갱신(시작 전 ok)
+ */
 export async function hubStatuses(db: D1Database, now: number): Promise<HubStatus[]> {
-  const pairs = JSON.stringify(HUBS.flatMap((h) => tilesCoveringCircle(h, PREWARM_RADIUS).map((k) => [h.id, k])));
-  const [places, tiles] = await db.batch<Record<string, number | string | null>>([
+  const pairs = JSON.stringify(
+    HUBS.flatMap((h) => tilesCoveringCircle(h, PREWARM_RADIUS).map((k) => [h.id, k, tileFreshFrom(k, now), hubRefreshStart(h, now)])),
+  );
+  const [places, tiles, done] = await db.batch<Record<string, number | string | null>>([
     db.prepare(HUB_PLACES_SQL).bind(pairs),
-    db.prepare(HUB_TILES_SQL).bind(pairs, now - TILE_TTL_MS),
+    db.prepare(HUB_TILES_SQL).bind(pairs),
+    db.prepare("SELECT key, value FROM meta WHERE key IN (SELECT value FROM json_each(?))")
+      .bind(JSON.stringify(HUBS.map((h) => HUB_REFRESHED_PREFIX + h.id))),
   ]);
   const num = (v: unknown) => Number(v ?? 0) || 0;
   const orNull = (v: unknown) => (v === null || v === undefined ? null : Number(v));
   return HUBS.map((h) => {
     const p = places.results.find((x) => x.hub === h.id) ?? {};
     const t = tiles.results.find((x) => x.hub === h.id) ?? {};
+    const r = parseHubRefreshed(done.results.find((x) => x.key === HUB_REFRESHED_PREFIX + h.id)?.value as string | undefined);
     return {
       hub: h.id,
       places: num(p.places), ok: num(p.ok), failed: num(p.failed), pending: num(p.pending), visible: num(p.visible),
       listReady: num(p.listReady), oldestOkAt: orNull(p.oldestOkAt),
       tiles: num(t.tiles), incompleteTiles: num(t.incompleteTiles), saturatedTiles: num(t.saturatedTiles), lastTileAt: orNull(t.lastTileAt),
+      refreshDay: h.refreshDay, refreshStart: hubRefreshStart(h, now), refreshedAt: r?.at ?? null, refreshedStart: r?.start ?? null,
+      due: num(p.due),
     };
   });
 }
