@@ -4,11 +4,13 @@
 # 사용:   B=https://mmj.itmz.me scripts/smoke.sh
 # 관리자: 토큰을 화면·기록에 남기지 않게 읽어서 넘긴다 →  read -rs ADMIN_TOKEN && export ADMIN_TOKEN && scripts/smoke.sh
 #         (토큰이 있으면 거점마다 감사 Q1·Q2를 더 본다. 토큰 값은 출력하지 않고, curl 인자에도 넣지 않는다)
+# R62 준비 중 거점(shared/hubs.ts의 ready: false): 목록은 보지 않고 "공개 API가 400으로 숨기는지"만 본다.
+#   감사는 하되 결과를 info로만 찍는다 (FAIL·WARN이 아니라 release.mjs가 롤백·중단 사유로 보지 않는다)
 #
-# 요청 수: 기본 20번 (+ ADMIN_TOKEN이 있으면 거점 수만큼). 읽기 경로에는 IP 제한이 없지만, 목록 요청이 카카오 수집을
+# 요청 수: 기본 15번 + 거점마다 1번 (+ ADMIN_TOKEN이 있으면 거점 수만큼). 읽기 경로에는 IP 제한이 없지만, 목록 요청이 카카오 수집을
 #   새로 부르면 그 수집은 IP당 분당 10회 제한(RATE_LIMITER)과 카카오 쿼터를 쓴다. 관리자 요청(인증 실패 2번 +
 #   감사)은 관리자 전용 admin:<IP> 제한(ADMIN_LIMITER, 분당 120회)을 쓴다. 그래서 요청을 아낀다
-#   - 목록은 거점마다 한 번만: 봉은사역은 화면과 같은 1000m(R42), 나머지는 500m
+#   - 목록은 공개 거점마다 한 번만: 봉은사역은 화면과 같은 1000m(R42), 나머지는 500m. 준비 중 거점은 400 확인 한 번(외부 호출 없음)
 #   - 정상 이벤트는 보내지 않는다 (운영 통계를 오염시키지 않게). 틀린 본문만 보낸다
 # 종료 코드: FAIL이 하나라도 있으면 1. WARN·INFO는 종료 코드에 영향 없음 (pending·stale·TTFB 등 운영 상태)
 set -uo pipefail
@@ -48,17 +50,18 @@ expect_code() { # <이름> <기대 상태> <설명> <curl 인자...>
   if [ "$CODE" = "$want" ]; then ok "$what → $CODE"; else bad "$what → $CODE (기대 $want)"; fi
 }
 
-# 거점 목록은 shared/hubs.ts에서 읽는다 (거점을 늘리면 스모크도 따라간다). 저장소 밖에서 돌리면 아래 기본값
+# 거점 목록은 shared/hubs.ts에서 읽는다 (거점을 늘리면 스모크도 따라간다). 줄마다 "id lat lng ready".
+# 저장소 밖에서 돌리면 아래 기본값 (식은 test/shared/release.test.ts가 hubs.ts에 그대로 돌려 본다)
 HUBS_TS="$(cd "$(dirname "$0")/.." && pwd)/shared/hubs.ts"
 hubs=()
 if [ -f "$HUBS_TS" ]; then
   while IFS= read -r line; do hubs+=("$line"); done < <(
-    sed -nE 's/.*id: "([a-z0-9-]+)".*lat: ([0-9.]+), lng: ([0-9.]+).*/\1 \2 \3/p' "$HUBS_TS"
+    sed -nE 's/.*id: "([a-z0-9-]+)".*lat: ([0-9.]+), lng: ([0-9.]+), ready: (true|false).*/\1 \2 \3 \4/p' "$HUBS_TS"
   )
 fi
 if [ ${#hubs[@]} -eq 0 ]; then
-  hubs=("bongeunsa 37.514255 127.060234" "ddp 37.5651 127.00749" "pangyo 37.394777 127.11159"
-    "naebang 37.487659 126.9936" "gwacheon 37.426505 126.989868")
+  hubs=("bongeunsa 37.514255 127.060234 true" "ddp 37.5651 127.00749 true" "pangyo 37.394777 127.11159 true"
+    "naebang 37.487659 126.9936 true" "gwacheon 37.426505 126.989868 true")
 fi
 
 echo "모먹죠 스모크 → $B"
@@ -102,12 +105,17 @@ else
   bad "/ 에서 /assets/*.js를 찾지 못함"
 fi
 
-echo "== 목록 (거점마다 1번)"
+echo "== 목록 (공개 거점마다 1번, 준비 중 거점은 숨김 확인)"
 ELEM_KEYS='["category","detail","distance","group","id","lat","lng","name","photoUrl","url","walkMinutes"]'
 DETAIL_KEYS='["bookable","groupFriendly","hours","menus","price","rating","reviewCount","soloFriendly","strengths"]'
 TOP_KEYS='["center","detailsFrozenSince","detailsNewestAt","detailsPaused","incompleteTiles","pending","places","radius","stale"]'
 for h in "${hubs[@]}"; do
-  read -r id _ _ <<<"$h"
+  read -r id _ _ ready <<<"$h"
+  if [ "$ready" != true ]; then
+    # R62: 덜 모은 거점은 공개 API가 모르는 거점처럼 400이어야 한다 (200이면 화면 밖에서 덜 모은 목록이 보인다 — 코드 문제)
+    expect_code "hidden-$id" 400 "준비 중 $id 목록 숨김" "$B/api/places?hub=$id&radius=500"
+    continue
+  fi
   r=500
   [ "$id" = bongeunsa ] && r=1000
   req "places-$id" "$B/api/places?hub=$id&radius=$r"
@@ -139,7 +147,7 @@ echo "== 입력 검증 (외부 호출이 일어나지 않는 요청만)"
 expect_code r99 400 "반경 99" "$B/api/places?hub=bongeunsa&radius=99"
 expect_code r1001 400 "반경 1001" "$B/api/places?hub=bongeunsa&radius=1001"
 expect_code r525 400 "반경 525 (50m 단위 아님)" "$B/api/places?hub=bongeunsa&radius=525"
-expect_code hubx 400 "모르는 거점" "$B/api/places?hub=gangnam&radius=500"
+expect_code hubx 400 "모르는 거점" "$B/api/places?hub=atlantis&radius=500"
 expect_code id16 404 "16자리 id" "$B/api/places/1234567890123456"
 
 echo "== 이벤트 (정상 이벤트는 보내지 않음)"
@@ -159,13 +167,17 @@ expect_code adm-none 401 "통계 토큰 없이" "$B/api/admin/stats"
 expect_code adm-wrong 401 "통계 틀린 토큰" -H "Authorization: Bearer smoke-wrong-token" "$B/api/admin/stats"
 if [ -n "${ADMIN_TOKEN:-}" ]; then
   for h in "${hubs[@]}"; do
-    read -r id lat lng <<<"$h"
+    read -r id lat lng ready <<<"$h"
     # 토큰은 curl 설정(-K, 프로세스 치환)으로만 넘긴다 — 명령줄 인자·출력에 남지 않게.
     # bash -x(set -x)로 돌리지 않는다: 아래 printf 줄이 토큰을 그대로 찍는다
     req "audit-$id" -K <(printf 'header = "Authorization: Bearer %s"\n' "$ADMIN_TOKEN") \
       "$B/api/admin/audit?lat=$lat&lng=$lng&radius=1000"
     code=$CODE
     f="$tmp/audit-$id.body"
+    if [ "$ready" != true ]; then
+      info "감사 $id(준비 중) → $code $(jq -c '{pass, places, tiles, detail: (.detail // null)}' "$f" 2>/dev/null) — 공개 전 확인용, FAIL로 세지 않음"
+      continue
+    fi
     if [ "$code" = 200 ] && jq -e '.pass.q1 and .pass.q2' "$f" >/dev/null 2>&1; then
       ok "감사 $id 1000m Q1·Q2 통과 ($(jq -r '"장소 \(.places), 상세 \(.detail.coverage * 100 | floor)%"' "$f"))"
     else

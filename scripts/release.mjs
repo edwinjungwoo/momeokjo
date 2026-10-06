@@ -434,6 +434,8 @@ const ROLLBACK_CAVEATS = [
  * @param {import("./release.d.mts").ReleaseDeps} deps
  */
 export async function runRelease(opts, deps) {
+  // R62: 스모크 FAIL 분류("모든 거점 0곳")는 스모크가 목록을 본 공개 거점 기준. 백필 훅은 모든 거점(deps.hubIds)
+  const smokeHubIds = deps.publicHubIds ?? deps.hubIds;
   const startedAt = deps.now();
   const log = deps.log;
   const summary = {
@@ -666,7 +668,7 @@ export async function runRelease(opts, deps) {
     }
     summary.smokeBaseline = base.fails;
     if (base.fails.length) {
-      const cls = classifySmokeFails(base.fails, deps.hubIds);
+      const cls = classifySmokeFails(base.fails, smokeHubIds);
       log(`  배포 전부터 FAIL ${base.fails.length}개:`);
       for (const f of cls.code) log(`    FAIL  ${f}`);
       for (const f of cls.data) log(`    FAIL  ${f}   (데이터 상태)`);
@@ -741,7 +743,7 @@ export async function runRelease(opts, deps) {
     log(`== 8. 스모크 (${SMOKE_SETTLE_MS / 1000}초 기다린 뒤)`);
     await deps.sleep(SMOKE_SETTLE_MS);
     const after = await runSmoke();
-    let verdict = shouldRollback({ code: after.code, summary: after.summary, fails: after.fails, baseline: base.fails, hubIds: deps.hubIds });
+    let verdict = shouldRollback({ code: after.code, summary: after.summary, fails: after.fails, baseline: base.fails, hubIds: smokeHubIds });
     summary.smoke = after.summary ? { ...after.summary, newFails: verdict.newFails } : null;
     let transient = 0;
     if (verdict.action === "rollback") {
@@ -751,7 +753,7 @@ export async function runRelease(opts, deps) {
       for (const f of first) log(`    FAIL  ${f}`);
       await deps.sleep(RECHECK_MS);
       const again = await runSmoke();
-      verdict = confirmRollback({ first, rerun: again, baseline: base.fails, hubIds: deps.hubIds });
+      verdict = confirmRollback({ first, rerun: again, baseline: base.fails, hubIds: smokeHubIds });
       // 처음 본 새 FAIL은 다시 돌린 뒤에도 요약에 남긴다
       summary.smoke = { ...(again.summary ?? after.summary), newFails: verdict.newFails, firstNewFails: first };
       if (verdict.action === "keep") transient = first.length;

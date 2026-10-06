@@ -1,6 +1,6 @@
 import { lastLevel } from "./category";
 import { isValidRadius } from "./constants";
-import { hubById, isHubId } from "./hubs";
+import { isPublicHubId, publicHubById } from "./hubs";
 import type { Filters } from "./recommend";
 import type { ApiPlace } from "./types";
 
@@ -13,10 +13,10 @@ export function shareUrl(origin: string, ids: string[], hubId: string, radius: n
   return `${base}?t=${ids.join(",")}&r=${radius}`;
 }
 
-/** R43: 경로가 정확히 /{거점 id}(끝 / 허용)이면 그 거점 id, 아니면 null */
+/** R43: 경로가 정확히 /{거점 id}(끝 / 허용)이면 그 거점 id, 아니면 null. R62: 준비 중 거점은 모르는 경로처럼 null */
 export function parseHubPath(pathname: string): string | null {
   const m = /^\/([a-z0-9-]+)\/?$/.exec(pathname);
-  return m && isHubId(m[1]) ? m[1] : null;
+  return m && isPublicHubId(m[1]) ? m[1] : null;
 }
 
 /** R36: 관리 화면 경로 — /admin과 /admin/(끝 슬래시) */
@@ -39,7 +39,7 @@ export function shareText(places: ApiPlace[], f: Filters, hubId: string, origin:
   const who = f.party === 4 ? "4명+" : `${f.party}명`;
   const ask = places.length === 1 ? "여기 어때요?" : "이 중에 어디 갈래요?";
   return [
-    `🍚 점심 고? (${who} · ${hubById(hubId).name} 반경 ${f.radius}m)`,
+    `🍚 점심 고? (${who} · ${publicHubById(hubId).name} 반경 ${f.radius}m)`,
     ...places.map(line),
     `${ask} 👉 ${shareUrl(origin, places.map((p) => p.id), hubId, f.radius)}`,
   ].join("\n");
@@ -79,7 +79,7 @@ export type ShareParams = { placeIds: string[]; hubId: string | null; radius: nu
 
 /**
  * t(쉼표로 이은 id 1~3개)를 읽고, 없으면 예전 p(1개)를 읽는다. 예전 링크의 lat/lng는 무시한다.
- * 거점은 경로(R43)가 우선이고, 없으면 예전 h를 읽는다.
+ * 거점은 경로(R43)가 우선이고, 없으면 예전 h를 읽는다. R62: 준비 중 거점(경로·h)은 모르는 거점처럼 버린다.
  */
 export function parseShareParams(search: string, pathname = "/"): ShareParams {
   const q = new URLSearchParams(search);
@@ -89,7 +89,7 @@ export function parseShareParams(search: string, pathname = "/"): ShareParams {
   const r = Number(q.get("r"));
   return {
     placeIds: fromT.length > 0 ? fromT : p && PLACE_ID.test(p) ? [p] : [],
-    hubId: parseHubPath(pathname) ?? (isHubId(h) ? h : null),
+    hubId: parseHubPath(pathname) ?? (isPublicHubId(h) ? h : null),
     radius: q.has("r") && isValidRadius(r) ? r : null,
   };
 }

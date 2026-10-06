@@ -1,5 +1,5 @@
 import { isValidRadius } from "./constants";
-import { DEFAULT_HUB_ID, isHubId } from "./hubs";
+import { DEFAULT_HUB_ID, isPublicHubId } from "./hubs";
 import { DEFAULT_FILTERS, type Filters } from "./recommend";
 import { isAdminPath, parseHubPath, parseShareParams, type ShareParams } from "./share";
 
@@ -41,7 +41,8 @@ export function parseSettings(raw: string | null): Settings {
   if (!isObject(json)) return DEFAULT_SETTINGS;
   return {
     filters: parseFilters(json.filters),
-    hubId: typeof json.hubId === "string" && isHubId(json.hubId) ? json.hubId : DEFAULT_HUB_ID,
+    // R62: 준비 중 거점은 모르는 거점처럼 기본 거점
+    hubId: typeof json.hubId === "string" && isPublicHubId(json.hubId) ? json.hubId : DEFAULT_HUB_ID,
   };
 }
 

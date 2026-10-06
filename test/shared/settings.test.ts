@@ -194,6 +194,22 @@ describe("settings", () => {
     expect(resolveStart(stored, "/", "")).toMatchObject({ askHub: false, saveHub: null });
   });
 
+  it("R62: 준비 중 거점은 모르는 거점처럼 — 저장값은 기본 거점, 짧은 링크·공유 링크의 거점은 무시", () => {
+    for (const id of ["gangnam", "yeouido", "gwanghwamun"]) {
+      expect(parseSettings(JSON.stringify({ hubId: id })).hubId, id).toBe("bongeunsa");
+    }
+    // 처음 온 기기가 /gangnam으로 열면 모르는 경로(/brand)처럼: 저장하지 않고 거점을 묻는다
+    expect(resolveStart(null, "/gangnam", "")).toEqual(resolveStart(null, "/brand", ""));
+    expect(resolveStart(null, "/gangnam", "")).toMatchObject({ askHub: true, saveHub: null, settings: DEFAULT_SETTINGS });
+    // 이미 고른 기기는 저장한 거점 그대로
+    const stored = JSON.stringify({ ...DEFAULT_SETTINGS, hubId: "naebang" });
+    expect(resolveStart(stored, "/gangnam/", "")).toMatchObject({ saveHub: null, replaceUrl: null, settings: { hubId: "naebang" } });
+    // 공유 링크의 준비 중 거점(경로·예전 h)도 무시 — 거점 없는 공유 링크처럼 받은 시트 뒤에 묻는다
+    expect(resolveStart(null, "/yeouido", "?t=1,2&r=700")).toMatchObject({ askHub: true, saveHub: null, settings: { hubId: "bongeunsa" } });
+    expect(resolveStart(stored, "/", "?t=1&h=gwanghwamun")).toMatchObject({ settings: { hubId: "naebang" } });
+    expect(needsHubPicker({ stored: null, path: "/gangnam", query: "" })).toBe(true);
+  });
+
   it("R61: 질문을 언제 보이나 — 거점 없는 공유 링크면 받은 곳을 다 불러오고 그 시트를 닫은 뒤에", () => {
     expect(showHubPicker({ askHub: false, shareLink: false, shareSettled: false, sheetOpen: false })).toBe(false);
     expect(showHubPicker({ askHub: true, shareLink: false, shareSettled: false, sheetOpen: false })).toBe(true);

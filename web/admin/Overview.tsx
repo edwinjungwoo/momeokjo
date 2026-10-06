@@ -6,6 +6,23 @@ import { delta, num, pct, shortDay, weekdayLabel } from "./format";
 
 export const hubName = (id: string) => (HUBS.some((h) => h.id === id) ? hubById(id).name : id);
 
+/** R62: 준비 중 거점(ready: false)인가 — 모르는 id(예전 이벤트)는 아님 */
+const isUnready = (id: string) => HUBS.some((h) => h.id === id && !h.ready);
+const UNREADY_LABEL = "준비 중";
+
+/** R62: 관리 화면 거점 고르기의 이름 — 준비 중 거점은 "(준비 중)"을 붙인다 */
+export const hubOptionLabel = (id: string) => (isUnready(id) ? `${hubName(id)} (${UNREADY_LABEL})` : hubName(id));
+
+/** R62: 관리 화면 표의 거점 이름 — 준비 중 거점은 "준비 중" 표시를 붙인다 */
+export function HubName({ id }: { id: string }) {
+  return (
+    <>
+      {hubName(id)}
+      {isUnready(id) && <span className="hub-badge">{UNREADY_LABEL}</span>}
+    </>
+  );
+}
+
 const LEVEL_LABEL: Record<Alert["level"], string> = { crit: "긴급", warn: "주의", info: "참고" };
 
 /** R57 "오늘의 이상 신호" 띠 */

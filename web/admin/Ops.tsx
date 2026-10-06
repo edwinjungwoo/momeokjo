@@ -6,7 +6,7 @@ import { HUBS } from "../../shared/hubs";
 import type { Api } from "./AdminPage";
 import { Meter } from "./charts";
 import { ago, kstTime, num, pct, until } from "./format";
-import { AlertStrip, hubName } from "./Overview";
+import { AlertStrip, HubName, hubName } from "./Overview";
 
 /** 대시보드 링크 (계정은 Cloudflare가 고르게 한다 — API 토큰 없음) */
 const CF_LINKS = [
@@ -88,7 +88,9 @@ function HubTable({ hubs, now, blocked, onRun, running }: {
           const filled = h.places > 0 ? h.ok / h.places : null;
           return (
             <tr key={h.hub}>
-              <td className="name">{hubName(h.hub)}</td>
+              <td className="name">
+                <HubName id={h.hub} />
+              </td>
               <td className="num" data-label="가게">{num(h.places)}</td>
               <td className="num" data-label="상세 채움">
                 <span className={filled !== null && filled < 0.95 ? "warn-text" : ""}>{pct(filled)}</span>

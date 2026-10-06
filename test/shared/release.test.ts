@@ -48,6 +48,10 @@ import {
   smokeOutput,
 } from "../fixtures/wrangler-output";
 
+import smokeSh from "../../scripts/smoke.sh?raw";
+import hubsTs from "../../shared/hubs.ts?raw";
+import { HUBS as ALL_HUBS } from "../../shared/hubs";
+
 const MIGRATION_SQL = import.meta.glob("../../migrations/*.sql", { query: "?raw", import: "default", eager: true }) as Record<string, string>;
 const sqlOf = (name: string) => MIGRATION_SQL[`../../migrations/${name}`];
 const HUBS = ["bongeunsa", "ddp", "pangyo", "naebang", "gwacheon"];
@@ -210,6 +214,40 @@ describe("infra: 스모크 FAIL 줄", () => {
     expect(classifySmokeFails([...some, FAIL_AUDIT, FAIL_PLACES_500], HUBS)).toEqual({ code: [FAIL_PLACES_500], data: [...some, FAIL_AUDIT] });
     // 거점 목록이 없으면 판단하지 않는다 (줄마다)
     expect(classifySmokeFails(all, [])).toEqual({ code: [], data: all });
+  });
+});
+
+describe("R62 준비 중 거점 — 스모크", () => {
+  it("R62: smoke.sh는 shared/hubs.ts에서 거점마다 id·좌표·ready를 읽는다 (sed 식을 그대로 돌려 본다)", () => {
+    const m = /sed -nE 's\/(.+?)\/(\\1[^/]*)\/p' "\$HUBS_TS"/.exec(smokeSh);
+    expect(m).not.toBeNull();
+    const re = new RegExp(m![1]);
+    const repl = m![2].replace(/\\(\d)/g, "$$$1");
+    const parsed = hubsTs.split("\n").filter((l) => re.test(l)).map((l) => l.replace(re, repl).trim());
+    expect(parsed).toEqual(ALL_HUBS.map((h) => `${h.id} ${h.lat} ${h.lng} ${h.ready}`));
+  });
+
+  it("R62: 준비 중 거점은 목록·감사를 FAIL로 세지 않는다 — 스모크는 info로만 찍고, 모르는 거점 확인은 hubs.ts에 없는 id로", () => {
+    const unready = ALL_HUBS.filter((h) => !h.ready);
+    expect(unready.length).toBeGreaterThan(0);
+    // 감사: 준비 중이면 info 줄 (FAIL 줄을 만드는 bad를 부르지 않는다)
+    expect(smokeSh).toMatch(/if \[ "\$ready" != true \]; then\n\s+info "감사 \$id\(준비 중\)/);
+    // 모르는 거점 400 확인에 실제 거점 id를 쓰지 않는다
+    const unknown = /expect_code hubx 400 "[^"]*" "\$B\/api\/places\?hub=([a-z0-9-]+)&/.exec(smokeSh);
+    expect(unknown).not.toBeNull();
+    expect(ALL_HUBS.some((h) => h.id === unknown![1])).toBe(false);
+    // 준비 중 거점 줄이 info·ok뿐이면 FAIL로 모이지 않는다
+    const out = smokeOutput([]).replace(
+      "== 정적 파일",
+      ["== 정적 파일", "  ok    준비 중 gangnam 목록 숨김 → 400", '  info  감사 gangnam(준비 중) → 200 {"pass":{"q1":false,"q2":false}}'].join("\n"),
+    );
+    expect(parseSmokeFails(out)).toEqual([]);
+  });
+
+  it("R62: '모든 거점 0곳'(코드 수준) 판단은 스모크가 목록을 본 공개 거점 기준이다", () => {
+    const pub = ALL_HUBS.filter((h) => h.ready).map((h) => h.id);
+    const all = pub.map(emptyFail);
+    expect(classifySmokeFails(all, pub)).toEqual({ code: all, data: [] });
   });
 });
 

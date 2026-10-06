@@ -8,7 +8,7 @@ import { appendFileSync, mkdirSync, readFileSync, writeFileSync } from "node:fs"
 import { dirname } from "node:path";
 import { createInterface } from "node:readline/promises";
 import { fileURLToPath } from "node:url";
-import { HUBS } from "../shared/hubs.ts";
+import { HUBS, PUBLIC_HUBS } from "../shared/hubs.ts";
 import { parseReleaseArgs, runRelease } from "./release.mjs";
 
 process.chdir(fileURLToPath(new URL("..", import.meta.url)));
@@ -71,5 +71,6 @@ const { code } = await runRelease(parsed.opts, {
   isTTY: Boolean(process.stdin.isTTY && process.stdout.isTTY),
   adminToken,
   hubIds: HUBS.map((h) => h.id),
+  publicHubIds: PUBLIC_HUBS.map((h) => h.id),
 });
 process.exit(code);

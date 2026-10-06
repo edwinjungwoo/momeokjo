@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type Ref } from "react";
-import { HUBS, type Hub } from "../../shared/hubs";
+import { PUBLIC_HUBS, type Hub } from "../../shared/hubs";
 import { CheckIcon, ChevronDown, PinIcon } from "./Icons";
 import { Mascot } from "./Mascot";
 
@@ -10,7 +10,7 @@ type Props = {
   buttonRef?: Ref<HTMLButtonElement>;
 };
 
-/** R24: 거점 칩 — shared/hubs.ts의 거점 중 하나를 고른다 */
+/** R24: 거점 칩 — shared/hubs.ts의 공개 거점(R62) 중 하나를 고른다 */
 export function HubChip({ hub, onChange, buttonRef }: Props) {
   const [open, setOpen] = useState(false);
   const root = useRef<HTMLDivElement>(null);
@@ -45,7 +45,7 @@ export function HubChip({ hub, onChange, buttonRef }: Props) {
             <Mascot pose="location" height={36} eager />
             <span>어디서 찾을까요?</span>
           </div>
-          {HUBS.map((h) => (
+          {PUBLIC_HUBS.map((h) => (
             <button
               key={h.id}
               type="button"

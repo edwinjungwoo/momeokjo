@@ -1,6 +1,6 @@
 import { PREWARM_RADIUS } from "../shared/constants";
 import { tilesCoveringCircle } from "../shared/geo";
-import { HUBS, type Hub } from "../shared/hubs";
+import { HUBS, PUBLIC_HUBS, type Hub } from "../shared/hubs";
 import type { LatLng } from "../shared/types";
 import { Budget } from "./budget";
 import { limitsFrom } from "./config";
@@ -101,7 +101,7 @@ export type CronResult = {
 };
 
 /**
- * R11: 모든 거점을 PREWARM_RADIUS로 유지한다. 외부 호출 예산 하나를 거점끼리 나눠 쓴다.
+ * R11: 모든 거점을 PREWARM_RADIUS로 유지한다 (R62 준비 중 거점 포함 — 공개 전에 채운다). 외부 호출 예산 하나를 거점끼리 나눠 쓴다.
  * 거점들의 격자를 합집합(중복 제거)으로 한 번에 처리하고, 상세 후보도 합집합에서 ID 중복 없이
  * 가장 가까운 거점 기준으로 고른다 — 겹치는 거점이 있어도 같은 격자·장소를 두 번 부르지 않는다.
  * D1 읽기를 아끼려고: 만료 후보는 (status, fetched_at) 인덱스로, 미수집 ID는 격자가 바뀐 뒤에만 훑는다.
@@ -152,13 +152,14 @@ export type SnapshotCronResult = SnapshotRun | { status: "read_budget" };
  * R56: 거점 스냅샷 하나를 만드는 Cron (본 Cron과 다른 실행 — CPU 한도를 따로 쓰고, 만들다 CPU 초과로 죽어도
  * 본 Cron의 사용량 기록은 잃지 않는다). 외부 호출은 없다. 이 실행의 D1 사용량도 따로 기록한다.
  * R38: 오늘 읽기가 소프트 한도를 넘었으면 만들지 않는다 (스냅샷이 없으면 미스는 지금 경로로 답한다).
+ * R62: 공개 거점만 만든다 (준비 중 거점은 목록 API가 400이라 읽을 일이 없고, 남은 행은 maintainSnapshots가 지운다).
  */
 export async function runSnapshotCron(env: Env, opts: { now: number; hubs?: Hub[] }): Promise<SnapshotCronResult> {
   const usage: D1Usage = { read: 0, written: 0 };
   const db = meteredDb(env.DB, usage);
   try {
     if (await overReadBudget(db, env, opts.now)) return { status: "read_budget" };
-    return await maintainSnapshots(db, hubOrder(opts.hubs ?? HUBS, opts.now), opts.now);
+    return await maintainSnapshots(db, hubOrder(opts.hubs ?? PUBLIC_HUBS, opts.now), opts.now);
   } finally {
     await recordD1Usage(env.DB, usage, opts.now).catch((e) => console.error("d1 usage record failed", e));
   }

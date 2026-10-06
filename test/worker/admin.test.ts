@@ -249,8 +249,8 @@ describe("admin", () => {
   });
 
   it("R11: 겹치는 거점이 있어도 한 실행에서 격자와 장소는 한 번씩만 확인·호출한다", async () => {
-    const a: Hub = { id: "a", name: "a", lat: ASEM.lat, lng: ASEM.lng };
-    const b: Hub = { id: "b", name: "b", lat: ASEM.lat + 0.001, lng: ASEM.lng };
+    const a: Hub = { id: "a", name: "a", lat: ASEM.lat, lng: ASEM.lng, ready: true };
+    const b: Hub = { id: "b", name: "b", lat: ASEM.lat + 0.001, lng: ASEM.lng, ready: true };
     const hubs = [a, b];
     const s1 = setup();
     await runScheduled(env, { fetcher: s1.fetcher, now: NOW, sleep: async () => {}, hubs });
@@ -306,6 +306,19 @@ describe("admin", () => {
     const r = await runScheduled(env, { fetcher: setup().fetcher, now: NOW, sleep: async () => {} });
     expect([...r.order].sort()).toEqual(HUBS.map((h) => h.id).sort());
     expect(r).not.toHaveProperty("pending");
+  });
+
+  it("R62: 본 Cron은 준비 중 거점도 수집·보충한다 (공개 전에 데이터를 채우게)", async () => {
+    const unready = HUBS.filter((h) => !h.ready);
+    expect(unready.length).toBeGreaterThan(0);
+    // 공개 거점 격자는 방금 모았다고 두고, 준비 중 거점 격자만 남긴다
+    for (const h of HUBS.filter((x) => x.ready)) for (const k of tilesCoveringCircle(h, PREWARM_RADIUS)) await markTile(env.DB, k, NOW, 0, false);
+    const r = await runScheduled(env, { fetcher: setup().fetcher, now: NOW, sleep: async () => {} });
+    for (const h of unready) expect(r.order, h.id).toContain(h.id);
+    expect(r.tiles.total).toBe(new Set(HUBS.flatMap((h) => tilesCoveringCircle(h, PREWARM_RADIUS))).size);
+    // 준비 중 거점의 격자도 이번 실행에서 수집 대상이다
+    const collected = new Set((await getTiles(env.DB, unready.flatMap((h) => tilesCoveringCircle(h, PREWARM_RADIUS)))).keys());
+    expect(collected.size).toBeGreaterThan(0);
   });
 
   it("R32/Q1~Q4: 감사 리포트는 덮는 격자에 기록된 ID 집합을 기준으로 한다", async () => {

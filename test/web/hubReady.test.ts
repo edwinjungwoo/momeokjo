@@ -1,0 +1,46 @@
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
+import { describe, expect, it } from "vitest";
+import { HUBS, PUBLIC_HUBS } from "../../shared/hubs";
+import { HubName, hubOptionLabel } from "../../web/admin/Overview";
+import { HubPicker } from "../../web/components/HubPicker";
+
+// 화면 코드 원문 (Vite가 빌드 시점에 묶어 준다)
+const sources = import.meta.glob("../../web/**/*.{ts,tsx}", { query: "?raw", import: "default", eager: true }) as Record<string, string>;
+
+const UNREADY = HUBS.filter((h) => !h.ready);
+
+describe("R62 준비 중 거점 — 화면", () => {
+  it("R62: 첫 접속 질문(R61)은 공개 거점만 보인다", () => {
+    const html = renderToStaticMarkup(createElement(HubPicker, { onPick: () => {}, onDismiss: () => {} }));
+    for (const h of PUBLIC_HUBS) expect(html, h.id).toContain(h.name);
+    expect(UNREADY.length).toBeGreaterThan(0);
+    for (const h of UNREADY) expect(html, h.id).not.toContain(h.name);
+  });
+
+  it("R62: 관리 화면 밖의 화면 코드는 모든 거점(HUBS·hubById·isHubId)을 쓰지 않는다 — 거점 메뉴·질문·설정은 공개 거점만", () => {
+    const user = Object.entries(sources).filter(([p]) => !p.includes("/web/admin/"));
+    expect(user.length).toBeGreaterThan(10);
+    for (const [p, code] of user) {
+      expect(code, p).not.toMatch(/(?<![\w.])HUBS\b/);
+      expect(code, p).not.toMatch(/(?<![\w.])(?:hubById|isHubId)\b/);
+    }
+    expect(sources["../../web/components/HubChip.tsx"]).toMatch(/PUBLIC_HUBS\.map\(/);
+    expect(sources["../../web/components/HubPicker.tsx"]).toMatch(/PUBLIC_HUBS\.map\(/);
+  });
+
+  it("R62: 관리 화면은 준비 중 거점도 보이고 '준비 중' 표시를 붙인다 (거점 고르기·운영 탭 거점 표)", () => {
+    expect(hubOptionLabel("gangnam")).toBe("강남역 (준비 중)");
+    expect(hubOptionLabel("ddp")).toBe("동대문역사문화공원역");
+    const unready = renderToStaticMarkup(createElement(HubName, { id: "yeouido" }));
+    expect(unready).toContain("여의도역");
+    expect(unready).toContain("준비 중");
+    expect(renderToStaticMarkup(createElement(HubName, { id: "pangyo" }))).not.toContain("준비 중");
+    // 모르는 id(예전 이벤트)는 id 그대로, 표시 없이
+    expect(renderToStaticMarkup(createElement(HubName, { id: "atlantis" }))).toBe("atlantis");
+    const page = sources["../../web/admin/AdminPage.tsx"];
+    expect(page).toMatch(/HUBS\.map\(/);
+    expect(page).toMatch(/hubOptionLabel\(/);
+    expect(sources["../../web/admin/Ops.tsx"]).toMatch(/<HubName /);
+  });
+});

@@ -93,6 +93,17 @@ describe("R23′ 3곳 공유", () => {
     expect(parseShareParams("?t=1&h=pangyo", "/ddp").hubId).toBe("ddp");
     expect(parseShareParams("?t=1", "/brand").hubId).toBeNull();
   });
+
+  it("R62: 준비 중 거점은 공유 링크(경로·h)와 짧은 링크에서 모르는 거점처럼 null", () => {
+    for (const id of ["gangnam", "yeouido", "gwanghwamun"]) {
+      expect(parseHubPath(`/${id}`), id).toBeNull();
+      expect(parseHubPath(`/${id}/`), id).toBeNull();
+      expect(parseShareParams("?t=1,2&r=700", `/${id}`).hubId, id).toBeNull();
+      expect(parseShareParams(`?t=1&h=${id}`).hubId, id).toBeNull();
+    }
+    // 준비 중 경로가 있어도 예전 h의 공개 거점은 읽는다
+    expect(parseShareParams("?t=1&h=ddp", "/gangnam").hubId).toBe("ddp");
+  });
 });
 
 describe("R43 거점 짧은 링크", () => {

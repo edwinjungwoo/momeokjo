@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { AUTO_DRAW_POLL_WAIT_MS, pollingElapsed, shouldAutoDraw } from "../shared/autoDraw";
 import { haversine, walkMinutes } from "../shared/geo";
-import { DEFAULT_HUB_ID, hubById } from "../shared/hubs";
+import { DEFAULT_HUB_ID, publicHubById } from "../shared/hubs";
 import { kstDay } from "../shared/kst";
 import { topPercents } from "../shared/rank";
 import { trioReasons } from "../shared/reasons";
@@ -71,7 +71,7 @@ const byId = (ps: ApiPlace[]) => Object.fromEntries(ps.map((p) => [p.id, p]));
 export default function App() {
   const { settings, share, update, askHub, chooseHub } = useSettings();
   const { filters } = settings;
-  const hub = hubById(settings.hubId);
+  const hub = publicHubById(settings.hubId);
   const center = useMemo<LatLng>(() => ({ lat: hub.lat, lng: hub.lng }), [hub.lat, hub.lng]);
   // R61: 첫 접속 거점을 아직 안 골랐으면(질문이 떠 있거나, 거점 없는 공유 링크라 받은 시트 뒤로 미뤘거나) 기본 거점 목록을 받지 않는다.
   // 고른 뒤 그 거점을 바로 받는다

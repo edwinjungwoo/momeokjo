@@ -1,5 +1,5 @@
 import { useEffect, useRef, type KeyboardEvent } from "react";
-import { HUBS } from "../../shared/hubs";
+import { PUBLIC_HUBS } from "../../shared/hubs";
 import { CloseIcon, PinIcon } from "./Icons";
 import { Mascot } from "./Mascot";
 import { useSwipeDown } from "./useSwipeDown";
@@ -79,7 +79,7 @@ export function HubPicker({ onPick, onDismiss }: Props) {
           </div>
         </div>
         <ul className="picker-list">
-          {HUBS.map((h) => (
+          {PUBLIC_HUBS.map((h) => (
             <li key={h.id}>
               <button type="button" className="picker-row" onClick={() => onPick(h.id)}>
                 <PinIcon className="picker-pin" size={18} />

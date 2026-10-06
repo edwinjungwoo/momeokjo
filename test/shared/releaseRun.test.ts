@@ -62,7 +62,10 @@ function happyReplies(): Record<string, Reply | Reply[]> {
   };
 }
 
-function harness(over: Record<string, Reply | Reply[]> = {}, extra: { files?: Record<string, string>; isTTY?: boolean; confirm?: boolean; adminToken?: string | null } = {}) {
+function harness(
+  over: Record<string, Reply | Reply[]> = {},
+  extra: { files?: Record<string, string>; isTTY?: boolean; confirm?: boolean; adminToken?: string | null; hubIds?: string[]; publicHubIds?: string[] } = {},
+) {
   const replies = { ...happyReplies(), ...over };
   const used: Record<string, number> = {};
   const calls: Call[] = [];
@@ -108,7 +111,8 @@ function harness(over: Record<string, Reply | Reply[]> = {}, extra: { files?: Re
     now: () => (clock += 1000),
     isTTY: extra.isTTY ?? false,
     adminToken: extra.adminToken === null ? undefined : (extra.adminToken ?? TOKEN),
-    hubIds: HUBS,
+    hubIds: extra.hubIds ?? HUBS,
+    ...(extra.publicHubIds ? { publicHubIds: extra.publicHubIds } : {}),
   };
   const ran = (prefix: string) => calls.filter((c) => c.line === prefix || c.line.startsWith(prefix + " "));
   return { deps, calls, logs, appended, written, files, sleeps, ran, output: () => logs.join("\n") };
@@ -580,6 +584,14 @@ describe("infra: npm run release — 기준 스모크와 자동 롤백", () => {
     const empty = harness(smokes([], HUBS.map(emptyFail)));
     expect((await runRelease(opts(), empty.deps)).code).toBe(2);
     expect(empty.ran("npx wrangler rollback")).toHaveLength(1);
+  });
+
+  it("R62: 준비 중 거점이 있어도 공개 거점이 모두 '0곳'이면 코드 회귀로 보고 롤백한다 (백필 훅은 모든 거점)", async () => {
+    const all = [...HUBS, "gangnam", "yeouido", "gwanghwamun"];
+    const h = harness(smokes([], HUBS.map(emptyFail)), { hubIds: all, publicHubIds: HUBS });
+    expect((await runRelease(opts(), h.deps)).code).toBe(2);
+    expect(h.ran("npx wrangler rollback")).toHaveLength(1);
+    expect(h.ran("node scripts/backfill.mjs").map((c) => c.line)).toEqual(all.map((id) => `node scripts/backfill.mjs --hub ${id} --limit 150`));
   });
 
   it("infra: 기준 FAIL이 모두 데이터 상태 신호면 플래그 없이도 경고만 하고 진행", async () => {

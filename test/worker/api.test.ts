@@ -68,6 +68,16 @@ describe("GET /api/places", () => {
     expect(await res.json()).toEqual({ error: "invalid_params" });
   });
 
+  it("R62: 준비 중 거점은 모르는 거점처럼 400 — 외부 호출·D1 읽기 없이 (덜 모은 목록을 API로도 볼 수 없게)", async () => {
+    for (const id of ["gangnam", "yeouido", "gwanghwamun"]) {
+      const s = setup();
+      const res = await callApp(s.app, `/api/places?hub=${id}&radius=500`);
+      expect(res.status, id).toBe(400);
+      expect(await res.json()).toEqual({ error: "invalid_params" });
+      expect(s.local.calls.length + s.place.calls.length, id).toBe(0);
+    }
+  });
+
   it("R12: 거점 id와 50m 단위 반경(100~1000m)만 받는다", async () => {
     for (const r of [100, 650, 1000]) {
       const res = await callApp(setup({ allow: false }).app, `/api/places?hub=ddp&radius=${r}`);

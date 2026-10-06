@@ -40,6 +40,10 @@ describe("events", () => {
     const bad = [
       ev({ t: "purchase" }),
       ev({ hub: "atlantis" }),
+      // R62: 준비 중 거점은 모르는 거점처럼 버린다
+      ev({ hub: "gangnam" }),
+      ev({ hub: "yeouido" }),
+      ev({ hub: "gwanghwamun" }),
       ev({ placeId: "12a" }),
       ev({ placeId: "1234567890123456" }),
       ev({ ts: "now" }),

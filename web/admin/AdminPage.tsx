@@ -6,7 +6,7 @@ import { Mascot } from "../components/Mascot";
 import { Behavior } from "./Behavior";
 import { ago } from "./format";
 import { Ops } from "./Ops";
-import { Overview } from "./Overview";
+import { Overview, hubOptionLabel } from "./Overview";
 import "./admin.css";
 
 /**
@@ -271,9 +271,10 @@ export default function AdminPage() {
         )}
         <select className="select" aria-label="거점" value={hub} onChange={(e) => setHub(e.target.value)}>
           <option value="all">모든 거점</option>
+          {/* R62: 준비 중 거점도 고를 수 있다 (이름 뒤에 "(준비 중)") */}
           {HUBS.map((h) => (
             <option key={h.id} value={h.id}>
-              {h.name}
+              {hubOptionLabel(h.id)}
             </option>
           ))}
         </select>

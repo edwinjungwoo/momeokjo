@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { FILTER_GROUPS } from "./category";
 import { isValidRadius } from "./constants";
-import { isHubId } from "./hubs";
+import { isPublicHubId } from "./hubs";
 import { EVENT_TYPES, MAX_EVENTS_PER_REQUEST, UUIDISH, clampTs, type EventType } from "./eventCore";
 import { kstDayHour } from "./kst";
 import type { CategoryGroup } from "./types";
@@ -35,7 +35,8 @@ export type EventProps = z.infer<typeof EventPropsSchema>;
 export const EventSchema = z.strictObject({
   t: z.enum(EVENT_TYPES),
   ts: z.number().finite(),
-  hub: z.string().refine(isHubId),
+  /** R62: 공개 거점만 (준비 중 거점은 화면에 없으니 그 이벤트는 버린다) */
+  hub: z.string().refine(isPublicHubId),
   placeId: z.string().regex(PLACE_ID).optional(),
   props: EventPropsSchema.optional(),
 });

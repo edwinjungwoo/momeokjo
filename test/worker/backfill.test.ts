@@ -134,6 +134,13 @@ describe("admin backfill (list_json)", () => {
     expect((await backfill(app, "?hub=nowhere")).status).toBe(400);
   });
 
+  it("R62: 준비 중 거점도 관리자 백필(--hub gangnam)은 된다 — 공개 전에 데이터를 채운다", async () => {
+    await seedIn(hub("gangnam"), ["g1", "g2"]);
+    await clearAll();
+    expect(await (await backfill(makeApp(), "?hub=gangnam")).json<Res>()).toMatchObject({ filled: 2, remaining: 0 });
+    expect(await nullsIn(["g1", "g2"])).toBe(0);
+  });
+
   it(`R12: limit 기본값은 ADMIN_BACKFILL_DEFAULT, 최댓값 ADMIN_BACKFILL_MAX — 더 크면 최댓값으로 줄이고, 1 미만·숫자 아님은 400`, async () => {
     expect(ADMIN_BACKFILL_DEFAULT).toBe(300);
     expect(ADMIN_BACKFILL_MAX).toBe(300);

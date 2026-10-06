@@ -3,7 +3,7 @@ import { z } from "zod";
 import { MAX_RADIUS, MIN_RADIUS, PREWARM_RADIUS, isValidRadius } from "../shared/constants";
 import { MAX_EVENT_BODY_BYTES, parseEventBatch } from "../shared/events";
 import { tilesCoveringCircle } from "../shared/geo";
-import { HUBS, isHubId } from "../shared/hubs";
+import { HUBS, PUBLIC_HUBS, isHubId, isPublicHubId } from "../shared/hubs";
 import { DASHBOARD_MAX_DAYS, addDays, daysBetween, isDay } from "../shared/dashboard";
 import { kstDay, utcDay } from "../shared/kst";
 import type { PlacesResponse } from "../shared/types";
@@ -28,9 +28,10 @@ import { ADMIN_BACKFILL_DEFAULT, ADMIN_BACKFILL_MAX, backfillListJsonIn } from "
 /**
  * R12: 공개 목록 API는 거점 id와 50m 단위 반경만 받는다 (좌표는 서버가 shared/hubs.ts에서 찾는다).
  * R42: 반경은 검증만 하고, 서버는 언제나 거점의 1000m 목록을 계산·캐시한다 (화면이 거리로 거른다)
+ * R62: 공개 거점만 — 준비 중 거점은 모르는 거점처럼 400 (덜 모은 목록을 API로도 볼 수 없게)
  */
 export const PlacesQuery = z.object({
-  hub: z.string().refine(isHubId),
+  hub: z.string().refine(isPublicHubId),
   radius: z.coerce.number().refine(isValidRadius),
 });
 
@@ -41,7 +42,7 @@ export const AreaQuery = z.object({
   radius: z.coerce.number().int().min(MIN_RADIUS).max(MAX_RADIUS),
 });
 
-/** R12: 배포 직후 list_json 백필 — 거점(없으면 모든 거점 격자), 한 번에 채울 행 수(최댓값을 넘으면 최댓값) */
+/** R12: 배포 직후 list_json 백필 — 거점(없으면 모든 거점 격자; R62 준비 중 거점 포함), 한 번에 채울 행 수(최댓값을 넘으면 최댓값) */
 export const BackfillQuery = z.object({
   hub: z.string().refine(isHubId).optional(),
   limit: z.coerce.number().int().min(1).default(ADMIN_BACKFILL_DEFAULT).transform((n) => Math.min(n, ADMIN_BACKFILL_MAX)),
@@ -196,7 +197,7 @@ export function createApp(deps: AppDeps) {
     c.header("Cache-Control", "no-store");
     const q = PlacesQuery.safeParse(c.req.query());
     if (!q.success) return c.json({ error: "invalid_params" }, 400);
-    const hub = HUBS.find((h) => h.id === q.data.hub)!;
+    const hub = PUBLIC_HUBS.find((h) => h.id === q.data.hub)!;
     // 거점이 몇 개뿐이라 같은 요청이 반복된다. 응답을 잠깐 캐시해서 D1 읽기와 CPU를 아낀다 (placesCacheTtl).
     // R42: 어떤 반경이 와도 1000m 하나만 계산·캐시한다 (거점당 키 하나)
     const key = new Request(placesCacheKey(hub.id));

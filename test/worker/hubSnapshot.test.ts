@@ -469,6 +469,23 @@ describe("R56 거점 스냅샷 — Cron", () => {
   });
 });
 
+describe("R62 준비 중 거점 — 스냅샷", () => {
+  it("R62: 스냅샷 Cron은 공개 거점만 만들고, 준비 중 거점의 스냅샷 행은 지운다", async () => {
+    for (const h of HUBS) for (const k of tilesCoveringCircle(h, PREWARM_RADIUS)) await markTile(env.DB, k, NOW, 0, false);
+    const unready = HUBS.filter((h) => !h.ready);
+    expect(unready.length).toBeGreaterThan(0);
+    // 예전 코드가 남긴(또는 손으로 만든) 준비 중 거점 스냅샷
+    expect(await buildHubSnapshot(env.DB, unready[0], NOW)).toMatchObject({ status: "built" });
+    const built = new Set<string>();
+    for (let i = 0; i < HUBS.length + 2; i++) {
+      const r = await runSnapshotCron(env, { now: NOW + i * 5 * 60_000 });
+      if ("hub" in r && r.status === "built") built.add(r.hub);
+    }
+    expect([...built].sort()).toEqual(HUBS.filter((h) => h.ready).map((h) => h.id).sort());
+    for (const h of unready) expect(await snapshotRow(h.id), h.id).toBeNull();
+  });
+});
+
 describe("R56 Fix wave 11 — 만들 수 없는 거점의 비용 상한", () => {
   const LIST_SQL = "CASE WHEN substr(list_json";
   const TP_SQL = "FROM tile_places tp LEFT JOIN places";
