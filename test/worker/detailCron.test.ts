@@ -5,6 +5,7 @@ import { tileKeyOf, tilesCoveringCircle } from "../../shared/geo";
 import { HUBS, hubById } from "../../shared/hubs";
 import { utcDay } from "../../shared/kst";
 import { CRON_DETAIL_LAST_KEY } from "../../worker/d1Usage";
+import { limitsFrom } from "../../worker/config";
 import { hubRefreshStart } from "../../worker/refreshSchedule";
 import {
   CRON_D1_CALL_LIMIT, MAIN_CRON, SECOND_CRON, runCron, runDetailCron, runScheduled, secondCronJob,
@@ -115,6 +116,37 @@ describe("R63 둘째 트리거 (홀수 분) — 스냅샷·쉼·상세만 보충
     expect(await run(env, at(9))).toMatchObject({ enriched: 0, skipped: "read_budget" });
     expect(place.calls).toHaveLength(0);
     expect(JSON.parse((await metaValue(CRON_DETAIL_LAST_KEY))!)).toMatchObject({ skipped: "read_budget" });
+  });
+
+  it("R63/R38: 오늘(UTC) D1 읽기가 소프트 한도의 DETAIL_ONLY_READ_SHARE(기본 0.6)에 닿으면 상세만 실행은 비켜선다 — 본 Cron·스냅샷 몫을 남긴다", async () => {
+    await markFresh(ALL_KEYS, BASE);
+    await seedOk([["old1", S_BONG - 1]]);
+    await replaceTilePlaces(env.DB, KB, ["old1"], BASE, false);
+    const place = fakePlaceApi({ old1: json("o1") });
+    const setRead = (n: number) =>
+      env.DB.prepare("INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)").bind(`d1_read:${utcDay(BASE)}`, String(n)).run();
+    const run = (e: Env, m: number) => runDetailCron(e, { fetcher: place.fetcher, now: at(m), sleep: async () => {} });
+    expect(limitsFrom(env).detailOnlyReadShare).toBe(0.6);
+    await setRead(1_800_000); // 3M × 0.6
+    expect(await run(env, 1)).toMatchObject({ enriched: 0, skipped: "read_share" });
+    expect(place.calls).toHaveLength(0);
+    expect(JSON.parse((await metaValue(CRON_DETAIL_LAST_KEY))!)).toMatchObject({ at: at(1), skipped: "read_share" });
+    // 설정으로 바꾼다
+    expect(await run({ ...env, DETAIL_ONLY_READ_SHARE: "0.7" } as unknown as Env, 3)).toMatchObject({ enriched: 1 });
+    // 한도 바로 아래면 돈다
+    await env.DB.prepare("UPDATE places SET fetched_at = ? WHERE id = 'old1'").bind(S_BONG - 1).run();
+    await setRead(1_799_000);
+    expect(await run(env, 9)).toMatchObject({ enriched: 1 });
+    // 본 Cron은 이 몫과 상관없다 (소프트 한도 전까지 돈다)
+    await setRead(2_000_000);
+    expect((await runScheduled(env, { fetcher: place.fetcher, now: at(10), sleep: async () => {} })).skipped).toBeUndefined();
+  });
+
+  it("R63/R38: DETAIL_ONLY_READ_SHARE가 숫자가 아니거나 0 이하·1 초과면 기본 0.6", () => {
+    for (const v of ["abc", "0", "-1", "1.5", ""]) {
+      expect(limitsFrom({ ...env, DETAIL_ONLY_READ_SHARE: v } as unknown as Env).detailOnlyReadShare, v).toBe(0.6);
+    }
+    expect(limitsFrom({ ...env, DETAIL_ONLY_READ_SHARE: "1" } as unknown as Env).detailOnlyReadShare).toBe(1);
   });
 
   it("R63/R38: 상세만 실행이 던지는 오류로 끝나도 사용량과 cron_detail_last(skipped: error)는 남긴다 — 본 Cron과 같다", async () => {

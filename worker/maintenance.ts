@@ -5,8 +5,9 @@ import type { LatLng } from "../shared/types";
 import { Budget } from "./budget";
 import { limitsFrom } from "./config";
 import {
-  CRON_DETAIL_LAST_KEY, D1CallBudget, meteredDb, overReadBudget, readSoftCap, recordCronRun, recordD1Usage, type D1Usage,
+  CRON_DETAIL_LAST_KEY, D1CallBudget, d1UsageOn, meteredDb, overReadBudget, readSoftCap, recordCronRun, recordD1Usage, type D1Usage,
 } from "./d1Usage";
+import { utcDay } from "../shared/kst";
 import { enrichCallReserve, enrichDetails } from "./detailEnricher";
 import { isRetentionWindow, pruneOldEvents } from "./events";
 import { pruneRollups, runRollups } from "./rollup";
@@ -298,8 +299,11 @@ export type DetailCronResult = {
   d1Calls?: number;
   d1Skipped?: string[];
   enrichError?: true;
-  /** read_budget: 오늘 읽기 소프트 한도, paused: 쿨다운·frozen(R10·R44), read_only: 개발 서버(R52) */
-  skipped?: "read_budget" | "paused" | "read_only";
+  /**
+   * read_budget: 오늘 읽기 소프트 한도, read_share: 소프트 한도 × DETAIL_ONLY_READ_SHARE(본 Cron 몫을 남김),
+   * paused: 쿨다운·frozen(R10·R44), read_only: 개발 서버(R52)
+   */
+  skipped?: "read_budget" | "read_share" | "paused" | "read_only";
 };
 
 /**
@@ -320,11 +324,19 @@ export async function runDetailCron(
   const result: DetailCronResult = { enriched: 0, failed: 0, calls: 0 };
   let finished = false;
   try {
-    if (await overReadBudget(db, env, opts.now)) {
+    // R38 읽기 예산 + R63 몫: 오늘 읽기를 한 번 읽어 소프트 한도면 read_budget, 소프트 한도 × DETAIL_ONLY_READ_SHARE면 read_share
+    // (본 Cron·스냅샷이 쓸 몫을 남기고 상세만 실행이 먼저 비켜선다)
+    const { budgetSize, batchSize: configured, detailCharBudget, detailOnlyReadShare } = limitsFrom(env);
+    const today = (await d1UsageOn(db, utcDay(opts.now))).read;
+    const cap = readSoftCap(env);
+    if (today >= cap) {
       result.skipped = "read_budget";
       return result;
     }
-    const { budgetSize, batchSize: configured, detailCharBudget } = limitsFrom(env);
+    if (today >= cap * detailOnlyReadShare) {
+      result.skipped = "read_share";
+      return result;
+    }
     const budget = new Budget(budgetSize);
     const hubs = hubOrder(opts.hubs ?? HUBS, opts.now);
     const keys = [...new Set(hubs.flatMap((h) => tilesCoveringCircle(h, PREWARM_RADIUS)))];

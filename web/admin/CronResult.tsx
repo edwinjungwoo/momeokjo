@@ -4,7 +4,9 @@ import { num } from "./format";
 /** Task 34: D1 호출 예산으로 건너뛴 단계 이름 */
 const STAGE: Record<string, string> = { expired: "만료 갱신", unfetched: "미수집 찾기", rollup: "집계" };
 /** 건너뛴 이유 */
-const SKIPPED: Record<string, string> = { read_budget: "읽기 예산", paused: "상세 멈춤", read_only: "읽기 전용" };
+const SKIPPED: Record<string, string> = {
+  read_budget: "읽기 예산", read_share: "읽기 몫(본 Cron에 양보)", paused: "상세 멈춤", read_only: "읽기 전용",
+};
 
 /**
  * 운영 탭 "그 실행 결과": 마지막 본 Cron의 격자·상세·외부 호출 수.

@@ -1,14 +1,27 @@
-export function limitsFrom(env: Env): { budgetSize: number; batchSize: number; detailCharBudget: number } {
+export function limitsFrom(env: Env): {
+  budgetSize: number; batchSize: number; detailCharBudget: number; detailOnlyReadShare: number;
+} {
   const budgetSize = Number(env.SUBREQUEST_BUDGET ?? 40);
   const batchSize = Number(env.DETAIL_BATCH_SIZE ?? MAX_DETAIL_BATCH_SIZE);
   const charBudget = Number(env.DETAIL_CHAR_BUDGET);
+  const rawShare: string | undefined = env.DETAIL_ONLY_READ_SHARE;
+  const share = rawShare === undefined || rawShare === "" ? Number.NaN : Number(rawShare);
   return {
     budgetSize: Number.isFinite(budgetSize) ? budgetSize : 40,
     // 천장으로 자른다 (음수는 0, 소수는 내림)
     batchSize: Number.isFinite(batchSize) ? Math.min(MAX_DETAIL_BATCH_SIZE, Math.max(0, Math.floor(batchSize))) : MAX_DETAIL_BATCH_SIZE,
     detailCharBudget: Number.isFinite(charBudget) && charBudget > 0 ? charBudget : DEFAULT_DETAIL_CHAR_BUDGET,
+    // R63: 상세만 실행은 오늘 읽기가 소프트 한도의 이 비율에 닿으면 비켜선다 (0 < 값 ≤ 1, 아니면 기본값)
+    detailOnlyReadShare: Number.isFinite(share) && share > 0 && share <= 1 ? share : DEFAULT_DETAIL_ONLY_READ_SHARE,
   };
 }
+
+/**
+ * R63: 둘째 트리거의 상세만 실행(홀수 분)이 비켜서는 읽기 비율 — 오늘(UTC) D1 읽기가 D1_READ_SOFT_CAP × 이 값 이상이면 건너뛴다
+ * (`skipped: "read_share"`). 남은 몫(소프트 한도까지)은 본 Cron(격자·완료·집계)과 스냅샷이 쓴다. 운영 값은 wrangler.jsonc
+ * vars DETAIL_ONLY_READ_SHARE (0.6 = 300만 행 중 180만 행)
+ */
+export const DEFAULT_DETAIL_ONLY_READ_SHARE = 0.6;
 
 /**
  * Task 34: 한 번의 보충(요청·warm·Cron)이 풀 상세 JSON 글자 수. 이만큼 읽으면 새 상세를 시작하지 않는다 (detailEnricher.ts).
