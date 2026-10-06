@@ -5,17 +5,21 @@ import {
   dirtyPaths,
   formatDuration,
   isD1LimitError,
+  isDataStateFail,
   isDestructive,
   kstStamp,
   parseActiveVersion,
   parseD1Rows,
   parseDeployVersionId,
+  parsePendingHooks,
   parsePendingMigrations,
   parseReleaseArgs,
   parseSecretNames,
+  parseSmokeFails,
   parseSmokeSummary,
   planRelease,
   shouldRollback,
+  smokeFailKey,
 } from "../../scripts/release.mjs";
 import {
   D1_LIMIT_ERROR,
@@ -23,6 +27,12 @@ import {
   DEPLOY_OUTPUT,
   DEPLOYMENTS_PRETTY,
   deploymentsJson,
+  FAIL_ASSET_NEW,
+  FAIL_ASSET_OLD,
+  FAIL_AUDIT,
+  FAIL_EMPTY,
+  FAIL_PLACES_000,
+  FAIL_PLACES_500,
   MIGRATIONS_NONE,
   MIGRATIONS_PENDING,
   MIGRATIONS_PENDING_0005_ANSI,
@@ -38,10 +48,13 @@ const HUBS = ["bongeunsa", "ddp", "pangyo", "naebang", "gwacheon"];
 
 describe("infra: release 인자", () => {
   it("infra: 기본값은 모두 꺼짐, 플래그를 받는다", () => {
-    expect(parseReleaseArgs([])).toEqual({ ok: true, opts: { dryRun: false, skipTests: false, force: false, yes: false, allowDestructive: false } });
-    expect(parseReleaseArgs(["--dry-run", "--yes", "--allow-destructive"])).toEqual({
+    expect(parseReleaseArgs([])).toEqual({
       ok: true,
-      opts: { dryRun: true, skipTests: false, force: false, yes: true, allowDestructive: true },
+      opts: { dryRun: false, skipTests: false, force: false, yes: false, allowDestructive: false, acceptBaselineFails: false },
+    });
+    expect(parseReleaseArgs(["--dry-run", "--yes", "--allow-destructive", "--accept-baseline-fails"])).toEqual({
+      ok: true,
+      opts: { dryRun: true, skipTests: false, force: false, yes: true, allowDestructive: true, acceptBaselineFails: true },
     });
   });
 
@@ -110,6 +123,14 @@ describe("infra: wrangler 출력 읽기", () => {
     expect(parseD1Rows("nope")).toBeNull();
   });
 
+  it("infra: JSON 배열 뒤에 다른 글이 붙어도 짝이 맞는 [ … ]만 읽고, 깨진 JSON은 null", () => {
+    expect(parseD1Rows(D1_SELECT_1 + '\n🪵  Logs were written to "/tmp/wrangler.log" [ok]\n')).toEqual([{ "1": 1 }]);
+    expect(parseSecretNames(SECRETS_JSON + "\nUpdate available! [4.148.0]\n")).toEqual(["ADMIN_TOKEN", "KAKAO_REST_KEY"]);
+    expect(parseD1Rows('[{"results": [1, 2')).toBeNull();
+    expect(parseD1Rows('[{"results": "]"} garbage')).toBeNull();
+    expect(parseSecretNames('[{"name": "a]b"}]')).toEqual(["a]b"]);
+  });
+
   it("infra: D1 일일 한도(7500) 오류를 알아본다", () => {
     expect(isD1LimitError(D1_LIMIT_ERROR)).toBe(true);
     expect(isD1LimitError("✘ [ERROR] D1_ERROR: Exceeded maximum daily rows read limit")).toBe(true);
@@ -153,18 +174,62 @@ describe("infra: wrangler 출력 읽기", () => {
   });
 });
 
-describe("infra: 스모크 뒤 롤백 판단", () => {
-  it("infra: FAIL이 하나라도 있으면 롤백", () => {
-    expect(shouldRollback({ code: 1, summary: { requests: 25, fails: 2, warns: 0 } })).toMatchObject({ action: "rollback" });
+describe("infra: 스모크 FAIL 줄", () => {
+  it("infra: smoke.sh의 '  FAIL  …' 줄만 모은다", () => {
+    expect(parseSmokeFails(smokeOutput([FAIL_PLACES_500, FAIL_AUDIT]))).toEqual([FAIL_PLACES_500, FAIL_AUDIT]);
+    expect(parseSmokeFails(smokeOutput(0))).toEqual([]);
+  });
+
+  it("infra: 같은 확인이면 같은 키 — 상태 코드·자산 해시가 달라도", () => {
+    expect(smokeFailKey(FAIL_PLACES_500)).toBe(smokeFailKey(FAIL_PLACES_000));
+    expect(smokeFailKey(FAIL_ASSET_OLD)).toBe(smokeFailKey(FAIL_ASSET_NEW));
+    expect(smokeFailKey(FAIL_PLACES_500)).not.toBe(smokeFailKey("ddp 500m 200인데 0곳"));
+  });
+
+  it("infra: 감사(Q1·Q2)와 '200인데 0곳'은 데이터 상태 신호", () => {
+    expect(isDataStateFail(FAIL_AUDIT)).toBe(true);
+    expect(isDataStateFail(FAIL_EMPTY)).toBe(true);
+    expect(isDataStateFail(FAIL_PLACES_500)).toBe(false);
+    expect(isDataStateFail(FAIL_ASSET_NEW)).toBe(false);
+  });
+});
+
+describe("infra: 스모크 뒤 롤백 판단 (배포 전 기준과 비교)", () => {
+  const s = (fails: string[], warns = 0) => ({ requests: 25, fails: fails.length, warns });
+  it("infra: 기준에 없던 코드 수준 FAIL이 생기면 롤백", () => {
+    expect(shouldRollback({ code: 1, summary: s([FAIL_PLACES_500]), fails: [FAIL_PLACES_500], baseline: [] })).toMatchObject({
+      action: "rollback",
+      newFails: [FAIL_PLACES_500],
+    });
+  });
+
+  it("infra: 배포 전부터 있던 FAIL은 롤백 사유가 아니다 (상태 코드·자산 해시가 바뀌어도 같은 확인)", () => {
+    expect(shouldRollback({ code: 1, summary: s([FAIL_PLACES_000, FAIL_ASSET_NEW]), fails: [FAIL_PLACES_000, FAIL_ASSET_NEW], baseline: [FAIL_PLACES_500, FAIL_ASSET_OLD] })).toMatchObject({
+      action: "keep",
+      newFails: [],
+    });
+  });
+
+  it("infra: 새로 생긴 FAIL이 데이터 상태 신호(감사·0곳)뿐이면 롤백하지 않고 data", () => {
+    expect(shouldRollback({ code: 1, summary: s([FAIL_AUDIT, FAIL_EMPTY]), fails: [FAIL_AUDIT, FAIL_EMPTY], baseline: [] })).toMatchObject({
+      action: "data",
+      newFails: [FAIL_AUDIT, FAIL_EMPTY],
+    });
+    // 코드 FAIL과 섞이면 롤백
+    expect(shouldRollback({ code: 1, summary: s([FAIL_AUDIT, FAIL_PLACES_500]), fails: [FAIL_AUDIT, FAIL_PLACES_500], baseline: [] })).toMatchObject({
+      action: "rollback",
+      newFails: [FAIL_PLACES_500],
+    });
   });
 
   it("infra: FAIL 0·종료 코드 0이면 그대로 (WARN은 상관없음)", () => {
-    expect(shouldRollback({ code: 0, summary: { requests: 25, fails: 0, warns: 4 } })).toMatchObject({ action: "keep" });
+    expect(shouldRollback({ code: 0, summary: s([], 4), fails: [], baseline: [] })).toMatchObject({ action: "keep" });
   });
 
-  it("infra: 요약을 못 읽었거나 종료 코드와 어긋나면 사람이 본다 (운영을 함부로 되돌리지 않음)", () => {
-    expect(shouldRollback({ code: 2, summary: null })).toMatchObject({ action: "manual" });
-    expect(shouldRollback({ code: 1, summary: { requests: 25, fails: 0, warns: 0 } })).toMatchObject({ action: "manual" });
+  it("infra: 요약을 못 읽었거나, FAIL 줄 수가 요약과 다르거나, 종료 코드와 어긋나면 사람이 본다", () => {
+    expect(shouldRollback({ code: 2, summary: null, fails: [], baseline: [] })).toMatchObject({ action: "manual" });
+    expect(shouldRollback({ code: 1, summary: s([]), fails: [], baseline: [] })).toMatchObject({ action: "manual" });
+    expect(shouldRollback({ code: 1, summary: { requests: 25, fails: 2, warns: 0 }, fails: [], baseline: [] })).toMatchObject({ action: "manual" });
   });
 });
 
@@ -181,6 +246,13 @@ describe("infra: 마이그레이션별 확인·후속 작업 목록", () => {
   it("infra: 등록된 이름은 실제 마이그레이션 파일이다", () => {
     for (const name of Object.keys(MIGRATION_CHECKS)) expect(sqlOf(name), name).toBeTypeOf("string");
     expect(Object.keys(MIGRATION_CHECKS)).toEqual(expect.arrayContaining(["0003_meta.sql", "0004_events.sql", "0005_list_json.sql"]));
+  });
+
+  it("infra: 0003 이후 모든 마이그레이션 파일에 확인 항목이 있다 (새 마이그레이션을 등록 없이 합치면 CI가 실패)", () => {
+    const files = Object.keys(MIGRATION_SQL).map((p) => p.split("/").pop()!);
+    const numbered = files.filter((f) => /^\d{4}_/.test(f) && Number(f.slice(0, 4)) >= 3);
+    expect(numbered).toEqual(expect.arrayContaining(["0003_meta.sql", "0005_list_json.sql"]));
+    for (const f of numbered) expect(MIGRATION_CHECKS[f], `scripts/migrationChecks.mjs에 ${f} 항목이 없어요`).toBeDefined();
   });
 
   it("infra: 0003은 meta 테이블, 0005는 places.list_json 열을 확인하고 0005만 백필 후속 작업이 있다", () => {
@@ -250,6 +322,37 @@ describe("infra: 배포 계획", () => {
   });
 });
 
+describe("infra: 지난 실행에서 남은 후속 작업", () => {
+  const carried = [{ migration: "0005_list_json.sql", name: "list_json 백필", cmd: "node", args: ["scripts/backfill.mjs", "--hub", "ddp", "--limit", "150"], needsAdminToken: true }];
+
+  it("infra: 적용할 마이그레이션이 없어도 남은 후속 작업을 계획에 넣는다", () => {
+    const plan = planRelease({ pending: [], sqlByName: {}, allowDestructive: false, hubIds: HUBS, hasAdminToken: true, carriedHooks: carried });
+    expect(plan.ok).toBe(true);
+    expect(plan.hooks.map((h) => h.args.join(" "))).toEqual(["scripts/backfill.mjs --hub ddp --limit 150"]);
+    expect(plan.lines.join("\n")).toContain("지난 실행");
+  });
+
+  it("infra: 같은 명령은 한 번만, 토큰이 필요하면 확인", () => {
+    const plan = planRelease({
+      pending: ["0005_list_json.sql"],
+      sqlByName: { "0005_list_json.sql": sqlOf("0005_list_json.sql") },
+      allowDestructive: false,
+      hubIds: ["ddp"],
+      hasAdminToken: true,
+      carriedHooks: carried,
+    });
+    expect(plan.hooks).toHaveLength(1);
+    expect(planRelease({ pending: [], sqlByName: {}, allowDestructive: false, hubIds: HUBS, hasAdminToken: false, carriedHooks: carried }).ok).toBe(false);
+  });
+
+  it("infra: 상태 파일 읽기 — 깨졌거나 없으면 빈 목록", () => {
+    expect(parsePendingHooks(JSON.stringify(carried))).toEqual(carried);
+    expect(parsePendingHooks(undefined)).toEqual([]);
+    expect(parsePendingHooks("not json")).toEqual([]);
+    expect(parsePendingHooks('[{"cmd": 1}]')).toEqual([]);
+  });
+});
+
 describe("infra: 배포 기록", () => {
   it("infra: KST 시각·걸린 시간", () => {
     expect(kstStamp(Date.UTC(2026, 9, 6, 0, 24))).toBe("2026-10-06 09:24");
@@ -272,5 +375,9 @@ describe("infra: 배포 기록", () => {
     expect(deployLogLine({ at: Date.UTC(2026, 9, 6, 0, 24), version: null, commit: "3a4cc93", migrations: [], result: "배포 전 중단", previous: null })).toBe(
       "| 2026-10-06 09:24 | - | 3a4cc93 | - | 배포 전 중단 | - |",
     );
+    // 마이그레이션 칸 메모(적용 실패)
+    expect(
+      deployLogLine({ at: Date.UTC(2026, 9, 6, 0, 24), version: null, commit: "3a4cc93", migrations: ["0005_list_json.sql"], migrationsNote: "적용 실패", result: "배포 전 중단", previous: null }),
+    ).toBe("| 2026-10-06 09:24 | - | 3a4cc93 | 0005_list_json (적용 실패) | 배포 전 중단 | - |");
   });
 });

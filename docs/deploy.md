@@ -1,6 +1,6 @@
 # 운영 배포 (mmj.itmz.me)
 
-운영 배포는 `npm run release` 하나로 해요. 스크립트(`scripts/deploy.mjs`, 판단은 `scripts/release.mjs`)는 아래 단계를 순서대로 밟고, **처음 실패한 곳에서 멈춰요.** 마이그레이션이 실패하면 배포하지 않고, 배포 뒤 스모크가 실패하면 직전 버전으로 자동 롤백해요.
+운영 배포는 `npm run release` 하나로 해요. 스크립트(`scripts/deploy.mjs`, 판단은 `scripts/release.mjs`)는 아래 단계를 순서대로 밟고, **처음 실패한 곳에서 멈춰요.** 마이그레이션이 실패하면 배포하지 않고, 배포 뒤 스모크에 **배포 전에는 없던 코드 수준 FAIL**이 생기면 직전 버전으로 자동 롤백해요.
 
 왜 만들었나:
 - 2026-10-05: 원격 마이그레이션이 D1 일일 한도로 실패했는데 배포는 나가서 롤백해야 했어요.
@@ -24,12 +24,13 @@ npm run release -- --yes       # 묻지 않고 진행 (터미널이 아니면 --
 
 | 플래그 | 뜻 |
 |---|---|
-| `--dry-run` | 로컬 확인 + 운영 **읽기**만 (비밀값 이름, `SELECT 1`, 마이그레이션 목록, 적용 전 확인, 활성 버전). 적용·배포·후속 작업·스모크·롤백·기록은 하지 않아요 |
-| `--yes` (`-y`) | 확인 질문 없이 진행 |
+| `--dry-run` | 로컬 확인 + 운영 **읽기**만 (비밀값 이름, `SELECT 1`, 마이그레이션 목록, 적용 전 확인, 활성 버전). 적용·배포·후속 작업·스모크·롤백·기록은 하지 않아요. 단, `wrangler d1 migrations list --remote`는 목록을 읽기 전에 늘 `CREATE TABLE IF NOT EXISTS d1_migrations …`를 보내요 — 표가 이미 있으니 바뀌는 것은 없지만 엄밀히는 쓰기 문장이에요 |
+| `--yes` (`-y`) | 확인 질문 없이 진행. 기준 스모크의 FAIL도 받아들여요 (`--accept-baseline-fails`와 같음) |
+| `--accept-baseline-fails` | 배포 전 기준 스모크에 FAIL이 있어도 진행 (그 FAIL은 보여주고, 배포 뒤에는 새로 생긴 FAIL만 봐요) |
 | `--allow-destructive` | `DROP`·`RENAME`·`ALTER … DROP`·`DELETE FROM`이 든 마이그레이션도 적용 (기본은 거절) |
 | `--skip-tests --force` | typecheck·test를 건너뛰어요 (빌드는 해요). `--force` 없이는 거절 |
 
-종료 코드: `0` 성공 · `1` 배포 전에 멈춤(운영 코드는 그대로) · `2` 스모크 실패 → 자동 롤백함 · `3` 사람이 확인해야 함(롤백 실패, 스모크 결과를 못 읽음, 후속 작업 실패, 배포 결과 불명).
+종료 코드: `0` 성공 · `1` 배포 전에 멈춤(운영 코드는 그대로) · `2` 새 코드 FAIL → 자동 롤백함 · `3` 사람이 확인해야 함(데이터 상태 확인 필요, 롤백 실패, 스모크 결과를 못 읽음, 후속 작업 실패, 배포됐는데 버전 불명). 배포 명령이 성공한 뒤의 실패는 항상 3이에요.
 
 ## 스크립트가 하는 일
 
@@ -41,10 +42,22 @@ npm run release -- --yes       # 묻지 않고 진행 (터미널이 아니면 --
    - 계획을 보여주고 확인을 받은 뒤 `wrangler d1 migrations apply momeokjo --remote`.
    - 다시 목록을 읽어 **남은 것이 없어야** 하고, 등록된 사후 확인(0003 → `meta`·`idx_places_status_fetched_at`, 0004 → `events`·인덱스 2개, 0005 → `places.list_json` 열)이 **모두 있어야** 해요. 하나라도 틀리면 배포 전에 멈춰요.
 4. **롤백 대상 기록** — `wrangler deployments list --json`에서 가장 최근 배포의 100% 버전. 트래픽이 나뉘어 있으면(점진 배포 중) 멈춰요.
-5. **배포** — `npm run deploy` (vite build && wrangler deploy). 출력의 `Current Version ID:`로 새 버전을 읽어요(없으면 deployments list로 확인). 배포 명령이 실패하면 활성 버전을 다시 보고, 그대로면 "반영 안 됨"(1), 바뀌었으면 확인 필요(3).
-6. **후속 작업** — 이번에 **적용한** 마이그레이션에 등록된 것만. 0005 → 거점마다 `node scripts/backfill.mjs --hub <id> --limit 150`. 백필이 D1 예산·요청 제한으로 멈추면(종료 코드 2) 경고만 해요(남은 행은 Cron이 채워요). 다른 실패는 스모크까지 마친 뒤 종료 코드 3.
-7. **스모크** — 10초 기다린 뒤 `B=https://mmj.itmz.me scripts/smoke.sh` (요청 25번 안팎, ADMIN_TOKEN이 있으면 거점별 감사 Q1·Q2 포함). **FAIL > 0이면** 4에서 기록한 버전으로 `wrangler rollback <id> --message "release: 스모크 FAIL n 자동 롤백 (<커밋>)" --yes`. 요약 줄을 못 읽으면 운영을 함부로 되돌리지 않고 확인 필요(3)로 끝내요.
-8. **요약·기록** — 버전(이전 → 새), 적용한 마이그레이션, 후속 작업 결과, 스모크 결과, 롤백 대상, 걸린 시간. 운영을 바꿨으면(마이그레이션 적용이나 배포를 시도했으면) `docs/deploys.md`에 한 줄을 더해요.
+5. **기준 스모크** — 배포 전에 지금 운영(이전 코드)으로 `scripts/smoke.sh`를 한 번 돌려요. 배포 뒤 결과와 비교할 기준이에요. 결과를 못 읽으면 배포하지 않아요. FAIL이 있으면 그 줄을 보여주고, `--accept-baseline-fails`(또는 `--yes`)가 없으면 배포 전에 멈춰요.
+6. **배포** — 확인 질문·기준 스모크 사이에 작업 트리가 더러워졌거나 HEAD가 바뀌지 않았는지(= origin) 다시 본 뒤 `npm run deploy` (vite build && wrangler deploy). 출력의 `Current Version ID:`로 새 버전을 읽어요(없으면 deployments list로 확인).
+   - 배포 명령이 실패하면 활성 버전을 다시 보고, 그대로면 "반영 안 됨"(1), 바뀌었으면 확인 필요(3).
+   - **배포 명령이 성공했는데 새 버전을 확인하지 못하면**(버전 줄 없음 + deployments list 실패·트래픽 나뉨·이전과 같음) "배포됨 — 버전 불명, 확인 필요"(3)로 멈추고, 기록해 둔 이전 버전으로 되돌리는 명령을 보여줘요. 기록에도 "배포 전 중단"이 아니라 그렇게 남아요(버전 칸 `?`).
+7. **후속 작업** — 이번에 **적용한** 마이그레이션에 등록된 것 + 지난 실행에서 남은 것(아래). 0005 → 거점마다 `node scripts/backfill.mjs --hub <id> --limit 150`. 백필이 D1 예산·요청 제한으로 멈추면(종료 코드 2) 경고만 해요(남은 행은 Cron이 채워요). 다른 실패는 다음 실행이 다시 돌리도록 남기고, 스모크까지 마친 뒤 종료 코드 3.
+8. **스모크** — 10초 기다린 뒤 다시 `B=https://mmj.itmz.me scripts/smoke.sh`. FAIL 줄을 기준과 **확인 단위로** 비교해요(`" → "` 뒤의 상태 코드와 빌드마다 바뀌는 `/assets/` 해시는 빼고 봐요 — `ddp 500m → 500`과 `→ 000`은 같은 확인).
+   - 기준에 없던 **코드 수준** FAIL이 있으면 → 4에서 기록한 버전으로 `wrangler rollback <id> --message "release: 새 스모크 FAIL n 자동 롤백 (<커밋>)" --yes` (2).
+   - 기준에 없던 FAIL이 **데이터 상태 신호뿐**이면(감사 Q1·Q2 `감사 <거점> → …`, `… 200인데 0곳`) → 롤백하지 않고 "데이터 상태 확인 필요"(3). 상세·격자 채움이나 수집 상태 문제일 수 있어서예요.
+   - 배포 전부터 있던 FAIL만 남았으면 성공("기준 FAIL n 그대로").
+   - 요약 줄을 못 읽거나 FAIL 줄 수가 요약과 다르면 운영을 함부로 되돌리지 않고 확인 필요(3).
+   - 스모크를 두 번 돌리니 요청은 약 50번(+ 토큰이 있으면 감사 거점 수 × 2)이에요.
+9. **요약·기록** — 버전(이전 → 새), 적용한 마이그레이션, 후속 작업 결과, 기준·배포 뒤 스모크, 롤백 대상, 걸린 시간. 운영을 바꿨으면(마이그레이션 적용이나 배포를 시도했으면) `docs/deploys.md`에 한 줄을 더해요. 적용이 실패한 마이그레이션은 `0005_list_json (적용 실패)`처럼 남아요.
+
+### 남은 후속 작업 (`.wrangler/release-pending-hooks.json`)
+
+마이그레이션은 적용했는데 배포 전에 멈추면(기준 스모크 FAIL, 트리가 바뀜 등), 그 마이그레이션의 후속 작업(새 코드가 있어야 도는 백필)을 못 돌린 채로 남아요. 스크립트는 그 명령을 출력하고, 기록 결과 칸에 `(후속 작업 대기: 0005_list_json)`을 붙이고, `.wrangler/release-pending-hooks.json`(gitignore)에 저장해요. **다음 `npm run release`는 이 파일을 읽어 계획에 "지난 실행에서 남음"으로 넣고 배포 뒤에 돌린 다음 비워요** (마이그레이션이 더 남지 않았어도). 배포 뒤 실패한 후속 작업도 같은 파일에 남아요. 손으로 돌렸다면 파일을 지우면 돼요.
 
 ### 배포 기록(`docs/deploys.md`)은 커밋하지 않아요
 
@@ -65,10 +78,11 @@ git add docs/deploys.md && git commit -m "docs(deploy): <날짜> 배포 기록" 
     // hooks: [{ name: "…", needsAdminToken: true, commands: (hubIds) => [{ cmd: "node", args: ["scripts/….mjs"] }] }],
   },
   ```
-  `sql`은 결과에 `name` 열이 있는 읽기 쿼리(`sqlite_master`, `PRAGMA table_info(<표>)`)예요. 등록하지 않아도 배포는 되지만 "남은 마이그레이션 없음"만 확인해요.
+  `sql`은 결과에 `name` 열이 있는 읽기 쿼리(`sqlite_master`, `PRAGMA table_info(<표>)`)예요. 0003 이후 마이그레이션은 등록이 **필수**예요 — 빠지면 테스트(CI)가 실패해요.
 
 ## 롤백과 한계
 
+- 자동 롤백은 **새 코드가 만든 회귀**에만 반응해요: 배포 전 기준 스모크에 없던 코드 수준 FAIL. 이미 있던 FAIL이나 데이터 상태 신호(감사·0곳)만으로는 되돌리지 않아요 — 되돌려도 고쳐지지 않으니까요.
 - 자동 롤백 대상은 **이번 배포 직전에 운영 중이던 버전**이에요. 같은 D1 스키마(마이그레이션 적용 전)에서 돌던 버전이고, 마이그레이션은 더하기만 하니 새 스키마에서도 돌아요.
 - **마이그레이션은 되돌리지 않아요.** 되돌릴 방법도 없어요 — 그래서 더하기만.
 - **`wrangler rollback`은 Cron 트리거를 되돌리지 않아요.** 롤백 뒤에도 지금 `wrangler.jsonc`의 `crons`가 남아요. 이전 버전이 다른 주기를 기대하면 손으로 맞춰야 해요 (예: `2f5adde0`은 `*/10`을 기대해요 — 대시보드의 Triggers나 그 커밋의 설정으로 `wrangler triggers deploy`).
@@ -120,7 +134,8 @@ B=https://mmj.itmz.me scripts/smoke.sh                       # FAIL 0이어야. 
 
 ## CI (GitHub Actions)
 
-`.github/workflows/ci.yml`: 모든 푸시와 PR에서 Node 26, `npm ci`(npm 캐시), `npm run typecheck`, `npm test`, `npm run build`, `%VITE_` 자리표시자 확인.
+`.github/workflows/ci.yml`: 모든 푸시와 PR에서 Node 26, `npm ci`(npm 캐시), `npm run typecheck`, `npm test`, `npm run build`, 빌드 결과가 있고 `%VITE_` 자리표시자가 없는지 확인(파일이 없으면 실패).
+- `test/shared/release.test.ts`가 0003 이후의 모든 `migrations/*.sql`에 `scripts/migrationChecks.mjs` 항목이 있는지 봐요 — 등록 없이 새 마이그레이션을 합치면 CI가 실패해요.
 - Cloudflare 자격 증명이 필요 없어요. 테스트는 `vitest.config.ts`의 `remoteBindings: false`로 로컬 D1을 쓰고, 빌드는 원격 D1에 붙지 않아요 (잘못된 `CLOUDFLARE_API_TOKEN`으로 빌드·테스트가 통과하는 것을 확인했어요).
 - 빌드용 `VITE_KAKAO_JS_KEY`는 가짜 값이에요 (CI 빌드 결과는 배포하지 않아요).
 

@@ -126,6 +126,24 @@ export const DEPLOYMENTS_PRETTY = [
   "",
 ].join("\n");
 
-/** scripts/smoke.sh 마지막 줄들 */
-export const smokeOutput = (fails: number, warns = 1) =>
-  `모먹죠 스모크 → https://mmj.itmz.me\n== 정적 파일\n  ok    / 200, 제목 '모먹죠 - 점심 고?'\n\n요청 25번 · FAIL ${fails} · WARN ${warns}\n`;
+/** scripts/smoke.sh 출력 (smoke.sh의 bad()는 "  FAIL  <설명>" 줄을 찍는다). fails는 FAIL 줄 내용 또는 개수 */
+export const smokeOutput = (fails: number | string[] = [], warns = 1) => {
+  const lines = typeof fails === "number" ? Array.from({ length: fails }, (_, i) => `/robots.txt → 50${i} 또는 Disallow 줄이 없음`) : fails;
+  return [
+    "모먹죠 스모크 → https://mmj.itmz.me",
+    "== 정적 파일",
+    "  ok    / 200, 제목 '모먹죠 - 점심 고?'",
+    ...lines.map((l) => `  FAIL  ${l}`),
+    "",
+    `요청 25번 · FAIL ${lines.length} · WARN ${warns}`,
+    "",
+  ].join("\n");
+};
+
+/** 실제 smoke.sh의 FAIL 줄 모양들 (자산 이름의 해시는 빌드마다 바뀐다) */
+export const FAIL_ASSET_OLD = "/assets/index-CePFwRKS.js → 404, cache-control '' (immutable 1년 기대, public/_headers 확인)";
+export const FAIL_ASSET_NEW = "/assets/index-Zb9xQ2aa.js → 404, cache-control '' (immutable 1년 기대, public/_headers 확인)";
+export const FAIL_PLACES_500 = "ddp 500m → 500";
+export const FAIL_PLACES_000 = "ddp 500m → 000";
+export const FAIL_AUDIT = '감사 ddp → 200 {"pass":{"q1":false,"q2":true}}';
+export const FAIL_EMPTY = "pangyo 500m 200인데 0곳";

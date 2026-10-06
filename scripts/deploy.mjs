@@ -1,9 +1,11 @@
-// 운영 배포 한 번에 (Task 32): npm run release [-- --dry-run] [--yes] [--allow-destructive] [--skip-tests --force]
-//   사전 확인 → D1 접근 → 마이그레이션 적용·확인 → 롤백 대상 기록 → 배포 → 후속 작업 → 스모크(실패면 자동 롤백) → 요약·docs/deploys.md
+// 운영 배포 한 번에 (Task 32): npm run release [-- --dry-run] [--yes] [--accept-baseline-fails] [--allow-destructive] [--skip-tests --force]
+//   사전 확인 → D1 접근 → 마이그레이션 적용·확인 → 롤백 대상 기록 → 기준 스모크 → 배포 → 후속 작업
+//   → 스모크(기준에 없던 코드 FAIL이면 자동 롤백) → 요약·docs/deploys.md
 // 판단과 순서는 scripts/release.mjs(테스트 있음), 이 파일은 실제 명령 실행·파일·터미널만 잇는다. 설명은 docs/deploy.md.
 // ADMIN_TOKEN은 환경 변수(없으면 .dev.vars)에서 읽어 백필·스모크에 환경 변수로만 넘기고 출력하지 않는다.
 import { spawn } from "node:child_process";
-import { appendFileSync, readFileSync } from "node:fs";
+import { appendFileSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { dirname } from "node:path";
 import { createInterface } from "node:readline/promises";
 import { fileURLToPath } from "node:url";
 import { HUBS } from "../shared/hubs.ts";
@@ -58,6 +60,10 @@ const { code } = await runRelease(parsed.opts, {
   run,
   readFile,
   appendFile: (path, text) => appendFileSync(path, text),
+  writeFile: (path, text) => {
+    mkdirSync(dirname(path), { recursive: true });
+    writeFileSync(path, text);
+  },
   log: (line) => console.log(line),
   confirm,
   sleep: (ms) => new Promise((r) => setTimeout(r, ms)),

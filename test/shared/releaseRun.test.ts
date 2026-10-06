@@ -9,6 +9,12 @@ import {
   d1Rows,
   DEPLOY_OUTPUT,
   deploymentsJson,
+  FAIL_ASSET_NEW,
+  FAIL_ASSET_OLD,
+  FAIL_AUDIT,
+  FAIL_EMPTY,
+  FAIL_PLACES_000,
+  FAIL_PLACES_500,
   MIGRATIONS_NONE,
   MIGRATIONS_PENDING_0005_ANSI,
   NEW_VERSION,
@@ -60,6 +66,7 @@ function harness(over: Record<string, Reply | Reply[]> = {}, extra: { files?: Re
   const calls: Call[] = [];
   const logs: string[] = [];
   const appended: { path: string; text: string }[] = [];
+  const written: { path: string; text: string }[] = [];
   const files: Record<string, string> = {
     "dist/client/index.html": '<script src="https://dapi.kakao.com/v2/maps/sdk.js?appkey=abc&autoload=false"></script>',
     "migrations/0003_meta.sql": sql0003,
@@ -88,6 +95,10 @@ function harness(over: Record<string, Reply | Reply[]> = {}, extra: { files?: Re
     },
     readFile: (p: string) => files[p],
     appendFile: (p: string, text: string) => void appended.push({ path: p, text }),
+    writeFile: (p: string, text: string) => {
+      files[p] = text;
+      written.push({ path: p, text });
+    },
     log: (s: string) => void logs.push(s),
     confirm: async () => extra.confirm ?? true,
     sleep: async () => {},
@@ -97,10 +108,10 @@ function harness(over: Record<string, Reply | Reply[]> = {}, extra: { files?: Re
     hubIds: HUBS,
   };
   const ran = (prefix: string) => calls.filter((c) => c.line === prefix || c.line.startsWith(prefix + " "));
-  return { deps, calls, logs, appended, ran, output: () => logs.join("\n") };
+  return { deps, calls, logs, appended, written, files, ran, output: () => logs.join("\n") };
 }
 
-const opts = (o: Partial<ReleaseOpts> = {}): ReleaseOpts => ({ dryRun: false, skipTests: false, force: false, yes: true, allowDestructive: false, ...o });
+const opts = (o: Partial<ReleaseOpts> = {}): ReleaseOpts => ({ dryRun: false, skipTests: false, force: false, yes: true, allowDestructive: false, acceptBaselineFails: false, ...o });
 
 describe("infra: npm run release — 정상 흐름", () => {
   it("infra: 사전 확인 → D1 → 0005 적용·확인 → 롤백 대상 기록 → 배포 → 거점별 백필 → 스모크 순서, 종료 코드 0", async () => {
@@ -119,11 +130,18 @@ describe("infra: npm run release — 정상 흐름", () => {
       "npx wrangler d1 migrations list",
       "npx wrangler d1 migrations apply momeokjo --remote",
       "npx wrangler deployments list --json",
+      "bash scripts/smoke.sh", // 기준 스모크 (배포 전)
       "npm run deploy",
       "node scripts/backfill.mjs --hub bongeunsa --limit 150",
-      "bash scripts/smoke.sh",
     ];
     for (let i = 1; i < steps.length; i++) expect(idx(steps[i - 1]), `${steps[i - 1]} → ${steps[i]}`).toBeLessThan(idx(steps[i]));
+    // 배포 뒤 스모크는 후속 작업 다음
+    expect(order.lastIndexOf("bash scripts/smoke.sh")).toBeGreaterThan(idx("node scripts/backfill.mjs --hub gwacheon"));
+    expect(h.ran("bash scripts/smoke.sh")).toHaveLength(2);
+    // 배포 직전에 트리·HEAD를 다시 본다 (확인 질문·기준 스모크 뒤)
+    expect(h.ran("git status --porcelain")).toHaveLength(2);
+    expect(order.lastIndexOf("git rev-parse HEAD")).toBeLessThan(idx("npm run deploy"));
+    expect(order.lastIndexOf("git rev-parse HEAD")).toBeGreaterThan(idx("bash scripts/smoke.sh"));
     // 적용 전 확인(없어야 함)과 적용 뒤 확인(있어야 함)을 둘 다 한다
     expect(h.ran(LIST_JSON_CHECK)).toHaveLength(2);
     expect(h.ran("npx wrangler d1 migrations list")).toHaveLength(2);
@@ -174,7 +192,7 @@ describe("infra: npm run release — 정상 흐름", () => {
     expect(h.ran(LIST_JSON_CHECK)).toHaveLength(0);
     expect(h.ran("node scripts/backfill.mjs")).toHaveLength(0);
     expect(h.ran("npm run deploy")).toHaveLength(1);
-    expect(h.ran("bash scripts/smoke.sh")).toHaveLength(1);
+    expect(h.ran("bash scripts/smoke.sh")).toHaveLength(2); // 기준 + 배포 뒤
   });
 
   it("infra: 배포 출력에 버전이 없으면 deployments list로 새 활성 버전을 확인한다", async () => {
@@ -194,7 +212,7 @@ describe("infra: npm run release — 정상 흐름", () => {
     const broken = harness({ "node scripts/backfill.mjs": fail("HTTP 401", 1) });
     const res = await runRelease(opts(), broken.deps);
     expect(res.code).toBe(3);
-    expect(broken.ran("bash scripts/smoke.sh")).toHaveLength(1);
+    expect(broken.ran("bash scripts/smoke.sh")).toHaveLength(2); // 후속 작업이 실패해도 배포 뒤 스모크까지
   });
 });
 
@@ -344,35 +362,159 @@ describe("infra: npm run release — 배포 전 중단", () => {
   it("infra: 배포 명령이 실패하고 활성 버전이 그대로면 '배포 안 됨'(1), 롤백하지 않는다", async () => {
     const h = harness({ "npm run deploy": fail("✘ [ERROR] build failed") });
     expect((await runRelease(opts(), h.deps)).code).toBe(1);
-    expect(h.ran("bash scripts/smoke.sh")).toHaveLength(0);
+    expect(h.ran("bash scripts/smoke.sh")).toHaveLength(1); // 기준 스모크만
     expect(h.ran("npx wrangler rollback")).toHaveLength(0);
+  });
+
+  it("infra: 확인 질문·기준 스모크 뒤 배포 직전에 트리가 더러워졌거나 HEAD가 바뀌면 배포하지 않는다", async () => {
+    const dirty = harness({ "git status --porcelain": [ok(""), ok(" M worker/index.ts\n")] });
+    expect((await runRelease(opts(), dirty.deps)).code).toBe(1);
+    expect(dirty.output()).toContain("worker/index.ts");
+    deployedNothing(dirty);
+
+    const moved = harness({ "git rev-parse HEAD": [ok(SHA + "\n"), ok("1111111111111111111111111111111111111111\n")] });
+    expect((await runRelease(opts(), moved.deps)).code).toBe(1);
+    deployedNothing(moved);
+  });
+
+  it("infra: 마이그레이션을 적용했는데 배포 전에 멈추면 남은 후속 작업을 보여주고 기록·상태 파일에 남긴다", async () => {
+    const h = harness({ "git status --porcelain": [ok(""), ok(" M worker/index.ts\n")] });
+    expect((await runRelease(opts(), h.deps)).code).toBe(1);
+    deployedNothing(h);
+    const out = h.output();
+    expect(out).toContain("node scripts/backfill.mjs --hub ddp --limit 150");
+    expect(h.appended[0].text).toMatch(/\| 0005_list_json \| 배포 전 중단 \(후속 작업 대기: 0005_list_json\) \|/);
+    const state = h.written.find((w) => w.path === ".wrangler/release-pending-hooks.json");
+    expect(JSON.parse(state!.text)).toHaveLength(HUBS.length);
+    expect(state!.text).not.toContain(TOKEN);
+  });
+
+  it("infra: 다음 실행은 상태 파일의 후속 작업을 계획에 넣고, 배포 뒤 돌린 다음 비운다", async () => {
+    const carried = HUBS.map((id) => ({ migration: "0005_list_json.sql", name: "list_json 백필", cmd: "node", args: ["scripts/backfill.mjs", "--hub", id, "--limit", "150"], needsAdminToken: true }));
+    const h = harness(
+      { "npx wrangler d1 migrations list momeokjo --remote": ok(MIGRATIONS_NONE) },
+      { files: { ".wrangler/release-pending-hooks.json": JSON.stringify(carried) } },
+    );
+    expect((await runRelease(opts(), h.deps)).code).toBe(0);
+    expect(h.output()).toContain("지난 실행");
+    expect(h.ran("node scripts/backfill.mjs")).toHaveLength(HUBS.length);
+    expect(h.ran("npx wrangler d1 migrations apply")).toHaveLength(0);
+    expect(JSON.parse(h.files[".wrangler/release-pending-hooks.json"])).toEqual([]);
+  });
+
+  it("infra: 배포 뒤 실패한 후속 작업은 상태 파일에 남는다", async () => {
+    const h = harness({ "node scripts/backfill.mjs --hub ddp": fail("HTTP 401", 1) });
+    expect((await runRelease(opts(), h.deps)).code).toBe(3);
+    const left = JSON.parse(h.files[".wrangler/release-pending-hooks.json"]);
+    expect(left.map((x: { args: string[] }) => x.args[2])).toEqual(["ddp"]);
+  });
+
+  it("infra: 마이그레이션 적용이 실패하면 기록에 '(적용 실패)'로 남긴다", async () => {
+    const h = harness({ "npx wrangler d1 migrations apply momeokjo --remote": fail("✘ [ERROR] SQLITE_ERROR") });
+    expect((await runRelease(opts(), h.deps)).code).toBe(1);
+    expect(h.appended[0].text).toMatch(/\| 0005_list_json \(적용 실패\) \| 배포 전 중단 \|/);
   });
 });
 
-describe("infra: npm run release — 스모크 실패와 자동 롤백", () => {
-  it("infra: 스모크 FAIL > 0이면 기록해 둔 버전으로 비대화식 롤백(--message, --yes), 종료 코드 2", async () => {
-    const h = harness({ "bash scripts/smoke.sh": fail("", 1, smokeOutput(2)) });
+describe("infra: npm run release — 배포는 됐는데 새 버전을 모를 때", () => {
+  const expectUnknown = async (over: Record<string, Reply | Reply[]>) => {
+    const h = harness(over);
+    const res = await runRelease(opts(), h.deps);
+    expect(res.code).toBe(3);
+    const out = h.output();
+    expect(out).toContain("배포됨 — 버전 불명, 확인 필요");
+    expect(out).toContain(`npx wrangler rollback ${PREV_VERSION}`);
+    expect(h.appended[0].text).toContain("배포됨 — 버전 불명, 확인 필요");
+    expect(h.appended[0].text).not.toContain("배포 전 중단");
+    expect(h.appended[0].text).toMatch(/^\| [\d-]+ [\d:]+ \| \? \|/);
+    expect(h.ran("bash scripts/smoke.sh")).toHaveLength(1); // 기준만, 배포 뒤 스모크·롤백 없음
+    expect(h.ran("npx wrangler rollback")).toHaveLength(0);
+  };
+
+  it("infra: 'Current Version ID'가 없고 deployments list도 실패", async () => {
+    await expectUnknown({
+      "npm run deploy": ok("Uploaded momeokjo\n"),
+      "npx wrangler deployments list --json": [ok(deploymentsJson(PREV_VERSION)), fail("✘ [ERROR] fetch failed")],
+    });
+  });
+
+  it("infra: 'Current Version ID'가 없고 트래픽이 나뉨", async () => {
+    const split = JSON.stringify([{ created_on: "2026-10-06T00:30:00Z", versions: [{ version_id: "a", percentage: 50 }, { version_id: "b", percentage: 50 }] }]);
+    await expectUnknown({ "npm run deploy": ok("Uploaded momeokjo\n"), "npx wrangler deployments list --json": [ok(deploymentsJson(PREV_VERSION)), ok(split)] });
+  });
+
+  it("infra: 'Current Version ID'가 없고 활성 버전이 그대로", async () => {
+    await expectUnknown({ "npm run deploy": ok("Uploaded momeokjo\n") });
+  });
+});
+
+describe("infra: npm run release — 기준 스모크와 자동 롤백", () => {
+  /** [배포 전 기준, 배포 뒤] 스모크 응답 */
+  const smokes = (before: string[], after: string[]) => ({
+    "bash scripts/smoke.sh": [before.length ? fail("", 1, smokeOutput(before)) : ok(smokeOutput(0)), after.length ? fail("", 1, smokeOutput(after)) : ok(smokeOutput(0))],
+  });
+
+  it("infra: 기준에 없던 코드 수준 FAIL이 새로 생기면 기록한 버전으로 비대화식 롤백(--message, --yes), 종료 코드 2", async () => {
+    const h = harness(smokes([], [FAIL_PLACES_500, FAIL_ASSET_NEW]));
     const res = await runRelease(opts(), h.deps);
     expect(res.code).toBe(2);
     const rb = h.ran("npx wrangler rollback");
     expect(rb).toHaveLength(1);
     expect(rb[0].line).toMatch(new RegExp(`^npx wrangler rollback ${PREV_VERSION} --message .+ --yes$`));
-    expect(res.summary).toMatchObject({ rolledBack: true, smoke: { fails: 2 } });
+    expect(res.summary).toMatchObject({ rolledBack: true, smoke: { fails: 2, newFails: [FAIL_PLACES_500, FAIL_ASSET_NEW] } });
     const out = h.output();
+    expect(out).toContain(FAIL_PLACES_500);
     expect(out).toContain("마이그레이션은 되돌리지 않아요");
     expect(out).toMatch(/[Cc]ron/);
-    expect(h.appended[0].text).toMatch(/\| 72a9f970 \| fc22b79 \| 0005_list_json \| 롤백 \(스모크 FAIL 2\) \| 2f5adde0 \|/);
+    expect(h.appended[0].text).toMatch(/\| 72a9f970 \| fc22b79 \| 0005_list_json \| 롤백 \(새 FAIL 2\) \| 2f5adde0 \|/);
+  });
+
+  it("infra: 배포 전부터 있던 FAIL은 배포 뒤에도 롤백 사유가 아니다 (--yes면 기준 FAIL을 받아들임)", async () => {
+    const h = harness(smokes([FAIL_PLACES_500, FAIL_ASSET_OLD], [FAIL_PLACES_000, FAIL_ASSET_NEW]));
+    const res = await runRelease(opts(), h.deps);
+    expect(res.code).toBe(0);
+    expect(h.ran("npx wrangler rollback")).toHaveLength(0);
+    expect(h.output()).toContain(FAIL_PLACES_500); // 기준 FAIL을 보여준다
+    expect(res.summary.result).toContain("기준 FAIL 2");
+  });
+
+  it("infra: 기준 스모크에 FAIL이 있으면 --yes·--accept-baseline-fails 없이는 배포 전에 멈춘다", async () => {
+    const stop = harness(smokes([FAIL_PLACES_500], []), { isTTY: true, confirm: true });
+    expect((await runRelease(opts({ yes: false }), stop.deps)).code).toBe(1);
+    expect(stop.output()).toContain(FAIL_PLACES_500);
+    expect(stop.output()).toContain("--accept-baseline-fails");
+    expect(stop.ran("npm run deploy")).toHaveLength(0);
+
+    const accepted = harness(smokes([FAIL_PLACES_500], [FAIL_PLACES_500]), { isTTY: true, confirm: true });
+    expect((await runRelease(opts({ yes: false, acceptBaselineFails: true }), accepted.deps)).code).toBe(0);
+    expect(accepted.ran("npm run deploy")).toHaveLength(1);
+  });
+
+  it("infra: 새 FAIL이 감사(Q1·Q2)·'200인데 0곳'뿐이면 롤백하지 않고 '데이터 상태 확인 필요'(3)", async () => {
+    const h = harness(smokes([], [FAIL_AUDIT, FAIL_EMPTY]));
+    const res = await runRelease(opts(), h.deps);
+    expect(res.code).toBe(3);
+    expect(h.ran("npx wrangler rollback")).toHaveLength(0);
+    expect(h.output()).toContain("데이터 상태 확인 필요");
+    expect(h.output()).toContain(FAIL_AUDIT);
+    expect(h.appended[0].text).toContain("데이터 상태 확인 필요");
+  });
+
+  it("infra: 기준 스모크 결과를 못 읽으면 배포하지 않는다", async () => {
+    const h = harness({ "bash scripts/smoke.sh": fail("jq이(가) 필요해요", 2) });
+    expect((await runRelease(opts(), h.deps)).code).toBe(1);
+    expect(h.ran("npm run deploy")).toHaveLength(0);
   });
 
   it("infra: 롤백까지 실패하면 종료 코드 3과 손으로 할 명령", async () => {
-    const h = harness({ "bash scripts/smoke.sh": fail("", 1, smokeOutput(1)), "npx wrangler rollback": fail("✘ [ERROR] auth") });
+    const h = harness({ ...smokes([], [FAIL_PLACES_500]), "npx wrangler rollback": fail("✘ [ERROR] auth") });
     const res = await runRelease(opts(), h.deps);
     expect(res.code).toBe(3);
     expect(h.output()).toContain(`npx wrangler rollback ${PREV_VERSION}`);
   });
 
-  it("infra: 스모크 결과를 못 읽으면 롤백하지 않고 확인 필요(3)", async () => {
-    const h = harness({ "bash scripts/smoke.sh": fail("jq이(가) 필요해요", 2) });
+  it("infra: 배포 뒤 스모크 결과를 못 읽으면 롤백하지 않고 확인 필요(3)", async () => {
+    const h = harness({ "bash scripts/smoke.sh": [ok(smokeOutput(0)), fail("jq이(가) 필요해요", 2)] });
     const res = await runRelease(opts(), h.deps);
     expect(res.code).toBe(3);
     expect(h.ran("npx wrangler rollback")).toHaveLength(0);
