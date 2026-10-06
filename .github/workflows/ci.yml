@@ -33,5 +33,6 @@ jobs:
       - run: npm run typecheck
       - run: npm test
       - run: npm run build
-      - name: 빌드 결과에 %VITE_ 자리표시자 없음
-        run: "! grep -q '%VITE_' dist/client/index.html"
+      - name: 빌드 결과가 있고 %VITE_ 자리표시자 없음
+        # 파일이 없으면 grep이 실패해 !가 통과로 뒤집으므로 먼저 있는지 본다 (fail-closed)
+        run: test -f dist/client/index.html && ! grep -q '%VITE_' dist/client/index.html
