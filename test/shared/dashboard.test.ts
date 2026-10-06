@@ -1,8 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
   CRON_STALE_MS, addDays, alertsOf, budgetFraction, budgetLevel, dayList, daysBetween, deltaOf, histogramMedian, isDay,
-  mondayOf, weekdayOf, type HubStatus, type OpsSnapshot,
+  METRICS, METRIC_FAMILIES, mondayOf, weekdayOf, type HubStatus, type OpsSnapshot,
 } from "../../shared/dashboard";
+import spec from "../../docs/superpowers/specs/2026-10-05-momeokjo-design.md?raw";
 
 const NOW = 1_800_000_000_000;
 const ops = (o: Partial<{ read: number; written: number; blockedUntil: number; frozen: OpsSnapshot["kakao"]["frozen"]; cronAt: number | null }> = {}): OpsSnapshot => ({
@@ -57,7 +58,14 @@ describe("대시보드 순수 계산", () => {
     expect([isDay("2027-02-29"), isDay("2027-02-28"), isDay("20270228")]).toEqual([false, true, false]);
   });
 
-  it("R52: 이상 신호 — 예산 70 % 이상, 쿨다운·frozen, Cron 15분 멈춤, 미수집·미완료 거점, 집계 밀림 (심각한 것 먼저)", () => {
+  it("R53: 지표 이름·묶음은 스펙 R53 표와 같다 (정의된 것은 모두 표에, 표에 있는 것은 모두 정의)", () => {
+    const r53 = spec.slice(spec.indexOf("- **R53 "), spec.indexOf("- **R54 "));
+    const rows = [...r53.matchAll(/^\s*\| `([^`]+)` \|/gm)].map((m) => m[1]);
+    expect(rows.length).toBeGreaterThan(50);
+    expect(new Set(rows)).toEqual(new Set([...Object.keys(METRICS), ...Object.keys(METRIC_FAMILIES)]));
+  });
+
+  it("R52: 이상 신호 —예산 70 % 이상, 쿨다운·frozen, Cron 15분 멈춤, 미수집·미완료 거점, 집계 밀림 (심각한 것 먼저)", () => {
     expect(alertsOf(ops(), [hub({})], NOW, rollup)).toEqual([]);
     const a = alertsOf(
       ops({ read: 2_200_000, blockedUntil: NOW + 60_000, cronAt: NOW - CRON_STALE_MS - 60_000 }),
