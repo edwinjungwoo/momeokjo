@@ -89,7 +89,7 @@ describe("GET /api/admin/dashboard", () => {
       ...day(TODAY, 400),
     ]);
     // Cron이 어제까지 집계했다
-    for (let i = 0; i < 5 && (await runRollups(env.DB, kst(TODAY, 5))) > 0; i++);
+    for (let i = 0; i < 5 && (await runRollups(env.DB, kst(TODAY, 5), { maxDaysPerUtcDay: 100 })) > 0; i++);
     const res = await get(setup(), "tab=overview&from=2027-01-13&to=2027-01-15&compare=1");
     expect(res.status).toBe(200);
     expect(res.headers.get("cache-control")).toBe("no-store");
@@ -142,7 +142,7 @@ describe("GET /api/admin/dashboard", () => {
       ...day(TODAY, 300),
       { anon: anonN(300), session: sessN(3000), hub: "bongeunsa", type: "exclude_place", ts: kst(TODAY, 12, 5), placeId: "105", props: { rank: 2 } },
     ]);
-    for (let i = 0; i < 10 && (await runRollups(env.DB, kst(TODAY, 5))) > 0; i++);
+    for (let i = 0; i < 10 && (await runRollups(env.DB, kst(TODAY, 5), { maxDaysPerUtcDay: 100 })) > 0; i++);
     const d = await (await get(setup(), "tab=behavior&from=2027-01-04&to=2027-01-15&compare=0")).json<BehaviorData>();
     expect(d.prevTotals).toBeNull();
     expect(d.totals).toMatchObject({ sessions: 7, funnel_draw: 6, funnel_expand: 3, funnel_confirm: 3, auto_left: 3, confirm_r1: 3 });

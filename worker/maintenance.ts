@@ -4,7 +4,7 @@ import { HUBS, type Hub } from "../shared/hubs";
 import type { LatLng } from "../shared/types";
 import { Budget } from "./budget";
 import { limitsFrom } from "./config";
-import { meteredDb, overReadBudget, recordCronRun, type D1Usage } from "./d1Usage";
+import { meteredDb, overReadBudget, readSoftCap, recordCronRun, type D1Usage } from "./d1Usage";
 import { enrichDetails } from "./detailEnricher";
 import { isRetentionWindow, pruneOldEvents } from "./events";
 import { pruneRollups, runRollups } from "./rollup";
@@ -101,7 +101,7 @@ export async function runScheduled(
     // R59: 밀린 일별 집계 (따라잡았으면 meta 1행). 읽기 예산을 넘은 날은 건너뛴다. 실패해도 수집 결과는 그대로 둔다
     result.rolled = result.skipped
       ? 0
-      : await runRollups(db, opts.now).catch((e) => {
+      : await runRollups(db, opts.now, { readSoftCap: readSoftCap(env) }).catch((e) => {
           console.error("rollup failed", e);
           return 0;
         });

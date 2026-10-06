@@ -1,6 +1,6 @@
 import { env } from "cloudflare:test";
 import { describe, expect, it } from "vitest";
-import { ROLLUP_DAYS_PER_RUN, isKnownMetric } from "../../shared/dashboard";
+import { ROLLUP_BUDGET_SHARE, ROLLUP_DAYS_PER_RUN, ROLLUP_MAX_DAYS_PER_UTC_DAY, dayList, isKnownMetric } from "../../shared/dashboard";
 import {
   cohortStatements, liveDayMetrics, pruneRollups, rollupDayStatements, rollupThrough, runRollups, lastRollableDay,
 } from "../../worker/rollup";
@@ -194,7 +194,7 @@ describe("R59 Cron 집계 (runRollups)", () => {
     expect(lastRollableDay(kst("2027-01-15", 0, 5))).toBe("2027-01-13");
   });
 
-  it("R59: 집계한 행은 같은 날의 실시간 집계와 같고, 커서(rollup_through)를 올린다. 따라잡은 뒤에는 meta 1행만 읽는다", async () => {
+  it("R59: 집계한 행은 같은 날의 실시간 집계와 같고, 커서(rollup_through)를 올린다. 따라잡은 뒤에는 meta 한 문장만 읽는다", async () => {
     await seedEvents(scenario());
     expect(await runRollups(env.DB, kst("2027-01-15", 4, 5))).toBe(1);
     expect(await rollupThrough(env.DB)).toBe(D);
@@ -204,7 +204,57 @@ describe("R59 Cron 집계 (runRollups)", () => {
 
     const { db, log } = recordingDb(env.DB);
     expect(await runRollups(db, kst("2027-01-15", 4, 10))).toBe(0);
-    expect(log.map((x) => x.read)).toEqual([1]);
+    // 따라잡은 뒤에는 meta 한 문장(커서·실패 기록·오늘 집계 수·오늘 읽기 키)만
+    expect(log).toHaveLength(1);
+    expect(log[0].read).toBeLessThanOrEqual(8);
+  });
+
+  it(`R38/R59: 오늘(UTC) 읽기가 소프트 한도의 ${ROLLUP_BUDGET_SHARE * 100}% 이상이면 집계하지 않는다`, async () => {
+    await seedEvents(scenario());
+    const now = kst("2027-01-15", 4, 5);
+    await env.DB.prepare("INSERT INTO meta VALUES (?, ?)").bind(`d1_read:${utcDay(now)}`, String(900_000)).run();
+    expect(await runRollups(env.DB, now, { readSoftCap: 3_000_000 })).toBe(0);
+    expect(await rollupThrough(env.DB)).toBeNull();
+    expect(await runRollups(env.DB, now, { readSoftCap: 4_000_000 })).toBe(1);
+  });
+
+  it(`R59: 밀린 날은 UTC 하루에 ${ROLLUP_MAX_DAYS_PER_UTC_DAY}일까지만 집계하고, 다음 UTC 날에 잇는다`, async () => {
+    const days = dayList("2027-01-03", "2027-01-14");
+    await seedEvents(days.map((d, i) => ({ anon: anonN(i), session: sessN(i), hub: "ddp", type: "app_open", ts: kst(d, 12) })));
+    const now = kst("2027-01-15", 5); // UTC 01-14 20:00
+    let total = 0;
+    for (let i = 0; i < 6; i++) total += await runRollups(env.DB, now);
+    expect(total).toBe(ROLLUP_MAX_DAYS_PER_UTC_DAY);
+    expect(await rollupThrough(env.DB)).toBe(days[ROLLUP_MAX_DAYS_PER_UTC_DAY - 1]);
+    // 다음 UTC 날(KST 09시 이후)이면 다시 센다
+    expect(await runRollups(env.DB, kst("2027-01-15", 9, 5))).toBe(3);
+  });
+
+  it("R59: 집계가 실패한 날은 meta에 날짜·시각을 남기고, 한 시간 안에는 다시 하지 않는다", async () => {
+    await seedEvents(scenario());
+    const now = kst("2027-01-15", 4, 5);
+    let calls = 0;
+    const failing = new Proxy(env.DB, {
+      get(t, k) {
+        if (k === "batch") {
+          return async () => {
+            calls += 1;
+            throw new Error("boom");
+          };
+        }
+        const v = Reflect.get(t, k);
+        return typeof v === "function" ? v.bind(t) : v;
+      },
+    });
+    expect(await runRollups(failing, now)).toBe(0);
+    expect(calls).toBe(1);
+    const failed = await env.DB.prepare("SELECT value FROM meta WHERE key = 'rollup_failed'").first<{ value: string }>();
+    expect(JSON.parse(failed!.value)).toEqual({ day: D, at: now });
+    expect(await runRollups(failing, now + 30 * 60_000)).toBe(0);
+    expect(calls).toBe(1);
+    // 한 시간 뒤에는 다시 하고, 성공하면 실패 기록을 지운다
+    expect(await runRollups(env.DB, now + 61 * 60_000)).toBe(1);
+    expect(await env.DB.prepare("SELECT value FROM meta WHERE key = 'rollup_failed'").first()).toBeNull();
   });
 
   it(`R59: 밀린 날은 오래된 날부터 실행마다 ${ROLLUP_DAYS_PER_RUN}일까지만, 처음이면 가장 오래된 이벤트 날부터`, async () => {
@@ -245,7 +295,7 @@ describe("R59 Cron 집계 (runRollups)", () => {
       open(4, "2027-01-05"), // 다음 주 코호트
     ]);
     const now = kst("2027-01-30", 5);
-    for (let i = 0; i < 20 && (await runRollups(env.DB, now)) > 0; i++);
+    for (let i = 0; i < 20 && (await runRollups(env.DB, now, { maxDaysPerUtcDay: 100 })) > 0; i++);
     expect(await rollupThrough(env.DB)).toBe("2027-01-29");
     const seen = (await env.DB.prepare("SELECT anon, day, hub, ret, last_day FROM anon_first_seen ORDER BY anon").all()).results;
     expect(seen).toEqual([
@@ -290,10 +340,15 @@ describe("R59 Cron 집계 (runRollups)", () => {
       env.DB.prepare("INSERT INTO anon_first_seen VALUES (?, '2027-01-01', 'ddp', 0, '2027-03-02')").bind(anonN(1)),
       env.DB.prepare("INSERT INTO anon_first_seen VALUES (?, '2027-01-01', 'ddp', 1, '2027-03-03')").bind(anonN(2)),
       env.DB.prepare("INSERT INTO daily_stats VALUES ('2026-04-26', '*', 'sessions', 1), ('2026-04-27', '*', 'sessions', 1)"),
+      env.DB.prepare("INSERT INTO meta VALUES ('rollup_days:2027-05-30', '7'), ('rollup_days:2027-05-31', '2'), ('rollup_through', '2027-05-30')"),
     ]);
     await pruneRollups(env.DB, now);
     expect((await env.DB.prepare("SELECT anon FROM anon_first_seen").all()).results).toEqual([{ anon: anonN(2) }]);
     expect((await env.DB.prepare("SELECT day FROM daily_stats").all()).results).toEqual([{ day: "2026-04-27" }]);
+    // 지난 UTC 날의 집계 횟수만 지운다 (오늘 UTC = 05-31)
+    expect((await env.DB.prepare("SELECT key FROM meta ORDER BY key").all()).results).toEqual([
+      { key: "rollup_days:2027-05-31" }, { key: "rollup_through" },
+    ]);
   });
 });
 

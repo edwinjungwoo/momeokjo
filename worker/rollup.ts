@@ -1,8 +1,10 @@
 import {
-  COHORT_METRICS, DAILY_STATS_RETENTION_DAYS, ROLLUP_DAYS_PER_RUN, ROLLUP_HOUR_KST, TOP_PLACES_PER_DAY, addDays, dayList, mondayOf,
+  COHORT_METRICS, DAILY_STATS_RETENTION_DAYS, ROLLUP_BUDGET_SHARE, ROLLUP_DAYS_PER_RUN, ROLLUP_HOUR_KST, ROLLUP_MAX_DAYS_PER_UTC_DAY,
+  ROLLUP_RETRY_MS, TOP_PLACES_PER_DAY, addDays, dayList, mondayOf,
 } from "../shared/dashboard";
 import { EVENT_RETENTION_DAYS } from "../shared/events";
-import { DAY_MS, kstDay, kstDayHour } from "../shared/kst";
+import { DAY_MS, kstDay, kstDayHour, utcDay } from "../shared/kst";
+import { DEFAULT_READ_SOFT_CAP } from "./d1Usage";
 
 /**
  * R59 일별 집계. 하루치 지표를 SQL 집계 문장 4개로 계산한다 — Cron은 같은 문장을 INSERT … SELECT로 감싸 daily_stats에 쓰고
@@ -265,15 +267,41 @@ export function lastRollableDay(now: number): string {
   return addDays(day, hour >= ROLLUP_HOUR_KST ? -1 : -2);
 }
 
+export const ROLLUP_FAILED_KEY = "rollup_failed";
+const ROLLUP_DAYS_PREFIX = "rollup_days:";
+const COUNT_UPSERT = `INSERT INTO meta (key, value) VALUES (?, '1')
+  ON CONFLICT(key) DO UPDATE SET value = CAST(meta.value AS INTEGER) + 1`;
+
+export type RollupOpts = {
+  /** R38 읽기 소프트 한도 (기본 DEFAULT_READ_SOFT_CAP) */
+  readSoftCap?: number;
+  /** UTC 하루 최대 집계 날 수 (기본 ROLLUP_MAX_DAYS_PER_UTC_DAY, 테스트용) */
+  maxDaysPerUtcDay?: number;
+};
+
 /**
  * R59 Cron: 밀린 날을 오래된 날부터 ROLLUP_DAYS_PER_RUN일까지 집계한다 (하루 = batch 한 번). 처음이면 보관 중인 가장 오래된 이벤트 날부터.
- * 다 따라잡았으면 meta 1행만 읽는다. 하루라도 집계했으면 마지막 batch에서 코호트를 다시 센다. 집계한 날 수를 돌려준다.
+ * 속도 조절: 오늘(UTC) 읽기가 소프트 한도의 ROLLUP_BUDGET_SHARE 이상이면 하지 않고, UTC 하루에 ROLLUP_MAX_DAYS_PER_UTC_DAY일까지만
+ * (meta rollup_days:{UTC 날짜}을 같은 batch에서 올린다). 실패한 날은 meta rollup_failed {day, at}을 남기고 ROLLUP_RETRY_MS 뒤에 다시 한다
+ * (성공하면 같은 batch에서 지운다). 따라잡았으면 meta 한 문장(4키)만 읽는다. 하루라도 집계했으면 마지막 batch에서 코호트를 다시 센다.
+ * 집계한 날 수를 돌려준다.
  */
-export async function runRollups(db: D1Database, now: number): Promise<number> {
+export async function runRollups(db: D1Database, now: number, opts: RollupOpts = {}): Promise<number> {
   const last = lastRollableDay(now);
   const oldest = kstDay(now - EVENT_RETENTION_DAYS * DAY_MS);
-  const through = await rollupThrough(db);
+  const utc = utcDay(now);
+  const countKey = `${ROLLUP_DAYS_PREFIX}${utc}`;
+  const readKey = `d1_read:${utc}`;
+  const r = await db
+    .prepare("SELECT key, value FROM meta WHERE key IN (?, ?, ?, ?)")
+    .bind(ROLLUP_THROUGH_KEY, ROLLUP_FAILED_KEY, countKey, readKey)
+    .all<{ key: string; value: string }>();
+  const get = (k: string) => r.results.find((x) => x.key === k)?.value;
+  const through = get(ROLLUP_THROUGH_KEY) ?? null;
   if (through !== null && through >= last) return 0;
+  if ((Number(get(readKey)) || 0) >= (opts.readSoftCap ?? DEFAULT_READ_SOFT_CAP) * ROLLUP_BUDGET_SHARE) return 0;
+  const room = (opts.maxDaysPerUtcDay ?? ROLLUP_MAX_DAYS_PER_UTC_DAY) - (Number(get(countKey)) || 0);
+  if (room <= 0) return 0;
   let start = through === null ? null : addDays(through, 1);
   if (start === null) {
     const first = await db.prepare("SELECT min(day) AS d FROM events").first<{ d: string | null }>();
@@ -285,19 +313,43 @@ export async function runRollups(db: D1Database, now: number): Promise<number> {
     start = first.d;
   }
   if (start < oldest) start = oldest;
-  const days = dayList(start, last).slice(0, ROLLUP_DAYS_PER_RUN);
+  let failed: { day?: unknown; at?: unknown } | null = null;
+  try {
+    failed = JSON.parse(get(ROLLUP_FAILED_KEY) ?? "null") as { day?: unknown; at?: unknown } | null;
+  } catch {
+    failed = null;
+  }
+  if (failed && failed.day === start && typeof failed.at === "number" && now - failed.at < ROLLUP_RETRY_MS) return 0;
+  const days = dayList(start, last).slice(0, Math.min(ROLLUP_DAYS_PER_RUN, room));
+  let done = 0;
   for (const [i, day] of days.entries()) {
     const stmts = rollupDayStatements(db, day);
     if (i === days.length - 1) stmts.splice(stmts.length - 1, 0, ...cohortStatements(db, kstDay(now)));
-    await db.batch(stmts);
+    stmts.push(db.prepare(COUNT_UPSERT).bind(countKey), db.prepare("DELETE FROM meta WHERE key = ?").bind(ROLLUP_FAILED_KEY));
+    try {
+      await db.batch(stmts);
+    } catch (e) {
+      console.error("rollup failed", day, e);
+      await db
+        .prepare(META_UPSERT)
+        .bind(ROLLUP_FAILED_KEY, JSON.stringify({ day, at: now }))
+        .run()
+        .catch((x) => console.error("rollup failure record failed", x));
+      break;
+    }
+    done += 1;
   }
-  return days.length;
+  return done;
 }
 
-/** R35 보관 정리 창에서 같이: 90일 넘게 오지 않은 id의 첫 방문 기록, DAILY_STATS_RETENTION_DAYS 지난 집계를 지운다 */
+/**
+ * R35 보관 정리 창에서 같이: 90일 넘게 오지 않은 id의 첫 방문 기록, DAILY_STATS_RETENTION_DAYS 지난 집계,
+ * 지난 UTC 날의 집계 횟수 키를 지운다
+ */
 export async function pruneRollups(db: D1Database, now: number): Promise<void> {
   await db.batch([
     db.prepare("DELETE FROM anon_first_seen WHERE last_day < ?").bind(kstDay(now - EVENT_RETENTION_DAYS * DAY_MS)),
     db.prepare("DELETE FROM daily_stats WHERE day < ?").bind(kstDay(now - DAILY_STATS_RETENTION_DAYS * DAY_MS)),
+    db.prepare("DELETE FROM meta WHERE key >= ? AND key < ?").bind(ROLLUP_DAYS_PREFIX, `${ROLLUP_DAYS_PREFIX}${utcDay(now)}`),
   ]);
 }

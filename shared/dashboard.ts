@@ -7,6 +7,12 @@ export const DASHBOARD_MAX_DAYS = 90;
 export const DAILY_STATS_RETENTION_DAYS = 400;
 /** Cron 한 번에 집계하는 날 수 (밀린 날을 오래된 날부터) */
 export const ROLLUP_DAYS_PER_RUN = 3;
+/** 밀린 날 따라잡기는 UTC 하루(D1 한도 하루)에 이만큼까지만 */
+export const ROLLUP_MAX_DAYS_PER_UTC_DAY = 7;
+/** 오늘(UTC) D1 읽기가 소프트 한도의 이만큼 이상이면 집계하지 않는다 (목록 서비스 몫을 남긴다) */
+export const ROLLUP_BUDGET_SHARE = 0.3;
+/** 집계가 실패한 날은 이만큼 지난 뒤에 다시 한다 */
+export const ROLLUP_RETRY_MS = 60 * 60_000;
 /** 전날은 KST 이 시각 이후 첫 Cron에서 집계한다 (늦게 오는 이벤트 ±10분과 보관 정리 창에 맞춘다) */
 export const ROLLUP_HOUR_KST = 4;
 /** 아직 집계하지 않은 최근 날은 화면이 이만큼까지만 실시간으로 센다 (오늘, 새벽 4시 전이면 어제도) */
