@@ -6,7 +6,7 @@ export type ReleaseOpts = {
   force: boolean;
   yes: boolean;
   allowDestructive: boolean;
-  /** 배포 전 기준 스모크에 FAIL이 있어도 진행 (--yes도 같은 효과) */
+  /** 배포 전 기준 스모크에 FAIL이 있어도 진행 — 이 플래그로만 (--yes는 받아들이지 않음) */
   acceptBaselineFails: boolean;
 };
 export type RunResult = { code: number; stdout?: string; stderr?: string };

@@ -301,7 +301,7 @@ export function planRelease({ pending, sqlByName, allowDestructive, hubIds, hasA
     }
   }
   lines.push("  · 롤백 대상 기록 (wrangler deployments list — 지금 100% 활성 버전)");
-  lines.push(`  · 기준 스모크 (배포 전 지금 운영) — FAIL이 있으면 --accept-baseline-fails(또는 --yes) 없이는 멈춤`);
+  lines.push(`  · 기준 스모크 (배포 전 지금 운영) — FAIL이 있으면 --accept-baseline-fails 없이는 멈춤 (--yes로는 안 됨)`);
   lines.push("  · 배포 직전 작업 트리·HEAD 다시 확인 → 배포 (npm run deploy)");
   if (hooks.length) {
     for (const carried of [true, false]) {
@@ -561,9 +561,9 @@ export async function runRelease(opts, deps) {
     if (base.fails.length) {
       log(`  배포 전부터 FAIL ${base.fails.length}개:`);
       for (const f of base.fails) log(`    FAIL  ${f}`);
-      if (!(opts.yes || opts.acceptBaselineFails)) {
+      if (!opts.acceptBaselineFails) {
         throw new Stop(
-          `배포 전부터 운영 스모크에 FAIL이 ${base.fails.length}개 있어요 — 먼저 고치거나, 이 FAIL을 안고 배포하려면 --accept-baseline-fails(또는 --yes)를 붙이세요. 배포 뒤에는 여기 없던 FAIL만 롤백 사유로 봐요`,
+          `배포 전부터 운영 스모크에 FAIL이 ${base.fails.length}개 있어요 — 먼저 고치거나, 이 FAIL을 안고 배포하려면 --accept-baseline-fails를 붙이세요 (--yes로는 받아들이지 않아요). 배포 뒤에는 여기 없던 FAIL만 롤백 사유로 봐요`,
         );
       }
       log("  기준 FAIL로 받아들여요 — 배포 뒤에는 새로 생긴 FAIL만 봐요");

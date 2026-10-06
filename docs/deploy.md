@@ -25,8 +25,8 @@ npm run release -- --yes       # 묻지 않고 진행 (터미널이 아니면 --
 | 플래그 | 뜻 |
 |---|---|
 | `--dry-run` | 로컬 확인 + 운영 **읽기**만 (비밀값 이름, `SELECT 1`, 마이그레이션 목록, 적용 전 확인, 활성 버전). 적용·배포·후속 작업·스모크·롤백·기록은 하지 않아요. 단, `wrangler d1 migrations list --remote`는 목록을 읽기 전에 늘 `CREATE TABLE IF NOT EXISTS d1_migrations …`를 보내요 — 표가 이미 있으니 바뀌는 것은 없지만 엄밀히는 쓰기 문장이에요 |
-| `--yes` (`-y`) | 확인 질문 없이 진행. 기준 스모크의 FAIL도 받아들여요 (`--accept-baseline-fails`와 같음) |
-| `--accept-baseline-fails` | 배포 전 기준 스모크에 FAIL이 있어도 진행 (그 FAIL은 보여주고, 배포 뒤에는 새로 생긴 FAIL만 봐요) |
+| `--yes` (`-y`) | 확인 질문 없이 진행. 기준 스모크의 FAIL은 **받아들이지 않아요** — 기준이 빨가면 FAIL을 보여주고 배포 전에 멈춰요(1) |
+| `--accept-baseline-fails` | 배포 전 기준 스모크에 FAIL이 있어도 진행 — 이 플래그로만 돼요 (그 FAIL은 보여주고, 배포 뒤에는 새로 생긴 FAIL만 봐요) |
 | `--allow-destructive` | `DROP`·`RENAME`·`ALTER … DROP`·`DELETE FROM`이 든 마이그레이션도 적용 (기본은 거절) |
 | `--skip-tests --force` | typecheck·test를 건너뛰어요 (빌드는 해요). `--force` 없이는 거절 |
 
@@ -42,7 +42,7 @@ npm run release -- --yes       # 묻지 않고 진행 (터미널이 아니면 --
    - 계획을 보여주고 확인을 받은 뒤 `wrangler d1 migrations apply momeokjo --remote`.
    - 다시 목록을 읽어 **남은 것이 없어야** 하고, 등록된 사후 확인(0003 → `meta`·`idx_places_status_fetched_at`, 0004 → `events`·인덱스 2개, 0005 → `places.list_json` 열)이 **모두 있어야** 해요. 하나라도 틀리면 배포 전에 멈춰요.
 4. **롤백 대상 기록** — `wrangler deployments list --json`에서 가장 최근 배포의 100% 버전. 트래픽이 나뉘어 있으면(점진 배포 중) 멈춰요.
-5. **기준 스모크** — 배포 전에 지금 운영(이전 코드)으로 `scripts/smoke.sh`를 한 번 돌려요. 배포 뒤 결과와 비교할 기준이에요. 결과를 못 읽으면 배포하지 않아요. FAIL이 있으면 그 줄을 보여주고, `--accept-baseline-fails`(또는 `--yes`)가 없으면 배포 전에 멈춰요.
+5. **기준 스모크** — 배포 전에 지금 운영(이전 코드)으로 `scripts/smoke.sh`를 한 번 돌려요. 배포 뒤 결과와 비교할 기준이에요. 결과를 못 읽으면 배포하지 않아요. FAIL이 있으면 그 줄을 보여주고, `--accept-baseline-fails`가 없으면 배포 전에 멈춰요(1). `--yes`로 도는 비대화식 실행도 마찬가지예요 — 빨간 기준 위에 배포하려면 사람이 플래그로 정해야 해요.
 6. **배포** — 확인 질문·기준 스모크 사이에 작업 트리가 더러워졌거나 HEAD가 바뀌지 않았는지(= origin) 다시 본 뒤 `npm run deploy` (vite build && wrangler deploy). 출력의 `Current Version ID:`로 새 버전을 읽어요(없으면 deployments list로 확인).
    - 배포 명령이 실패하면 활성 버전을 다시 보고, 그대로면 "반영 안 됨"(1), 바뀌었으면 확인 필요(3).
    - **배포 명령이 성공했는데 새 버전을 확인하지 못하면**(버전 줄 없음 + deployments list 실패·트래픽 나뉨·이전과 같음) "배포됨 — 버전 불명, 확인 필요"(3)로 멈추고, 기록해 둔 이전 버전으로 되돌리는 명령을 보여줘요. 기록에도 "배포 전 중단"이 아니라 그렇게 남아요(버전 칸 `?`).

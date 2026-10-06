@@ -469,21 +469,31 @@ describe("infra: npm run release — 기준 스모크와 자동 롤백", () => {
     expect(h.appended[0].text).toMatch(/\| 72a9f970 \| fc22b79 \| 0005_list_json \| 롤백 \(새 FAIL 2\) \| 2f5adde0 \|/);
   });
 
-  it("infra: 배포 전부터 있던 FAIL은 배포 뒤에도 롤백 사유가 아니다 (--yes면 기준 FAIL을 받아들임)", async () => {
+  it("infra: 배포 전부터 있던 FAIL은 배포 뒤에도 롤백 사유가 아니다 (--accept-baseline-fails로 받아들였을 때)", async () => {
     const h = harness(smokes([FAIL_PLACES_500, FAIL_ASSET_OLD], [FAIL_PLACES_000, FAIL_ASSET_NEW]));
-    const res = await runRelease(opts(), h.deps);
+    const res = await runRelease(opts({ acceptBaselineFails: true }), h.deps);
     expect(res.code).toBe(0);
     expect(h.ran("npx wrangler rollback")).toHaveLength(0);
     expect(h.output()).toContain(FAIL_PLACES_500); // 기준 FAIL을 보여준다
     expect(res.summary.result).toContain("기준 FAIL 2");
   });
 
-  it("infra: 기준 스모크에 FAIL이 있으면 --yes·--accept-baseline-fails 없이는 배포 전에 멈춘다", async () => {
+  it("infra: 기준 스모크에 FAIL이 있으면 --accept-baseline-fails 없이는 배포 전에 멈춘다 — --yes(비대화식)도 받아들이지 않음", async () => {
     const stop = harness(smokes([FAIL_PLACES_500], []), { isTTY: true, confirm: true });
     expect((await runRelease(opts({ yes: false }), stop.deps)).code).toBe(1);
     expect(stop.output()).toContain(FAIL_PLACES_500);
     expect(stop.output()).toContain("--accept-baseline-fails");
     expect(stop.ran("npm run deploy")).toHaveLength(0);
+
+    // --yes로 도는 비대화식 실행도 기준이 빨가면 FAIL을 보여주고 배포 전에 멈춘다 (종료 코드 1)
+    const unattended = harness(smokes([FAIL_PLACES_500, FAIL_AUDIT], []), { isTTY: false });
+    const res = await runRelease(opts({ yes: true }), unattended.deps);
+    expect(res.code).toBe(1);
+    expect(unattended.output()).toContain(FAIL_PLACES_500);
+    expect(unattended.output()).toContain(FAIL_AUDIT);
+    expect(unattended.output()).toContain("--accept-baseline-fails");
+    expect(unattended.ran("npm run deploy")).toHaveLength(0);
+    expect(unattended.ran("npx wrangler rollback")).toHaveLength(0);
 
     const accepted = harness(smokes([FAIL_PLACES_500], [FAIL_PLACES_500]), { isTTY: true, confirm: true });
     expect((await runRelease(opts({ yes: false, acceptBaselineFails: true }), accepted.deps)).code).toBe(0);
