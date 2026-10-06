@@ -8,6 +8,8 @@ import { utcDay } from "../../shared/kst";
 import { createApp, type ResponseCache } from "../../worker/app";
 import { recordCronRun } from "../../worker/d1Usage";
 import { markTile, replaceTilePlaces, saveDetailFailure } from "../../worker/repo";
+import { dashboardCacheKey } from "../../worker/dashboard";
+import { readOnlyEnv } from "../../worker/readOnly";
 import { runRollups } from "../../worker/rollup";
 import { callApp } from "../helpers/callApp";
 import { anonN, seedEvents, sessN, type Seed } from "../helpers/events";
@@ -313,5 +315,45 @@ describe("GET /api/admin/dashboard", () => {
     log.length = 0;
     await callApp(app, `/api/admin/dashboard?${q}&compare=0`, { headers: AUTH }, { ...env, DB: db });
     expect(log.some((x) => /FROM events|tile_places/.test(x.sql))).toBe(false);
+  });
+  it("R59: 오늘 읽기가 절반을 넘어도 이미 캐시에 있는 실시간 집계는 쓴다 (캐시에 없는 날만 missing)", async () => {
+    await seedEvents([...day("2027-01-14", 100), ...day(TODAY, 200)]);
+    const cache = memCache();
+    const app = setup({ cache });
+    // 예산 안에서 오늘만 한 번 센다 (행태 탭 오늘만 — 어제는 아직 캐시에 없다; 개요는 14일 스파크라인 때문에 어제도 센다)
+    await get(app, "tab=behavior&from=2027-01-15&to=2027-01-15");
+    await env.DB.prepare("INSERT OR REPLACE INTO meta VALUES (?, '1500000')").bind(`d1_read:${utcDay(NOW)}`).run();
+    const { db, log } = recordingDb(env.DB);
+    const res = await callApp(app, "/api/admin/dashboard?tab=overview&from=2027-01-14&to=2027-01-15&compare=0", { headers: AUTH }, { ...env, DB: db });
+    const d = await res.json<OverviewData>();
+    expect(d.sources).toEqual({ "2027-01-14": "missing", [TODAY]: "live" });
+    expect(d.kpis.sessions.value).toBe(2);
+    expect(log.some((x) => /FROM events/.test(x.sql))).toBe(false);
+  });
+
+  it("R60: 실제 캐시에 응답이 있어도 토큰 없는 요청은 401 (인증이 캐시보다 먼저)", async () => {
+    const app = setup({ cache: caches.default });
+    const q = "tab=ops&from=2027-01-02&to=2027-01-15&hub=gwacheon";
+    expect((await get(app, q)).status).toBe(200);
+    expect((await get(app, q, {})).status).toBe(401);
+    expect((await get(app, q, { Authorization: "Bearer nope" })).status).toBe(401);
+  });
+
+  it("R52/R59: 개발 서버(READ_ONLY=1, readOnlyDb)에서도 세 탭 모두 읽기만으로 답한다 (실시간 집계 SQL 포함)", async () => {
+    await seedEvents([...day("2027-01-14", 100), ...day(TODAY, 200)]);
+    await runRollups(env.DB, kst(TODAY, 5));
+    const ro = readOnlyEnv({ ...env, READ_ONLY: "1" } as Env);
+    const app = setup();
+    for (const tab of ["overview", "behavior", "ops"]) {
+      const res = await callApp(app, `/api/admin/dashboard?tab=${tab}&from=2027-01-13&to=2027-01-15`, { headers: AUTH }, ro);
+      expect(res.status, tab).toBe(200);
+    }
+    const d = await (await callApp(app, "/api/admin/dashboard?tab=overview&from=2027-01-14&to=2027-01-15", { headers: AUTH }, ro)).json<OverviewData>();
+    expect(d.sources).toEqual({ "2027-01-14": "rollup", [TODAY]: "live" });
+    expect(d.kpis.sessions.value).toBe(4);
+  });
+
+  it("R59: 응답 형식이 바뀌어 캐시 판을 2로 올렸다", () => {
+    expect(dashboardCacheKey({ tab: "ops", from: TODAY, to: TODAY, hub: "all", compare: true })).toContain("&v=2");
   });
 });

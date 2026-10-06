@@ -115,7 +115,7 @@ function CohortGrid({ data }: { data: BehaviorData }) {
               <td className="num">{num(c.size)}</td>
               {c.ret.map((r, i) => {
                 const share = r === null || c.size === 0 ? null : r / c.size;
-                const partial = c.partial?.[i] === true;
+                const partial = c.partial[i];
                 return (
                   <td
                     key={RETENTION_DAYS[i]}
@@ -147,7 +147,7 @@ export function Behavior({ data }: { data: BehaviorData }) {
   const t = data.totals;
   const p = data.prevTotals;
   const c = data.cmpTotals;
-  const since = { relaxed: data.collectSince?.relaxed ?? COLLECT_SINCE.relaxed, confirmRank: data.collectSince?.confirmRank ?? COLLECT_SINCE.confirmRank };
+  const since = { relaxed: data.collectSince.relaxed ?? COLLECT_SINCE.relaxed, confirmRank: data.collectSince.confirmRank ?? COLLECT_SINCE.confirmRank };
   if (v(t, "sessions") === 0 && v(t, "events") === 0) {
     return (
       <div className="stack-lg">

@@ -98,7 +98,7 @@ export async function runScheduled(
   let result: CronResult | null = null;
   try {
     result = await maintain(env, db, opts);
-    // R59: 밀린 일별 집계 (따라잡았으면 meta 1행). 읽기 예산을 넘은 날은 건너뛴다. 실패해도 수집 결과는 그대로 둔다
+    // R59: 밀린 일별 집계 (따라잡았으면 meta 한 문장, 4키). 읽기 예산을 넘은 날은 건너뛴다(R59 30% 가드는 runRollups 안). 실패해도 수집 결과는 그대로 둔다
     result.rolled = result.skipped
       ? 0
       : await runRollups(db, opts.now, { readSoftCap: readSoftCap(env) }).catch((e) => {

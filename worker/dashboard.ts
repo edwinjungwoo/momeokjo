@@ -33,7 +33,7 @@ export type DashboardDeps = {
 export type DashboardQuery = { tab: DashboardTab; from: string; to: string; hub: string; compare: boolean };
 
 /** 응답 형식이 바뀌면 올린다 */
-export const DASHBOARD_CACHE_VERSION = "1";
+export const DASHBOARD_CACHE_VERSION = "2";
 export const DASHBOARD_CACHE_MS = 60_000;
 /**
  * 실시간 집계(그날 events를 이벤트당 수 행씩 읽는다)는 탭·거점이 함께 쓰고 5분 둔다 — 자동 새로고침(60초)이 매번 다시 세지 않게.
@@ -290,6 +290,23 @@ function base(
   };
 }
 
+/**
+ * 날마다 출처 + 실시간 가드: 가드를 넘었으면(liveAllowed false) 실시간 날 중 필요한 부분이 모두 이미 캐시에 있는 날만 live로 두고
+ * (다시 세지 않으니 읽기 0), 나머지는 missing
+ */
+async function resolveSources(
+  deps: DashboardDeps, days: Iterable<string>, today: string, through: string | null, liveAllowed: boolean, parts: LivePart[],
+): Promise<Map<string, DaySource>> {
+  const m = sourcesFor(days, today, through, true);
+  if (liveAllowed) return m;
+  for (const [d, src] of m) {
+    if (src !== "live") continue;
+    const hits = await Promise.all(parts.map((p) => cachedJson<MetricRow[]>(deps.cache, liveKey(d, p), deps.now)));
+    if (!hits.every((h) => h !== null)) m.set(d, "missing");
+  }
+  return m;
+}
+
 function sourcesFor(days: Iterable<string>, today: string, through: string | null, liveAllowed: boolean) {
   const m = new Map<string, DaySource>();
   for (const d of days) m.set(d, sourceOf(d, today, through, liveAllowed));
@@ -322,7 +339,7 @@ async function overview(deps: DashboardDeps, q: DashboardQuery, state: MetaState
   const key = hubKey(q.hub);
   const hubKeys = q.hub === "all" ? ["*", ...HUBS.map((h) => h.id)] : [key];
   const extra = [...new Set([...sparkDays, ...prevDays])].filter((d) => d < q.from || d > q.to);
-  const sources = sourcesFor([...rangeDays, ...extra], today, state.rollupThrough, liveAllowed);
+  const sources = await resolveSources(deps, [...rangeDays, ...extra], today, state.rollupThrough, liveAllowed, ["core"]);
   const [store, hubs] = await Promise.all([
     collect(
       deps, sources,
@@ -429,7 +446,7 @@ async function behavior(deps: DashboardDeps, q: DashboardQuery, state: MetaState
   const weeks: string[] = [];
   for (let w = mondayOf(q.from); w <= q.to; w = addDays(w, 7)) weeks.push(w);
   const key = hubKey(q.hub);
-  const sources = sourcesFor([...rangeDays, ...cmp.prev], today, state.rollupThrough, liveAllowed);
+  const sources = await resolveSources(deps, [...rangeDays, ...cmp.prev], today, state.rollupThrough, liveAllowed, ["core", "detail"]);
   const rolled = (days: string[]) => days.filter((d) => sources.get(d) === "rollup");
   const live = (days: string[]) => days.filter((d) => sources.get(d) === "live");
   const json = (days: string[]) => JSON.stringify(days);
