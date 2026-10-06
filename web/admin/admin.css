@@ -374,7 +374,7 @@ button.cell:hover, button.cell:focus-visible { outline: 2px solid var(--text); o
 .run-panel.lv-ok { border-color: #bfe0cc; background: #f3faf6; }
 .run-panel.lv-warn { border-color: #ffd4c2; background: #fff6f0; }
 .run-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 4px; }
-.dialog { width: min(420px, calc(100vw - 32px)); padding: 20px; border: 1px solid var(--border); border-radius: 14px; background: var(--card); color: var(--text); box-shadow: var(--shadow-pop); }
+.dialog { position: fixed; inset: 0; margin: auto; height: fit-content; width: min(420px, calc(100vw - 32px)); padding: 20px; border: 1px solid var(--border); border-radius: 14px; background: var(--card); color: var(--text); box-shadow: var(--shadow-pop); }
 .dialog::backdrop { background: rgba(60, 47, 37, 0.35); }
 .dialog-body { margin: 8px 0 20px; font-size: 14px; line-height: 1.6; color: var(--text-2); }
 .dialog-actions { display: flex; justify-content: flex-end; gap: 8px; }
