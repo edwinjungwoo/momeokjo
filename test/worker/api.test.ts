@@ -16,6 +16,10 @@ import { hubRefreshStart } from "../../worker/refreshSchedule";
 import { doc, fakeKakaoLocal, fakePlaceApi, routeFetch } from "../helpers/fakeKakao";
 import { markOuterTilesFresh, placeJson, seedPlace } from "../helpers/places";
 
+/** 배포 뒤 스모크가 쓰는 허용 키 목록 (scripts/smoke.sh) */
+const SMOKE_SH = Object.values(
+  import.meta.glob("../../scripts/smoke.sh", { query: "?raw", import: "default", eager: true }) as Record<string, string>,
+)[0];
 const NOW = 1_800_000_000_000;
 const HUB = hubById("bongeunsa");
 const HUB_CENTER = { lat: HUB.lat, lng: HUB.lng };
@@ -322,6 +326,11 @@ describe("GET /api/places — 응답 캐시와 목록 원소", () => {
         ["bookable", "groupFriendly", "hours", "menus", "price", "rating", "reviewCount", "soloFriendly", "strengths"],
       );
     }
+    // 배포 뒤 스모크(scripts/smoke.sh)의 허용 키 목록도 실제 응답과 같아야 한다 — 다르면 멀쩡한 배포가 자동 롤백된다 (2026-10-06)
+    const smokeKeys = (name: string) => JSON.parse(new RegExp(`^${name}='(.+)'$`, "m").exec(SMOKE_SH)![1]) as string[];
+    expect(smokeKeys("TOP_KEYS")).toEqual(Object.keys(body).sort());
+    expect(smokeKeys("ELEM_KEYS")).toEqual(Object.keys(body.places[0]).sort());
+    expect(smokeKeys("DETAIL_KEYS")).toEqual(Object.keys(body.places[0].detail!).sort());
   });
 
   it("R12: 목록 원소에는 화면이 쓰지 않는 주소·전화번호를 싣지 않는다 (단건에는 있다)", async () => {

@@ -117,7 +117,7 @@ fi
 echo "== 목록 (공개 거점마다 1번, 준비 중 거점은 숨김 확인)"
 ELEM_KEYS='["category","detail","distance","group","id","lat","lng","name","photoUrl","url","walkMinutes"]'
 DETAIL_KEYS='["bookable","groupFriendly","hours","menus","price","rating","reviewCount","soloFriendly","strengths"]'
-TOP_KEYS='["center","detailsFrozenSince","detailsNewestAt","detailsPaused","incompleteTiles","pending","places","radius","stale"]'
+TOP_KEYS='["center","detailsFrozenSince","detailsNewestAt","detailsPaused","incompleteTiles","pending","places","radius","refreshDay","refreshedAt","stale"]'
 for h in "${hubs[@]}"; do
   read -r id _ _ ready <<<"$h"
   if [ "$ready" != true ]; then
@@ -153,7 +153,7 @@ for h in "${hubs[@]}"; do
   jq -e '.radius == 1000 and ([.places[].distance] | all(. <= 1000))' "$f" >/dev/null \
     && ok "$id 1000m 목록(반경 ${r} 요청)" || bad "$id 응답 반경이 1000이 아니거나 1000m 밖 가게가 있음"
   jq -e --argjson top "$TOP_KEYS" --argjson el "$ELEM_KEYS" --argjson de "$DETAIL_KEYS" \
-    '(keys == $top) and (([.places[] | keys[]] | unique) - $el | length == 0)
+    '((keys - $top) | length == 0) and (([.places[] | keys[]] | unique) - $el | length == 0)
      and (([.places[] | .detail // {} | keys[]] | unique) - $de | length == 0)' "$f" >/dev/null \
     && ok "$id 응답·원소 키가 허용 목록 안" || bad "$id 응답에 예상 밖 키 (주소·전화·태그 등)"
   read -r pending incomplete stale frozen < <(jq -r '[.pending, .incompleteTiles, .stale, (.detailsFrozenSince // "null")] | @tsv' "$f")
