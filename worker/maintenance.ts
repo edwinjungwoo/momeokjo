@@ -3,7 +3,7 @@ import { tilesCoveringCircle } from "../shared/geo";
 import { HUBS, PUBLIC_HUBS, type Hub } from "../shared/hubs";
 import type { LatLng } from "../shared/types";
 import { Budget } from "./budget";
-import { limitsFrom } from "./config";
+import { detailOnlyExtraFrom, limitsFrom } from "./config";
 import {
   CRON_DETAIL_LAST_KEY, D1CallBudget, d1UsageOn, meteredDb, overReadBudget, readSoftCap, readTodayAndMeta, recordCronRun, recordD1Usage,
   type D1Usage,
@@ -228,23 +228,27 @@ export async function runScheduled(
 }
 
 /**
- * wrangler.jsonc triggers.crons — 본 Cron(5분마다: 격자·보충·완료·집계·보관)과 둘째 트리거(홀수 분). 바꾸면 둘 다 바꾼다.
- * R63: 계정의 Cron 트리거 수를 늘리지 않으려고 예전 스냅샷 트리거(2-59/5)를 홀수 분 하나로 바꿔 분(UTC)으로 나눈다 — secondCronJob.
- * 주의: R63 앞 버전으로 롤백하면 트리거를 2-59/5로 되돌려야 한다 (옛 코드는 모르는 cron을 본 Cron으로 돌린다 — docs/deploy.md)
+ * wrangler.jsonc triggers.crons — 본 Cron(5분마다: 격자·보충·완료·집계·보관)과 둘째 트리거(매 분). 바꾸면 둘 다 바꾼다.
+ * R63: 계정의 Cron 트리거 수를 늘리지 않으려고 예전 스냅샷 트리거(2-59/5)를 하나로 바꿔 분(UTC)으로 나눈다 — secondCronJob.
+ * 채우기 부스트(2026-10-07): 둘째 트리거를 1-59/2에서 매 분으로 바꾸고, 짝수 분은 DETAIL_ONLY_EXTRA가 "1"일 때만 상세만 보충한다
+ * (끄려면 vars만 "0"으로 — 트리거는 그대로 둬도 예전 1-59/2와 같은 일을 한다).
+ * 주의: 부스트 앞 버전으로 롤백하면 트리거를 1-59/2로(R63 앞이면 2-59/5로) 되돌려야 한다 (옛 코드는 모르는 cron을 본 Cron으로 돌린다 — docs/deploy.md)
  */
 export const MAIN_CRON = "*/5 * * * *";
-export const SECOND_CRON = "1-59/2 * * * *";
+export const SECOND_CRON = "* * * * *";
 
 export type SecondCronJob = "snapshot" | "skip" | "detail";
 /**
- * 둘째 트리거의 예정 시각(UTC 분)으로 할 일: 7·17·…·57분은 R56 스냅샷(시간당 6번), 5의 배수(5·15·…·55)는 쉼 — 본 Cron이
- * 도는 분이라 겹치지 않게, 나머지 홀수 분(시간당 18번)은 R63 상세만 보충
+ * 둘째 트리거의 예정 시각(UTC 분)으로 할 일: 7·17·…·57분은 R56 스냅샷(시간당 6번), 5의 배수(0·5·…·55)는 쉼 — 본 Cron이
+ * 도는 분이라 겹치지 않게, 나머지 홀수 분(시간당 18번)은 R63 상세만 보충, 나머지 짝수 분(시간당 24번)은 extra(DETAIL_ONLY_EXTRA "1",
+ * 채우기 부스트)일 때만 상세만 보충이고 아니면 쉼
  */
-export function secondCronJob(scheduledTime: number): SecondCronJob {
+export function secondCronJob(scheduledTime: number, extra = false): SecondCronJob {
   const m = new Date(scheduledTime).getUTCMinutes();
   if (m % 10 === 7) return "snapshot";
   if (m % 5 === 0) return "skip";
-  return "detail";
+  if (m % 2 === 1) return "detail";
+  return extra ? "detail" : "skip";
 }
 
 export type SnapshotCronResult = SnapshotRun | { status: "read_budget" };
@@ -273,7 +277,8 @@ export type CronRun =
   | { cron: "idle" };
 
 /**
- * scheduled 입구: controller.cron으로 나누고, 둘째 트리거는 예정 시각(controller.scheduledTime, 없으면 now)의 분으로 다시 나눈다.
+ * scheduled 입구: controller.cron으로 나누고, 둘째 트리거는 예정 시각(controller.scheduledTime, 없으면 now)의 분과
+ * DETAIL_ONLY_EXTRA(짝수 분)로 다시 나눈다.
  * 모르는 값(로컬 /__scheduled 등)은 본 Cron
  */
 export async function runCron(
@@ -281,7 +286,7 @@ export async function runCron(
   opts: { fetcher: FetchFn; now: number; scheduledTime?: number; sleep?: (ms: number) => Promise<void>; hubs?: Hub[] },
 ): Promise<CronRun> {
   if (cron === SECOND_CRON) {
-    const job = secondCronJob(opts.scheduledTime ?? opts.now);
+    const job = secondCronJob(opts.scheduledTime ?? opts.now, detailOnlyExtraFrom(env));
     if (job === "snapshot") return { cron: "snapshot", result: await runSnapshotCron(env, opts) };
     if (job === "skip") return { cron: "idle" };
     return { cron: "detail", result: await runDetailCron(env, opts) };
@@ -309,7 +314,7 @@ export type DetailCronResult = {
 };
 
 /**
- * R63 상세만 실행 (둘째 트리거의 홀수 분, 시간당 18번 — 주간 갱신 처리량을 늘린다).
+ * R63 상세만 실행 (둘째 트리거의 홀수 분 시간당 18번, 채우기 부스트 동안은 짝수 분까지 42번 — 주간 갱신·새 거점 채우기 처리량을 늘린다).
  * 본 Cron과 같은 순서로: 읽기 예산(R38) → 쿨다운·frozen(R10·R44) → 만료 후보 + 미수집 앞선 커서(같은 커서) → 유효 배치 →
  * pickCronIds → enrichDetails. 격자 수집·집계·스냅샷·보관 정리·완료 기록은 하지 않는다(본 Cron 몫).
  * 실행 하나의 D1 호출 예산도 본 Cron과 같다(끝의 기록 몫을 남긴다). 끝에 사용량과 cron_detail_last를 한 문장으로 쓴다.

@@ -5,7 +5,7 @@ import { tileKeyOf, tilesCoveringCircle } from "../../shared/geo";
 import { HUBS, hubById } from "../../shared/hubs";
 import { utcDay } from "../../shared/kst";
 import { CRON_DETAIL_LAST_KEY } from "../../worker/d1Usage";
-import { limitsFrom } from "../../worker/config";
+import { detailOnlyExtraFrom, limitsFrom } from "../../worker/config";
 import { hubRefreshStart } from "../../worker/refreshSchedule";
 import {
   CRON_D1_CALL_LIMIT, MAIN_CRON, SECOND_CRON, runCron, runDetailCron, runScheduled, secondCronJob,
@@ -41,32 +41,66 @@ const metaValue = async (key: string) =>
   (await env.DB.prepare("SELECT value FROM meta WHERE key = ?").bind(key).first<{ value: string }>())?.value ?? null;
 
 describe("R63 둘째 트리거 (홀수 분) — 스냅샷·쉼·상세만 보충", () => {
-  it("R63/R56: 둘째 트리거는 1-59/2(홀수 분)이고 UTC 분으로 나눈다 — 7·17·…·57은 스냅샷, 5의 배수는 쉼(본 Cron 분), 나머지는 상세만", () => {
-    expect(SECOND_CRON).toBe("1-59/2 * * * *");
+  it("R63/R56: 둘째 트리거는 매 분(* * * * *)이고 UTC 분으로 나눈다 — 7·17·…·57은 스냅샷, 5의 배수는 쉼(본 Cron 분), 나머지 홀수 분은 상세만, 짝수 분은 DETAIL_ONLY_EXTRA가 \"1\"일 때만 상세만(아니면 쉼)", () => {
+    expect(SECOND_CRON).toBe("* * * * *");
     expect(wranglerConfig).toContain(`"${MAIN_CRON}"`);
     expect(wranglerConfig).toContain(`"${SECOND_CRON}"`);
-    // 트리거는 두 개 그대로 (계정의 Cron 트리거 수를 늘리지 않는다), 예전 2-59/5는 없다
-    expect(wranglerConfig).toMatch(/"crons": \["\*\/5 \* \* \* \*", "1-59\/2 \* \* \* \*"\]/);
-    const jobs = new Map<string, number[]>();
-    for (let m = 1; m < 60; m += 2) {
-      const j = secondCronJob(at(m));
-      jobs.set(j, [...(jobs.get(j) ?? []), m]);
-    }
-    expect(jobs.get("snapshot")).toEqual([7, 17, 27, 37, 47, 57]);
-    expect(jobs.get("skip")).toEqual([5, 15, 25, 35, 45, 55]);
-    expect(jobs.get("detail")).toHaveLength(18);
-    // 본 Cron 분(5의 배수)과 상세만 실행은 같은 분을 쓰지 않는다
-    for (const m of jobs.get("detail")!) expect(m % 5, String(m)).not.toBe(0);
+    // 트리거는 두 개 그대로 (계정의 Cron 트리거 수를 늘리지 않는다), 예전 1-59/2·2-59/5는 없다
+    expect(wranglerConfig).toMatch(/"crons": \["\*\/5 \* \* \* \*", "\* \* \* \* \*"\]/);
+    const table = (extra: boolean) => {
+      const jobs = new Map<string, number[]>();
+      for (let m = 0; m < 60; m++) {
+        const j = secondCronJob(at(m), extra);
+        jobs.set(j, [...(jobs.get(j) ?? []), m]);
+      }
+      return jobs;
+    };
+    const fives = Array.from({ length: 12 }, (_, i) => i * 5);
+    const snapshots = [7, 17, 27, 37, 47, 57];
+    const odd = Array.from({ length: 30 }, (_, i) => 2 * i + 1).filter((m) => m % 5 !== 0 && m % 10 !== 7);
+    const even = Array.from({ length: 30 }, (_, i) => 2 * i).filter((m) => m % 5 !== 0);
+    expect(odd).toHaveLength(18);
+    expect(even).toHaveLength(24);
+
+    // 부스트 켬: 스냅샷 6 · 쉼 12(본 Cron 분) · 상세만 42 (홀수 18 + 짝수 24)
+    const on = table(true);
+    expect(on.get("snapshot")).toEqual(snapshots);
+    expect(on.get("skip")).toEqual(fives);
+    expect(on.get("detail")).toEqual([...odd, ...even].sort((a, b) => a - b));
+    expect(on.get("detail")).toHaveLength(42);
+    // 부스트 끔: 예전(1-59/2)과 같은 홀수 분 18번만, 짝수 분은 쉼
+    const off = table(false);
+    expect(off.get("snapshot")).toEqual(snapshots);
+    expect(off.get("detail")).toEqual(odd);
+    expect(off.get("skip")).toEqual([...fives, ...even].sort((a, b) => a - b));
+    // 기본값은 끔
+    for (let m = 0; m < 60; m++) expect(secondCronJob(at(m)), String(m)).toBe(secondCronJob(at(m), false));
+    // 본 Cron 분(5의 배수)과 상세만·스냅샷 실행은 같은 분을 쓰지 않는다
+    for (const m of [...on.get("detail")!, ...on.get("snapshot")!]) expect(m % 5, String(m)).not.toBe(0);
   });
 
-  it("R63: runCron은 둘째 트리거를 예정 시각의 분으로 나누고, 본 Cron·모르는 문자열은 그대로 본 Cron이다", async () => {
+  it("R63: DETAIL_ONLY_EXTRA는 wrangler.jsonc vars에서 지금 \"1\"(부스트 켬)이고, 정확히 \"1\"일 때만 켠다", () => {
+    expect(wranglerConfig).toMatch(/"DETAIL_ONLY_EXTRA": "1"/);
+    expect(detailOnlyExtraFrom(env)).toBe(true);
+    for (const v of ["0", "", "true", "yes", " 1", undefined]) {
+      expect(detailOnlyExtraFrom({ ...env, DETAIL_ONLY_EXTRA: v } as unknown as Env), String(v)).toBe(false);
+    }
+  });
+
+  it("R63: runCron은 둘째 트리거를 예정 시각의 분으로 나누고(짝수 분은 DETAIL_ONLY_EXTRA를 본다), 본 Cron·모르는 문자열은 그대로 본 Cron이다", async () => {
     await markFresh(ALL_KEYS, BASE);
     const opts = { fetcher: fakePlaceApi({}).fetcher, sleep: async () => {} };
+    const off = { ...env, DETAIL_ONLY_EXTRA: "0" } as unknown as Env;
     expect((await runCron(SECOND_CRON, env, { ...opts, now: at(7), scheduledTime: at(7) })).cron).toBe("snapshot");
     expect(await runCron(SECOND_CRON, env, { ...opts, now: at(15), scheduledTime: at(15) })).toEqual({ cron: "idle" });
     expect((await runCron(SECOND_CRON, env, { ...opts, now: at(3) + 2000, scheduledTime: at(3) })).cron).toBe("detail");
+    expect((await runCron(SECOND_CRON, off, { ...opts, now: at(13) + 2000, scheduledTime: at(13) })).cron).toBe("detail");
+    // 짝수 분: 켜져 있으면 상세만, 꺼져 있으면 쉼
+    expect((await runCron(SECOND_CRON, env, { ...opts, now: at(4) + 2000, scheduledTime: at(4) })).cron).toBe("detail");
+    expect(await runCron(SECOND_CRON, off, { ...opts, now: at(8) + 2000, scheduledTime: at(8) })).toEqual({ cron: "idle" });
+    expect(await runCron(SECOND_CRON, env, { ...opts, now: at(20) + 2000, scheduledTime: at(20) })).toEqual({ cron: "idle" });
     expect((await runCron(MAIN_CRON, env, { ...opts, now: at(10) })).cron).toBe("maintain");
-    expect((await runCron("* * * * *", env, { ...opts, now: at(20) })).cron).toBe("maintain");
+    expect((await runCron("0 * * * *", env, { ...opts, now: at(30) })).cron).toBe("maintain");
   });
 
   it("R63/R38: 상세만 실행은 만료·미수집 후보를 보충하고 사용량과 cron_detail_last를 남긴다 — 격자 수집·집계·스냅샷·완료 기록은 하지 않는다", async () => {
@@ -80,7 +114,7 @@ describe("R63 둘째 트리거 (홀수 분) — 스냅샷·쉼·상세만 보충
     const r = await runDetailCron(env, { fetcher: routeFetch(local.fetcher, place.fetcher), now: at(3), sleep: async () => {} });
     expect(local.calls).toHaveLength(0);
     expect(place.calls.map((c) => c.id)).toEqual(["new1", "old1", "old2"]); // 미수집 먼저
-    expect(r).toMatchObject({ enriched: 3, failed: 0, batch: 4 });
+    expect(r).toMatchObject({ enriched: 3, failed: 0, batch: 6 }); // 운영 DETAIL_BATCH_SIZE 6
     expect(r.d1Calls).toBeLessThanOrEqual(CRON_D1_CALL_LIMIT - 1);
     expect((await getMeta(env.DB, "old1"))?.fetchedAt).toBe(at(3));
     expect(await env.DB.prepare("SELECT count(*) AS n FROM hub_snapshots").first<{ n: number }>()).toEqual({ n: 0 });

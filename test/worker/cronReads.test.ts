@@ -4,6 +4,7 @@ import { DETAIL_FAIL_TTL_MS, LIST_JSON_VERSION, PREWARM_RADIUS } from "../../sha
 import { tilesCoveringCircle } from "../../shared/geo";
 import { HUBS, PUBLIC_HUBS, hubById } from "../../shared/hubs";
 import type { FetchFn } from "../../worker/fetchFn";
+import { limitsFrom } from "../../worker/config";
 import { HUB_SNAPSHOT_VERSION } from "../../worker/hubSnapshot";
 import { HUB_DUE_EXISTS_SQL, HUB_REFRESHED_PREFIX } from "../../worker/hubRefresh";
 import { hubOrder, runDetailCron, runScheduled, runSnapshotCron } from "../../worker/maintenance";
@@ -130,11 +131,14 @@ describe("Task 40: 운영 크기에서 Cron 한 번이 읽는 D1 행 (정상 상
     const now = await warmUp(NOW + MIN5);
     const okCursor = await metaValue("expired_from:ok");
     // 모든 격자-장소 상태를 읽어 고른 것 (Cron 순서의 기준)
-    const oracle = pickCronIds(await tilePlaceStates(env.DB, KEYS), hubOrder(HUBS, now), now, 4);
+    const B = limitsFrom(env).batchSize; // 운영 배치 (wrangler.jsonc DETAIL_BATCH_SIZE)
+    const oracle = pickCronIds(await tilePlaceStates(env.DB, KEYS), hubOrder(HUBS, now), now, B);
     const { r, log, place } = await mainRun(now);
-    expect(r).toMatchObject({ enriched: 4, failed: 0, batch: 4 });
+    expect(r).toMatchObject({ failed: 0, batch: B });
     expect(r.d1Skipped).toBeUndefined();
-    expect([...place.calls].sort()).toEqual([...oracle].sort());
+    // 글자 예산(200,000자)이 배치 뒤쪽을 남길 수 있다 — 가져온 것은 고른 순서의 앞쪽, 나머지는 deferred
+    expect(r.enriched + (r.deferred ?? 0)).toBe(B);
+    expect([...place.calls].sort()).toEqual(oracle.slice(0, place.calls.length).sort());
     // 단계별 상한
     expect(log.some((x) => x.sql.includes(DUETILE_SQL))).toBe(false);
     expect(reads(log, (q) => q === NEAREST_UNFETCHED_SQL)).toBeLessThanOrEqual(600);

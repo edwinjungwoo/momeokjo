@@ -539,8 +539,9 @@ export function pickDetailIds(
  * 오래된 것부터, 같으면 가장 가까운 거점까지 칸 거리 순, 같으면 id순. 한 가게가 여러 칸에 있으면 대상인 칸 중 (시각, 거리)가 가장 앞선 것.
  * 그래서 시작이 오래된 거점의 갱신이 먼저 끝나고, 한 거점 안에서는 예전처럼 가까운 순이다.
  * 갱신 대상 판단·시작·거리는 넘겨받은 거점(hubs)으로만 본다 (거점 밖 칸은 3일 + 지터 — isDetailDue).
- * R9: 배치가 2곳 이상이고 대상인 실패 행이 있는데 자리 안에 없으면, 마지막 자리를 가장 오래 기다린 실패 행에 준다 —
- * 밀린 갱신 뒤로 6시간 재시도가 끝없이 밀리지 않게 (실패는 dueSince가 늦어서 그대로면 맨 뒤다).
+ * R9: 배치가 2곳 이상이고 대상인 실패 행이 있는데 자리 안에 없으면, 마지막 후보를 빼고 가장 오래 기다린 실패 행을 맨 앞에 둔다 —
+ * 밀린 갱신 뒤로 6시간 재시도가 끝없이 밀리지 않게 (실패는 dueSince가 늦어서 그대로면 맨 뒤다). 맨 앞인 까닭: enrichDetails는
+ * 글자 예산(DETAIL_CHAR_BUDGET)·D1 호출이 모자라면 배치 뒤쪽을 남기므로(deferred), 마지막 자리면 배치 6 + 글자 200,000자에서 늘 남겨진다.
  */
 export function pickCronIds(states: TilePlaceState[], hubs: readonly Hub[], now: number, limit: number): string[] {
   const startsOf = refreshStartsIndex(hubs, now);
@@ -569,7 +570,10 @@ export function pickCronIds(states: TilePlaceState[], hubs: readonly Hub[], now:
   const picked = sorted.slice(0, n);
   if (n >= 2 && sorted.length > n && !picked.some(([, x]) => x.failed)) {
     const fail = sorted.slice(n).find(([, x]) => x.failed);
-    if (fail) picked[n - 1] = fail;
+    if (fail) {
+      picked.pop();
+      picked.unshift(fail);
+    }
   }
   return picked.map(([id]) => id);
 }

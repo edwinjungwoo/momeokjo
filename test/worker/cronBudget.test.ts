@@ -5,9 +5,9 @@ import { tileKeyOf, tileRect, tilesCoveringCircle, haversine } from "../../share
 import { HUBS } from "../../shared/hubs";
 import { kstDay } from "../../shared/kst";
 import { createApp } from "../../worker/app";
-import { CRON_D1_CALL_LIMIT, CRON_D1_RESERVE, cronBatchFor, runScheduled, warmOnce } from "../../worker/maintenance";
+import { CRON_D1_CALL_LIMIT, CRON_D1_RESERVE, cronBatchFor, runDetailCron, runScheduled, warmOnce } from "../../worker/maintenance";
 import { D1CallBudget, meteredDb, type D1Usage } from "../../worker/d1Usage";
-import { MAX_DETAIL_BATCH_SIZE } from "../../worker/config";
+import { MAX_DETAIL_BATCH_SIZE, limitsFrom } from "../../worker/config";
 import { replaceTilePlaces } from "../../worker/repo";
 import { callApp } from "../helpers/callApp";
 import { anonN, seedEvents, sessN } from "../helpers/events";
@@ -229,6 +229,50 @@ describe("Task 34: 본 Cron의 D1 호출 예산", () => {
     // 만료 후보(e1~e4)와 미수집(가장 먼 칸)을 모두 고르고 보충했다
     expect(place.calls.map((c) => c.id).sort()).toEqual(["e1", "e2", "e3", "e4", "farnew"]);
     expect(r).toMatchObject({ enriched: 5, failed: 0 });
+  });
+
+  it("R10/R38/R63: 운영 배치(wrangler.jsonc DETAIL_BATCH_SIZE 6, 채우기 부스트)로 보통 본 Cron과 상세만 실행 모두 유효 배치 6 그대로이고 D1 호출 50번 안이다 — 상세만 실행은 저장이 모두 실패해 한 곳씩 다시 쓰고 차단을 기록하는 최악도", async () => {
+    expect(limitsFrom(env).batchSize).toBe(6);
+    const steadyNow = NOW + 3 * 3600_000; // 보관 정리 창 밖
+    const home = tileKeyOf(HUBS[0]);
+    const far = [...KEYS].sort((a, b) => midDist(a) - midDist(b)).filter((k) => k !== home)[40];
+    const due = KEYS.filter((k) => k !== home && k !== far).slice(0, 2);
+    await markFresh(KEYS.filter((k) => !due.includes(k)), steadyNow);
+    const ids = ["e1", "e2", "e3", "e4", "e5", "e6", "e7"];
+    await insertPlaces([
+      ...Array.from({ length: 850 }, (_, i) => [`ook${i}`, "ok", steadyNow - 10 * DETAIL_OK_TTL_MS + i] as [string, string, number]),
+      ...ids.map((id) => [id, "ok", hubRefreshStart(HUBS[0], steadyNow) - 1000] as [string, string, number]),
+    ]);
+    await replaceTilePlaces(env.DB, home, ids, steadyNow, false);
+    await replaceTilePlaces(env.DB, far, ["farnew"], steadyNow, false);
+    const pj = (name: string) => placeJson({ name, lat: HUBS[0].lat, lng: HUBS[0].lng });
+    const big = { ...env, DETAIL_CHAR_BUDGET: "100000000" } as unknown as Env; // 글자 예산이 배치를 줄이지 않게
+    {
+      const place = fakePlaceApi(Object.fromEntries([...ids, "farnew"].map((id) => [id, pj(id)])));
+      const { db, n } = countingDb(env.DB);
+      const r = await runScheduled({ ...big, DB: db }, {
+        fetcher: routeFetch(fakeKakaoLocal([]).fetcher, place.fetcher), now: steadyNow, sleep: async () => {},
+      });
+      expect(n.calls, `main D1 calls ${n.calls}`).toBeLessThanOrEqual(CRON_D1_CALL_LIMIT);
+      expect(r.d1Skipped).toBeUndefined();
+      expect(r.batch).toBe(6);
+      expect(r.tiles.collected).toBe(2);
+      expect(r).toMatchObject({ enriched: 6, failed: 0 });
+    }
+    // 상세만 실행 최악: 남은 6곳(e*·farnew) 저장이 모두 실패(묶음도 한 곳씩도) + 403 → 오늘 세 번째 차단(강등 모드)
+    await env.DB.prepare(
+      `CREATE TRIGGER bad_rows BEFORE INSERT ON places WHEN NEW.id IN (${[...ids, "farnew"].map((id) => `'${id}'`).join(", ")}) BEGIN SELECT RAISE(ABORT, 'bad row'); END`,
+    ).run();
+    await env.DB.prepare("INSERT INTO meta (key, value) VALUES (?, '2')").bind(`block_count:${kstDay(steadyNow)}`).run();
+    const place = fakePlaceApi({ ...Object.fromEntries([...ids, "farnew"].map((id) => [id, pj(id)])), e7: 403 });
+    const { db, n } = countingDb(env.DB);
+    const d = await runDetailCron({ ...big, DB: db }, { fetcher: place.fetcher, now: steadyNow + 60_000, sleep: async () => {} });
+    expect(n.calls, `detail-only D1 calls ${n.calls}`).toBeLessThanOrEqual(CRON_D1_CALL_LIMIT);
+    expect(d.batch).toBe(6);
+    expect(d.d1Skipped).toBeUndefined();
+    expect(d.d1Calls).toBeLessThanOrEqual(CRON_D1_CALL_LIMIT - 1);
+    expect(place.calls.length).toBeGreaterThan(0);
+    expect(d.enrichError).toBe(true);
   });
 
   it("R10/R38: 보관 정리 실행(KST 04:00~04:04)의 유효 배치는 천장 설정(8)에서 6이다 — docs/deploy.md·스펙에 적은 값 (보통 실행은 8)", async () => {

@@ -17,6 +17,15 @@ export function limitsFrom(env: Env): {
 }
 
 /**
+ * R63 채우기 부스트: 둘째 트리거(매 분)의 짝수 분(5의 배수 빼고, 시간당 24번)에도 상세만 보충을 돌릴지. wrangler.jsonc vars
+ * DETAIL_ONLY_EXTRA가 정확히 "1"일 때만 켠다 — 끄려면 "0"으로 배포한다 (트리거는 그대로, 짝수 분은 쉼)
+ */
+export function detailOnlyExtraFrom(env: Env): boolean {
+  const v: string | undefined = env.DETAIL_ONLY_EXTRA;
+  return v === "1";
+}
+
+/**
  * R63: 둘째 트리거의 상세만 실행(홀수 분)이 비켜서는 읽기 비율 — 오늘(UTC) D1 읽기가 D1_READ_SOFT_CAP × 이 값 이상이면 건너뛴다
  * (`skipped: "read_share"`). 남은 몫(소프트 한도까지)은 본 Cron(격자·완료·집계)과 스냅샷이 쓴다. 운영 값은 wrangler.jsonc
  * vars DETAIL_ONLY_READ_SHARE (0.6 = 300만 행 중 180만 행)

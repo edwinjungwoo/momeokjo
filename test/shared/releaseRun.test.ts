@@ -562,6 +562,22 @@ describe("infra: npm run release — 기준 스모크와 자동 롤백", () => {
     expect((await runRelease(opts(), old.deps)).code).toBe(2);
   });
 
+  it("R63: 자동 롤백했는데 지금 설정의 둘째 트리거가 * * * * *(채우기 부스트)면 크게 알리고 종료 코드 3 — 부스트 앞 버전은 1-59/2를, R63 앞 버전은 2-59/5를 기대한다", async () => {
+    const h = harness(smokes([], [FAIL_PLACES_500]), {
+      files: { "wrangler.jsonc": '// 예전에는 "1-59/2 * * * *"였다\n"triggers": { "crons": ["*/5 * * * *", "* * * * *"] },' },
+    });
+    const res = await runRelease(opts(), h.deps);
+    expect(res.code).toBe(3);
+    expect(h.ran("npx wrangler rollback")).toHaveLength(1);
+    expect(res.summary.rolledBack).toBe(true);
+    const note = "둘째 트리거를 1-59/2로 되돌려야 해요 (부스트 앞 버전 — R63 앞 버전이면 2-59/5) (대시보드 Triggers 또는 wrangler triggers deploy)";
+    expect(res.summary.result).toContain(note);
+    expect(h.output()).toContain(note);
+    expect(h.output()).toContain("지금 운영 트리거는 */5 + * * * * *예요");
+    // 1-59/2 안내와 섞이지 않는다 (설정의 crons 배열만 본다 — 주석은 보지 않는다)
+    expect(h.output()).not.toContain("둘째 트리거를 2-59/5로 되돌려야 해요");
+  });
+
   it("infra: 기준에 없던 코드 수준 FAIL이 새로 생기면 기록한 버전으로 비대화식 롤백(--message, --yes), 종료 코드 2", async () => {
     const h = harness(smokes([], [FAIL_PLACES_500, FAIL_ASSET_NEW]));
     const res = await runRelease(opts(), h.deps);

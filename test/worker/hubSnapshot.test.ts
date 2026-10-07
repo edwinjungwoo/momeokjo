@@ -461,7 +461,7 @@ describe("R56 거점 스냅샷 — Cron", () => {
     expect(main.cron === "maintain" && main.result).toHaveProperty("order");
     expect(await env.DB.prepare("SELECT count(*) AS c FROM hub_snapshots").first<{ c: number }>()).toEqual({ c: 0 });
     // 모르는 cron 문자열(로컬 /__scheduled 등)은 본 Cron
-    expect((await runCron("* * * * *", env, opts)).cron).toBe("maintain");
+    expect((await runCron("0 * * * *", env, opts)).cron).toBe("maintain");
     const fetchedBefore = local.calls.length;
     const snap = await runCron(SECOND_CRON, env, { ...opts, scheduledTime: Date.UTC(2027, 0, 15, 8, 7) });
     expect(snap).toMatchObject({ cron: "snapshot", result: { status: "built" } });

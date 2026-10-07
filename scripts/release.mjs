@@ -421,21 +421,32 @@ const tail = (text, n = 15) => {
 };
 
 /** R63 둘째 트리거 (그 앞 버전은 2-59/5를 기대한다) */
-const SECOND_TRIGGER_R63 = "1-59/2";
+const SECOND_TRIGGER_R63 = "1-59/2 * * * *";
 const TRIGGER_RESTORE_NOTE = "둘째 트리거를 2-59/5로 되돌려야 해요 (대시보드 Triggers 또는 wrangler triggers deploy)";
+/** 채우기 부스트 둘째 트리거 (매 분 — 그 앞 버전은 1-59/2를, R63 앞 버전은 2-59/5를 기대한다) */
+const SECOND_TRIGGER_BOOST = "* * * * *";
+const BOOST_TRIGGER_RESTORE_NOTE =
+  "둘째 트리거를 1-59/2로 되돌려야 해요 (부스트 앞 버전 — R63 앞 버전이면 2-59/5) (대시보드 Triggers 또는 wrangler triggers deploy)";
+
+/** wrangler.jsonc의 triggers.crons 값들 (주석 속 cron 문자열은 보지 않는다). 못 찾으면 [] */
+function configuredCrons(text) {
+  const m = /"crons"\s*:\s*\[([^\]]*)\]/.exec(text ?? "");
+  return m ? [...m[1].matchAll(/"([^"]*)"/g)].map((x) => x[1]) : [];
+}
 
 const ROLLBACK_CAVEATS = [
   "  ⚠ 마이그레이션은 되돌리지 않아요 — 그래서 마이그레이션은 더하기만 해요 (이전 버전도 새 스키마에서 돌아야 해요).",
   "  ⚠ wrangler rollback은 Cron 트리거를 되돌리지 않아요 — 지금 wrangler.jsonc의 crons가 그대로 남아요. 이전 버전이 다른 주기를 기대하면 손으로 맞추세요 (docs/deploy.md).",
   "  ⚠ 롤백 대상은 이번 배포 직전에 운영 중이던 버전이에요. 다른 버전으로 손으로 롤백할 때는 docs/deploy.md의 '안전한 롤백 대상'을 보세요.",
-  "  ⚠ R63(주 1회 갱신) 앞 버전으로 되돌렸다면: 대시보드 Triggers에서 둘째 트리거 `1-59/2 * * * *`를 `2-59/5 * * * *`로 되돌리세요 (옛 코드는 모르는 cron을 본 Cron으로 돌려 홀수 분마다 전체 수집을 해요 — docs/deploy.md).",
-  "  ⚠ R56(스냅샷) 앞 버전으로 되돌렸다면: 대시보드 Triggers에서 둘째 트리거(`1-59/2`, R63 전이면 `2-59/5`)를 지우세요 (옛 코드는 두 트리거 모두 전체 수집을 돌려요). 이 버전을 다시 올리기 전에는 npx wrangler d1 execute momeokjo --remote --command \"DELETE FROM hub_snapshots\"",
+  "  ⚠ 채우기 부스트 앞 버전으로 되돌렸다면: 대시보드 Triggers에서 둘째 트리거 `* * * * *`를 `1-59/2 * * * *`로 되돌리세요 (R63 앞 버전이면 `2-59/5 * * * *` — 옛 코드는 모르는 cron을 본 Cron으로 돌려 매 분 전체 수집을 해요 — docs/deploy.md).",
+  "  ⚠ R63(주 1회 갱신) 앞 버전으로 되돌렸다면: 대시보드 Triggers에서 둘째 트리거(`* * * * *` 또는 `1-59/2 * * * *`)를 `2-59/5 * * * *`로 되돌리세요 (옛 코드는 모르는 cron을 본 Cron으로 돌려 전체 수집을 더 해요 — docs/deploy.md).",
+  "  ⚠ R56(스냅샷) 앞 버전으로 되돌렸다면: 대시보드 Triggers에서 둘째 트리거(`* * * * *`·`1-59/2`, R63 전이면 `2-59/5`)를 지우세요 (옛 코드는 두 트리거 모두 전체 수집을 돌려요). 이 버전을 다시 올리기 전에는 npx wrangler d1 execute momeokjo --remote --command \"DELETE FROM hub_snapshots\"",
 ];
 
 /**
  * npm run release 전체 흐름. 첫 실패에서 멈춘다.
  * 종료 코드: 0 성공 · 1 배포 전 중단(운영 코드는 그대로) · 2 스모크 실패 → 자동 롤백함 · 3 사람이 확인해야 함
- * (R63: 자동 롤백했어도 설정의 둘째 트리거가 1-59/2면 3 — 트리거를 손으로 2-59/5로 되돌려야 한다)
+ * (R63: 자동 롤백했어도 설정의 둘째 트리거가 * * * * *(채우기 부스트)나 1-59/2면 3 — 트리거를 손으로 1-59/2·2-59/5로 되돌려야 한다)
  * @param {import("./release.d.mts").ReleaseOpts} opts
  * @param {import("./release.d.mts").ReleaseDeps} deps
  */
@@ -813,9 +824,17 @@ export async function runRelease(opts, deps) {
     summary.rolledBack = true;
     summary.result = `롤백 (새 FAIL ${n})`;
     log(`  롤백했어요 — 지금 활성 버전은 ${previous}`);
-    // R63: wrangler rollback은 트리거를 되돌리지 않는다. 지금 설정이 R63 둘째 트리거(1-59/2)면 옛 버전은 2-59/5를 기대한다 —
-    // 그대로 두면 옛 코드가 모르는 cron을 본 Cron으로 돌려 홀수 분마다 전체 수집을 한다. 사람이 고쳐야 하니 크게 알리고 3
-    if (deps.readFile("wrangler.jsonc")?.includes(SECOND_TRIGGER_R63)) {
+    // R63: wrangler rollback은 트리거를 되돌리지 않는다. 지금 설정의 둘째 트리거가 채우기 부스트(* * * * *)면 부스트 앞 버전은 1-59/2를
+    // (R63 앞이면 2-59/5를), R63 둘째 트리거(1-59/2)면 옛 버전은 2-59/5를 기대한다 — 그대로 두면 옛 코드가 모르는 cron을 본 Cron으로
+    // 돌려 그 분마다 전체 수집을 한다. 사람이 고쳐야 하니 크게 알리고 3
+    const crons = configuredCrons(deps.readFile("wrangler.jsonc"));
+    if (crons.includes(SECOND_TRIGGER_BOOST)) {
+      summary.result += ` — ${BOOST_TRIGGER_RESTORE_NOTE}`;
+      log(`  ✗✗ ${BOOST_TRIGGER_RESTORE_NOTE}`);
+      log(`     지금 운영 트리거는 */5 + * * * * *예요. 부스트 앞 버전은 1-59/2를(R63 앞 버전은 2-59/5를) 기대해요 — 바꾸기 전까지 본 Cron이 매 분 더 돌아요. 롤백한 버전이 이미 부스트 뒤 버전이면 그대로 두세요 (docs/deploy.md).`);
+      return 3;
+    }
+    if (crons.includes(SECOND_TRIGGER_R63)) {
       summary.result += ` — ${TRIGGER_RESTORE_NOTE}`;
       log(`  ✗✗ ${TRIGGER_RESTORE_NOTE}`);
       log(`     지금 운영 트리거는 */5 + 1-59/2예요. 롤백한 버전은 2-59/5를 기대해요 — 바꾸기 전까지 본 Cron이 홀수 분마다 더 돌아요 (docs/deploy.md).`);

@@ -22,6 +22,8 @@ const ROWS = { rowsRead: expect.any(Number), rowsWritten: expect.any(Number) };
 const AUTH = { Authorization: "Bearer test-admin-token" };
 const AREA = `lat=${ASEM.lat}&lng=${ASEM.lng}&radius=300`;
 const at = (dLat: number) => ASEM.lat + dLat;
+/** 운영 배치(DETAIL_BATCH_SIZE)는 그대로, 글자 예산만 넉넉히 — 운영 글자 예산(200,000자)은 픽스처 상세(~70k자) 4곳에서 멈춰 배치 6을 다 못 채운다 */
+const wideChars = () => ({ ...env, DETAIL_CHAR_BUDGET: "100000000" }) as unknown as Env;
 
 const fresh = (): D1Usage => ({ read: 0, written: 0 });
 const setUsage = (day: string, read: number, written = 0) =>
@@ -138,7 +140,7 @@ describe("D1 읽기 예산", () => {
     const B = limitsFrom(env).batchSize; // 운영 설정(wrangler.jsonc DETAIL_BATCH_SIZE)
     const { app } = setup(B + 2);
     const warm = async (q = "") =>
-      (await callApp(app, `/api/admin/warm?${AREA}${q}`, { method: "POST", headers: AUTH })).json<any>();
+      (await callApp(app, `/api/admin/warm?${AREA}${q}`, { method: "POST", headers: AUTH }, wideChars())).json<any>();
     expect(await warm()).toEqual({ incompleteTiles: 0, pending: "more", enriched: B, failed: 0, deferred: 0, chars: expect.any(Number), truncated: false, ...ROWS });
     expect(await warm()).toEqual({ incompleteTiles: 0, pending: 0, enriched: 2, failed: 0, deferred: 0, chars: expect.any(Number), truncated: false, ...ROWS });
   });
@@ -146,7 +148,7 @@ describe("D1 읽기 예산", () => {
   it("R31: ?count=1이면 남은 수를 정확히 센다", async () => {
     const B = limitsFrom(env).batchSize;
     const { app } = setup(B + 2);
-    const r = await (await callApp(app, `/api/admin/warm?${AREA}&count=1`, { method: "POST", headers: AUTH })).json<any>();
+    const r = await (await callApp(app, `/api/admin/warm?${AREA}&count=1`, { method: "POST", headers: AUTH }, wideChars())).json<any>();
     expect(r).toEqual({ incompleteTiles: 0, pending: 2, enriched: B, failed: 0, deferred: 0, chars: expect.any(Number), truncated: false, ...ROWS });
   });
 

@@ -202,11 +202,11 @@ describe("R63 Cron 순서", () => {
     expect(pickCronIds(states, [{ ...BONG, refreshDay: 4 }, DDP], NOW, 10)).toEqual(["d"]);
   });
 
-  it("R63/R9: 갱신이 밀려 있어도 실패 재시도 자리를 실행마다 하나 둔다 (배치 2 이상, 대상인 실패가 있을 때만)", () => {
+  it("R63/R9: 갱신이 밀려 있어도 실패 재시도 자리를 실행마다 하나 둔다 (배치 2 이상, 대상인 실패가 있을 때만) — 마지막 후보 대신 맨 앞에 둔다 (글자 예산·D1 호출로 배치 뒤쪽이 남겨져도 재시도는 한다)", () => {
     const backlog: TilePlaceState[] = ["b1", "b2", "b3", "b4", "b5"].map((id) => ({ id, tileKey: KB, meta: ok(S_BONG - 1) }));
     const fail: TilePlaceState = { id: "f1", tileKey: KB, meta: failed(NOW - 7 * HOUR) };
     const notYet: TilePlaceState = { id: "f2", tileKey: KB, meta: failed(NOW - HOUR) };
-    expect(pickCronIds([...backlog, fail, notYet], HUBS, NOW, 4)).toEqual(["b1", "b2", "b3", "f1"]);
+    expect(pickCronIds([...backlog, fail, notYet], HUBS, NOW, 4)).toEqual(["f1", "b1", "b2", "b3"]);
     expect(pickCronIds([...backlog, fail], HUBS, NOW, 1)).toEqual(["b1"]);
     expect(pickCronIds([...backlog, notYet], HUBS, NOW, 4)).toEqual(["b1", "b2", "b3", "b4"]);
     // 이미 자리 안에 있으면 그대로

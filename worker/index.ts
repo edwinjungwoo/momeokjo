@@ -13,7 +13,8 @@ export default {
     logReadOnlyOnce(env);
     return app.fetch(request, readOnlyEnv(env), ctx);
   },
-  // R56·R63: controller.cron으로 본 Cron과 둘째 트리거(홀수 분)를 나누고, 둘째는 예정 시각의 분으로 스냅샷·쉼·상세만 보충을 나눈다
+  // R56·R63: controller.cron으로 본 Cron과 둘째 트리거(매 분)를 나누고, 둘째는 예정 시각의 분(짝수 분은 DETAIL_ONLY_EXTRA도)으로
+  // 스냅샷·쉼·상세만 보충을 나눈다
   // (worker/maintenance.ts runCron·secondCronJob).
   // R52: 읽기 전용 개발 모드면 두 Cron 모두 아무것도 하지 않는다
   async scheduled(controller, env, ctx) {
