@@ -11,6 +11,11 @@ export function priceText(p: ApiPlace): string | null {
   return v === null ? null : `${won(v)}대`;
 }
 
+/** R28: 이 평점부터 강조색(별·숫자 오렌지, 지도 칩 오렌지). 그 아래는 칭찬처럼 보이지 않게 차분한 글자색 */
+export const RATING_HIGH = 4;
+
+export const ratingTone = (rating: number | null): "high" | "plain" => (rating !== null && rating >= RATING_HIGH ? "high" : "plain");
+
 /** R22: 펼친 결과 카드에서 처음 보여주는 메뉴 수 (행동 줄 아래, 나머지는 "메뉴 N개 더 보기") */
 export const MENU_PREVIEW = 5;
 

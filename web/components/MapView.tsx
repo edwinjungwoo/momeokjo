@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { chipToggles, keptChips, layoutPicks, pickBadgeBox, pickLabelBox, type ChipBox, type LabelBox } from "../../shared/labels";
 import type { ApiPlace, CategoryGroup, LatLng } from "../../shared/types";
+import { RATING_HIGH } from "../format";
 import { loadKakaoMaps } from "../kakaoLoader";
 import { copyrightCorner, sheetCover } from "../mapCover";
 
@@ -8,7 +9,8 @@ const ACCENT = "#FF683D";
 /** 줌 단계: 레벨 5 이상=far(전부 점), 4=mid(평점 높은 곳만 칩), 3 이하=near(전부 칩) */
 type Zoom = "far" | "mid" | "near";
 const zoomOf = (level: number): Zoom => (level >= 5 ? "far" : level === 4 ? "mid" : "near");
-const TOP_RATING = 4;
+/** 평점 높은 곳 (.pin--top: 칩 오렌지, mid에서도 칩). 목록·카드의 별 강조와 같은 기준 (R28) */
+const TOP_RATING = RATING_HIGH;
 
 const GLYPH: Record<CategoryGroup, string> = {
   korean: "🍚",

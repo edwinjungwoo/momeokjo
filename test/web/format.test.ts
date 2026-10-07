@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { PlacesResponse } from "../../shared/types";
-import { MENU_PREVIEW, callFirst, menuPreview, refreshNote, telHref } from "../../web/format";
+import { MENU_PREVIEW, RATING_HIGH, callFirst, menuPreview, ratingTone, refreshNote, telHref } from "../../web/format";
 import { apiPlace } from "../helpers/apiPlace";
 
 describe("R49 4명+면 전화 먼저", () => {
@@ -62,5 +62,17 @@ describe("R22 펼친 결과 카드의 메뉴는 5개까지", () => {
     expect(menuPreview(menus, true)).toEqual({ shown: menus, hidden: 0 });
     expect(menuPreview(menus.slice(0, 5), false)).toEqual({ shown: menus.slice(0, 5), hidden: 0 });
     expect(menuPreview([], false)).toEqual({ shown: [], hidden: 0 });
+  });
+});
+
+describe("R28 낮은 평점은 강조색으로 칭찬하지 않는다", () => {
+  it("R28: 4.0 이상만 강조(high), 그 아래와 평점 없음은 차분한 글자색(plain)", () => {
+    expect(RATING_HIGH).toBe(4);
+    expect(ratingTone(4)).toBe("high");
+    expect(ratingTone(4.9)).toBe("high");
+    expect(ratingTone(3.99)).toBe("plain");
+    expect(ratingTone(1.1)).toBe("plain");
+    expect(ratingTone(0)).toBe("plain");
+    expect(ratingTone(null)).toBe("plain");
   });
 });

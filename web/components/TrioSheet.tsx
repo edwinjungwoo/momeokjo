@@ -5,7 +5,7 @@ import { photoThumbUrl } from "../../shared/photo";
 import type { Reason } from "../../shared/reasons";
 import type { Party } from "../../shared/recommend";
 import type { ApiPlace, Menu } from "../../shared/types";
-import { MENU_PREVIEW, callFirst, menuPreview, openState, priceText, todayHoursText, won } from "../format";
+import { MENU_PREVIEW, callFirst, menuPreview, openState, ratingTone, priceText, todayHoursText, won } from "../format";
 import { ChevronDown, CloseIcon, InfoIcon } from "./Icons";
 import { Mascot } from "./Mascot";
 import { RankPill } from "./RankPill";
@@ -130,7 +130,7 @@ function TrioCard(props: {
           <span className="trio-facts">
             {p.walkMinutes !== undefined && <b>도보 {p.walkMinutes}분</b>}
             {rating !== null && (
-              <span className="trio-rating">
+              <span className={`trio-rating${ratingTone(rating) === "plain" ? " is-plain" : ""}`}>
                 <span className="star" aria-hidden="true">★</span>
                 {rating.toFixed(1)}
               </span>
