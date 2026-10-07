@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
+import { GROUP_GLYPH } from "../../shared/category";
 import { chipToggles, keptChips, layoutPicks, pickBadgeBox, pickLabelBox, type ChipBox, type LabelBox } from "../../shared/labels";
-import type { ApiPlace, CategoryGroup, LatLng } from "../../shared/types";
+import type { ApiPlace, LatLng } from "../../shared/types";
 import { RATING_HIGH } from "../format";
 import { loadKakaoMaps } from "../kakaoLoader";
 import { copyrightCorner, sheetCover } from "../mapCover";
@@ -12,22 +13,11 @@ const zoomOf = (level: number): Zoom => (level >= 5 ? "far" : level === 4 ? "mid
 /** 평점 높은 곳 (.pin--top: 칩 오렌지, mid에서도 칩). 목록·카드의 별 강조와 같은 기준 (R28) */
 const TOP_RATING = RATING_HIGH;
 
-const GLYPH: Record<CategoryGroup, string> = {
-  korean: "🍚",
-  chinese: "🥟",
-  japanese: "🍣",
-  western: "🍝",
-  asian: "🍜",
-  snack: "🍔",
-  bar: "🍺",
-  dessert: "🍰",
-  etc: "🍴",
-};
 
 /** 확대했을 때 칩 글자: "🍚 4.3" (평점이 없으면 아이콘만) */
 function chipText(p: ApiPlace): string {
   const r = p.detail?.rating ?? null;
-  return r === null ? GLYPH[p.group] : `${GLYPH[p.group]} ${r.toFixed(1)}`;
+  return r === null ? GROUP_GLYPH[p.group] : `${GROUP_GLYPH[p.group]} ${r.toFixed(1)}`;
 }
 
 type Props = {

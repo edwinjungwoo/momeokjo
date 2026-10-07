@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from "react";
-import { lastLevel } from "../../shared/category";
+import { GROUP_GLYPH, lastLevel } from "../../shared/category";
 import { photoThumbUrl } from "../../shared/photo";
 import type { SortKey } from "../../shared/recommend";
-import type { ApiPlace } from "../../shared/types";
+import type { ApiPlace, CategoryGroup } from "../../shared/types";
 import { openState, priceText } from "../format";
 import { RankPill } from "./RankPill";
 import { Rating } from "./Rating";
@@ -19,10 +19,16 @@ type Props = {
   onSelect: (p: ApiPlace) => void;
 };
 
-/** R33: 64px 썸네일. 사진이 없거나 로드에 실패하면 크림색 자리 + 흐린 마스코트로 바꿔서 줄 정렬을 유지한다 */
-function Thumb({ url }: { url: string | null }) {
+/** R33: 64px 썸네일. 사진이 없거나 로드에 실패하면 크림색 자리 + 카테고리 아이콘(지도 칩과 같은 것)으로 바꿔서 줄 정렬을 유지한다 */
+function Thumb({ url, group }: { url: string | null; group: CategoryGroup }) {
   const [failed, setFailed] = useState(false);
-  if (!url || failed) return <span className="row-thumb is-empty" aria-hidden="true" />;
+  if (!url || failed) {
+    return (
+      <span className="row-thumb is-empty" aria-hidden="true">
+        {GROUP_GLYPH[group]}
+      </span>
+    );
+  }
   return (
     <img
       className="row-thumb"
@@ -93,7 +99,7 @@ export function PlaceList({
           return (
             <li key={p.id}>
               <button type="button" className="row" aria-current={p.id === selectedId} onClick={() => onSelect(p)}>
-                {anyPhoto && <Thumb url={p.photoUrl} />}
+                {anyPhoto && <Thumb url={p.photoUrl} group={p.group} />}
                 <span className="row-text">
                   <span className="row-name">{p.name}</span>
                   <span className="row-sub">

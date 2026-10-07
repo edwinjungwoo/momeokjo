@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState } from "react";
-import { lastLevel } from "../../shared/category";
+import { GROUP_GLYPH, lastLevel } from "../../shared/category";
 import { checkedText } from "../../shared/freshness";
 import { photoThumbUrl } from "../../shared/photo";
 import type { Reason } from "../../shared/reasons";
 import type { Party } from "../../shared/recommend";
-import type { ApiPlace, Menu } from "../../shared/types";
+import type { ApiPlace, CategoryGroup, Menu } from "../../shared/types";
 import { MENU_PREVIEW, callFirst, menuPreview, openState, ratingTone, priceText, todayHoursText, won } from "../format";
 import { ChevronDown, CloseIcon, InfoIcon } from "./Icons";
 import { Mascot } from "./Mascot";
@@ -45,11 +45,13 @@ type Props = {
   onInfo: () => void;
 };
 
-/** 56px 썸네일 + 왼쪽 위 번호 (지도 핀 번호와 같다). 사진이 없으면 크림색 자리 + 흐린 마스코트 */
-function Thumb({ url, rank }: { url: string | null; rank: number }) {
+/** 56px 썸네일 + 왼쪽 위 번호 (지도 핀 번호와 같다). 사진이 없으면 크림색 자리 + 카테고리 아이콘 (R33) */
+function Thumb({ url, rank, group }: { url: string | null; rank: number; group: CategoryGroup }) {
   const [failed, setFailed] = useState(false);
+  const empty = !url || failed;
   return (
-    <span className={`trio-thumb${!url || failed ? " is-empty" : ""}`} aria-hidden="true">
+    <span className={`trio-thumb${empty ? " is-empty" : ""}`} aria-hidden="true">
+      {empty && <span className="thumb-glyph">{GROUP_GLYPH[group]}</span>}
       {url && !failed && (
         <img src={photoThumbUrl(url)} alt="" width={56} height={56} loading="lazy" decoding="async" onError={() => setFailed(true)} />
       )}
@@ -121,7 +123,7 @@ function TrioCard(props: {
         aria-controls={open ? detailId : undefined}
         onClick={onToggle}
       >
-        <Thumb url={p.photoUrl} rank={rank} />
+        <Thumb url={p.photoUrl} rank={rank} group={p.group} />
         <span className="trio-text">
           <span className="trio-name">
             <span className="sr-only">{rank}번째 후보 </span>

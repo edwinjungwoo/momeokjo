@@ -286,8 +286,8 @@ input[type="range"] { width: 100%; height: 44px; margin: 0; accent-color: var(--
 .row:active { background: var(--fill); }
 .row[aria-current="true"] { background: var(--accent-wash); }
 .row-thumb { flex: none; display: block; width: 64px; height: 64px; border-radius: 12px; object-fit: cover; background: var(--bg-2); }
-.row-thumb.is-empty { position: relative; overflow: hidden; }
-.row-thumb.is-empty::after { content: ""; position: absolute; inset: 0; background: url("/brand/pose/dish.webp") center / 38px auto no-repeat; opacity: 0.32; }
+/* R33: 사진이 없으면 크림색 타일 + 카테고리 아이콘 (지도 칩과 같은 것, 같은 마스코트가 줄마다 되풀이되지 않게) */
+.row-thumb.is-empty { display: grid; place-items: center; font-size: 28px; line-height: 1; }
 .row-text { flex: 1; min-width: 0; display: grid; gap: 4px; }
 .row-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 16px; font-weight: 600; letter-spacing: -0.01em; }
 .row-sub { display: flex; align-items: baseline; gap: 6px; min-width: 0; overflow: hidden; white-space: nowrap; font-size: 14px; color: var(--text-2); }
@@ -556,7 +556,8 @@ input[type="range"] { width: 100%; height: 44px; margin: 0; accent-color: var(--
 .trio-card.is-open .trio-row:active { background: none; }
 .trio-thumb { position: relative; flex: none; width: 56px; height: 56px; border-radius: 12px; background: var(--bg-2); }
 .trio-thumb img { display: block; width: 56px; height: 56px; border-radius: 12px; object-fit: cover; }
-.trio-thumb.is-empty::after { content: ""; position: absolute; inset: 0; border-radius: 12px; background: url("/brand/pose/dish.webp") center / 34px auto no-repeat; opacity: 0.32; }
+.trio-thumb.is-empty { display: grid; place-items: center; }
+.thumb-glyph { font-size: 26px; line-height: 1; }
 /* 지도 핀 번호와 같은 모양 */
 .trio-rank {
   position: absolute;
