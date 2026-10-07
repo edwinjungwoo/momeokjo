@@ -79,9 +79,10 @@ describe("R63 둘째 트리거 (홀수 분) — 스냅샷·쉼·상세만 보충
     for (const m of [...on.get("detail")!, ...on.get("snapshot")!]) expect(m % 5, String(m)).not.toBe(0);
   });
 
-  it("R63: DETAIL_ONLY_EXTRA는 wrangler.jsonc vars에서 지금 \"1\"(부스트 켬)이고, 정확히 \"1\"일 때만 켠다", () => {
-    expect(wranglerConfig).toMatch(/"DETAIL_ONLY_EXTRA": "1"/);
-    expect(detailOnlyExtraFrom(env)).toBe(true);
+  it("R63: DETAIL_ONLY_EXTRA는 wrangler.jsonc vars에서 지금 \"0\"(부스트 끔 — 2026-10-08 CPU 한도)이고, 정확히 \"1\"일 때만 켠다", () => {
+    expect(wranglerConfig).toMatch(/"DETAIL_ONLY_EXTRA": "0"/);
+    expect(detailOnlyExtraFrom(env)).toBe(false);
+    expect(detailOnlyExtraFrom({ ...env, DETAIL_ONLY_EXTRA: "1" } as unknown as Env)).toBe(true);
     for (const v of ["0", "", "true", "yes", " 1", undefined]) {
       expect(detailOnlyExtraFrom({ ...env, DETAIL_ONLY_EXTRA: v } as unknown as Env), String(v)).toBe(false);
     }
@@ -91,12 +92,13 @@ describe("R63 둘째 트리거 (홀수 분) — 스냅샷·쉼·상세만 보충
     await markFresh(ALL_KEYS, BASE);
     const opts = { fetcher: fakePlaceApi({}).fetcher, sleep: async () => {} };
     const off = { ...env, DETAIL_ONLY_EXTRA: "0" } as unknown as Env;
+    const on = { ...env, DETAIL_ONLY_EXTRA: "1" } as unknown as Env;
     expect((await runCron(SECOND_CRON, env, { ...opts, now: at(7), scheduledTime: at(7) })).cron).toBe("snapshot");
     expect(await runCron(SECOND_CRON, env, { ...opts, now: at(15), scheduledTime: at(15) })).toEqual({ cron: "idle" });
     expect((await runCron(SECOND_CRON, env, { ...opts, now: at(3) + 2000, scheduledTime: at(3) })).cron).toBe("detail");
     expect((await runCron(SECOND_CRON, off, { ...opts, now: at(13) + 2000, scheduledTime: at(13) })).cron).toBe("detail");
     // 짝수 분: 켜져 있으면 상세만, 꺼져 있으면 쉼
-    expect((await runCron(SECOND_CRON, env, { ...opts, now: at(4) + 2000, scheduledTime: at(4) })).cron).toBe("detail");
+    expect((await runCron(SECOND_CRON, on, { ...opts, now: at(4) + 2000, scheduledTime: at(4) })).cron).toBe("detail");
     expect(await runCron(SECOND_CRON, off, { ...opts, now: at(8) + 2000, scheduledTime: at(8) })).toEqual({ cron: "idle" });
     expect(await runCron(SECOND_CRON, env, { ...opts, now: at(20) + 2000, scheduledTime: at(20) })).toEqual({ cron: "idle" });
     expect((await runCron(MAIN_CRON, env, { ...opts, now: at(10) })).cron).toBe("maintain");
@@ -114,7 +116,7 @@ describe("R63 둘째 트리거 (홀수 분) — 스냅샷·쉼·상세만 보충
     const r = await runDetailCron(env, { fetcher: routeFetch(local.fetcher, place.fetcher), now: at(3), sleep: async () => {} });
     expect(local.calls).toHaveLength(0);
     expect(place.calls.map((c) => c.id)).toEqual(["new1", "old1", "old2"]); // 미수집 먼저
-    expect(r).toMatchObject({ enriched: 3, failed: 0, batch: 6 }); // 운영 DETAIL_BATCH_SIZE 6
+    expect(r).toMatchObject({ enriched: 3, failed: 0, batch: 4 }); // 운영 DETAIL_BATCH_SIZE 4
     expect(r.d1Calls).toBeLessThanOrEqual(CRON_D1_CALL_LIMIT - 1);
     expect((await getMeta(env.DB, "old1"))?.fetchedAt).toBe(at(3));
     expect(await env.DB.prepare("SELECT count(*) AS n FROM hub_snapshots").first<{ n: number }>()).toEqual({ n: 0 });

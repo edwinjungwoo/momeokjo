@@ -231,8 +231,8 @@ describe("Task 34: 본 Cron의 D1 호출 예산", () => {
     expect(r).toMatchObject({ enriched: 5, failed: 0 });
   });
 
-  it("R10/R38/R63: 운영 배치(wrangler.jsonc DETAIL_BATCH_SIZE 6, 채우기 부스트)로 보통 본 Cron과 상세만 실행 모두 유효 배치 6 그대로이고 D1 호출 50번 안이다 — 상세만 실행은 저장이 모두 실패해 한 곳씩 다시 쓰고 차단을 기록하는 최악도", async () => {
-    expect(limitsFrom(env).batchSize).toBe(6);
+  it("R10/R38/R63: 운영 배치는 wrangler.jsonc DETAIL_BATCH_SIZE 4(채우기 부스트는 끔)이고, 부스트 값 6으로도 보통 본 Cron과 상세만 실행 모두 유효 배치 6 그대로이며 D1 호출 50번 안이다 — 상세만 실행은 저장이 모두 실패해 한 곳씩 다시 쓰고 차단을 기록하는 최악도", async () => {
+    expect(limitsFrom(env).batchSize).toBe(4);
     const steadyNow = NOW + 3 * 3600_000; // 보관 정리 창 밖
     const home = tileKeyOf(HUBS[0]);
     const far = [...KEYS].sort((a, b) => midDist(a) - midDist(b)).filter((k) => k !== home)[40];
@@ -246,7 +246,7 @@ describe("Task 34: 본 Cron의 D1 호출 예산", () => {
     await replaceTilePlaces(env.DB, home, ids, steadyNow, false);
     await replaceTilePlaces(env.DB, far, ["farnew"], steadyNow, false);
     const pj = (name: string) => placeJson({ name, lat: HUBS[0].lat, lng: HUBS[0].lng });
-    const big = { ...env, DETAIL_CHAR_BUDGET: "100000000" } as unknown as Env; // 글자 예산이 배치를 줄이지 않게
+    const big = { ...env, DETAIL_BATCH_SIZE: "6", DETAIL_CHAR_BUDGET: "100000000" } as unknown as Env; // 부스트 배치 6, 글자 예산이 배치를 줄이지 않게
     {
       const place = fakePlaceApi(Object.fromEntries([...ids, "farnew"].map((id) => [id, pj(id)])));
       const { db, n } = countingDb(env.DB);

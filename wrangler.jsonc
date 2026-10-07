@@ -26,13 +26,13 @@
   // 주의: 채우기 부스트 앞 버전으로 롤백하면 둘째 트리거를 1-59/2로(R63 앞 버전이면 2-59/5로) 되돌린다 (docs/deploy.md)
   "triggers": { "crons": ["*/5 * * * *", "* * * * *"] },
   // Task 34: 상세 보충은 보수적으로 (본문 200,000자까지 — worker/config.ts). 운영 cpuTime을 보고 올린다.
-  // 채우기 부스트(2026-10-07): 실행당 6곳(평소 4, 천장 8). 끌 때는 DETAIL_BATCH_SIZE "4" + DETAIL_CHAR_BUDGET "200000" + DETAIL_ONLY_EXTRA "0" (docs/deploy.md)
+  // 채우기 부스트(2026-10-07)는 2026-10-08에 껐다 — 매 분 Cron이 무료 플랜 CPU 한도에 걸려 exceededCpu로 끊겼다 (docs/deploy.md)
   "vars": {
-    "SUBREQUEST_BUDGET": "40", "DETAIL_BATCH_SIZE": "6", "DETAIL_CHAR_BUDGET": "400000", "D1_READ_SOFT_CAP": "3000000",
+    "SUBREQUEST_BUDGET": "40", "DETAIL_BATCH_SIZE": "4", "DETAIL_CHAR_BUDGET": "200000", "D1_READ_SOFT_CAP": "3000000",
     // R63: 상세만 실행(홀수 분)은 오늘 읽기가 소프트 한도의 이 비율(180만 행)에 닿으면 비켜선다 — 본 Cron·스냅샷 몫
     "DETAIL_ONLY_READ_SHARE": "0.6",
     // R63 채우기 부스트: "1"이면 둘째 트리거의 짝수 분(5의 배수 빼고)에도 상세만 보충 — 끄려면 "0" (트리거는 그대로 둔다)
-    "DETAIL_ONLY_EXTRA": "1",
+    "DETAIL_ONLY_EXTRA": "0",
     "D1_WRITE_SOFT_CAP": "60000"
   },
   "routes": [{ "pattern": "mmj.itmz.me", "custom_domain": true }]
