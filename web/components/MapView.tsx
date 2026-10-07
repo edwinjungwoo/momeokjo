@@ -4,7 +4,7 @@ import { chipToggles, keptChips, layoutPicks, pickBadgeBox, pickLabelBox, type C
 import type { ApiPlace, LatLng } from "../../shared/types";
 import { RATING_HIGH } from "../format";
 import { loadKakaoMaps } from "../kakaoLoader";
-import { copyrightCorner, sheetCover } from "../mapCover";
+import { copyrightCorner, coverFollow, sheetCover, type MapOp } from "../mapCover";
 
 const ACCENT = "#FF683D";
 /** 줌 단계: 레벨 5 이상=far(전부 점), 4=mid(평점 높은 곳만 칩), 3 이하=near(전부 칩) */
@@ -101,6 +101,13 @@ export function MapView({ center, radius, places, selectedId, picks, focusId, on
   /** 칩 대신 점으로 그리는 핀 id (.pin--nochip) */
   const noChip = useRef(new Set<string>());
   const layoutChips = useRef<(f?: Frame | null) => void>(() => {});
+  /** 지도가 마지막으로 스스로 한 이동(핀으로 panTo, 3곳 맞추기)과 그 뒤 사용자가 지도를 끌었는지 — 시트 때문에 높이를 바꾼 뒤 무엇을 따라갈지 정한다 */
+  const lastOp = useRef<MapOp>(null);
+  const userMoved = useRef(false);
+  /** setCover가 방금 만든 지도 높이 — 그 높이 변화는 setCover가 가운데를 이미 맞췄으니 컨테이너 ResizeObserver가 setCenter로 진행 중인 panTo를 끊지 않게 한다 */
+  const coverHeight = useRef<number | null>(null);
+  /** 뽑힌 3곳이 다 보이게 맞춘다 (맞출 핀이 없으면 false) */
+  const fitPicks = useRef<() => boolean>(() => false);
   const layoutLabels = useRef<(f?: Frame | null) => void>(() => {});
   const [ready, setReady] = useState(false);
   const [failed, setFailed] = useState(false);
@@ -167,13 +174,20 @@ export function MapView({ center, radius, places, selectedId, picks, focusId, on
         // 확대·이동이 끝나면 이름표 겹침을 다시 본다 (확대하면 떨어져서 다시 보일 수 있다).
         // 칩 겹침은 핀 수백 개를 훑으므로 확대 중 매 프레임(zoom_changed)이 아니라 끝났을 때(idle)만 다시 계산한다
         kakao.maps.event.addListener(m, "idle", relayoutPins);
+        // 사용자가 끈 뒤에는 시트 높이가 바뀌어도 예전 목표로 끌고 가지 않는다
+        kakao.maps.event.addListener(m, "dragstart", () => {
+          userMoved.current = true;
+        });
         let lastWidth = node.clientWidth;
         const observer = new ResizeObserver(() => {
           if (!hasSize(node)) return;
           const keep = m.getCenter();
           const widthChanged = node.clientWidth !== lastWidth;
           lastWidth = node.clientWidth;
+          const byCover = !widthChanged && coverHeight.current === node.clientHeight;
+          coverHeight.current = null;
           m.relayout();
+          if (byCover && !needsFit.current) return;
           // 너비가 바뀌면(회전, 창 크기) 원을 다시 맞춘다. 높이만 바뀌면(모바일 주소창) 중심을 유지한다.
           if (needsFit.current || widthChanged) fitCircle();
           else m.setCenter(keep);
@@ -209,7 +223,7 @@ export function MapView({ center, radius, places, selectedId, picks, focusId, on
 
   // R28: 카카오 로고·축척(약관상 가리면 안 된다)이 시트에 가리지 않게 한다.
   // - 모바일: 바텀 시트(fixed)가 지도 칸 아래쪽을 덮으면 지도 컨테이너를 시트 윗변까지 줄인다(--map-cover). 로고·축척이 시트 바로 위에 오고,
-  //   핀 이동(panTo)도 보이는 곳 가운데로 온다. 줄이거나 늘릴 때 지도 내용은 제자리에 둔다(위쪽 기준)
+  //   핀 이동(panTo)도 보이는 곳 가운데로 온다. 줄이거나 늘린 뒤에는 따라가던 핀·3곳 맞추기를 다시 하고(coverFollow), 없으면 지도 내용을 제자리에 둔다(위쪽 기준)
   // - 데스크톱: 결과·상세 오버레이가 지도 왼쪽 아래를 덮으므로 로고·축척을 오른쪽 아래로 옮긴다
   useEffect(() => {
     const node = el.current;
@@ -233,9 +247,15 @@ export function MapView({ center, radius, places, selectedId, picks, focusId, on
         target = m.getProjection().coordsFromContainerPoint(new kakao.maps.Point(w / 2, newH / 2));
       }
       cover = next;
+      coverHeight.current = newH;
       box.style.setProperty("--map-cover", `${next}px`);
       m.relayout();
-      m.setCenter(target);
+      // 따라가던 핀이 있으면 그 핀으로 다시 이동하고(바꾸기 전 가운데로 setCenter하면 진행 중인 panTo가 끊긴다), 3곳 맞추기였으면 새 높이로 다시 맞춘다
+      const follow = coverFollow({ panId: selectedRef.current ?? focusRef.current, lastOp: lastOp.current, moved: userMoved.current });
+      const pin = follow.kind === "pan" ? overlays.current.get(follow.id) : undefined;
+      if (pin) m.panTo(pin.getPosition());
+      else if (!(follow.kind === "fit" && fitPicks.current())) m.setCenter(target);
+      relayoutPins();
     };
     const apply = () => {
       const onDesktop = desktop?.matches ?? false;
@@ -476,19 +496,18 @@ export function MapView({ center, radius, places, selectedId, picks, focusId, on
 
   // R22′: 새 후보가 뽑히면 먼저 3곳이 다 보이게 맞춘다
   const picksKey = picks.join(",");
-  useEffect(() => {
-    if (!ready || !picksKey) return;
+  fitPicks.current = () => {
     const kakao = window.kakao;
-    const pts = picksKey
-      .split(",")
+    const m = map.current;
+    if (!m) return false;
+    const pts = picksRef.current
       .map((id) => overlays.current.get(id))
       .filter(Boolean)
       .map((ov) => ov.getPosition());
-    if (pts.length === 0) return;
-    const m = map.current;
+    if (pts.length === 0) return false;
     if (pts.length === 1) {
       m.panTo(pts[0]);
-      return;
+      return true;
     }
     const bounds = new kakao.maps.LatLngBounds();
     for (const pt of pts) bounds.extend(pt);
@@ -506,21 +525,35 @@ export function MapView({ center, radius, places, selectedId, picks, focusId, on
     m.setBounds(bounds, 56, FIT_PAD, bottom, left);
     if (m.getLevel() < MIN_FIT_LEVEL) m.setLevel(MIN_FIT_LEVEL);
     layoutLabels.current();
-    // places가 바뀔 때마다(폴링)가 아니라 새로 뽑혔을 때만 맞춘다
+    return true;
+  };
+  useEffect(() => {
+    if (!ready || !picksKey) return;
+    // places가 바뀔 때마다(폴링)가 아니라 새로 뽑혔을 때만 맞춘다 (picksRef는 위 핀 effect가 이미 이번 picks로 바꿨다)
+    if (fitPicks.current()) {
+      lastOp.current = "fit";
+      userMoved.current = false;
+    }
   }, [ready, picksKey]);
 
   // 펼친 후보로 이동
   useEffect(() => {
     if (!ready || !focusId) return;
     const ov = overlays.current.get(focusId);
-    if (ov) map.current.panTo(ov.getPosition());
+    if (!ov) return;
+    map.current.panTo(ov.getPosition());
+    lastOp.current = "pan";
+    userMoved.current = false;
   }, [ready, focusId]);
 
   // 선택이 바뀌면 그 핀으로 이동 (모바일에서 뽑은 뒤 지도가 결과를 따라간다)
   useEffect(() => {
     if (!ready || !selectedId) return;
     const ov = overlays.current.get(selectedId);
-    if (ov) map.current.panTo(ov.getPosition());
+    if (!ov) return;
+    map.current.panTo(ov.getPosition());
+    lastOp.current = "pan";
+    userMoved.current = false;
   }, [ready, selectedId]);
 
   return (

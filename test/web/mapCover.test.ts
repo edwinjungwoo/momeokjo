@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { MIN_MAP_VISIBLE, copyrightCorner, sheetCover } from "../../web/mapCover";
+import { MIN_MAP_VISIBLE, copyrightCorner, coverFollow, sheetCover } from "../../web/mapCover";
 
 describe("R28 지도 로고·축척은 시트에 가리지 않는다", () => {
   // 375×812: 지도 칸은 상단바 아래 53px부터 40dvh(325px)
@@ -27,5 +27,24 @@ describe("R28 지도 로고·축척은 시트에 가리지 않는다", () => {
   it("R28: 로고 자리 — 모바일은 왼쪽 아래(시트 위), 데스크톱은 결과 오버레이가 왼쪽 아래를 덮어서 오른쪽 아래", () => {
     expect(copyrightCorner(false)).toBe("BOTTOMLEFT");
     expect(copyrightCorner(true)).toBe("BOTTOMRIGHT");
+  });
+});
+
+describe("R28 지도 높이를 바꾼 뒤에도 지도가 따라가던 곳을 따라간다", () => {
+  it("R28: 선택한 핀·펼친 후보가 있으면 높이를 바꾼 뒤 그 핀으로 다시 이동한다 (진행 중인 panTo를 setCenter로 끊지 않게)", () => {
+    expect(coverFollow({ panId: "a", lastOp: "pan", moved: false })).toEqual({ kind: "pan", id: "a" });
+    // 마지막 동작이 3곳 맞추기였어도 펼친 후보가 생겼으면 그 핀
+    expect(coverFollow({ panId: "b", lastOp: "fit", moved: false })).toEqual({ kind: "pan", id: "b" });
+  });
+
+  it("R28: 핀 없이 마지막 동작이 뽑힌 3곳 맞추기면 새 높이로 다시 맞춘다", () => {
+    expect(coverFollow({ panId: null, lastOp: "fit", moved: false })).toEqual({ kind: "fit" });
+  });
+
+  it("R28: 사용자가 지도를 끌었거나 따라가던 곳이 없으면 지도 내용을 제자리에 둔다 (위쪽 기준)", () => {
+    expect(coverFollow({ panId: "a", lastOp: "pan", moved: true })).toEqual({ kind: "anchor" });
+    expect(coverFollow({ panId: null, lastOp: "fit", moved: true })).toEqual({ kind: "anchor" });
+    expect(coverFollow({ panId: null, lastOp: "pan", moved: false })).toEqual({ kind: "anchor" });
+    expect(coverFollow({ panId: null, lastOp: null, moved: false })).toEqual({ kind: "anchor" });
   });
 });

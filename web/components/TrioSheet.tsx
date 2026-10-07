@@ -76,7 +76,8 @@ function TrioMenus({ menus, id }: { menus: Menu[]; id: string }) {
         ))}
       </ul>
       {menus.length > MENU_PREVIEW && (
-        <button type="button" className="trio-menus-more" aria-expanded={all} aria-controls={id} onClick={() => setAll(!all)}>
+        // 글자("메뉴 N개 더 보기" ↔ "메뉴 접기")가 상태를 말하므로 aria-expanded는 두지 않는다 (이름과 상태가 둘 다 바뀌어 겹쳐 읽히지 않게)
+        <button type="button" className="trio-menus-more" aria-controls={id} onClick={() => setAll(!all)}>
           {all ? "메뉴 접기" : `메뉴 ${hidden}개 더 보기`}
         </button>
       )}
