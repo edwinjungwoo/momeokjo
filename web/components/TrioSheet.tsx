@@ -4,8 +4,8 @@ import { checkedText } from "../../shared/freshness";
 import { photoThumbUrl } from "../../shared/photo";
 import type { Reason } from "../../shared/reasons";
 import type { Party } from "../../shared/recommend";
-import type { ApiPlace } from "../../shared/types";
-import { callFirst, openState, priceText, todayHoursText, won } from "../format";
+import type { ApiPlace, Menu } from "../../shared/types";
+import { MENU_PREVIEW, callFirst, menuPreview, openState, priceText, todayHoursText, won } from "../format";
 import { ChevronDown, CloseIcon, InfoIcon } from "./Icons";
 import { Mascot } from "./Mascot";
 import { RankPill } from "./RankPill";
@@ -55,6 +55,30 @@ function Thumb({ url, rank }: { url: string | null; rank: number }) {
       )}
       <span className="trio-rank">{rank}</span>
     </span>
+  );
+}
+
+/** R22: 펼친 카드의 메뉴 — 처음엔 5개, 나머지는 조용한 "메뉴 N개 더 보기"로 펼친다 (카드를 접으면 다시 5개) */
+function TrioMenus({ menus, id }: { menus: Menu[]; id: string }) {
+  const [all, setAll] = useState(false);
+  if (menus.length === 0) return null;
+  const { shown, hidden } = menuPreview(menus, all);
+  return (
+    <>
+      <ul className="menus trio-menus is-open" id={id}>
+        {shown.map((m, i) => (
+          <li key={`${m.name}-${i}`}>
+            <span>{m.name}</span>
+            <span>{won(m.price)}</span>
+          </li>
+        ))}
+      </ul>
+      {menus.length > MENU_PREVIEW && (
+        <button type="button" className="trio-menus-more" aria-expanded={all} aria-controls={id} onClick={() => setAll(!all)}>
+          {all ? "메뉴 접기" : `메뉴 ${hidden}개 더 보기`}
+        </button>
+      )}
+    </>
   );
 }
 
@@ -129,7 +153,15 @@ function TrioCard(props: {
       </button>
       {open && (
         <div className="trio-detail" id={detailId}>
-          {/* R49: 4명+는 자리부터 확인하게 전화를 첫 행동으로 (전화번호는 R13 단건에만 있다).
+          <p className="trio-line">
+            <span className={state.closed ? "closed" : undefined}>{state.text}</span>
+            {hours && <span>{hours}</span>}
+            {d && d.reviewCount !== null && rating !== null && <span>리뷰 {d.reviewCount.toLocaleString("ko-KR")}</span>}
+          </p>
+          {d && d.strengths.length > 0 && <p className="trio-line">{d.strengths.join(", ")}</p>}
+          {!d && !detailLoading && <p className="trio-line">평점과 메뉴 정보를 아직 불러오지 못했어요</p>}
+          {/* 행동은 상태·강점 바로 아래 (메뉴가 길어도 폰 첫 화면에 보이게), 메뉴는 그 아래 */}
+          {/* R49: 4명+는 자리부터 확인하게 전화를 행동 맨 위 첫 행동으로 (전화번호는 R13 단건에만 있다).
               단건을 받는 동안은 같은 높이 자리를 잡아 둬서 버튼이 들어올 때 아래 내용이 밀리지 않게 한다 (전화가 없으면 그 자리만 빠진다) */}
           {call ? (
             <a className="trio-call" href={call}>
@@ -138,24 +170,6 @@ function TrioCard(props: {
           ) : party >= 4 && detailLoading ? (
             <span className="trio-call is-pending" aria-hidden="true" />
           ) : null}
-          <p className="trio-line">
-            <span className={state.closed ? "closed" : undefined}>{state.text}</span>
-            {hours && <span>{hours}</span>}
-            {d && d.reviewCount !== null && rating !== null && <span>리뷰 {d.reviewCount.toLocaleString("ko-KR")}</span>}
-          </p>
-          {d && d.strengths.length > 0 && <p className="trio-line">{d.strengths.join(", ")}</p>}
-          {!d && !detailLoading && <p className="trio-line">평점과 메뉴 정보를 아직 불러오지 못했어요</p>}
-          {menus.length > 0 && (
-            <ul className="menus trio-menus is-open">
-              {menus.map((m, i) => (
-                <li key={`${m.name}-${i}`}>
-                  <span>{m.name}</span>
-                  <span>{won(m.price)}</span>
-                </li>
-              ))}
-            </ul>
-          )}
-          {detailLoading && <p className="trio-line is-loading">메뉴를 불러오는 중이에요…</p>}
           <div className="trio-links">
             <a href={p.url} target="_blank" rel="noreferrer" onClick={() => onKakao(p)}>
               카카오맵에서 보기
@@ -167,6 +181,8 @@ function TrioCard(props: {
               다음부터 안 보기
             </button>
           </div>
+          <TrioMenus menus={menus} id={`trio-menus-${p.id}`} />
+          {detailLoading && <p className="trio-line is-loading">메뉴를 불러오는 중이에요…</p>}
           {/* R48: 단건 응답을 받으면 그 정보를 언제 확인했는지. 출처("정보 출처: 카카오맵")는 시트 아래 줄에 이미 있어서 시점만 */}
           {p.fetchedAt !== undefined && <p className="trio-source">{checkedText(p.fetchedAt, now.getTime())}</p>}
         </div>

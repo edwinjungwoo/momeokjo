@@ -2,13 +2,21 @@ import { detailAgeDays, freshnessText } from "../shared/freshness";
 import { isOpenDuring, kstParts } from "../shared/hours";
 import { isRefreshDay, refreshNoteText } from "../shared/refresh";
 import type { Filters, Party } from "../shared/recommend";
-import type { ApiPlace, PlacesResponse } from "../shared/types";
+import type { ApiPlace, Menu, PlacesResponse } from "../shared/types";
 
 export const won = (n: number) => `${n.toLocaleString("ko-KR")}원`;
 
 export function priceText(p: ApiPlace): string | null {
   const v = p.detail?.price ?? null;
   return v === null ? null : `${won(v)}대`;
+}
+
+/** R22: 펼친 결과 카드에서 처음 보여주는 메뉴 수 (행동 줄 아래, 나머지는 "메뉴 N개 더 보기") */
+export const MENU_PREVIEW = 5;
+
+export function menuPreview(menus: Menu[], expanded: boolean): { shown: Menu[]; hidden: number } {
+  if (expanded || menus.length <= MENU_PREVIEW) return { shown: menus, hidden: 0 };
+  return { shown: menus.slice(0, MENU_PREVIEW), hidden: menus.length - MENU_PREVIEW };
 }
 
 export const walkText = (p: ApiPlace) => (p.walkMinutes === undefined ? null : `도보 ${p.walkMinutes}분`);

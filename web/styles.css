@@ -594,6 +594,8 @@ input[type="range"] { width: 100%; height: 44px; margin: 0; accent-color: var(--
 .trio-line > * + *::before { content: "·"; margin-right: 6px; color: var(--text-3); }
 .trio-line.is-loading { color: var(--text-3); }
 .trio-menus { margin-top: 10px; padding-top: 10px; font-size: 14px; }
+/* R22: "메뉴 N개 더 보기" — 조용한 글자 버튼 (누르는 높이 44px) */
+.trio-menus-more { display: block; min-height: 44px; padding: 0; border: 0; background: none; color: var(--text-2); font-size: 13px; font-weight: 600; }
 /* 세 행동은 360px에서 간격을 10px로 좁혀야 한 줄(320px 안)에 들어간다. 더 좁거나 글자가 커지면 말줄임 없이 "다음부터 안 보기"가 다음 줄로 내려간다 */
 .trio-links { display: flex; flex-wrap: wrap; align-items: center; gap: 0 16px; margin-top: 4px; }
 .trio-links > * { white-space: nowrap; }
@@ -918,9 +920,9 @@ input[type="range"] { width: 100%; height: 44px; margin: 0; accent-color: var(--
     padding: 20px;
   }
   .hero { max-height: none; }
-  /* 데스크톱은 더보기 없이 최대 5개 (R28) */
+  /* 데스크톱 상세 카드는 더보기 없이 최대 5개 (R28). 결과 카드는 모바일과 같이 5개 + "메뉴 N개 더 보기" (R22) */
   .menus:not(.is-open) li:nth-child(n + 4) { display: flex; }
-  .menus li:nth-child(n + 6) { display: none !important; }
+  .menus:not(.trio-menus) li:nth-child(n + 6) { display: none !important; }
   .toast { bottom: 24px; }
 }
 /* 모바일: 결과 3곳 시트(와 그 앞의 고르는 중 시트)는 뽑기 바 자리까지 내려와 화면 맨 아래에 붙는다 (행동 줄이 바를 대신한다). 홈 인디케이터만큼 아래 여백 */

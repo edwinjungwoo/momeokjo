@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { PlacesResponse } from "../../shared/types";
-import { callFirst, refreshNote, telHref } from "../../web/format";
+import { MENU_PREVIEW, callFirst, menuPreview, refreshNote, telHref } from "../../web/format";
 import { apiPlace } from "../helpers/apiPlace";
 
 describe("R49 4명+면 전화 먼저", () => {
@@ -45,5 +45,22 @@ describe("R63 가게 정보 업데이트 한 줄", () => {
   it("R63: 예전 기기 저장본(필드 없음)은 거점 설정의 요일로, 완료 날짜 없이 보여준다", () => {
     const { refreshedAt: _a, refreshDay: _d, ...old } = base;
     expect(refreshNote(old as PlacesResponse, 4)).toBe("매주 목요일 업데이트");
+  });
+});
+
+describe("R22 펼친 결과 카드의 메뉴는 5개까지", () => {
+  const menus = Array.from({ length: 8 }, (_, i) => ({ name: `메뉴${i + 1}`, price: 1000 * (i + 1) }));
+
+  it("R22: 접힌 상태는 앞 5개만, 나머지 개수를 \"메뉴 N개 더 보기\"로 알린다", () => {
+    expect(MENU_PREVIEW).toBe(5);
+    const v = menuPreview(menus, false);
+    expect(v.shown.map((m) => m.name)).toEqual(["메뉴1", "메뉴2", "메뉴3", "메뉴4", "메뉴5"]);
+    expect(v.hidden).toBe(3);
+  });
+
+  it("R22: 더 보기를 누르면 전부, 5개 이하면 더 보기가 없다", () => {
+    expect(menuPreview(menus, true)).toEqual({ shown: menus, hidden: 0 });
+    expect(menuPreview(menus.slice(0, 5), false)).toEqual({ shown: menus.slice(0, 5), hidden: 0 });
+    expect(menuPreview([], false)).toEqual({ shown: [], hidden: 0 });
   });
 });
