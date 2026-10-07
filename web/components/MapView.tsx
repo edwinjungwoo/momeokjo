@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { chipToggles, keptChips, layoutPicks, pickBadgeBox, pickLabelBox, type ChipBox, type LabelBox } from "../../shared/labels";
 import type { ApiPlace, CategoryGroup, LatLng } from "../../shared/types";
 import { loadKakaoMaps } from "../kakaoLoader";
+import { copyrightCorner, sheetCover } from "../mapCover";
 
 const ACCENT = "#FF683D";
 /** 줌 단계: 레벨 5 이상=far(전부 점), 4=mid(평점 높은 곳만 칩), 3 이하=near(전부 칩) */
@@ -40,7 +41,16 @@ type Props = {
 };
 
 /** 데스크톱은 결과 오버레이가 지도 왼쪽을, 모바일은 바텀 시트가 지도 아래를 가린다 */
-const isDesktop = () => window.matchMedia?.("(min-width: 900px)").matches ?? false;
+const DESKTOP_QUERY = "(min-width: 900px)";
+const isDesktop = () => window.matchMedia?.(DESKTOP_QUERY).matches ?? false;
+
+/** 시트 윗변의 레이아웃 자리 (열릴 때 미끄러지는 애니메이션·끌어 내리기 transform은 뺀다 — 그 동안 지도를 계속 다시 맞추지 않게) */
+function layoutTop(sheet: HTMLElement): number {
+  const top = sheet.getBoundingClientRect().top;
+  const t = getComputedStyle(sheet).transform;
+  if (!t || t === "none" || typeof DOMMatrixReadOnly === "undefined") return top;
+  return top - new DOMMatrixReadOnly(t).m42;
+}
 const MIN_FIT_LEVEL = 3;
 const FIT_PAD = 40;
 
@@ -80,6 +90,7 @@ function chipTextWidth(text: string, px: number, fontFamily: string): number {
 /** R28: 거점 핀, 반경 원(점선), 후보 핀(CustomOverlay 버튼). 선택된 핀은 커지고 한 번 퍼진다. */
 export function MapView({ center, radius, places, selectedId, picks, focusId, onSelect }: Props) {
   const el = useRef<HTMLDivElement>(null);
+  const zoomBox = useRef<HTMLDivElement>(null);
   const map = useRef<any>(undefined);
   const circle = useRef<any>(undefined);
   const centerPin = useRef<any>(undefined);
@@ -203,6 +214,68 @@ export function MapView({ center, radius, places, selectedId, picks, focusId, on
     };
     // 지도는 한 번만 만든다. center/radius 변경은 아래 effect가 반영한다.
   }, [attempt]);
+
+  // R28: 카카오 로고·축척(약관상 가리면 안 된다)이 시트에 가리지 않게 한다.
+  // - 모바일: 바텀 시트(fixed)가 지도 칸 아래쪽을 덮으면 지도 컨테이너를 시트 윗변까지 줄인다(--map-cover). 로고·축척이 시트 바로 위에 오고,
+  //   핀 이동(panTo)도 보이는 곳 가운데로 온다. 줄이거나 늘릴 때 지도 내용은 제자리에 둔다(위쪽 기준)
+  // - 데스크톱: 결과·상세 오버레이가 지도 왼쪽 아래를 덮으므로 로고·축척을 오른쪽 아래로 옮긴다
+  useEffect(() => {
+    const node = el.current;
+    const box = zoomBox.current;
+    const wrap = node?.closest<HTMLElement>(".map-wrap");
+    const m = map.current;
+    if (!ready || !node || !box || !wrap || !m) return;
+    const kakao = window.kakao;
+    const desktop = window.matchMedia?.(DESKTOP_QUERY);
+    let cover = 0;
+    let corner: string | null = null;
+    let watched: HTMLElement | null = null;
+    const setCover = (next: number) => {
+      if (next === cover) return;
+      const w = node.clientWidth;
+      const h = node.clientHeight;
+      const newH = h + cover - next;
+      // 새 컨테이너 가운데에 올 좌표 = 지금 컨테이너의 (가로 가운데, 새 높이의 절반) — 위쪽을 기준으로 지도 내용이 움직이지 않는다
+      let target = m.getCenter();
+      if (w > 0 && h > 0 && typeof m.getProjection === "function" && kakao?.maps?.Point) {
+        target = m.getProjection().coordsFromContainerPoint(new kakao.maps.Point(w / 2, newH / 2));
+      }
+      cover = next;
+      box.style.setProperty("--map-cover", `${next}px`);
+      m.relayout();
+      m.setCenter(target);
+    };
+    const apply = () => {
+      const onDesktop = desktop?.matches ?? false;
+      const want = copyrightCorner(onDesktop);
+      if (want !== corner && typeof m.setCopyrightPosition === "function" && kakao?.maps?.CopyrightPosition) {
+        m.setCopyrightPosition(kakao.maps.CopyrightPosition[want], false);
+        corner = want;
+      }
+      // 시트는 지도 칸의 바로 아래 자식 (PlaceCard, TrioSheet). 바뀌면 크기 관찰 대상도 바꾼다
+      const sheet = onDesktop ? null : wrap.querySelector<HTMLElement>(":scope > .sheet");
+      if (sheet !== watched) {
+        if (watched) sheetSize.unobserve(watched);
+        if (sheet) sheetSize.observe(sheet);
+        watched = sheet;
+      }
+      setCover(sheetCover(wrap.getBoundingClientRect(), sheet ? layoutTop(sheet) : null));
+    };
+    // 시트가 열리고 닫히고 바뀔 때(고르는 중 → 결과), 시트 높이가 바뀔 때(카드 펼침), 화면 크기가 바뀔 때
+    const sheetSize = new ResizeObserver(apply);
+    const children = new MutationObserver(apply);
+    children.observe(wrap, { childList: true });
+    const wrapSize = new ResizeObserver(apply);
+    wrapSize.observe(wrap);
+    desktop?.addEventListener?.("change", apply);
+    apply();
+    return () => {
+      sheetSize.disconnect();
+      children.disconnect();
+      wrapSize.disconnect();
+      desktop?.removeEventListener?.("change", apply);
+    };
+  }, [ready]);
 
   // 거점, 반경 변경
   useEffect(() => {
@@ -461,7 +534,7 @@ export function MapView({ center, radius, places, selectedId, picks, focusId, on
   return (
     <>
       {/* 지도 컨테이너의 class는 SDK 몫이라 건드리지 않고, 핀 모양 전환 data-zoom은 감싸는 요소에 둔다 */}
-      <div className="map-zoom" data-zoom={zoom} data-focus={focusId ? "1" : undefined}>
+      <div ref={zoomBox} className="map-zoom" data-zoom={zoom} data-focus={focusId ? "1" : undefined}>
         <div ref={el} className="map" />
       </div>
       {failed && (
