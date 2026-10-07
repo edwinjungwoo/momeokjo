@@ -35,3 +35,19 @@ describe("R30: 알약 모양 버튼의 보이는 높이", () => {
     expect(offenders).toEqual([]);
   });
 });
+
+describe("R28: 지도 핀이 카카오 기본 지도 아이콘과 섞이지 않는다", () => {
+  const rule = (sel: string) => rules(css).find((r) => r.selector === sel)?.body ?? "";
+  it("R28: 멀리서 본 점은 진한 브랜드 오렌지(#E8512A) + 흰 테두리 2px + 옅은 그림자, 크기는 작게(색 부분 8px 이하)", () => {
+    const dot = rule(".pin::before");
+    expect(dot).toMatch(/background:\s*var\(--accent-strong\)/);
+    expect(dot).toMatch(/border:\s*2px solid #fff/);
+    expect(dot).toMatch(/box-shadow:/);
+    const w = Number(/(?:^|;)\s*width:\s*(\d+)px/.exec(dot)?.[1]);
+    expect(w).toBeGreaterThan(0);
+    expect(w).toBeLessThanOrEqual(8);
+  });
+  it("R28: 가까이 본 칩도 옅은 그림자로 지도 글자와 구분한다", () => {
+    expect(rule(".pin-chip")).toMatch(/box-shadow:/);
+  });
+});
