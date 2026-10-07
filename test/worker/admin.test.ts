@@ -36,8 +36,8 @@ function setup() {
 }
 
 describe("admin", () => {
-  it("R10/R63: 운영 기본값은 보수적으로 둔다 — wrangler.jsonc vars DETAIL_BATCH_SIZE 6(채우기 부스트 동안, 끄면 4)·DETAIL_CHAR_BUDGET 200000 (설정만 바꿔 올릴 수 있다)", () => {
-    expect(limitsFrom(env)).toEqual({ budgetSize: 40, batchSize: 6, detailCharBudget: 200_000, detailOnlyReadShare: 0.6 });
+  it("R10/R63: 운영 기본값은 보수적으로 둔다 — wrangler.jsonc vars DETAIL_BATCH_SIZE 6(채우기 부스트 동안, 끄면 4)·DETAIL_CHAR_BUDGET 400000(채우기 부스트 동안, 끄면 200000) (설정만 바꿔 올릴 수 있다)", () => {
+    expect(limitsFrom(env)).toEqual({ budgetSize: 40, batchSize: 6, detailCharBudget: 400_000, detailOnlyReadShare: 0.6 });
     // 변수가 없거나 양수가 아니면 코드 기본값 (배치는 천장 MAX_DETAIL_BATCH_SIZE)
     expect(limitsFrom({ ...env, DETAIL_BATCH_SIZE: undefined, DETAIL_CHAR_BUDGET: "0", DETAIL_ONLY_READ_SHARE: undefined } as unknown as Env)).toEqual({
       budgetSize: 40, batchSize: MAX_DETAIL_BATCH_SIZE, detailCharBudget: 600_000, detailOnlyReadShare: 0.6,

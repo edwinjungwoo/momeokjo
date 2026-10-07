@@ -148,21 +148,24 @@ describe("Task 40: 운영 크기에서 Cron 한 번이 읽는 D1 행 (정상 상
     expect(reads(log), `main reads ${reads(log)}`).toBeLessThanOrEqual(1500);
     // 상세만 실행도 같은 단계를 쓴다
     const d = await detailRun(now + 60_000);
-    expect(d.r).toMatchObject({ enriched: 4 });
+    // 운영 배치·글자 예산 그대로 — 가져온 곳 + 글자 예산으로 남긴 곳 = 배치
+    expect(d.r.enriched + (d.r.deferred ?? 0)).toBe(B);
     expect(reads(d.log), `detail reads ${reads(d.log)}`).toBeLessThanOrEqual(1500);
   });
 
   it("R38/R63: 주간 갱신 중(미수집 없음) 본 Cron·상세만 실행은 실행마다 ≤1.5천 행 — 미수집 커서는 끝이라 묶음 질의가 없고 만료 쪽 하나", async () => {
     await seed("refresh");
     const now = await warmUp();
+    const B = limitsFrom(env).batchSize;
     const { r, log } = await mainRun(now);
-    expect(r).toMatchObject({ enriched: 4, failed: 0 });
+    expect(r).toMatchObject({ failed: 0 });
+    expect(r.enriched + (r.deferred ?? 0)).toBe(B);
     expect(log.some((x) => x.sql.includes(DUETILE_SQL))).toBe(false);
     expect(log.some((x) => x.sql === NEAREST_UNFETCHED_SQL)).toBe(false);
     expect(reads(log, (q) => q === EXPIRED_SCAN_SQL)).toBeLessThanOrEqual(1000);
     expect(reads(log), `main reads ${reads(log)}`).toBeLessThanOrEqual(1500);
     const d = await detailRun(now + 60_000);
-    expect(d.r).toMatchObject({ enriched: 4 });
+    expect(d.r.enriched + (d.r.deferred ?? 0)).toBe(B);
     expect(reads(d.log), `detail reads ${reads(d.log)}`).toBeLessThanOrEqual(1500);
   });
 
