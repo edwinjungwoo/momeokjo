@@ -123,8 +123,8 @@ describe("R24 역 검색 — 화면 (헤더 메뉴·첫 접속 질문)", () => {
   it("R24: 결과 수는 읽기 도구에만 알린다 (polite) — 빈 검색어는 알리지 않고, 없으면 조용한 안내 문구", () => {
     expect(field("")).toMatch(/<span class="sr-only" aria-live="polite"><\/span>/);
     expect(field("2", 3)).toContain(">결과 3곳<");
-    expect(noResultText(" 서울 ")).toBe("‘서울’ 역은 아직 없어요");
-    expect(field(" 서울 ", 0)).toContain(">‘서울’ 역은 아직 없어요<");
+    expect(noResultText(" 서울 ")).toBe("‘서울’에 맞는 역이 아직 없어요");
+    expect(field(" 서울 ", 0)).toContain(">‘서울’에 맞는 역이 아직 없어요<");
   });
 
   it("R61: 첫 접속 질문은 제목 아래 검색 칸, 그 아래 역 목록", () => {

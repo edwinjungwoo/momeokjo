@@ -13,7 +13,7 @@ type Props = {
 };
 
 /** 결과가 없을 때 조용한 안내 (목록 자리·읽기 도구 알림 같은 문구) */
-export const noResultText = (query: string) => `‘${query.trim()}’ 역은 아직 없어요`;
+export const noResultText = (query: string) => `‘${query.trim()}’에 맞는 역이 아직 없어요`;
 
 /** 마우스·트랙패드 같은 정밀 포인터 — 폰에서는 자동 포커스로 키보드를 띄우지 않는다 */
 export const finePointer = () => typeof matchMedia === "function" && matchMedia("(pointer: fine)").matches;
@@ -31,6 +31,8 @@ export function HubSearchField({ value, onChange, onEnter, count, escClears = fa
 
   const onKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Enter") {
+      // 한글 조합 중 Enter는 글자를 마무리하는 키라 고르지 않는다 (맥 크롬은 조합 끝난 뒤 Enter를 한 번 더 보낸다)
+      if (e.nativeEvent.isComposing) return;
       e.preventDefault();
       onEnter();
     } else if (e.key === "Escape" && escClears && value !== "") {

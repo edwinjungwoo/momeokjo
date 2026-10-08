@@ -728,6 +728,10 @@ input[type="range"] { width: 100%; height: 44px; margin: 0; accent-color: var(--
   width: max-content; /* 긴 역 이름 + 호선 배지가 한 줄에 (버튼 폭에 묶이지 않게) */
   min-width: 208px;
   max-width: calc(100vw - 40px);
+  /* 역이 늘거나 가로 화면이어도 메뉴가 화면 아래로 넘치지 않게 */
+  max-height: calc(100dvh - 88px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
   padding: 8px;
   background: var(--bg);
   border-radius: 16px;
