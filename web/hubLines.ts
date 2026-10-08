@@ -26,6 +26,8 @@ export const HUB_LINES: Record<string, string[]> = {
   gwanghwamun: ["5"],
   yeoksam: ["2"],
   seonjeongneung: ["9", "suinbundang"],
+  seolleung: ["2", "suinbundang"],
+  samseong: ["2"],
 };
 
 /** 역 고르기 목록 (헤더 메뉴·첫 접속 질문): 공개 거점을 가나다순으로 */

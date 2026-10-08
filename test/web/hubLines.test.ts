@@ -23,6 +23,8 @@ describe("역 고르기 — 호선 배지·가나다순", () => {
       gwanghwamun: ["5"],
       yeoksam: ["2"],
       seonjeongneung: ["9", "suinbundang"],
+      seolleung: ["2", "suinbundang"],
+      samseong: ["2"],
     });
   });
 

@@ -5,7 +5,7 @@ import { DEFAULT_HUB_ID, HUBS, PUBLIC_HUBS, hubById, isHubId, isPublicHubId, pub
 import { UNREADY_HUB } from "../helpers/unreadyHub";
 
 describe("hubs", () => {
-  it("R24: 거점은 봉은사역(기본), 동대문역사문화공원역, 판교역, 내방역, 정부과천청사역, 강남역, 여의도역, 광화문역, 역삼역, 선정릉역", () => {
+  it("R24: 거점은 봉은사역(기본), 동대문역사문화공원역, 판교역, 내방역, 정부과천청사역, 강남역, 여의도역, 광화문역, 역삼역, 선정릉역, 선릉역, 삼성역", () => {
     expect(HUBS).toEqual([
       { id: "bongeunsa", name: "봉은사역", lat: 37.514255, lng: 127.060234, ready: true, refreshDay: 1 },
       { id: "ddp", name: "동대문역사문화공원역", lat: 37.5651, lng: 127.00749, ready: true, refreshDay: 2 },
@@ -17,6 +17,8 @@ describe("hubs", () => {
       { id: "gwanghwamun", name: "광화문역", lat: 37.571649, lng: 126.976424, ready: true, refreshDay: 4 },
       { id: "yeoksam", name: "역삼역", lat: 37.500674, lng: 127.036469, ready: false, refreshDay: 5 },
       { id: "seonjeongneung", name: "선정릉역", lat: 37.510324, lng: 127.044015, ready: false, refreshDay: 1 },
+      { id: "seolleung", name: "선릉역", lat: 37.504497, lng: 127.048963, ready: false, refreshDay: 1 },
+      { id: "samseong", name: "삼성역", lat: 37.508823, lng: 127.063023, ready: false, refreshDay: 1 },
     ]);
     expect(DEFAULT_HUB_ID).toBe("bongeunsa");
     expect(new Set(HUBS.map((h) => h.id)).size).toBe(HUBS.length);
@@ -29,9 +31,9 @@ describe("hubs", () => {
     expect(isHubId("atlantis")).toBe(false);
   });
 
-  it("R62: 공개 거점은 ready인 거점 — 강남역·여의도역·광화문역은 2026-10-08에 공개해 8곳 공개, 같은 날 더한 역삼역·선정릉역은 준비 중", () => {
+  it("R62: 공개 거점은 ready인 거점 — 강남역·여의도역·광화문역은 2026-10-08에 공개해 8곳 공개, 같은 날 더한 역삼역·선정릉역과 2026-10-09에 더한 선릉역·삼성역은 준비 중", () => {
     expect(PUBLIC_HUBS.map((h) => h.id)).toEqual(["bongeunsa", "ddp", "pangyo", "naebang", "gwacheon", "gangnam", "yeouido", "gwanghwamun"]);
-    expect(HUBS.filter((h) => !h.ready).map((h) => h.id)).toEqual(["yeoksam", "seonjeongneung"]);
+    expect(HUBS.filter((h) => !h.ready).map((h) => h.id)).toEqual(["yeoksam", "seonjeongneung", "seolleung", "samseong"]);
     // 기본 거점은 언제나 공개 거점이어야 한다 (저장값·링크가 틀리면 여기로 간다)
     expect(PUBLIC_HUBS.some((h) => h.id === DEFAULT_HUB_ID)).toBe(true);
   });
