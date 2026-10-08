@@ -110,3 +110,16 @@ export function telHref(phone: string | null | undefined): string | null {
 
 /** R49: 4명+이면 펼친 결과 카드의 첫 행동을 "전화로 자리 확인"으로 (전화번호는 R13 단건에만 있다) */
 export const callFirst = (p: ApiPlace, party: Party): string | null => (party >= 4 ? telHref(p.phone) : null);
+
+/**
+ * R34/R28: 목록 행 둘째 줄 (평점 뒤). 폰 폭(375·360px)에서는 평점 + 한 가지만 들어가서
+ * 상위 N%가 있으면 짧은 알약("상위 N%" — 카드에서는 "근처 상위 N%")만, 없으면 카테고리.
+ * 곧 닫거나 닫힌 줄은 그 알림이 앞에 오니 알약을 빼고 카테고리를 보인다.
+ */
+export function rowSubLine(r: { top: number | undefined; closed: boolean; category: string | null }): {
+  pill: string | null;
+  category: string | null;
+} {
+  if (r.top !== undefined && !r.closed) return { pill: `상위 ${r.top}%`, category: null };
+  return { pill: null, category: r.category };
+}

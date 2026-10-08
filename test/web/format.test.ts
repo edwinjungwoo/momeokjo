@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { PlacesResponse } from "../../shared/types";
-import { MENU_PREVIEW, RATING_HIGH, callFirst, menuPreview, ratingTone, refreshNote, telHref } from "../../web/format";
+import { MENU_PREVIEW, RATING_HIGH, callFirst, menuPreview, ratingTone, refreshNote, rowSubLine, telHref } from "../../web/format";
 import { apiPlace } from "../helpers/apiPlace";
 
 describe("R49 4명+면 전화 먼저", () => {
@@ -74,5 +74,17 @@ describe("R28 낮은 평점은 강조색으로 칭찬하지 않는다", () => {
     expect(ratingTone(1.1)).toBe("plain");
     expect(ratingTone(0)).toBe("plain");
     expect(ratingTone(null)).toBe("plain");
+  });
+});
+
+describe("R34/R28 목록 행 둘째 줄 — 375·360px에서 알약이 잘리지 않게", () => {
+  it("R34: 상위 N%가 있으면 평점 옆에 짧은 알약(상위 N%)만, 카테고리는 빼고 — 없으면 평점 · 카테고리", () => {
+    expect(rowSubLine({ top: 5, closed: false, category: "중국요리" })).toEqual({ pill: "상위 5%", category: null });
+    expect(rowSubLine({ top: undefined, closed: false, category: "중국요리" })).toEqual({ pill: null, category: "중국요리" });
+    expect(rowSubLine({ top: undefined, closed: false, category: null })).toEqual({ pill: null, category: null });
+  });
+
+  it("R34: 곧 닫거나 닫힌 줄은 그 알림이 먼저라 알약을 빼고 카테고리를 보인다 (한 줄에 셋을 넣지 않는다)", () => {
+    expect(rowSubLine({ top: 5, closed: true, category: "한식" })).toEqual({ pill: null, category: "한식" });
   });
 });

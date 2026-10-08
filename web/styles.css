@@ -297,6 +297,9 @@ input[type="range"] { width: 100%; height: 44px; margin: 0; accent-color: var(--
 /* R34 근처 상위 N%: 구분점 없이 옅은 포인트 알약 */
 .rank-pill { flex: none; align-self: center; padding: 0 8px; border-radius: 999px; background: var(--accent-wash); color: var(--accent-ink); font-size: 12px; font-weight: 600; line-height: 20px; white-space: nowrap; }
 .row-sub > .rank-pill::before, .facts > .rank-pill::before { content: none; }
+/* R34: 폰 폭에서 리뷰 수가 아주 길면(1만+) 알약 대신 리뷰 수 괄호가 줄어든다 (알약은 늘 온전히) */
+.row-sub > .rating { flex: 0 1 auto; min-width: 0; overflow: hidden; }
+.row-sub > .rating .count { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .row-side { flex: none; display: grid; justify-items: end; gap: 4px; text-align: right; white-space: nowrap; }
 .row-walk { font-size: 14px; font-weight: 600; }
 .row-price { font-size: 13px; color: var(--text-3); }

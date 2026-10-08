@@ -3,8 +3,7 @@ import { GROUP_GLYPH, lastLevel } from "../../shared/category";
 import { photoThumbUrl } from "../../shared/photo";
 import type { SortKey } from "../../shared/recommend";
 import type { ApiPlace, CategoryGroup } from "../../shared/types";
-import { openState, priceText } from "../format";
-import { RankPill } from "./RankPill";
+import { openState, priceText, rowSubLine } from "../format";
 import { Rating } from "./Rating";
 
 type Props = {
@@ -95,7 +94,7 @@ export function PlaceList({
         {shown.map((p) => {
           const price = priceText(p);
           const open = openState(p, now);
-          const category = lastLevel(p.category);
+          const sub = rowSubLine({ top: ranks.get(p.id), closed: open.closed, category: lastLevel(p.category) });
           return (
             <li key={p.id}>
               <button type="button" className="row" aria-current={p.id === selectedId} onClick={() => onSelect(p)}>
@@ -106,8 +105,8 @@ export function PlaceList({
                     {/* "영업 중"은 기본값이라 생략하고, 곧 닫거나 닫힌 경우만 앞에 알린다 */}
                     {open.closed && <span className="row-warn">{open.text}</span>}
                     <Rating p={p} />
-                    {category && <span className="row-cat">{category}</span>}
-                    <RankPill top={ranks.get(p.id)} />
+                    {sub.category && <span className="row-cat">{sub.category}</span>}
+                    {sub.pill && <span className="rank-pill" title={`근처 상위 ${ranks.get(p.id)}%`}>{sub.pill}</span>}
                   </span>
                 </span>
                 <span className="row-side">
