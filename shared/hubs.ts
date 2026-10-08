@@ -18,10 +18,10 @@ export const HUBS: Hub[] = [
   { id: "pangyo", name: "판교역", lat: 37.394777, lng: 127.11159, ready: true, refreshDay: 3 },
   { id: "naebang", name: "내방역", lat: 37.487659, lng: 126.9936, ready: true, refreshDay: 3 },
   { id: "gwacheon", name: "정부과천청사역", lat: 37.426505, lng: 126.989868, ready: true, refreshDay: 4 },
-  // 2026-10-06 추가 — 좌표는 카카오 로컬 키워드 검색(SW8 지하철역) 결과. R62: 수집·감사가 끝날 때까지 준비 중
-  { id: "gangnam", name: "강남역", lat: 37.498086, lng: 127.028001, ready: false, refreshDay: 5 },
-  { id: "yeouido", name: "여의도역", lat: 37.521775, lng: 126.924398, ready: false, refreshDay: 6 },
-  { id: "gwanghwamun", name: "광화문역", lat: 37.571649, lng: 126.976424, ready: false, refreshDay: 4 },
+  // 2026-10-06 추가 — 좌표는 카카오 로컬 키워드 검색(SW8 지하철역) 결과. R62: 수집·감사(Q1·Q2)를 마치고 2026-10-08 공개
+  { id: "gangnam", name: "강남역", lat: 37.498086, lng: 127.028001, ready: true, refreshDay: 5 },
+  { id: "yeouido", name: "여의도역", lat: 37.521775, lng: 126.924398, ready: true, refreshDay: 6 },
+  { id: "gwanghwamun", name: "광화문역", lat: 37.571649, lng: 126.976424, ready: true, refreshDay: 4 },
 ];
 
 /** R62: 사용자에게 보이는 거점 (ready만) */

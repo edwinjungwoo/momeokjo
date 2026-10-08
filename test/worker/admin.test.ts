@@ -1,5 +1,5 @@
 import { createExecutionContext, env, waitOnExecutionContext } from "cloudflare:test";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { ASEM, PREWARM_RADIUS } from "../../shared/constants";
 import { HUBS, type Hub } from "../../shared/hubs";
 import { tileKeyOf, tilesCoveringCircle } from "../../shared/geo";
@@ -16,6 +16,10 @@ import { recordingDb } from "../helpers/recordDb";
 import { callApp } from "../helpers/callApp";
 import { doc, fakeKakaoLocal, fakePlaceApi, routeFetch } from "../helpers/fakeKakao";
 import { placeJson, seedPlace } from "../helpers/places";
+import { UNREADY_HUB } from "../helpers/unreadyHub";
+
+// R62: 운영 거점은 모두 공개라 테스트 전용 준비 중 거점을 HUBS에 더한다
+vi.mock("../../shared/hubs", async (orig) => (await import("../helpers/unreadyHub")).withUnreadyHub(orig));
 
 const NOW = 1_800_000_000_000;
 const AUTH = { Authorization: "Bearer test-admin-token" };
@@ -325,7 +329,7 @@ describe("admin", () => {
 
   it("R62: 본 Cron은 준비 중 거점도 수집·보충한다 (공개 전에 데이터를 채우게)", async () => {
     const unready = HUBS.filter((h) => !h.ready);
-    expect(unready.length).toBeGreaterThan(0);
+    expect(unready).toEqual([UNREADY_HUB]);
     // 공개 거점 격자는 방금 모았다고 두고, 준비 중 거점 격자만 남긴다
     for (const h of HUBS.filter((x) => x.ready)) for (const k of tilesCoveringCircle(h, PREWARM_RADIUS)) await markTile(env.DB, k, NOW, 0, false);
     const r = await runScheduled(env, { fetcher: setup().fetcher, now: NOW, sleep: async () => {} });

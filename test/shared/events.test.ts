@@ -1,8 +1,13 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   EventSchema, SESSION_IDLE_MS, TS_SKEW_MS, clampTs, nextSession, parseEventBatch, toStored,
 } from "../../shared/events";
+import { isHubId } from "../../shared/hubs";
 import { kstDayHour } from "../../shared/kst";
+import { UNREADY_HUB } from "../helpers/unreadyHub";
+
+// R62: 운영 거점은 모두 공개라 테스트 전용 준비 중 거점을 HUBS에 더한다
+vi.mock("../../shared/hubs", async (orig) => (await import("../helpers/unreadyHub")).withUnreadyHub(orig));
 
 const NOW = 1_800_000_000_000; // 2027-01-15 17:00 KST
 const ANON = "0b0e7c6e-3f6b-4b8e-9a3e-1c2d3e4f5a6b";
@@ -26,6 +31,8 @@ describe("events", () => {
 
   it("R35: 알려진 타입·거점·필드만 받는다 (그 밖의 키는 거부)", () => {
     expect(EventSchema.safeParse(ev()).success).toBe(true);
+    expect(EventSchema.safeParse(ev({ hub: "gangnam" })).success).toBe(true);
+    expect(isHubId(UNREADY_HUB.id)).toBe(true);
     expect(
       EventSchema.safeParse(
         ev({
@@ -41,9 +48,7 @@ describe("events", () => {
       ev({ t: "purchase" }),
       ev({ hub: "atlantis" }),
       // R62: 준비 중 거점은 모르는 거점처럼 버린다
-      ev({ hub: "gangnam" }),
-      ev({ hub: "yeouido" }),
-      ev({ hub: "gwanghwamun" }),
+      ev({ hub: UNREADY_HUB.id }),
       ev({ placeId: "12a" }),
       ev({ placeId: "1234567890123456" }),
       ev({ ts: "now" }),

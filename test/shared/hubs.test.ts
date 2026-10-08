@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { PREWARM_RADIUS } from "../../shared/constants";
 import { tilesCoveringCircle } from "../../shared/geo";
 import { DEFAULT_HUB_ID, HUBS, PUBLIC_HUBS, hubById, isHubId, isPublicHubId, publicHubById } from "../../shared/hubs";
+import { UNREADY_HUB } from "../helpers/unreadyHub";
 
 describe("hubs", () => {
   it("R24: 거점은 봉은사역(기본), 동대문역사문화공원역, 판교역, 내방역, 정부과천청사역, 강남역, 여의도역, 광화문역", () => {
@@ -11,9 +12,9 @@ describe("hubs", () => {
       { id: "pangyo", name: "판교역", lat: 37.394777, lng: 127.11159, ready: true, refreshDay: 3 },
       { id: "naebang", name: "내방역", lat: 37.487659, lng: 126.9936, ready: true, refreshDay: 3 },
       { id: "gwacheon", name: "정부과천청사역", lat: 37.426505, lng: 126.989868, ready: true, refreshDay: 4 },
-      { id: "gangnam", name: "강남역", lat: 37.498086, lng: 127.028001, ready: false, refreshDay: 5 },
-      { id: "yeouido", name: "여의도역", lat: 37.521775, lng: 126.924398, ready: false, refreshDay: 6 },
-      { id: "gwanghwamun", name: "광화문역", lat: 37.571649, lng: 126.976424, ready: false, refreshDay: 4 },
+      { id: "gangnam", name: "강남역", lat: 37.498086, lng: 127.028001, ready: true, refreshDay: 5 },
+      { id: "yeouido", name: "여의도역", lat: 37.521775, lng: 126.924398, ready: true, refreshDay: 6 },
+      { id: "gwanghwamun", name: "광화문역", lat: 37.571649, lng: 126.976424, ready: true, refreshDay: 4 },
     ]);
     expect(DEFAULT_HUB_ID).toBe("bongeunsa");
     expect(new Set(HUBS.map((h) => h.id)).size).toBe(HUBS.length);
@@ -26,21 +27,30 @@ describe("hubs", () => {
     expect(isHubId("atlantis")).toBe(false);
   });
 
-  it("R62: 공개 거점은 ready인 5곳뿐이고, 새로 더한 3곳(강남역·여의도역·광화문역)은 준비 중이다", () => {
-    expect(PUBLIC_HUBS.map((h) => h.id)).toEqual(["bongeunsa", "ddp", "pangyo", "naebang", "gwacheon"]);
-    expect(HUBS.filter((h) => !h.ready).map((h) => h.id)).toEqual(["gangnam", "yeouido", "gwanghwamun"]);
+  it("R62: 공개 거점은 ready인 거점 — 강남역·여의도역·광화문역도 감사를 마치고 2026-10-08에 공개해 지금은 8곳 모두 공개", () => {
+    expect(PUBLIC_HUBS.map((h) => h.id)).toEqual(["bongeunsa", "ddp", "pangyo", "naebang", "gwacheon", "gangnam", "yeouido", "gwanghwamun"]);
+    expect(HUBS.filter((h) => !h.ready)).toEqual([]);
     // 기본 거점은 언제나 공개 거점이어야 한다 (저장값·링크가 틀리면 여기로 간다)
     expect(PUBLIC_HUBS.some((h) => h.id === DEFAULT_HUB_ID)).toBe(true);
   });
 
   it("R62: 화면용 검증(isPublicHubId·publicHubById)은 준비 중 거점을 모르는 거점처럼, 배경 작업용(isHubId·hubById)은 모든 거점", () => {
-    expect(isPublicHubId("ddp")).toBe(true);
-    for (const id of ["gangnam", "yeouido", "gwanghwamun", "atlantis", null, undefined, ""]) expect(isPublicHubId(id), String(id)).toBe(false);
-    expect(publicHubById("pangyo").id).toBe("pangyo");
-    expect(publicHubById("gangnam").id).toBe("bongeunsa");
-    expect(publicHubById(null).id).toBe("bongeunsa");
-    expect(isHubId("gangnam")).toBe(true);
-    expect(hubById("gangnam").name).toBe("강남역");
+    // 운영 거점은 모두 공개라 테스트 전용 준비 중 거점을 HUBS에 잠깐 더해 본다 (PUBLIC_HUBS는 읽을 때 ready만 걸러 둔 목록)
+    HUBS.push(UNREADY_HUB);
+    try {
+      expect(PUBLIC_HUBS).not.toContain(UNREADY_HUB);
+      expect(isPublicHubId("ddp")).toBe(true);
+      expect(isPublicHubId("gangnam")).toBe(true);
+      for (const id of [UNREADY_HUB.id, "atlantis", null, undefined, ""]) expect(isPublicHubId(id), String(id)).toBe(false);
+      expect(publicHubById("pangyo").id).toBe("pangyo");
+      expect(publicHubById(UNREADY_HUB.id).id).toBe("bongeunsa");
+      expect(publicHubById(null).id).toBe("bongeunsa");
+      expect(isHubId(UNREADY_HUB.id)).toBe(true);
+      expect(hubById(UNREADY_HUB.id).name).toBe(UNREADY_HUB.name);
+    } finally {
+      HUBS.splice(HUBS.indexOf(UNREADY_HUB), 1);
+    }
+    expect(isHubId(UNREADY_HUB.id)).toBe(false);
   });
 
   it("R24/R43: 거점 id는 URL 경로에 그대로 쓰는 소문자 영숫자(·하이픈)이고 서로 다르다", () => {

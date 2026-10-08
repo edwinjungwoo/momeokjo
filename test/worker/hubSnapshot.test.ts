@@ -1,5 +1,5 @@
 import { applyD1Migrations, env } from "cloudflare:test";
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   DETAIL_FREEZE_MS, LIST_JSON_VERSION, MAX_RADIUS, PLACE_BLOCK_COOLDOWN_MS, PREWARM_RADIUS, TILE_TTL_MS,
 } from "../../shared/constants";
@@ -22,6 +22,10 @@ import { recordingDb } from "../helpers/recordDb";
 import { doc, fakeKakaoLocal, fakePlaceApi, routeFetch } from "../helpers/fakeKakao";
 import { makeSummary, markOuterTilesFresh, placeJson, sampleDetail } from "../helpers/places";
 import wranglerConfig from "../../wrangler.jsonc?raw";
+import { UNREADY_HUB } from "../helpers/unreadyHub";
+
+// R62: 운영 거점은 모두 공개라 테스트 전용 준비 중 거점을 HUBS에 더한다
+vi.mock("../../shared/hubs", async (orig) => (await import("../helpers/unreadyHub")).withUnreadyHub(orig));
 
 const NOW = 1_800_000_000_000;
 const HUB = hubById("bongeunsa");
@@ -486,7 +490,7 @@ describe("R62 준비 중 거점 — 스냅샷", () => {
   it("R62: 스냅샷 Cron은 공개 거점만 만들고, 준비 중 거점의 스냅샷 행은 지운다", async () => {
     for (const h of HUBS) for (const k of tilesCoveringCircle(h, PREWARM_RADIUS)) await markTile(env.DB, k, NOW, 0, false);
     const unready = HUBS.filter((h) => !h.ready);
-    expect(unready.length).toBeGreaterThan(0);
+    expect(unready).toEqual([UNREADY_HUB]);
     // 예전 코드가 남긴(또는 손으로 만든) 준비 중 거점 스냅샷
     expect(await buildHubSnapshot(env.DB, unready[0], NOW)).toMatchObject({ status: "built" });
     const built = new Set<string>();

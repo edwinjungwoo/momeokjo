@@ -1,9 +1,13 @@
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { HUBS, PUBLIC_HUBS } from "../../shared/hubs";
 import { HubName, hubOptionLabel } from "../../web/admin/Overview";
 import { HubPicker } from "../../web/components/HubPicker";
+import { UNREADY_HUB } from "../helpers/unreadyHub";
+
+// R62: 운영 거점은 모두 공개라 테스트 전용 준비 중 거점을 HUBS에 더한다
+vi.mock("../../shared/hubs", async (orig) => (await import("../helpers/unreadyHub")).withUnreadyHub(orig));
 
 // 화면 코드 원문 (Vite가 빌드 시점에 묶어 준다)
 const sources = import.meta.glob("../../web/**/*.{ts,tsx}", { query: "?raw", import: "default", eager: true }) as Record<string, string>;
@@ -14,7 +18,7 @@ describe("R62 준비 중 거점 — 화면", () => {
   it("R62: 첫 접속 질문(R61)은 공개 거점만 보인다", () => {
     const html = renderToStaticMarkup(createElement(HubPicker, { onPick: () => {}, onDismiss: () => {} }));
     for (const h of PUBLIC_HUBS) expect(html, h.id).toContain(h.name);
-    expect(UNREADY.length).toBeGreaterThan(0);
+    expect(UNREADY).toEqual([UNREADY_HUB]);
     for (const h of UNREADY) expect(html, h.id).not.toContain(h.name);
   });
 
@@ -30,12 +34,14 @@ describe("R62 준비 중 거점 — 화면", () => {
   });
 
   it("R62: 관리 화면은 준비 중 거점도 보이고 '준비 중' 표시를 붙인다 (거점 고르기·운영 탭 거점 표)", () => {
-    expect(hubOptionLabel("gangnam")).toBe("강남역 (준비 중)");
+    expect(hubOptionLabel(UNREADY_HUB.id)).toBe(`${UNREADY_HUB.name} (준비 중)`);
     expect(hubOptionLabel("ddp")).toBe("동대문역사문화공원역");
-    const unready = renderToStaticMarkup(createElement(HubName, { id: "yeouido" }));
-    expect(unready).toContain("여의도역");
+    expect(hubOptionLabel("gangnam")).toBe("강남역");
+    const unready = renderToStaticMarkup(createElement(HubName, { id: UNREADY_HUB.id }));
+    expect(unready).toContain(UNREADY_HUB.name);
     expect(unready).toContain("준비 중");
     expect(renderToStaticMarkup(createElement(HubName, { id: "pangyo" }))).not.toContain("준비 중");
+    expect(renderToStaticMarkup(createElement(HubName, { id: "yeouido" }))).not.toContain("준비 중");
     // 모르는 id(예전 이벤트)는 id 그대로, 표시 없이
     expect(renderToStaticMarkup(createElement(HubName, { id: "atlantis" }))).toBe("atlantis");
     const page = sources["../../web/admin/AdminPage.tsx"];

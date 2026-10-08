@@ -28,8 +28,10 @@ const KEYS = [...new Set(HUBS.flatMap((h) => tilesCoveringCircle(h, PREWARM_RADI
 const PER_TILE = 20;
 const DDP = hubById("ddp");
 const BONG = hubById("bongeunsa");
-/** 새 거점(준비 중) 격자 — 미수집이 몰린 자리 */
-const NEW_HUB_TILES = new Set(HUBS.filter((h) => !h.ready).flatMap((h) => tilesCoveringCircle(h, PREWARM_RADIUS)));
+/** 새 거점 — 2026-10-06에 더해 미수집이 몰렸던 3곳 (2026-10-08 공개 뒤에도 같은 자리로 새 거점 미수집을 흉내 낸다. 공개 여부와 무관) */
+const NEW_HUB_IDS = new Set(["gangnam", "yeouido", "gwanghwamun"]);
+/** 새 거점 격자 — 미수집이 몰린 자리 */
+const NEW_HUB_TILES = new Set(HUBS.filter((h) => NEW_HUB_IDS.has(h.id)).flatMap((h) => tilesCoveringCircle(h, PREWARM_RADIUS)));
 const DDP_TILES = new Set(tilesCoveringCircle(DDP, PREWARM_RADIUS));
 const FAILED_ID = `${KEYS.indexOf(tilesCoveringCircle(BONG, PREWARM_RADIUS)[0])}_0`;
 
@@ -74,7 +76,7 @@ async function seed(s: Scenario) {
     "INSERT INTO tiles (key, collected_at, place_count, saturated) SELECT value, ?, ?, 0 FROM json_each(?)",
   ).bind(fresh, PER_TILE, JSON.stringify(KEYS)).run();
   // 갱신을 다 끝낸 거점은 완료 기록이 있다 (운영과 같다 — 거점마다 주 한 번 하는 완료 확인 전체 훑기는 정상 상태가 아니다)
-  const done = HUBS.filter((h) => s === "idle" || (h.id !== DDP.id && !(s === "backlog" && !h.ready)));
+  const done = HUBS.filter((h) => s === "idle" || (h.id !== DDP.id && !(s === "backlog" && NEW_HUB_IDS.has(h.id))));
   await env.DB.prepare("INSERT INTO meta (key, value) VALUES (?, 'done')").bind(`list_json_backfill:v${LIST_JSON_VERSION}`).run();
   {
     await env.DB.batch(done.map((h) =>
@@ -125,6 +127,7 @@ describe("Task 40: 운영 크기에서 Cron 한 번이 읽는 D1 행 (정상 상
   });
 
   it("R38/R11/R63/R9: 새 거점 미수집이 쌓인 동안 본 Cron은 실행마다 ≤1.5천 행 — 격자 확인을 건너뛰고, 미수집은 앞선 자리만 작게 읽고, 미수집이 배치를 다 채우면 ok 만료 쪽은 읽지 않는다 (고르는 가게는 다 읽은 것과 같다)", async () => {
+    expect(NEW_HUB_TILES.size).toBeGreaterThan(0);
     await seed("backlog");
     // 첫 실행: 격자 확인·미수집 커서 재설정. R9: 미수집이 밀려 있어도 실패 재시도 자리 하나
     expect((await mainRun(NOW)).place.calls).toContain(FAILED_ID);

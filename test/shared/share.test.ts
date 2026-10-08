@@ -1,9 +1,13 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { DEFAULT_FILTERS } from "../../shared/recommend";
 import { isAdminPath, parseHubPath, parseShareParams, shareConfirmText, excludeToastText, shareText, shareUrl, toParticle, topicParticle } from "../../shared/share";
-import { HUBS } from "../../shared/hubs";
+import { HUBS, isHubId } from "../../shared/hubs";
 import wranglerRaw from "../../wrangler.jsonc?raw";
 import { apiPlace } from "../helpers/apiPlace";
+import { UNREADY_HUB } from "../helpers/unreadyHub";
+
+// R62: 운영 거점은 모두 공개라 테스트 전용 준비 중 거점을 HUBS에 더한다
+vi.mock("../../shared/hubs", async (orig) => (await import("../helpers/unreadyHub")).withUnreadyHub(orig));
 
 const ORIGIN = "https://mmj.itmz.me";
 const A = apiPlace("27531028", { name: "중앙해장", category: "음식점 > 한식 > 해장국", walkMinutes: 4 }, { rating: 4.1 });
@@ -95,14 +99,14 @@ describe("R23′ 3곳 공유", () => {
   });
 
   it("R62: 준비 중 거점은 공유 링크(경로·h)와 짧은 링크에서 모르는 거점처럼 null", () => {
-    for (const id of ["gangnam", "yeouido", "gwanghwamun"]) {
-      expect(parseHubPath(`/${id}`), id).toBeNull();
-      expect(parseHubPath(`/${id}/`), id).toBeNull();
-      expect(parseShareParams("?t=1,2&r=700", `/${id}`).hubId, id).toBeNull();
-      expect(parseShareParams(`?t=1&h=${id}`).hubId, id).toBeNull();
-    }
+    const id = UNREADY_HUB.id;
+    expect(isHubId(id)).toBe(true);
+    expect(parseHubPath(`/${id}`)).toBeNull();
+    expect(parseHubPath(`/${id}/`)).toBeNull();
+    expect(parseShareParams("?t=1,2&r=700", `/${id}`).hubId).toBeNull();
+    expect(parseShareParams(`?t=1&h=${id}`).hubId).toBeNull();
     // 준비 중 경로가 있어도 예전 h의 공개 거점은 읽는다
-    expect(parseShareParams("?t=1&h=ddp", "/gangnam").hubId).toBe("ddp");
+    expect(parseShareParams("?t=1&h=ddp", `/${id}`).hubId).toBe("ddp");
   });
 });
 

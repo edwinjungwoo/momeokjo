@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   DETAIL_JITTER_MS, DETAIL_OK_TTL_MS, PLACE_BLOCK_COOLDOWN_MS, TILE_TTL_MS,
 } from "../../shared/constants";
-import { hubById } from "../../shared/hubs";
+import { hubById, isHubId } from "../../shared/hubs";
 import { tileKeyOf, tilesCoveringCircle, walkMinutes } from "../../shared/geo";
 import type { PlacesResponse } from "../../shared/types";
 import {
@@ -15,6 +15,10 @@ import { recordHubRefreshed } from "../../worker/hubRefresh";
 import { hubRefreshStart } from "../../worker/refreshSchedule";
 import { doc, fakeKakaoLocal, fakePlaceApi, routeFetch } from "../helpers/fakeKakao";
 import { markOuterTilesFresh, placeJson, seedPlace } from "../helpers/places";
+import { UNREADY_HUB } from "../helpers/unreadyHub";
+
+// R62: 운영 거점은 모두 공개라 테스트 전용 준비 중 거점을 HUBS에 더한다
+vi.mock("../../shared/hubs", async (orig) => (await import("../helpers/unreadyHub")).withUnreadyHub(orig));
 
 /** 배포 뒤 스모크가 쓰는 허용 키 목록 (scripts/smoke.sh) */
 const SMOKE_SH = Object.values(
@@ -75,13 +79,13 @@ describe("GET /api/places", () => {
   });
 
   it("R62: 준비 중 거점은 모르는 거점처럼 400 — 외부 호출·D1 읽기 없이 (덜 모은 목록을 API로도 볼 수 없게)", async () => {
-    for (const id of ["gangnam", "yeouido", "gwanghwamun"]) {
-      const s = setup();
-      const res = await callApp(s.app, `/api/places?hub=${id}&radius=500`);
-      expect(res.status, id).toBe(400);
-      expect(await res.json()).toEqual({ error: "invalid_params" });
-      expect(s.local.calls.length + s.place.calls.length, id).toBe(0);
-    }
+    const id = UNREADY_HUB.id;
+    expect(isHubId(id)).toBe(true);
+    const s = setup();
+    const res = await callApp(s.app, `/api/places?hub=${id}&radius=500`);
+    expect(res.status).toBe(400);
+    expect(await res.json()).toEqual({ error: "invalid_params" });
+    expect(s.local.calls.length + s.place.calls.length).toBe(0);
   });
 
   it("R12: 거점 id와 50m 단위 반경(100~1000m)만 받는다", async () => {

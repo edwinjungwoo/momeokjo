@@ -125,6 +125,8 @@ git add docs/deploys.md && git commit -m "docs(deploy): <날짜> 배포 기록" 
 
 거점은 `shared/hubs.ts`에 `ready: false`(준비 중)와 갱신 요일 `refreshDay`(아래 "주 1회 갱신")를 넣어 한 줄로 더해요. 준비 중 거점은 화면·공유 링크·`/api/places`(400)에서 보이지 않고, Cron은 계속 채워요.
 
+지금(2026-10-08) 준비 중 거점은 없어요 — 강남역·여의도역·광화문역은 감사 Q1·Q2를 통과해 공개했어요. 아래 `gangnam`은 명령 예시예요.
+
 1. **수집** — Cron이 5분마다 채워요. 빨리 채우려면 `ADMIN_TOKEN=… npm run warm -- --hub gangnam`(또는 관리 화면 운영 탭의 거점 표, "준비 중" 표시가 붙은 줄).
 2. **감사 Q1·Q2 통과** — `ADMIN_TOKEN=… npm run audit -- --hub gangnam`이 Q1·Q2를 통과해야 해요. 스모크(토큰 있음)도 준비 중 거점을 감사하지만 `info` 줄로만 보여줘요 (FAIL이 아니라 롤백·중단 사유가 아니에요).
 3. **`ready: true`** — 그 거점 줄 하나만 바꿔 커밋해요.

@@ -1,14 +1,18 @@
 import { env } from "cloudflare:test";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { ASEM } from "../../shared/constants";
 import { tileKeyOf } from "../../shared/geo";
-import { HUBS } from "../../shared/hubs";
+import { HUBS, isPublicHubId } from "../../shared/hubs";
 import { utcDay } from "../../shared/kst";
 import { createApp } from "../../worker/app";
 import { LIST_JSON_PREFIX } from "../../worker/present";
 import { ADMIN_BACKFILL_DEFAULT, ADMIN_BACKFILL_MAX, ADMIN_BACKFILL_SQL, replaceTilePlaces, saveDetailFailure } from "../../worker/repo";
 import { callApp } from "../helpers/callApp";
 import { seedPlace } from "../helpers/places";
+import { UNREADY_HUB } from "../helpers/unreadyHub";
+
+// R62: 운영 거점은 모두 공개라 테스트 전용 준비 중 거점을 HUBS에 더한다
+vi.mock("../../shared/hubs", async (orig) => (await import("../helpers/unreadyHub")).withUnreadyHub(orig));
 
 const NOW = 1_800_000_000_000;
 const AUTH = { Authorization: "Bearer test-admin-token" };
@@ -134,10 +138,11 @@ describe("admin backfill (list_json)", () => {
     expect((await backfill(app, "?hub=nowhere")).status).toBe(400);
   });
 
-  it("R62: 준비 중 거점도 관리자 백필(--hub gangnam)은 된다 — 공개 전에 데이터를 채운다", async () => {
-    await seedIn(hub("gangnam"), ["g1", "g2"]);
+  it("R62: 준비 중 거점도 관리자 백필(--hub 준비 중 거점)은 된다 — 공개 전에 데이터를 채운다", async () => {
+    expect(isPublicHubId(UNREADY_HUB.id)).toBe(false);
+    await seedIn(hub(UNREADY_HUB.id), ["g1", "g2"]);
     await clearAll();
-    expect(await (await backfill(makeApp(), "?hub=gangnam")).json<Res>()).toMatchObject({ filled: 2, remaining: 0 });
+    expect(await (await backfill(makeApp(), `?hub=${UNREADY_HUB.id}`)).json<Res>()).toMatchObject({ filled: 2, remaining: 0 });
     expect(await nullsIn(["g1", "g2"])).toBe(0);
   });
 

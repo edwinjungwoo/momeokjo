@@ -217,19 +217,29 @@ describe("infra: 스모크 FAIL 줄", () => {
   });
 });
 
+/** smoke.sh가 hubs.ts 모양 원문에서 거점 줄("id lat lng ready")을 읽는 sed 식을 그대로 돌린다 */
+function smokeHubLines(src: string): string[] {
+  const m = /sed -nE 's\/(.+?)\/(\\1[^/]*)\/p' "\$HUBS_TS"/.exec(smokeSh);
+  expect(m).not.toBeNull();
+  const re = new RegExp(m![1]);
+  const repl = m![2].replace(/\\(\d)/g, "$$$1");
+  return src.split("\n").filter((l) => re.test(l)).map((l) => l.replace(re, repl).trim());
+}
+
 describe("R62 준비 중 거점 — 스모크", () => {
   it("R62: smoke.sh는 shared/hubs.ts에서 거점마다 id·좌표·ready를 읽는다 (sed 식을 그대로 돌려 본다)", () => {
-    const m = /sed -nE 's\/(.+?)\/(\\1[^/]*)\/p' "\$HUBS_TS"/.exec(smokeSh);
-    expect(m).not.toBeNull();
-    const re = new RegExp(m![1]);
-    const repl = m![2].replace(/\\(\d)/g, "$$$1");
-    const parsed = hubsTs.split("\n").filter((l) => re.test(l)).map((l) => l.replace(re, repl).trim());
-    expect(parsed).toEqual(ALL_HUBS.map((h) => `${h.id} ${h.lat} ${h.lng} ${h.ready}`));
+    expect(smokeHubLines(hubsTs)).toEqual(ALL_HUBS.map((h) => `${h.id} ${h.lat} ${h.lng} ${h.ready}`));
   });
 
   it("R62: 준비 중 거점은 목록·감사를 FAIL로 세지 않는다 — 스모크는 info로만 찍고, 모르는 거점 확인은 hubs.ts에 없는 id로", () => {
-    const unready = ALL_HUBS.filter((h) => !h.ready);
-    expect(unready.length).toBeGreaterThan(0);
+    // 운영 거점은 모두 공개라(2026-10-08) 준비 중 줄이 하나 있는 hubs.ts 모양 원문으로 본다 — ready는 "false"로 읽혀 아래 `!= true` 쪽으로 간다
+    const fixture = [
+      '  { id: "bongeunsa", name: "봉은사역", lat: 37.514255, lng: 127.060234, ready: true, refreshDay: 1 },',
+      '  { id: "testready", name: "준비중시험역", lat: 33.499621, lng: 126.531188, ready: false, refreshDay: 0 },',
+    ].join("\n");
+    expect(smokeHubLines(fixture)).toEqual(["bongeunsa 37.514255 127.060234 true", "testready 33.499621 126.531188 false"]);
+    // 목록: 준비 중이면 숨김(400)만 확인하고 다음 거점으로
+    expect(smokeSh).toMatch(/read -r id _ _ ready <<<"\$h"\n\s+if \[ "\$ready" != true \]; then/);
     // 감사: 준비 중이면 info 줄 (FAIL 줄을 만드는 bad를 부르지 않는다)
     expect(smokeSh).toMatch(/if \[ "\$ready" != true \]; then\n\s+info "감사 \$id\(준비 중\)/);
     // 모르는 거점 400 확인에 실제 거점 id를 쓰지 않는다
@@ -239,13 +249,13 @@ describe("R62 준비 중 거점 — 스모크", () => {
     // 준비 중 거점 줄이 info·ok뿐이면 FAIL로 모이지 않는다
     const out = smokeOutput([]).replace(
       "== 정적 파일",
-      ["== 정적 파일", "  ok    준비 중 gangnam 목록 숨김 → 400", '  info  감사 gangnam(준비 중) → 200 {"pass":{"q1":false,"q2":false}}'].join("\n"),
+      ["== 정적 파일", "  ok    준비 중 testready 목록 숨김 → 400", '  info  감사 testready(준비 중) → 200 {"pass":{"q1":false,"q2":false}}'].join("\n"),
     );
     expect(parseSmokeFails(out)).toEqual([]);
   });
 
   it("R62: 준비 중 거점 목록이 200이면 코드 수준 FAIL이라(데이터 상태 아님) 기준에 없던 줄이면 롤백 판단이다", () => {
-    const leak = "준비 중 gangnam 목록 숨김 → 200 (기대 400)";
+    const leak = "준비 중 testready 목록 숨김 → 200 (기대 400)";
     const pub = ALL_HUBS.filter((h) => h.ready).map((h) => h.id);
     expect(isDataStateFail(leak)).toBe(false);
     expect(classifySmokeFails([leak], pub)).toEqual({ code: [leak], data: [] });
