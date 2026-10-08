@@ -651,6 +651,8 @@ input[type="range"] { width: 100%; height: 44px; margin: 0; accent-color: var(--
   list-style: none;
   display: grid;
   grid-template-columns: minmax(0, 1fr);
+  /* 검색으로 줄이 줄어도 줄 높이는 그대로 (목록 자리는 처음 높이 — HubPicker) */
+  align-content: start;
   gap: 2px;
   min-height: 0;
   margin: 0 -12px;
@@ -677,6 +679,8 @@ input[type="range"] { width: 100%; height: 44px; margin: 0; accent-color: var(--
 .picker-row:active { background: var(--fill); transform: scale(0.98); transition-duration: 0.1s; }
 .picker-pin { color: var(--accent); }
 .picker-name { min-width: 0; overflow-wrap: anywhere; word-break: keep-all; }
+.picker .hub-search { flex: none; margin-bottom: 8px; }
+.picker-empty { padding: 12px; font-size: 15px; color: var(--text-2); overflow-wrap: anywhere; word-break: keep-all; }
 
 /* ── "모먹죠는 이렇게 골라요" (R64): 거점 고르기와 같은 바텀 시트(데스크톱은 가운데 창), 뒤 배경은 .picker-scrim ── */
 .sheet.info {
@@ -731,12 +735,37 @@ input[type="range"] { width: 100%; height: 44px; margin: 0; accent-color: var(--
   animation: fade-up 0.16s ease-out;
 }
 .menu-head { display: flex; align-items: center; gap: 8px; padding: 0 8px 8px; margin-bottom: 4px; border-bottom: 1px solid var(--divider); font-size: 13px; font-weight: 600; color: var(--text-2); }
-.menu button { min-height: 48px; padding: 0 12px; border: 0; border-radius: 10px; background: none; text-align: left; font-size: 16px; }
-.menu button:active { background: var(--fill); }
-.menu button[role="menuitemradio"] { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-.menu button[aria-checked="true"] { font-weight: 700; }
+.menu-item { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 48px; padding: 0 12px; border: 0; border-radius: 10px; background: none; text-align: left; font-size: 16px; }
+.menu-item:active { background: var(--fill); }
+.menu-item[aria-current="true"] { font-weight: 700; }
+/* 검색 칸·없음 안내는 메뉴 폭(가장 긴 역 줄)을 늘리지 않고 그 폭에 맞춘다 */
+.menu .hub-search { contain: inline-size; margin-bottom: 4px; }
+.menu-empty { contain: inline-size; padding: 12px; font-size: 15px; color: var(--text-2); overflow-wrap: anywhere; word-break: keep-all; }
 .menu-check { flex: none; color: var(--accent); }
 .menu-hub { display: flex; align-items: center; gap: 8px; min-width: 0; }
+/* 역 검색 (R24·R61): 역 고르기 목록 위 — 옅은 채움 칸, 돋보기·지우기는 흐린 글자색. 16px 글자라 iOS가 확대하지 않는다 */
+.hub-search { position: relative; display: flex; align-items: center; }
+.hub-search-icon { position: absolute; left: 12px; color: var(--text-3); pointer-events: none; }
+.hub-search-input {
+  width: 100%;
+  min-width: 0;
+  height: 44px;
+  margin: 0;
+  padding: 0 44px 0 36px;
+  border: 0;
+  border-radius: 12px;
+  background: var(--fill);
+  font-size: 16px;
+  -webkit-appearance: none;
+  appearance: none;
+}
+.hub-search-input::placeholder { color: var(--text-3); opacity: 1; }
+.hub-search-input::-webkit-search-cancel-button,
+.hub-search-input::-webkit-search-decoration { -webkit-appearance: none; appearance: none; display: none; }
+.hub-search-input:focus-visible { outline-offset: 0; }
+.hub-search-clear { position: absolute; top: 0; right: 0; display: grid; place-items: center; width: 44px; height: 44px; padding: 0; border: 0; border-radius: 12px; background: none; color: #fff; }
+.hub-search-clear-dot { display: grid; place-items: center; width: 18px; height: 18px; border-radius: 50%; background: var(--text-3); }
+
 /* 역 이름 옆 호선 배지 — 서울 지하철 노선도 색. 숫자 노선은 동그라미, 신분당·경강은 둥근 네모 */
 .line-badges { display: inline-flex; align-items: center; gap: 3px; flex: none; }
 .line-badge { display: inline-grid; place-items: center; min-width: 18px; height: 18px; border-radius: 999px; color: #fff; font-size: 11px; font-weight: 700; line-height: 1; font-variant-numeric: tabular-nums; }
@@ -981,7 +1010,7 @@ input[type="range"] { width: 100%; height: 44px; margin: 0; accent-color: var(--
 @media (hover: hover) {
   .row:hover:not([aria-current="true"]) { background: #fbf7f3; }
   .chip:hover:not([aria-pressed="true"]) { background-color: var(--fill-press); }
-  .menu button:hover { background: var(--fill); }
+  .menu-item:hover { background: var(--fill); }
   .draw:hover { background: var(--accent-press); }
   .draw.is-secondary:hover { background: var(--fill-press); }
   .trio-row:hover { background: #fbf7f3; }

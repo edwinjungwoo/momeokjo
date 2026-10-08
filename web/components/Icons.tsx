@@ -46,3 +46,12 @@ export function InfoIcon({ size = 18, className }: P) {
     </svg>
   );
 }
+
+export function SearchIcon({ size = 16, className }: P) {
+  return (
+    <svg className={className} width={size} height={size} viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+      <circle cx="7" cy="7" r="4.75" fill="none" stroke="currentColor" strokeWidth="1.6" />
+      <path d="M10.5 10.5 13.5 13.5" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+    </svg>
+  );
+}

@@ -1,5 +1,7 @@
-import { useEffect, useRef, type KeyboardEvent } from "react";
+import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 import { pickerHubs } from "../hubLines";
+import { searchHubs } from "../hubSearch";
+import { HubSearchField, finePointer, noResultText } from "./HubSearchField";
 import { LineBadges } from "./LineBadges";
 import { CloseIcon, PinIcon } from "./Icons";
 import { Mascot } from "./Mascot";
@@ -15,15 +17,26 @@ type Props = {
 /**
  * R61: 첫 접속 때 한 번만 묻는 거점 고르기 (결과 시트와 같은 바텀 시트, 데스크톱은 가운데 창).
  * 확인 버튼 없이 한 번 누르면 끝. 거점이 6곳을 넘으면 목록만 시트 안에서 스크롤한다.
+ * 제목 아래 역 검색 칸(R24) — 거르는 동안 목록 자리는 처음(전체 목록) 높이를 지켜서 시트가 출렁이지 않는다.
  * 뒤 화면은 App이 inert로 막고, 여기서는 Tab을 시트 안에서 돌린다 (포커스 가두기).
  */
 export function HubPicker({ onPick, onDismiss }: Props) {
   const swipe = useSwipeDown(onDismiss);
   const title = useRef<HTMLHeadingElement>(null);
+  const list = useRef<HTMLUListElement>(null);
+  const [query, setQuery] = useState("");
+  const [listHeight, setListHeight] = useState<number>();
+  const results = searchHubs(pickerHubs(), query);
 
-  // 제목에 포커스 — 스크린리더가 질문부터 읽고, 첫 줄(봉은사역)에 포커스 테두리가 떠서 미리 고른 것처럼 보이지 않게
+  // 제목에 포커스 — 스크린리더가 질문부터 읽고, 첫 줄(봉은사역)에 포커스 테두리가 떠서 미리 고른 것처럼 보이지 않게.
+  // 정밀 포인터(마우스)는 검색 칸이 스스로 포커스를 가져간다 (폰은 키보드를 띄우지 않게 제목)
   useEffect(() => {
-    title.current?.focus({ preventScroll: true });
+    if (!finePointer()) title.current?.focus({ preventScroll: true });
+  }, []);
+
+  // 처음(전체 목록) 높이를 목록 자리로 — 거르면 줄이 줄어도 시트 높이는 그대로. 화면이 낮으면(키보드) 시트 상한 안에서 줄어든다
+  useEffect(() => {
+    if (list.current) setListHeight(list.current.scrollHeight);
   }, []);
 
   // Esc는 포커스가 시트 밖(배경을 눌러 body로 감)이어도 받는다
@@ -37,7 +50,7 @@ export function HubPicker({ onPick, onDismiss }: Props) {
 
   const onKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
     if (e.key !== "Tab") return;
-    const items = [...e.currentTarget.querySelectorAll<HTMLElement>("button:not([disabled])")];
+    const items = [...e.currentTarget.querySelectorAll<HTMLElement>("button:not([disabled]), input")];
     if (items.length === 0) return;
     const first = items[0];
     const last = items[items.length - 1];
@@ -79,8 +92,15 @@ export function HubPicker({ onPick, onDismiss }: Props) {
             </p>
           </div>
         </div>
-        <ul className="picker-list">
-          {pickerHubs().map((h) => (
+        <HubSearchField
+          value={query}
+          onChange={setQuery}
+          onEnter={() => results[0] && onPick(results[0].id)}
+          count={results.length}
+          escClears
+        />
+        <ul className="picker-list" ref={list} style={listHeight ? { flexBasis: listHeight } : undefined}>
+          {results.map((h) => (
             <li key={h.id}>
               <button type="button" className="picker-row" onClick={() => onPick(h.id)}>
                 <PinIcon className="picker-pin" size={18} />
@@ -89,6 +109,7 @@ export function HubPicker({ onPick, onDismiss }: Props) {
               </button>
             </li>
           ))}
+          {results.length === 0 && <li className="picker-empty">{noResultText(query)}</li>}
         </ul>
       </div>
     </>

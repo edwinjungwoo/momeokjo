@@ -34,9 +34,9 @@ describe("R62 준비 중 거점 — 화면", () => {
       expect(code, p).not.toMatch(/(?<![\w.])HUBS\b/);
       expect(code, p).not.toMatch(/(?<![\w.])(?:hubById|isHubId)\b/);
     }
-    // 거점 메뉴·첫 접속 질문은 pickerHubs()(공개 거점 가나다순)로 그린다
-    expect(sources["../../web/components/HubChip.tsx"]).toMatch(/pickerHubs\(\)\.map\(/);
-    expect(sources["../../web/components/HubPicker.tsx"]).toMatch(/pickerHubs\(\)\.map\(/);
+    // 거점 메뉴·첫 접속 질문은 pickerHubs()(공개 거점 가나다순)를 역 검색(R24 searchHubs)으로 걸러 그린다
+    expect(sources["../../web/components/HubChip.tsx"]).toMatch(/searchHubs\(pickerHubs\(\), query\)/);
+    expect(sources["../../web/components/HubPicker.tsx"]).toMatch(/searchHubs\(pickerHubs\(\), query\)/);
     expect(sources["../../web/hubLines.ts"]).toMatch(/\[\.\.\.PUBLIC_HUBS\]\.sort\(/);
   });
 
