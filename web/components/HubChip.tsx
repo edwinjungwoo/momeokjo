@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState, type Ref } from "react";
-import { PUBLIC_HUBS, type Hub } from "../../shared/hubs";
+import type { Hub } from "../../shared/hubs";
+import { pickerHubs } from "../hubLines";
+import { LineBadges } from "./LineBadges";
 import { CheckIcon, ChevronDown, PinIcon } from "./Icons";
 import { Mascot } from "./Mascot";
 
@@ -45,7 +47,7 @@ export function HubChip({ hub, onChange, buttonRef }: Props) {
             <Mascot pose="location" height={36} eager />
             <span>어디서 찾을까요?</span>
           </div>
-          {PUBLIC_HUBS.map((h) => (
+          {pickerHubs().map((h) => (
             <button
               key={h.id}
               type="button"
@@ -56,7 +58,10 @@ export function HubChip({ hub, onChange, buttonRef }: Props) {
                 if (h.id !== hub.id) onChange(h.id);
               }}
             >
-              <span>{h.name}</span>
+              <span className="menu-hub">
+                <span>{h.name}</span>
+                <LineBadges hubId={h.id} />
+              </span>
               {h.id === hub.id && <CheckIcon className="menu-check" />}
             </button>
           ))}

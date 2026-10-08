@@ -20,6 +20,10 @@ describe("R62 준비 중 거점 — 화면", () => {
     for (const h of PUBLIC_HUBS) expect(html, h.id).toContain(h.name);
     expect(UNREADY).toEqual([UNREADY_HUB]);
     for (const h of UNREADY) expect(html, h.id).not.toContain(h.name);
+    // 가나다순, 이름 옆 호선 배지 (읽기 도구에는 노선 이름)
+    const at = PUBLIC_HUBS.map((h) => [h.name, html.indexOf(h.name)] as const).sort((a, b) => a[1] - b[1]).map(([n]) => n);
+    expect(at).toEqual([...at].sort((a, b) => a.localeCompare(b, "ko")));
+    expect(html).toContain('aria-label="2호선, 신분당선"');
   });
 
   it("R62: 관리 화면 밖의 화면 코드는 모든 거점(HUBS·hubById·isHubId)을 쓰지 않는다 — 거점 메뉴·질문·설정은 공개 거점만", () => {
@@ -29,8 +33,10 @@ describe("R62 준비 중 거점 — 화면", () => {
       expect(code, p).not.toMatch(/(?<![\w.])HUBS\b/);
       expect(code, p).not.toMatch(/(?<![\w.])(?:hubById|isHubId)\b/);
     }
-    expect(sources["../../web/components/HubChip.tsx"]).toMatch(/PUBLIC_HUBS\.map\(/);
-    expect(sources["../../web/components/HubPicker.tsx"]).toMatch(/PUBLIC_HUBS\.map\(/);
+    // 거점 메뉴·첫 접속 질문은 pickerHubs()(공개 거점 가나다순)로 그린다
+    expect(sources["../../web/components/HubChip.tsx"]).toMatch(/pickerHubs\(\)\.map\(/);
+    expect(sources["../../web/components/HubPicker.tsx"]).toMatch(/pickerHubs\(\)\.map\(/);
+    expect(sources["../../web/hubLines.ts"]).toMatch(/\[\.\.\.PUBLIC_HUBS\]\.sort\(/);
   });
 
   it("R62: 관리 화면은 준비 중 거점도 보이고 '준비 중' 표시를 붙인다 (거점 고르기·운영 탭 거점 표)", () => {
