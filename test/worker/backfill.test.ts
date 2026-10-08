@@ -11,7 +11,7 @@ import { callApp } from "../helpers/callApp";
 import { seedPlace } from "../helpers/places";
 import { UNREADY_HUB } from "../helpers/unreadyHub";
 
-// R62: 운영 거점은 모두 공개라 테스트 전용 준비 중 거점을 HUBS에 더한다
+// R62: 준비 중 동작은 테스트 전용 준비 중 거점으로 본다 (운영 준비 중 거점은 공개되면 바뀐다) — HUBS에 더한다
 vi.mock("../../shared/hubs", async (orig) => (await import("../helpers/unreadyHub")).withUnreadyHub(orig));
 
 const NOW = 1_800_000_000_000;

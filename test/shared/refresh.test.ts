@@ -9,7 +9,7 @@ describe("R63 거점별 주 1회 갱신 요일", () => {
   it("R63: 모든 거점에 갱신 요일(KST, 0=일 ~ 6=토)이 있고, 사용자가 정한 대로다 (일요일은 없음)", () => {
     for (const h of HUBS) expect(isRefreshDay(h.refreshDay), h.id).toBe(true);
     expect(Object.fromEntries(HUBS.map((h) => [h.id, h.refreshDay]))).toEqual({
-      bongeunsa: 1, ddp: 2, pangyo: 3, naebang: 3, gwacheon: 4, gwanghwamun: 4, gangnam: 5, yeouido: 6,
+      bongeunsa: 1, seonjeongneung: 1, ddp: 2, pangyo: 3, naebang: 3, gwacheon: 4, gwanghwamun: 4, gangnam: 5, yeoksam: 5, yeouido: 6,
     });
     expect(HUBS.some((h) => h.refreshDay === 0)).toBe(false);
     for (const bad of [-1, 7, 1.5, "1", null, undefined, Number.NaN]) expect(isRefreshDay(bad), String(bad)).toBe(false);

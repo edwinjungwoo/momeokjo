@@ -5,7 +5,7 @@ import { DEFAULT_HUB_ID, HUBS, PUBLIC_HUBS, hubById, isHubId, isPublicHubId, pub
 import { UNREADY_HUB } from "../helpers/unreadyHub";
 
 describe("hubs", () => {
-  it("R24: 거점은 봉은사역(기본), 동대문역사문화공원역, 판교역, 내방역, 정부과천청사역, 강남역, 여의도역, 광화문역", () => {
+  it("R24: 거점은 봉은사역(기본), 동대문역사문화공원역, 판교역, 내방역, 정부과천청사역, 강남역, 여의도역, 광화문역, 역삼역, 선정릉역", () => {
     expect(HUBS).toEqual([
       { id: "bongeunsa", name: "봉은사역", lat: 37.514255, lng: 127.060234, ready: true, refreshDay: 1 },
       { id: "ddp", name: "동대문역사문화공원역", lat: 37.5651, lng: 127.00749, ready: true, refreshDay: 2 },
@@ -15,6 +15,8 @@ describe("hubs", () => {
       { id: "gangnam", name: "강남역", lat: 37.498086, lng: 127.028001, ready: true, refreshDay: 5 },
       { id: "yeouido", name: "여의도역", lat: 37.521775, lng: 126.924398, ready: true, refreshDay: 6 },
       { id: "gwanghwamun", name: "광화문역", lat: 37.571649, lng: 126.976424, ready: true, refreshDay: 4 },
+      { id: "yeoksam", name: "역삼역", lat: 37.500674, lng: 127.036469, ready: false, refreshDay: 5 },
+      { id: "seonjeongneung", name: "선정릉역", lat: 37.510324, lng: 127.044015, ready: false, refreshDay: 1 },
     ]);
     expect(DEFAULT_HUB_ID).toBe("bongeunsa");
     expect(new Set(HUBS.map((h) => h.id)).size).toBe(HUBS.length);
@@ -27,15 +29,15 @@ describe("hubs", () => {
     expect(isHubId("atlantis")).toBe(false);
   });
 
-  it("R62: 공개 거점은 ready인 거점 — 강남역·여의도역·광화문역도 감사를 마치고 2026-10-08에 공개해 지금은 8곳 모두 공개", () => {
+  it("R62: 공개 거점은 ready인 거점 — 강남역·여의도역·광화문역은 2026-10-08에 공개해 8곳 공개, 같은 날 더한 역삼역·선정릉역은 준비 중", () => {
     expect(PUBLIC_HUBS.map((h) => h.id)).toEqual(["bongeunsa", "ddp", "pangyo", "naebang", "gwacheon", "gangnam", "yeouido", "gwanghwamun"]);
-    expect(HUBS.filter((h) => !h.ready)).toEqual([]);
+    expect(HUBS.filter((h) => !h.ready).map((h) => h.id)).toEqual(["yeoksam", "seonjeongneung"]);
     // 기본 거점은 언제나 공개 거점이어야 한다 (저장값·링크가 틀리면 여기로 간다)
     expect(PUBLIC_HUBS.some((h) => h.id === DEFAULT_HUB_ID)).toBe(true);
   });
 
   it("R62: 화면용 검증(isPublicHubId·publicHubById)은 준비 중 거점을 모르는 거점처럼, 배경 작업용(isHubId·hubById)은 모든 거점", () => {
-    // 운영 거점은 모두 공개라 테스트 전용 준비 중 거점을 HUBS에 잠깐 더해 본다 (PUBLIC_HUBS는 읽을 때 ready만 걸러 둔 목록)
+    // 운영 준비 중 거점은 공개되면 바뀌므로 테스트 전용 준비 중 거점을 HUBS에 잠깐 더해 본다 (PUBLIC_HUBS는 읽을 때 ready만 걸러 둔 목록)
     HUBS.push(UNREADY_HUB);
     try {
       expect(PUBLIC_HUBS).not.toContain(UNREADY_HUB);

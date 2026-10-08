@@ -18,7 +18,7 @@ import { doc, fakeKakaoLocal, fakePlaceApi, routeFetch } from "../helpers/fakeKa
 import { placeJson, seedPlace } from "../helpers/places";
 import { UNREADY_HUB } from "../helpers/unreadyHub";
 
-// R62: 운영 거점은 모두 공개라 테스트 전용 준비 중 거점을 HUBS에 더한다
+// R62: 준비 중 동작은 테스트 전용 준비 중 거점으로 본다 (운영 준비 중 거점은 공개되면 바뀐다) — HUBS에 더한다
 vi.mock("../../shared/hubs", async (orig) => (await import("../helpers/unreadyHub")).withUnreadyHub(orig));
 
 const NOW = 1_800_000_000_000;
@@ -329,15 +329,20 @@ describe("admin", () => {
 
   it("R62: 본 Cron은 준비 중 거점도 수집·보충한다 (공개 전에 데이터를 채우게)", async () => {
     const unready = HUBS.filter((h) => !h.ready);
-    expect(unready).toEqual([UNREADY_HUB]);
+    // 운영 준비 중 거점(지금은 역삼역·선정릉역)과 테스트 전용 준비 중 거점 모두
+    expect(unready).toContain(UNREADY_HUB);
     // 공개 거점 격자는 방금 모았다고 두고, 준비 중 거점 격자만 남긴다
-    for (const h of HUBS.filter((x) => x.ready)) for (const k of tilesCoveringCircle(h, PREWARM_RADIUS)) await markTile(env.DB, k, NOW, 0, false);
+    const readyTiles = new Set(HUBS.filter((x) => x.ready).flatMap((h) => tilesCoveringCircle(h, PREWARM_RADIUS)));
+    for (const k of readyTiles) await markTile(env.DB, k, NOW, 0, false);
     const r = await runScheduled(env, { fetcher: setup().fetcher, now: NOW, sleep: async () => {} });
     for (const h of unready) expect(r.order, h.id).toContain(h.id);
     expect(r.tiles.total).toBe(new Set(HUBS.flatMap((h) => tilesCoveringCircle(h, PREWARM_RADIUS))).size);
-    // 준비 중 거점의 격자도 이번 실행에서 수집 대상이다
-    const collected = new Set((await getTiles(env.DB, unready.flatMap((h) => tilesCoveringCircle(h, PREWARM_RADIUS)))).keys());
+    // 준비 중 거점의 격자도 이번 실행에서 수집 대상이다 — 공개 거점과 겹쳐 미리 표시한 칸은 빼고 센다
+    const unreadyOnly = [...new Set(unready.flatMap((h) => tilesCoveringCircle(h, PREWARM_RADIUS)))].filter((k) => !readyTiles.has(k));
+    expect(unreadyOnly.length).toBeGreaterThan(0);
+    const collected = new Set((await getTiles(env.DB, unreadyOnly)).keys());
     expect(collected.size).toBeGreaterThan(0);
+    expect(r.tiles.collected).toBe(collected.size);
   });
 
   it("R32/Q1~Q4: 감사 리포트는 덮는 격자에 기록된 ID 집합을 기준으로 한다", async () => {

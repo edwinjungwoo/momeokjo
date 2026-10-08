@@ -11,6 +11,7 @@ export const LINES: Record<string, Line> = {
   "9": { label: "9", name: "9호선", color: "#BDB092" },
   sinbundang: { label: "신분당", name: "신분당선", color: "#D4003B" },
   gyeonggang: { label: "경강", name: "경강선", color: "#0054A6" },
+  suinbundang: { label: "수인분당", name: "수인분당선", color: "#F5A200" },
 };
 
 /** 거점 id → 지나는 노선 (2026-10 기준 운행 노선, 노선 번호순) */
@@ -23,6 +24,8 @@ export const HUB_LINES: Record<string, string[]> = {
   gangnam: ["2", "sinbundang"],
   yeouido: ["5", "9"],
   gwanghwamun: ["5"],
+  yeoksam: ["2"],
+  seonjeongneung: ["9", "suinbundang"],
 };
 
 /** 역 고르기 목록 (헤더 메뉴·첫 접속 질문): 공개 거점을 가나다순으로 */

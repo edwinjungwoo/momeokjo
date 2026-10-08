@@ -232,7 +232,7 @@ describe("R62 준비 중 거점 — 스모크", () => {
   });
 
   it("R62: 준비 중 거점은 목록·감사를 FAIL로 세지 않는다 — 스모크는 info로만 찍고, 모르는 거점 확인은 hubs.ts에 없는 id로", () => {
-    // 운영 거점은 모두 공개라(2026-10-08) 준비 중 줄이 하나 있는 hubs.ts 모양 원문으로 본다 — ready는 "false"로 읽혀 아래 `!= true` 쪽으로 간다
+    // 운영 준비 중 거점은 공개되면 바뀌므로 테스트 전용 준비 중 줄이 하나 있는 hubs.ts 모양 원문으로 본다 — ready는 "false"로 읽혀 아래 `!= true` 쪽으로 간다
     const fixture = [
       '  { id: "bongeunsa", name: "봉은사역", lat: 37.514255, lng: 127.060234, ready: true, refreshDay: 1 },',
       '  { id: "testready", name: "준비중시험역", lat: 33.499621, lng: 126.531188, ready: false, refreshDay: 0 },',

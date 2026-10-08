@@ -10,14 +10,15 @@ import { HUB_DUE_EXISTS_SQL, HUB_REFRESHED_PREFIX } from "../../worker/hubRefres
 import { hubOrder, runDetailCron, runScheduled, runSnapshotCron } from "../../worker/maintenance";
 import { hubRefreshStart } from "../../worker/refreshSchedule";
 import {
-  EXPIRED_SCAN_SQL, NEAREST_UNFETCHED_SQL, TILES_FRESH_KEY, TILES_FRESH_RECHECK_MS, UNFETCHED_FROM_KEY, UNFETCHED_PROBE_TILES,
+  EXPIRED_SCAN_SQL, NEAREST_UNFETCHED_SQL, TILES_FRESH_KEY, TILES_FRESH_RECHECK_MS, UNFETCHED_CHUNK_TILES, UNFETCHED_FROM_KEY,
+  UNFETCHED_MAX_CHUNKS, UNFETCHED_PROBE_TILES,
   nearestUnfetchedStates, pickCronIds, tilePlaceStates, unfetchedStates,
 } from "../../worker/repo";
 import { placeJson } from "../helpers/places";
 import { recordingDb, type Executed } from "../helpers/recordDb";
 
 /**
- * Task 40: 운영과 같은 크기(거점 8곳, 격자 ≈540칸, 가게 ≈1만 곳)에서 본 Cron·상세만 실행·스냅샷 Cron이 한 번에 읽는 D1 행의 상한.
+ * Task 40: 운영과 같은 크기(거점 10곳, 격자 ≈600칸, 가게 ≈1.2만 곳 — 2026-10-08 역삼역·선정릉역 추가 전에는 8곳·540칸)에서 본 Cron·상세만 실행·스냅샷 Cron이 한 번에 읽는 D1 행의 상한.
  * 운영(2026-10-07 07:3x KST)에서 본 Cron은 실행마다 ≈4천 행(격자 확인 ≈1.1천 + 미수집 30칸 묶음 ≈2천 + 만료 쪽 ≈0.9천)을 읽었다
  */
 const kst = (y: number, mo: number, d: number, h = 0, mi = 0) => Date.UTC(y, mo - 1, d, h - 9, mi);
@@ -110,20 +111,24 @@ async function detailRun(now: number) {
   const r = await runDetailCron({ ...env, DB: db }, { fetcher: place.fetcher, now, sleep: async () => {} });
   return { r, log, place };
 }
-/** 미수집 커서 재설정 걷기(540칸 = 30칸 × 6묶음 × 3번)를 지나 정상 상태로: 본 Cron 3번. 다음 실행 시각을 돌려준다 */
+/** 미수집 커서 재설정 걷기 — 실행마다 30칸 × 6묶음씩이라 599칸이면 4번 (540칸일 때는 3번) */
+const WALK_RUNS = Math.ceil(KEYS.length / (UNFETCHED_CHUNK_TILES * UNFETCHED_MAX_CHUNKS));
+/** 미수집 커서 재설정 걷기를 지나 정상 상태로: 본 Cron WALK_RUNS번. 다음 실행 시각을 돌려준다 */
 async function warmUp(from = NOW): Promise<number> {
-  for (let i = 0; i < 3; i++) await mainRun(from + i * MIN5);
-  return from + 3 * MIN5;
+  for (let i = 0; i < WALK_RUNS; i++) await mainRun(from + i * MIN5);
+  return from + WALK_RUNS * MIN5;
 }
 const metaValue = async (key: string) =>
   (await env.DB.prepare("SELECT value FROM meta WHERE key = ?").bind(key).first<{ value: string }>())?.value ?? null;
 
 describe("Task 40: 운영 크기에서 Cron 한 번이 읽는 D1 행 (정상 상태 상한)", () => {
-  it("R38/R11: 운영 크기 픽스처 — 거점 8곳, 격자 ≈540칸, 가게 ≈1만 곳", async () => {
+  it("R38/R11: 운영 크기 픽스처 — 거점 10곳(공개 8 + 준비 중 2), 격자 599칸(겹친 칸은 한 번), 가게 ≈1.2만 곳", async () => {
     const n = await seed("idle");
-    expect(HUBS).toHaveLength(8);
-    expect(KEYS.length).toBeGreaterThan(500);
-    expect(n.ids).toBeGreaterThan(10_000);
+    expect(HUBS).toHaveLength(10);
+    expect(PUBLIC_HUBS).toHaveLength(8);
+    expect(KEYS).toHaveLength(599);
+    expect(WALK_RUNS).toBe(4);
+    expect(n.ids).toBe(599 * PER_TILE);
   });
 
   it("R38/R11/R63/R9: 새 거점 미수집이 쌓인 동안 본 Cron은 실행마다 ≤1.5천 행 — 격자 확인을 건너뛰고, 미수집은 앞선 자리만 작게 읽고, 미수집이 배치를 다 채우면 ok 만료 쪽은 읽지 않는다 (고르는 가게는 다 읽은 것과 같다)", async () => {

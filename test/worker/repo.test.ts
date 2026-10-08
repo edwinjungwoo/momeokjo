@@ -840,8 +840,9 @@ describe("Task 34: 상세 저장을 batch 하나로", () => {
     expect(batched.places).toEqual(oneByOne.places);
     expect(batchedBody).toBe(await listBody());
     expect(JSON.parse(batchedBody).places.length).toBeGreaterThanOrEqual(parsedNearBong.length);
-    // 옮긴 가게의 예전 거점(강남)·새 거점(봉은사), 표시 정보가 남은 실패 행의 거점(판교). 먼 가게·처음 실패한 가게는 없음
-    expect(batched.stamped).toEqual(["bongeunsa", "gangnam", "pangyo"]);
+    // 옮긴 가게의 예전 거점(강남, 강남역 자리는 역삼역 반경에도 든다)·새 거점(봉은사), 표시 정보가 남은 실패 행의 거점(판교).
+    // 먼 가게·처음 실패한 가게는 없음
+    expect(batched.stamped).toEqual(["bongeunsa", "gangnam", "pangyo", "yeoksam"]);
     expect(batched.stamped).toEqual(oneByOne.stamped);
   });
 

@@ -1,8 +1,8 @@
 import type { Hub } from "../../shared/hubs";
 
 /**
- * R62 테스트 전용 준비 중 거점 — 운영 HUBS(shared/hubs.ts)에는 없다 (2026-10-08부터 운영 거점은 모두 공개).
- * 다음 거점도 같은 장치(ready: false)로 더하므로, 준비 중 동작은 이 거점으로 계속 확인한다.
+ * R62 테스트 전용 준비 중 거점 — 운영 HUBS(shared/hubs.ts)에는 없다. 운영 준비 중 거점(2026-10-08부터 역삼역·선정릉역)은
+ * 공개되면 바뀌므로, 준비 중 동작은 이 거점으로 계속 확인한다 (운영 준비 중 거점도 함께 숨겨지는지는 각 테스트가 본다).
  * 다른 거점 격자와 겹치지 않게 멀리(제주시) 두고, 갱신 요일은 비워 둔 일요일(0).
  */
 export const UNREADY_HUB: Hub = { id: "testready", name: "준비중시험역", lat: 33.499621, lng: 126.531188, ready: false, refreshDay: 0 };

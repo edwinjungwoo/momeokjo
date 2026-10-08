@@ -6,7 +6,7 @@ import { HubName, hubOptionLabel } from "../../web/admin/Overview";
 import { HubPicker } from "../../web/components/HubPicker";
 import { UNREADY_HUB } from "../helpers/unreadyHub";
 
-// R62: 운영 거점은 모두 공개라 테스트 전용 준비 중 거점을 HUBS에 더한다
+// R62: 준비 중 동작은 테스트 전용 준비 중 거점으로 본다 (운영 준비 중 거점은 공개되면 바뀐다) — HUBS에 더한다
 vi.mock("../../shared/hubs", async (orig) => (await import("../helpers/unreadyHub")).withUnreadyHub(orig));
 
 // 화면 코드 원문 (Vite가 빌드 시점에 묶어 준다)
@@ -18,7 +18,8 @@ describe("R62 준비 중 거점 — 화면", () => {
   it("R62: 첫 접속 질문(R61)은 공개 거점만 보인다", () => {
     const html = renderToStaticMarkup(createElement(HubPicker, { onPick: () => {}, onDismiss: () => {} }));
     for (const h of PUBLIC_HUBS) expect(html, h.id).toContain(h.name);
-    expect(UNREADY).toEqual([UNREADY_HUB]);
+    // 운영 준비 중 거점(지금은 역삼역·선정릉역)과 테스트 전용 준비 중 거점 모두
+    expect(UNREADY).toContain(UNREADY_HUB);
     for (const h of UNREADY) expect(html, h.id).not.toContain(h.name);
     // 가나다순, 이름 옆 호선 배지 (읽기 도구에는 노선 이름)
     const at = PUBLIC_HUBS.map((h) => [h.name, html.indexOf(h.name)] as const).sort((a, b) => a[1] - b[1]).map(([n]) => n);
