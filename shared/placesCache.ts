@@ -66,6 +66,11 @@ export type PlacesMergeState<D> = {
   polling: boolean;
 };
 
+/** R65: 지금 목록 정보를 받은 때 — 기기 저장본이면 저장 시각, 새로 받은 목록(304 확인 포함)이면 받은 시각 (아직 없으면 null) */
+export function placesDataAt(cache: { savedAt: number } | null, receivedAt: number | null): number | null {
+  return cache ? cache.savedAt : receivedAt;
+}
+
 /**
  * 뒤늦게 읽힌 저장본을 화면 상태에 합친다.
  * - 이 거점의 새 목록을 이미 들고 있으면(저장본보다 네트워크가 먼저 온 경우, 다시 시도) 저장본은 버린다.

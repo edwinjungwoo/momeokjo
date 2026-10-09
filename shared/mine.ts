@@ -70,16 +70,19 @@ function recentTimes(s: PersonalState, now: number): [string, number][] {
 export const recentIds = (s: PersonalState, now: number): string[] => recentTimes(s, now).map(([id]) => id);
 
 /**
- * 이름을 다시 불러올 곳: 세 묶음 중 지금 목록에도 3일 안 이름 기억에도 없는 곳, 한 시각(넣음·엶·뺌)이 최근인 것부터 최대 30곳
+ * 이름을 다시 불러올 곳: 세 묶음 중 지금 목록에도 3일 안 이름 기억에도 없는 곳, 한 시각(넣음·엶·뺌)이 최근인 것부터 최대 30곳.
+ * skip(이번 세션에 못 찾은 곳)은 빼고 그 자리는 다음 곳으로 채운다
  */
-export function unresolvedIds(s: PersonalState, now: number, live: (id: string) => LivePlace | undefined): string[] {
+export function unresolvedIds(
+  s: PersonalState, now: number, live: (id: string) => LivePlace | undefined, skip: (id: string) => boolean = () => false,
+): string[] {
   const all: [string, number][] = [
     ...favoriteIds(s).map((id): [string, number] => [id, s.favorites[id]]),
     ...recentTimes(s, now),
     ...Object.entries(s.excluded),
   ];
   return all
-    .filter(([id]) => live(id) === undefined && freshSnapshot(s, id, now) === undefined)
+    .filter(([id]) => !skip(id) && live(id) === undefined && freshSnapshot(s, id, now) === undefined)
     .sort((a, b) => b[1] - a[1])
     .map(([id]) => id)
     .slice(0, MAX_RESOLVE);

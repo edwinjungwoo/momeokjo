@@ -129,5 +129,10 @@ describe("R65 내 가게 — 목록 만들기", () => {
     expect(ids).toHaveLength(MAX_RESOLVE);
     expect(ids[0]).toBe("1");
     expect(ids.at(-1)).toBe("30");
+    // 이번 세션에 못 찾은 곳은 다시 부르지 않고, 그 자리는 다음 곳으로 채운다
+    const skipped = unresolvedIds(many, NOW, () => undefined, (id) => id === "1" || id === "2");
+    expect(skipped).toHaveLength(MAX_RESOLVE);
+    expect(skipped[0]).toBe("3");
+    expect(skipped.at(-1)).toBe("32");
   });
 });

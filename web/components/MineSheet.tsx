@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type KeyboardEvent, type Ref } from "react";
+import { useEffect, useRef, useState, type KeyboardEvent, type MutableRefObject, type Ref } from "react";
 import type { MineItem, MineSections } from "../../shared/mine";
 import { HeartButton } from "./HeartButton";
 import { CloseIcon, HeartIcon } from "./Icons";
@@ -26,19 +26,32 @@ type Props = {
 };
 
 type Kind = "favorites" | "recent" | "excluded";
+/** 방금 누른 줄 (♡ 빼기·다시 보기로 그 줄이 사라지면 포커스를 옮길 자리를 찾는다) */
+type Removing = { kind: Kind; id: string; index: number };
 
-function Section({ kind, title, caption, items, props }: {
-  kind: Kind; title: string; caption?: string; items: MineItem[]; props: Props;
+/**
+ * R65: 줄이 사라진 뒤 포커스 — 그 묶음의 다음 줄(남은 줄의 같은 자리) → 묶음 제목 → (묶음이 비어 사라졌으면) 시트 제목
+ */
+export function focusAfterRemove(remaining: readonly string[], index: number): { row: string } | "heading" | "title" {
+  if (remaining.length === 0) return "title";
+  return index < remaining.length ? { row: remaining[index] } : "heading";
+}
+
+function Section({ kind, title, caption, items, props, removing }: {
+  kind: Kind; title: string; caption?: string; items: MineItem[]; props: Props; removing: MutableRefObject<Removing | null>;
 }) {
   if (items.length === 0) return null;
   const headId = `mine-${kind}`;
+  const mark = (id: string, index: number) => {
+    removing.current = { kind, id, index };
+  };
   return (
     <section className="mine-section" aria-labelledby={headId}>
-      <h3 className="mine-head" id={headId}>{title}</h3>
+      <h3 className="mine-head" id={headId} tabIndex={-1}>{title}</h3>
       {caption && <p className="mine-caption">{caption}</p>}
       <ul className="mine-list">
-        {items.map((it) => (
-          <li key={it.id} className="mine-row">
+        {items.map((it, i) => (
+          <li key={it.id} className="mine-row" data-id={it.id}>
             <button type="button" className="mine-open" aria-busy={it.loading || undefined} onClick={() => props.onOpen(it)}>
               {it.loading ? (
                 // 3일 지난 이름을 단건으로 다시 불러오는 동안 이름 자리 뼈대
@@ -51,11 +64,26 @@ function Section({ kind, title, caption, items, props }: {
               {it.line && <span className="mine-line">{it.line}</span>}
             </button>
             {kind === "excluded" ? (
-              <button type="button" className="mine-restore" onClick={() => props.onRestore(it)}>
+              // 이름을 불러오는 동안은 누를 수 없다 (알림에 이름이 들어가서)
+              <button
+                type="button"
+                className="mine-restore"
+                disabled={it.loading}
+                onClick={() => {
+                  mark(it.id, i);
+                  props.onRestore(it);
+                }}
+              >
                 다시 보기
               </button>
             ) : (
-              <HeartButton on={kind === "favorites"} onToggle={() => props.onToggleFavorite(it, kind !== "favorites")} />
+              <HeartButton
+                on={kind === "favorites"}
+                onToggle={() => {
+                  mark(it.id, i);
+                  props.onToggleFavorite(it, kind !== "favorites");
+                }}
+              />
             )}
           </li>
         ))}
@@ -112,6 +140,21 @@ export function MineSheet(props: Props) {
     }
   };
 
+  // R65: ♡ 빼기·다시 보기로 누른 줄이 그 묶음에서 사라지면 포커스를 다음 줄 → 묶음 제목 → 시트 제목으로 옮긴다
+  const removing = useRef<Removing | null>(null);
+  useEffect(() => {
+    const r = removing.current;
+    if (!r) return;
+    removing.current = null;
+    const remaining = sections[r.kind].map((it) => it.id);
+    if (remaining.includes(r.id)) return;
+    const target = focusAfterRemove(remaining, r.index);
+    const head = document.getElementById(`mine-${r.kind}`);
+    if (target === "title") title.current?.focus({ preventScroll: true });
+    else if (target === "heading") head?.focus({ preventScroll: true });
+    else head?.closest("section")?.querySelector<HTMLElement>(`[data-id="${target.row}"] .mine-open`)?.focus();
+  }, [sections]);
+
   const empty = sections.favorites.length + sections.recent.length + sections.excluded.length === 0;
   return (
     <>
@@ -134,9 +177,12 @@ export function MineSheet(props: Props) {
           </div>
         ) : (
           <div className="mine-body">
-            <Section kind="favorites" title="즐겨찾기" items={sections.favorites} props={props} />
-            <Section kind="recent" title="최근 열어 본 곳" caption="카카오맵을 열었거나 공유한 곳이에요" items={sections.recent} props={props} />
-            <Section kind="excluded" title="뺀 곳" items={sections.excluded} props={props} />
+            <Section kind="favorites" title="즐겨찾기" items={sections.favorites} props={props} removing={removing} />
+            <Section
+              kind="recent" title="최근 열어 본 곳" caption="카카오맵을 열었거나 공유한 곳이에요" items={sections.recent} props={props}
+              removing={removing}
+            />
+            <Section kind="excluded" title="뺀 곳" items={sections.excluded} props={props} removing={removing} />
           </div>
         )}
       </div>

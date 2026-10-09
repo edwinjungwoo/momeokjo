@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   addFavorite, addSignals, excludePlace, includePlace, isFavorite as isFav, parsePersonal, personalMultiplier, pruneSnapshots,
-  refreshSnapshots, removeFavorite, saveSnapshots, undoExclude as undoExcludeState, type PersonalState, type SignalKind,
-  type SnapshotSource,
+  refreshSnapshots, removeFavorite, saveSnapshots, tidyPersonal, undoExclude as undoExcludeState, type PersonalState,
+  type SignalKind, type SnapshotSource, type Stamp,
 } from "../shared/personal";
 import { lastLevel } from "../shared/category";
 import { mineSections, unresolvedIds, type LivePlace } from "../shared/mine";
@@ -10,14 +10,12 @@ import type { ApiPlace } from "../shared/types";
 
 const KEY = "mmj:personal:v1";
 
-/** 효과가 끝난 신호와 3일 지났거나 아무도 가리키지 않는 이름 기억(R65)을 정리한다 */
-const tidy = (s: PersonalState, now: number) => pruneSnapshots(addSignals(s, [], now), now);
-
-function read(): PersonalState {
+/** 효과가 끝난 신호와 3일 지났거나 아무도 가리키지 않는 이름 기억(R65)을 정리한다. changed면 한 번 다시 저장한다 */
+function read(): { state: PersonalState; changed: boolean } {
   try {
-    return tidy(parsePersonal(localStorage.getItem(KEY)), Date.now());
+    return tidyPersonal(parsePersonal(localStorage.getItem(KEY)), Date.now());
   } catch {
-    return parsePersonal(null);
+    return { state: parsePersonal(null), changed: false };
   }
 }
 
@@ -30,8 +28,10 @@ const REMEMBERED: ReadonlySet<SignalKind> = new Set(["kakao_open", "shared"]);
  * R65: 같은 저장값에 즐겨찾기와 이름 기억을 더한다 — "내 가게"가 서버 없이 이름을 보여준다.
  */
 export function usePersonal() {
-  const [state, setState] = useState<PersonalState>(read);
-  const touched = useRef(false);
+  const [initial] = useState(read);
+  const [state, setState] = useState<PersonalState>(initial.state);
+  // R65: 읽을 때 지난 이름 기억을 버렸으면 정리한 값을 바로 한 번 저장한다
+  const touched = useRef(initial.changed);
 
   useEffect(() => {
     if (!touched.current) return;
@@ -51,8 +51,9 @@ export function usePersonal() {
     });
   }, []);
 
+  /** stamp: 그 가게 정보를 받은 때 (기기 저장본에서 온 것이면 저장 시각 — R65 이름 기억 시각) */
   const record = useCallback(
-    (kind: SignalKind, places: ApiPlace[]) => {
+    (kind: SignalKind, places: ApiPlace[], stamp?: Stamp) => {
       if (places.length === 0) return;
       change((s, now) => {
         const next = addSignals(
@@ -64,14 +65,14 @@ export function usePersonal() {
           }),
           now,
         );
-        return REMEMBERED.has(kind) ? saveSnapshots(next, places, now) : next;
+        return REMEMBERED.has(kind) ? saveSnapshots(next, places, now, stamp) : next;
       });
     },
     [change],
   );
   /** R65: 즐겨찾기였으면 즐겨찾기에서도 빠진다 — 되돌리기 전에 favoriteAt으로 빼기 전 값을 받아 둔다 */
   const exclude = useCallback(
-    (p: ApiPlace) => change((s, now) => saveSnapshots(excludePlace(s, p.id, now), [p], now)),
+    (p: ApiPlace, stamp?: Stamp) => change((s, now) => saveSnapshots(excludePlace(s, p.id, now), [p], now, stamp)),
     [change],
   );
   /** R37/R65: "되돌리기" — 빼기를 풀고 즐겨찾기였으면 그 시각 그대로 돌려 놓는다 */
@@ -84,17 +85,17 @@ export function usePersonal() {
     [state],
   );
   /** R65: 목록·단건 응답에 나온 곳의 이름 기억을 새로 한다 (내 가게가 가리키는 곳만, 바뀐 게 없으면 저장하지 않는다) */
-  const refresh = useCallback((places: ApiPlace[]) => {
-    if (places.length > 0) change((s, now) => refreshSnapshots(s, places, now));
+  const refresh = useCallback((places: ApiPlace[], stamp?: Stamp) => {
+    if (places.length > 0) change((s, now) => refreshSnapshots(s, places, now, stamp));
   }, [change]);
   const include = useCallback((id: string) => change((s) => includePlace(s, id)), [change]);
   const isExcluded = useCallback((id: string) => Object.hasOwn(state.excluded, id), [state]);
   /** R65: 즐겨찾기에 넣는다 (뺀 곳이면 풀린다). place가 있으면 이름도 새로 기억한다 */
   const favorite = useCallback(
-    (id: string, place?: SnapshotSource) =>
+    (id: string, place?: SnapshotSource, stamp?: Stamp) =>
       change((s, now) => {
         const next = addFavorite(s, id, now);
-        return place ? saveSnapshots(next, [place], now) : next;
+        return place ? saveSnapshots(next, [place], now, stamp) : next;
       }),
     [change],
   );
@@ -106,9 +107,10 @@ export function usePersonal() {
       mineSections(state, now, live, loading),
     [state],
   );
-  /** R65: 이름을 다시 불러올 곳 (최대 30곳) */
+  /** R65: 이름을 다시 불러올 곳 (최대 30곳, skip = 이번 세션에 못 찾은 곳) */
   const unresolved = useCallback(
-    (now: number, live: (id: string) => LivePlace | undefined) => unresolvedIds(state, now, live),
+    (now: number, live: (id: string) => LivePlace | undefined, skip: (id: string) => boolean) =>
+      unresolvedIds(state, now, live, skip),
     [state],
   );
   /** 뽑을 때 한 번 읽는다 (now는 뽑는 순간) */

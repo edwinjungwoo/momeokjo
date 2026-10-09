@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { RESOLVE_CONCURRENCY, forEachLimited } from "../../web/mineResolve";
+import { RESOLVE_CONCURRENCY, createFailedNames, forEachLimited } from "../../web/mineResolve";
 
 const tick = () => new Promise((r) => setTimeout(r, 0));
 
@@ -33,5 +33,13 @@ describe("R65 내 가게 — 이름 다시 불러오기", () => {
       await tick();
     }, ctrl.signal);
     expect(started).toEqual(["1", "2"]);
+  });
+
+  it("R65: 못 찾은 곳은 이번 세션 동안 기억해서 다시 부르지 않는다", () => {
+    const failed = createFailedNames();
+    expect(failed.has("1")).toBe(false);
+    failed.add("1");
+    expect(failed.has("1")).toBe(true);
+    expect(failed.has("2")).toBe(false);
   });
 });

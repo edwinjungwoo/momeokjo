@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { MAX_RADIUS } from "../shared/constants";
 import type { PlacesResponse } from "../shared/types";
-import { mergeCachedPlaces } from "../shared/placesCache";
+import { mergeCachedPlaces, placesDataAt } from "../shared/placesCache";
 import { loadPlaces } from "./api";
 import { readCachedEtag, readCachedPlaces, saveCachedPlaces } from "./placesCache";
 import { loadDelayMs, pollDelayMs, shouldPoll } from "./pollSchedule";
@@ -15,6 +15,8 @@ type State = {
   hub: string | null;
   /** data가 기기 저장본이면 저장 시각과 신선도 (새로 받은 목록이면 null) */
   cache: { savedAt: number; fresh: boolean } | null;
+  /** R65: 네트워크로 data를 받은 시각 (304로 확인한 저장본 포함) */
+  receivedAt: number | null;
 };
 
 /**
@@ -33,7 +35,7 @@ type State = {
  */
 export function usePlaces(hubId: string, enabled = true) {
   const [state, setState] = useState<State>({
-    data: null, loading: true, error: false, polling: false, hub: null, cache: null,
+    data: null, loading: true, error: false, polling: false, hub: null, cache: null, receivedAt: null,
   });
   const [reloadKey, setReloadKey] = useState(0);
   /** 마지막으로 불러온 거점 (아직 안 불렀으면 null — 첫 요청은 디바운스하지 않는다) */
@@ -66,7 +68,7 @@ export function usePlaces(hubId: string, enabled = true) {
         received = true;
         const delay = shouldPoll(data) ? pollDelayMs(polls) : null;
         const more = delay !== null;
-        setState({ data, loading: false, error: false, polling: more, hub: hubId, cache: null });
+        setState({ data, loading: false, error: false, polling: more, hub: hubId, cache: null, receivedAt: Date.now() });
         if (delay !== null) {
           polls += 1;
           timer = window.setTimeout(load, delay);
@@ -96,5 +98,7 @@ export function usePlaces(hubId: string, enabled = true) {
   const { data, loading, error, polling, cache } = state;
   /** 지금 data가 기기 저장본인가 ("stale" = 24시간 넘음 → 자동 뽑기는 새 목록을 기다린다) */
   const fromCache = cache === null ? null : cache.fresh ? "fresh" : "stale";
-  return { data, loading, error, polling, fromCache, reload } as const;
+  /** R65: 지금 data를 받은 때 (기기 저장본이면 저장 시각) — 이름 기억 시각 */
+  const dataAt = placesDataAt(cache, state.receivedAt);
+  return { data, loading, error, polling, fromCache, dataAt, reload } as const;
 }

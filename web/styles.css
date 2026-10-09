@@ -729,6 +729,8 @@ input[type="range"] { width: 100%; height: 44px; margin: 0; accent-color: var(--
 /* 누르는 줄은 양옆 12px 넓힌다 (시트 안쪽 여백 20px 안이라 넘치지 않는다) */
 .mine-body { min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr); align-content: start; gap: 16px; margin: 0 -12px; padding: 0 0 4px; overflow-y: auto; overscroll-behavior: contain; }
 .mine-head { margin: 0; padding: 4px 12px 0; font-size: 14px; font-weight: 700; color: var(--text-2); }
+.mine-head:focus { outline: none; }
+.mine-restore:disabled { color: var(--text-3); cursor: default; }
 .mine-caption { padding: 0 12px; font-size: 12px; color: var(--text-3); word-break: keep-all; }
 .mine-list { list-style: none; display: grid; grid-template-columns: minmax(0, 1fr); margin: 4px 0 0; padding: 0; }
 .mine-row { position: relative; display: flex; align-items: center; min-width: 0; }

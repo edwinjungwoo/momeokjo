@@ -3,7 +3,7 @@ import {
   EMPTY_PERSONAL, FAVORITE_BOOST, MAX_FAVORITES, MAX_NAME_LENGTH, MAX_SIGNALS, MAX_SNAPSHOTS, SNAPSHOT_MAX_AGE_MS,
   SNAPSHOT_REFRESH_MS, addFavorite, addSignals, categoryFatigue, decay, excludePlace, freshSnapshot, groupBoost, includePlace,
   isFavorite, parsePersonal, personalMultiplier, pruneSnapshots, recencyFactor, refreshSnapshots, removeFavorite, saveSnapshots,
-  undoExclude, type PersonalState, type Signal, type Snapshot,
+  tidyPersonal, undoExclude, type PersonalState, type Signal, type Snapshot,
 } from "../../shared/personal";
 import { PLACES_CACHE_MAX_AGE_MS } from "../../shared/placesCache";
 
@@ -395,5 +395,42 @@ describe("R65 내 가게 — 즐겨찾기·이름 기억 (기기 안에서만)",
     const restored = includePlace(hidden, "5");
     expect(restored.excluded).toEqual({});
     expect(isFavorite(restored, "5")).toBe(false);
+  });
+
+  it("R65: 이름 기억의 시각은 그 정보를 받은 때 — 2.9일 된 기기 저장본에서 온 이름은 0.1일 뒤에 지난다", () => {
+    const s = addFavorite(EMPTY_PERSONAL, "1", NOW);
+    const cachedAt = NOW - 2.9 * D;
+    const stamp = () => cachedAt;
+    const saved = saveSnapshots(s, [src("1", "저장본 이름")], NOW, stamp);
+    expect(saved.snapshots["1"].at).toBe(cachedAt);
+    expect(freshSnapshot(saved, "1", NOW + 0.1 * D)?.name).toBe("저장본 이름");
+    expect(freshSnapshot(saved, "1", NOW + 0.1 * D + 1)).toBeUndefined();
+    expect(pruneSnapshots(saved, NOW + 0.1 * D + 1).snapshots).toEqual({});
+    // 목록이 와서 새로 할 때도 같다
+    const refreshed = refreshSnapshots(s, [src("1", "저장본 이름")], NOW, stamp);
+    expect(refreshed.snapshots["1"].at).toBe(cachedAt);
+    // 미래 시각(시계 어긋남)은 지금으로 자른다
+    expect(saveSnapshots(s, [src("1")], NOW, () => NOW + D).snapshots["1"].at).toBe(NOW);
+  });
+
+  it("R65: 더 오래된 정보로 새 이름 기억을 덮지 않고, 3일 넘은 정보는 기억하지 않는다", () => {
+    const s = saveSnapshots(addFavorite(EMPTY_PERSONAL, "1", NOW), [src("1", "어제 이름")], NOW - D);
+    // 2일 전 저장본이 와도 어제 이름 그대로 (같은 객체)
+    expect(refreshSnapshots(s, [src("1", "그제 이름")], NOW, () => NOW - 2 * D)).toBe(s);
+    expect(saveSnapshots(s, [src("1", "그제 이름")], NOW, () => NOW - 2 * D).snapshots["1"]).toMatchObject({ name: "어제 이름", at: NOW - D });
+    // 3일 넘은 저장본에서 온 이름은 남기지 않는다
+    const fav = addFavorite(EMPTY_PERSONAL, "2", NOW);
+    expect(refreshSnapshots(fav, [src("2")], NOW, () => NOW - 3 * D - 1)).toBe(fav);
+    expect(saveSnapshots(fav, [src("2")], NOW, () => NOW - 3 * D - 1).snapshots).toEqual({});
+  });
+
+  it("R65: 읽을 때 정리 — 지난 이름 기억이나 신호를 버렸으면 changed (한 번 다시 저장한다)", () => {
+    const s: PersonalState = { ...addFavorite(EMPTY_PERSONAL, "1", NOW), snapshots: { "1": snap("지난 이름", NOW - 4 * D) } };
+    const t = tidyPersonal(s, NOW);
+    expect(t.state.snapshots).toEqual({});
+    expect(t.changed).toBe(true);
+    expect(tidyPersonal(t.state, NOW).changed).toBe(false);
+    expect(tidyPersonal(state(sig("shown", 2 * D, "9")), NOW).changed).toBe(true);
+    expect(tidyPersonal({ ...s, snapshots: { "1": snap("새 이름", NOW) } }, NOW).changed).toBe(false);
   });
 });

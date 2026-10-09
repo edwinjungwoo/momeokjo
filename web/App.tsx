@@ -16,7 +16,7 @@ import { createTapGate } from "../shared/tapGate";
 import type { ApiDetail, ApiPlace, LatLng } from "../shared/types";
 import { filterProps, setTrackingHub, startTracking, track, trackFilters } from "./analytics";
 import { fetchPlace } from "./api";
-import { RESOLVE_CONCURRENCY, forEachLimited } from "./mineResolve";
+import { RESOLVE_CONCURRENCY, failedNames, forEachLimited } from "./mineResolve";
 import { trackHubPicked } from "./onboarding";
 import { autoDrawOffDay, autoDrawnThisSession, markAutoDrawn, turnOffAutoDraw, useInteracted } from "./autoDraw";
 import { EmptyState, ErrorState } from "./components/EmptyState";
@@ -82,7 +82,7 @@ export default function App() {
   const center = useMemo<LatLng>(() => ({ lat: hub.lat, lng: hub.lng }), [hub.lat, hub.lng]);
   // R61: 첫 접속 거점을 아직 안 골랐으면(질문이 떠 있거나, 거점 없는 공유 링크라 받은 시트 뒤로 미뤘거나) 기본 거점 목록을 받지 않는다.
   // 고른 뒤 그 거점을 바로 받는다
-  const { data, loading, error, polling, fromCache, reload } = usePlaces(hub.id, !askHub);
+  const { data, loading, error, polling, fromCache, dataAt, reload } = usePlaces(hub.id, !askHub);
   const now = useNow();
   const personal = usePersonal();
   const { isExcluded, isFavorite, record, refresh: refreshNames } = personal;
@@ -165,9 +165,15 @@ export default function App() {
   // 폴링으로 목록이 바뀌면 최신 객체를 쓰고, 받아 둔 전체 상세와 현재 거점 기준 도보 시간을 붙인다
   const latest = useMemo(() => new Map((data?.places ?? []).map((p) => [p.id, p])), [data]);
   // R65: 새로 받은 거점 목록에 나온 곳(즐겨찾기·최근·뺀 곳)의 이름 기억을 새로 한다 — 요청을 더 하지 않고 자주 보는 곳은 늘 3일 안
+  // 시각은 그 목록을 받은 때(기기 저장본이면 저장 시각) — 오래된 정보를 새것처럼 3일 늘리지 않는다
   useEffect(() => {
-    if (data) refreshNames(data.places);
-  }, [data, refreshNames]);
+    if (data && dataAt !== null) refreshNames(data.places, () => dataAt);
+  }, [data, dataAt, refreshNames]);
+  /**
+   * R65: 화면의 가게 정보를 받은 때 — 지금 목록(기기 저장본일 수 있다)에 있으면 그 목록의 시각, 아니면(공유·단건으로 방금 받음) 지금.
+   * ♡·빼기·카카오맵·공유 때 이름 기억 시각으로 쓴다
+   */
+  const stampOf = (id: string) => (dataAt !== null && latest.has(id) ? dataAt : Date.now());
   const resolve = useCallback(
     (p: ApiPlace) => {
       const base = latest.get(p.id) ?? p;
@@ -463,7 +469,7 @@ export default function App() {
   const shareOut = async (text: string, ps: ApiPlace[], confirm: boolean) => {
     const outcome = await shareOrCopy(text);
     if (outcome === "shared" || outcome === "copied") {
-      record("shared", ps);
+      record("shared", ps, stampOf);
       const picks = ps.slice(0, TRIO_SIZE).map((p) => p.id);
       // R58: 확정 공유는 결과 카드 번호도 보낸다 (결과 3곳 밖이면 없음)
       track("share", confirm ? { placeId: ps[0].id, props: { picks, confirm: true, ...rankOf(ps[0].id) } } : { props: { picks } });
@@ -482,7 +488,7 @@ export default function App() {
     return i >= 0 ? { rank: i + 1 } : undefined;
   };
   const onKakao = (p: ApiPlace) => {
-    record("kakao_open", [p]);
+    record("kakao_open", [p], stampOf);
     track("open_kakao", { placeId: p.id, props: rankOf(p.id) });
   };
   const onFocus = (id: string | null) => {
@@ -494,7 +500,7 @@ export default function App() {
     track("exclude_place", { placeId: p.id, props: rankOf(p.id) });
     // R65: 즐겨찾기였으면 즐겨찾기에서도 빠진다 — 되돌리기가 둘 다 돌려 놓게 빼기 전 값을 받아 둔다
     const favoriteAt = personal.favoriteAt(p.id);
-    personal.exclude(p);
+    personal.exclude(p, stampOf);
     setFocusId(null);
     // 이름을 넣은 알림 + 8초 되돌리기
     toast.show(excludeToastText(p.name), undefined, {
@@ -516,7 +522,7 @@ export default function App() {
       track("favorite_remove", { placeId: id });
       toast.show("즐겨찾기에서 뺐어요");
     } else {
-      personal.favorite(id, place);
+      personal.favorite(id, place, stampOf);
       track("favorite_add", { placeId: id });
       toast.show("즐겨찾기에 넣었어요", "love");
     }
@@ -539,7 +545,8 @@ export default function App() {
   latestNow.current = latest;
   useEffect(() => {
     if (!mineOpen) return;
-    const ids = unresolvedNow.current(Date.now(), (id) => latestNow.current.get(id));
+    // 이번 세션에 못 찾은 곳은 다시 부르지 않는다
+    const ids = unresolvedNow.current(Date.now(), (id) => latestNow.current.get(id), failedNames.has);
     if (ids.length === 0) return;
     const ctrl = new AbortController();
     setResolving(new Set(ids));
@@ -552,6 +559,9 @@ export default function App() {
     void forEachLimited(ids, RESOLVE_CONCURRENCY, async (id) => {
       try {
         refreshNames([await fetchPlace(id, ctrl.signal)]);
+      } catch (e) {
+        if (!ctrl.signal.aborted) failedNames.add(id);
+        throw e;
       } finally {
         if (!ctrl.signal.aborted) settle(id);
       }
@@ -593,7 +603,8 @@ export default function App() {
   const onRestore = (item: MineItem) => {
     personal.include(item.id);
     track("restore_exclude", { placeId: item.id });
-    toast.show(restoreToastText(item.name));
+    // 이름을 불러오는 중이면 "다시 보기"는 막혀 있지만, 혹시 빈 이름이면 대신 쓰는 이름으로
+    toast.show(restoreToastText(item.name || "이전에 뺀 가게"));
   };
 
   // R65: 옮긴 거점의 목록이 다 오면 그 곳을 연다. 목록에 없으면(수집 전 등) 단건(R13)으로 받아 연다

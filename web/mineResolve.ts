@@ -1,3 +1,10 @@
+/** R65: 이름을 다시 불러오다 못 찾은 곳 (이번 세션 동안 — 메모리에만, 다음에 시트를 열어도 다시 부르지 않는다) */
+export function createFailedNames() {
+  const ids = new Set<string>();
+  return { has: (id: string) => ids.has(id), add: (id: string) => void ids.add(id) };
+}
+export const failedNames = createFailedNames();
+
 /** R65: 내 가게를 열 때 이름을 다시 불러오는 동시 수 */
 export const RESOLVE_CONCURRENCY = 3;
 

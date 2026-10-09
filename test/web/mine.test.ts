@@ -3,7 +3,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import type { MineSections } from "../../shared/mine";
 import { HeartButton } from "../../web/components/HeartButton";
-import { MineButton, MineSheet } from "../../web/components/MineSheet";
+import { MineButton, MineSheet, focusAfterRemove } from "../../web/components/MineSheet";
 import { PlaceCard } from "../../web/components/PlaceCard";
 import { TrioSheet } from "../../web/components/TrioSheet";
 import { apiPlace } from "../helpers/apiPlace";
@@ -121,5 +121,21 @@ describe("R65 내 가게 — 화면", () => {
     expect(fav).toContain("mine-skeleton");
     expect(fav).toContain("불러오는 중");
     expect(fav).toContain('aria-busy="true"');
+  });
+
+  it("R65: 이름을 불러오는 중인 뺀 곳의 '다시 보기'는 누를 수 없다 (빈 이름으로 알림이 뜨지 않게)", () => {
+    const html = sheet({ ...FULL, excluded: [{ id: "3", name: "", line: "", pos: null, loading: true }] });
+    const out = section(html, "뺀 곳");
+    expect(out).toMatch(/<button[^>]*disabled=""[^>]*>다시 보기<\/button>/);
+    expect(section(sheet(FULL), "뺀 곳")).not.toContain("disabled");
+  });
+
+  it("R65: 줄이 사라지면(♡ 빼기·다시 보기) 포커스는 그 묶음의 다음 줄 → 묶음 제목 → 시트 제목", () => {
+    // 3줄 중 가운데(1번)를 뺐다 → 남은 줄의 1번(원래 다음 줄)
+    expect(focusAfterRemove(["a", "c"], 1)).toEqual({ row: "c" });
+    // 마지막 줄을 뺐다 → 묶음 제목
+    expect(focusAfterRemove(["a", "b"], 2)).toBe("heading");
+    // 묶음이 비어 사라졌다 → 시트 제목
+    expect(focusAfterRemove([], 0)).toBe("title");
   });
 });

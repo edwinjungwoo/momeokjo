@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { DETAIL_OK_TTL_MS } from "../../shared/constants";
 import {
   DEVICE_CACHE_VERSION, PLACES_CACHE_FRESH_MS, PLACES_CACHE_MAX_AGE_MS, PLACES_CACHE_MAX_CHARS, PLACES_CACHE_MAX_HUBS,
-  mergeCachedPlaces, placesCacheEntry, placesCacheEvictions, readPlacesCache, type PlacesMergeState,
+  mergeCachedPlaces, placesCacheEntry, placesCacheEvictions, placesDataAt, readPlacesCache, type PlacesMergeState,
 } from "../../shared/placesCache";
 
 const NOW = 1_800_000_000_000;
@@ -106,5 +106,11 @@ describe("placesCache", () => {
       const other: S = { ...initial, data: "net-other", hub: "bongeunsa", loading: false };
       expect(mergeCachedPlaces(other, "ddp", fresh)).toMatchObject({ data: "cached", hub: "ddp" });
     });
+  });
+
+  it("R65: 목록 정보의 시각 — 기기 저장본이면 저장 시각, 새로 받은 목록이면 받은 시각", () => {
+    expect(placesDataAt({ savedAt: 111 }, 999)).toBe(111);
+    expect(placesDataAt(null, 999)).toBe(999);
+    expect(placesDataAt(null, null)).toBeNull();
   });
 });

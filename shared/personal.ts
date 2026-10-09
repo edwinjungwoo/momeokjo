@@ -157,14 +157,28 @@ export function removeFavorite(s: PersonalState, id: string): PersonalState {
 /** 이름을 기억할 가게 (ApiPlace의 일부) */
 export type SnapshotSource = { id: string; name: string; group: CategoryGroup; category?: string; lat: number; lng: number };
 
-/** R65: 이름·그룹·세부 종류·좌표를 기억한다 (있으면 새 값으로). 틀린 값은 남기지 않는다 — 정리는 pruneSnapshots */
-export function saveSnapshots(s: PersonalState, places: SnapshotSource[], now: number): PersonalState {
+/**
+ * 그 정보를 받은 때: stamp(id)가 있으면 그 값(기기 저장본이면 저장 시각), 없으면 지금. 미래(시계 어긋남)는 지금으로 자른다
+ */
+export type Stamp = (id: string) => number;
+const sourceAt = (stamp: Stamp | undefined, id: string, now: number) => Math.min(stamp?.(id) ?? now, now);
+
+function snapshotOf(p: SnapshotSource, at: number): Snapshot {
+  const cat = p.category === undefined ? "" : lastLevel(p.category);
+  return { name: p.name.trim().slice(0, MAX_NAME_LENGTH), group: p.group, ...(isCat(cat) ? { cat } : {}), lat: p.lat, lng: p.lng, at };
+}
+
+/**
+ * R65: 이름·그룹·세부 종류·좌표를 기억한다. 시각은 그 정보를 받은 때(stamp — 기기 저장본에서 온 것이면 저장 시각)라서
+ * 오래된 정보를 새것처럼 3일을 다시 늘리지 않는다. 이미 더 새 정보가 있으면 그대로, 3일 넘은 정보·틀린 값은 남기지 않는다
+ */
+export function saveSnapshots(s: PersonalState, places: SnapshotSource[], now: number, stamp?: Stamp): PersonalState {
   const snapshots = { ...s.snapshots };
   for (const p of places) {
-    const cat = p.category === undefined ? "" : lastLevel(p.category);
-    const snap: Snapshot = {
-      name: p.name.trim().slice(0, MAX_NAME_LENGTH), group: p.group, ...(isCat(cat) ? { cat } : {}), lat: p.lat, lng: p.lng, at: now,
-    };
+    const at = sourceAt(stamp, p.id, now);
+    const old = Object.hasOwn(snapshots, p.id) ? snapshots[p.id] : undefined;
+    if (now - at > SNAPSHOT_MAX_AGE_MS || (old && old.at > at)) continue;
+    const snap = snapshotOf(p, at);
     if (PLACE_ID.test(p.id) && isSnapshot(snap)) snapshots[p.id] = snap;
   }
   return { ...s, snapshots };
@@ -189,17 +203,31 @@ export function freshSnapshot(s: PersonalState, id: string, now: number): Snapsh
  * R65: 목록·단건 응답에 나온 곳 중 내 가게가 가리키는 곳의 이름 기억을 새로 한다 (요청을 더 하지 않고 자주 보는 곳은 늘 3일 안).
  * 1시간 안에 같은 값으로 새로 했으면 그대로 — 바뀐 것이 없으면 같은 상태 객체를 돌려준다 (저장·다시 그리기 없음)
  */
-export function refreshSnapshots(s: PersonalState, places: SnapshotSource[], now: number): PersonalState {
+export function refreshSnapshots(s: PersonalState, places: SnapshotSource[], now: number, stamp?: Stamp): PersonalState {
   const ids = referenced(s, now);
   const due = places.filter((p) => {
     if (!ids.has(p.id)) return false;
-    const old = s.snapshots[p.id];
-    if (!old || now - old.at > SNAPSHOT_REFRESH_MS) return true;
-    const cat = p.category === undefined ? "" : lastLevel(p.category);
-    return old.name !== p.name.trim().slice(0, MAX_NAME_LENGTH) || old.group !== p.group || (old.cat ?? "") !== (isCat(cat) ? cat : "") ||
-      old.lat !== p.lat || old.lng !== p.lng;
+    const at = sourceAt(stamp, p.id, now);
+    if (now - at > SNAPSHOT_MAX_AGE_MS) return false;
+    const old = Object.hasOwn(s.snapshots, p.id) ? s.snapshots[p.id] : undefined;
+    if (!old) return true;
+    if (old.at >= at) return false;
+    if (at - old.at > SNAPSHOT_REFRESH_MS) return true;
+    const next = snapshotOf(p, at);
+    return old.name !== next.name || old.group !== next.group || old.cat !== next.cat || old.lat !== next.lat || old.lng !== next.lng;
   });
-  return due.length === 0 ? s : saveSnapshots(s, due, now);
+  return due.length === 0 ? s : saveSnapshots(s, due, now, stamp);
+}
+
+/**
+ * R65: 읽을 때 정리 — 효과가 끝난 신호, 3일 지났거나 아무도 가리키지 않는 이름 기억을 버린다.
+ * changed면 정리한 값을 한 번 다시 저장한다 (지난 이름이 기기에 남아 있지 않게)
+ */
+export function tidyPersonal(s: PersonalState, now: number): { state: PersonalState; changed: boolean } {
+  const state = pruneSnapshots(addSignals(s, [], now), now);
+  const changed =
+    state.signals.length !== s.signals.length || Object.keys(state.snapshots).length !== Object.keys(s.snapshots).length;
+  return { state, changed };
 }
 
 /**
