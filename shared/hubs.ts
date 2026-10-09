@@ -22,13 +22,13 @@ export const HUBS: Hub[] = [
   { id: "gangnam", name: "강남역", lat: 37.498086, lng: 127.028001, ready: true, refreshDay: 5 },
   { id: "yeouido", name: "여의도역", lat: 37.521775, lng: 126.924398, ready: true, refreshDay: 6 },
   { id: "gwanghwamun", name: "광화문역", lat: 37.571649, lng: 126.976424, ready: true, refreshDay: 4 },
-  // 2026-10-08 추가 — 좌표는 카카오 로컬 키워드 검색(SW8, 역삼은 2호선·선정릉은 9호선 출구). R62: 수집·감사가 끝날 때까지 준비 중.
+  // 2026-10-08 추가 — 좌표는 카카오 로컬 키워드 검색(SW8, 역삼은 2호선·선정릉은 9호선 출구). R62: 수집·감사를 마치고 2026-10-09 공개.
   // 갱신 요일은 많이 겹치는 거점과 같은 날 — 겹친 칸·가게는 그날 한 번만 다시 가져온다 (역삼 ↔ 강남 금, 선정릉 ↔ 봉은사 월)
-  { id: "yeoksam", name: "역삼역", lat: 37.500674, lng: 127.036469, ready: false, refreshDay: 5 },
-  { id: "seonjeongneung", name: "선정릉역", lat: 37.510324, lng: 127.044015, ready: false, refreshDay: 1 },
-  // 2026-10-09 추가 (좌표는 카카오 로컬 SW8, 2호선 출구). 테헤란로 빈 곳 — 갱신은 많이 겹치는 봉은사·선정릉과 같은 월요일
-  { id: "seolleung", name: "선릉역", lat: 37.504497, lng: 127.048963, ready: false, refreshDay: 1 },
-  { id: "samseong", name: "삼성역", lat: 37.508823, lng: 127.063023, ready: false, refreshDay: 1 },
+  { id: "yeoksam", name: "역삼역", lat: 37.500674, lng: 127.036469, ready: true, refreshDay: 5 },
+  { id: "seonjeongneung", name: "선정릉역", lat: 37.510324, lng: 127.044015, ready: true, refreshDay: 1 },
+  // 2026-10-09 추가·공개 (좌표는 카카오 로컬 SW8, 2호선 출구). 테헤란로 빈 곳 — 갱신은 많이 겹치는 봉은사·선정릉과 같은 월요일
+  { id: "seolleung", name: "선릉역", lat: 37.504497, lng: 127.048963, ready: true, refreshDay: 1 },
+  { id: "samseong", name: "삼성역", lat: 37.508823, lng: 127.063023, ready: true, refreshDay: 1 },
 ];
 
 /** R62: 사용자에게 보이는 거점 (ready만) */

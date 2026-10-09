@@ -122,10 +122,10 @@ const metaValue = async (key: string) =>
   (await env.DB.prepare("SELECT value FROM meta WHERE key = ?").bind(key).first<{ value: string }>())?.value ?? null;
 
 describe("Task 40: 운영 크기에서 Cron 한 번이 읽는 D1 행 (정상 상태 상한)", () => {
-  it("R38/R11: 운영 크기 픽스처 — 거점 12곳(공개 8 + 준비 중 4), 격자 631칸(겹친 칸은 한 번), 가게 ≈1.2만 곳", async () => {
+  it("R38/R11: 운영 크기 픽스처 — 거점 12곳(모두 공개), 격자 631칸(겹친 칸은 한 번), 가게 ≈1.2만 곳", async () => {
     const n = await seed("idle");
     expect(HUBS).toHaveLength(12);
-    expect(PUBLIC_HUBS).toHaveLength(8);
+    expect(PUBLIC_HUBS).toHaveLength(12);
     expect(KEYS).toHaveLength(631);
     expect(WALK_RUNS).toBe(4);
     expect(n.ids).toBe(631 * PER_TILE);
