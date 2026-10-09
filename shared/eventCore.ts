@@ -19,6 +19,10 @@ export const EVENT_TYPES = [
   "exclude_place", // "다음부터 안 보기"
   "undo_exclude", // "되돌리기"
   "share_open", // 받은 공유 링크(t=)를 엶 (picks)
+  "favorite_add", // R65 카드·내 가게의 ♡로 즐겨찾기에 넣음 (placeId)
+  "favorite_remove", // R65 즐겨찾기에서 뺌 (placeId)
+  "restore_exclude", // R65 내 가게 "뺀 곳"의 "다시 보기" (placeId)
+  "open_mine", // R65 헤더의 "내 가게"를 엶
 ] as const;
 export type EventType = (typeof EVENT_TYPES)[number];
 

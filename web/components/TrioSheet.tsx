@@ -6,6 +6,7 @@ import type { Reason } from "../../shared/reasons";
 import type { Party } from "../../shared/recommend";
 import type { ApiPlace, CategoryGroup, Menu } from "../../shared/types";
 import { MENU_PREVIEW, callFirst, menuPreview, openState, ratingTone, priceText, todayHoursText, won } from "../format";
+import { HeartButton } from "./HeartButton";
 import { ChevronDown, CloseIcon, InfoIcon } from "./Icons";
 import { Mascot } from "./Mascot";
 import { RankPill } from "./RankPill";
@@ -43,6 +44,9 @@ type Props = {
   /** R64: 제목 옆 ⓘ — "모먹죠는 이렇게 골라요" 설명 시트 (시트 자체는 App이 띄운다) */
   infoOpen: boolean;
   onInfo: () => void;
+  /** R65: 즐겨찾기인가, 펼친 카드의 ♡ (넣기·빼기) */
+  isFavorite: (id: string) => boolean;
+  onFavorite: (p: ApiPlace) => void;
 };
 
 /** 56px 썸네일 + 왼쪽 위 번호 (지도 핀 번호와 같다). 사진이 없으면 크림색 자리 + 카테고리 아이콘 (R33) */
@@ -99,6 +103,8 @@ function TrioCard(props: {
   onConfirm: (p: ApiPlace) => void;
   onKakao: (p: ApiPlace) => void;
   onExclude: (p: ApiPlace) => void;
+  favorite: boolean;
+  onFavorite: (p: ApiPlace) => void;
 }) {
   const { place: p, rank, open, detailLoading, topPercent, outside, reason, party, now, onToggle, onConfirm, onKakao, onExclude } = props;
   const li = useRef<HTMLLIElement>(null);
@@ -156,11 +162,15 @@ function TrioCard(props: {
       </button>
       {open && (
         <div className="trio-detail" id={detailId}>
-          <p className="trio-line">
-            <span className={state.closed ? "closed" : undefined}>{state.text}</span>
-            {hours && <span>{hours}</span>}
-            {d && d.reviewCount !== null && rating !== null && <span>리뷰 {d.reviewCount.toLocaleString("ko-KR")}</span>}
-          </p>
+          {/* R65: 즐겨찾기 ♡는 이름 바로 아래 줄 끝 — 접힌 카드 줄(이름·사실·이유)은 이미 꽉 차서 펼쳤을 때만, 행동 줄과는 따로 */}
+          <div className="trio-top">
+            <p className="trio-line">
+              <span className={state.closed ? "closed" : undefined}>{state.text}</span>
+              {hours && <span>{hours}</span>}
+              {d && d.reviewCount !== null && rating !== null && <span>리뷰 {d.reviewCount.toLocaleString("ko-KR")}</span>}
+            </p>
+            <HeartButton on={props.favorite} onToggle={() => props.onFavorite(p)} />
+          </div>
           {d && d.strengths.length > 0 && <p className="trio-line">{d.strengths.join(", ")}</p>}
           {!d && !detailLoading && <p className="trio-line">평점과 메뉴 정보를 아직 불러오지 못했어요</p>}
           {/* 행동은 상태·강점 바로 아래 (메뉴가 길어도 폰 첫 화면에 보이게), 메뉴는 그 아래 */}
@@ -302,6 +312,8 @@ export function TrioSheet(props: Props) {
             onConfirm={onConfirm}
             onKakao={onKakao}
             onExclude={onExclude}
+            favorite={props.isFavorite(p.id)}
+            onFavorite={props.onFavorite}
           />
         ))}
       </ol>

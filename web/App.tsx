@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import { AUTO_DRAW_POLL_WAIT_MS, pollingElapsed, shouldAutoDraw } from "../shared/autoDraw";
 import { haversine, walkMinutes } from "../shared/geo";
 import { DEFAULT_HUB_ID, publicHubById } from "../shared/hubs";
+import { NEAR_HUB_MOVE_M, nearestHub, type MineItem, type MineSections } from "../shared/mine";
 import { kstDay } from "../shared/kst";
 import { topPercents } from "../shared/rank";
 import { trioReasons } from "../shared/reasons";
@@ -10,7 +11,7 @@ import {
   TRIO_SIZE, drawTrio, filterPlaces, relaxNotice, relaxToFill, relaxedBy, sortPlaces, type Filters,
 } from "../shared/recommend";
 import { showHubPicker, urlAfterHubChange } from "../shared/settings";
-import { excludeToastText, shareConfirmText, shareText, toParticle } from "../shared/share";
+import { excludeToastText, restoreToastText, shareConfirmText, shareText, toParticle } from "../shared/share";
 import { createTapGate } from "../shared/tapGate";
 import type { ApiDetail, ApiPlace, LatLng } from "../shared/types";
 import { filterProps, setTrackingHub, startTracking, track, trackFilters } from "./analytics";
@@ -23,6 +24,7 @@ import { FirstTip, useFirstTip } from "./components/FirstTip";
 import { HubChip } from "./components/HubChip";
 import { HubPicker } from "./components/HubPicker";
 import { MapView } from "./components/MapView";
+import { MineButton, MineSheet } from "./components/MineSheet";
 import { warmPoses } from "./components/Mascot";
 import { PlaceCard } from "./components/PlaceCard";
 import { PlaceList } from "./components/PlaceList";
@@ -68,6 +70,9 @@ type Full = Pick<ApiPlace, "phone" | "fetchedAt"> & { detail: ApiDetail };
 const fullOf = (p: ApiPlace): Full | null => (p.detail ? { detail: p.detail, phone: p.phone, fetchedAt: p.fetchedAt } : null);
 
 const byId = (ps: ApiPlace[]) => Object.fromEntries(ps.map((p) => [p.id, p]));
+const NO_MINE: MineSections = { favorites: [], recent: [], excluded: [] };
+/** R65: 지금 목록에 없는 곳은 카카오맵 장소 페이지로 */
+const kakaoPlaceUrl = (id: string) => `https://place.map.kakao.com/${id}`;
 
 export default function App() {
   const { settings, share, update, askHub, chooseHub } = useSettings();
@@ -79,12 +84,14 @@ export default function App() {
   const { data, loading, error, polling, fromCache, reload } = usePlaces(hub.id, !askHub);
   const now = useNow();
   const personal = usePersonal();
-  const { isExcluded, record } = personal;
+  const { isExcluded, isFavorite, record } = personal;
   const [trio, setTrio] = useState<Trio | null>(null);
   const [focusId, setFocusId] = useState<string | null>(null);
   /** 목록·핀에서 연 한 곳 (뽑기 결과 위에 잠깐 겹쳐 연다) */
   const [selected, setSelected] = useState<ApiPlace | null>(null);
   const [receivedSingle, setReceivedSingle] = useState<string | null>(null);
+  /** R65: 내 가게에서 누른 곳 — 그 거점 목록이 오면 연다 */
+  const [pendingOpen, setPendingOpen] = useState<{ id: string; hubId: string } | null>(null);
   const drawnIds = useRef(new Set<string>());
   const shareCtrl = useRef<AbortController | null>(null);
   const shuffle = useSlotShuffle();
@@ -262,6 +269,7 @@ export default function App() {
   };
   const setHub = (hubId: string) => {
     clearTrio();
+    setPendingOpen(null);
     // R61: 미뤄 둔 첫 접속 질문 전에 거점 칩으로 골랐으면 그게 답이다 (다시 묻지 않는다)
     if (askHub) chooseHub(hubId);
     else update((s) => ({ ...s, hubId }));
@@ -476,7 +484,7 @@ export default function App() {
   // R37: "다음부터 안 보기" → "{이름}은/는 다음부터 안 뽑아요" + 되돌리기
   const onExclude = (p: ApiPlace) => {
     track("exclude_place", { placeId: p.id, props: rankOf(p.id) });
-    personal.exclude(p.id);
+    personal.exclude(p);
     setFocusId(null);
     // 이름을 넣은 알림 + 8초 되돌리기
     toast.show(excludeToastText(p.name), undefined, {
@@ -490,6 +498,75 @@ export default function App() {
       },
     });
   };
+
+  // R65: ♡ — 즐겨찾기에 넣기·빼기 (카드·내 가게 공통). 넣을 때 이름도 기억한다 (place가 있으면)
+  const toggleFavorite = (id: string, place?: ApiPlace) => {
+    if (isFavorite(id)) {
+      personal.unfavorite(id);
+      track("favorite_remove", { placeId: id });
+      toast.show("즐겨찾기에서 뺐어요");
+    } else {
+      personal.favorite(id, place);
+      track("favorite_add", { placeId: id });
+      toast.show("즐겨찾기에 넣었어요", "love");
+    }
+  };
+  const onFavorite = (p: ApiPlace) => toggleFavorite(p.id, p);
+
+  // R65: "내 가게" 시트. 목록은 열려 있을 때만 만든다 (이름은 지금 받아 둔 목록 → 기억한 이름)
+  const [mineOpen, setMineOpen] = useState(false);
+  const mine = useMemo(
+    () => (mineOpen ? personal.mine(Date.now(), (id) => latest.get(id)) : NO_MINE),
+    [mineOpen, personal.mine, latest],
+  );
+  const openMine = () => {
+    setMineOpen(true);
+    track("open_mine");
+  };
+  const closeMine = useCallback(() => setMineOpen(false), []);
+  /** 지금 거점 목록이 화면에 있는 목록인가 (거점을 바꾼 직후에는 이전 거점 목록이 남아 있다) */
+  const listIsHub = data !== null && data.center.lat === hub.lat && data.center.lng === hub.lng;
+  /**
+   * R65: 내 가게 줄을 누름 → 지금 목록에 있으면 닫고 그 카드를 연다(목록·핀을 누른 것과 같다).
+   * 없으면 1km 안의 공개 역으로 옮기고 그 목록이 오면 연다. 가까운 역이 없으면 카카오맵 장소 페이지를 새 탭으로
+   */
+  const onMineOpen = (item: MineItem) => {
+    const here = listIsHub ? latest.get(item.id) : undefined;
+    if (here) {
+      setMineOpen(false);
+      onSelect(here);
+      return;
+    }
+    const target = item.pos ? nearestHub(item.pos, NEAR_HUB_MOVE_M) : null;
+    if (!target) {
+      window.open(kakaoPlaceUrl(item.id), "_blank", "noopener,noreferrer");
+      return;
+    }
+    setMineOpen(false);
+    if (target.id !== hub.id) setHub(target.id);
+    setPendingOpen({ id: item.id, hubId: target.id });
+  };
+  const onRestore = (item: MineItem) => {
+    personal.include(item.id);
+    track("restore_exclude", { placeId: item.id });
+    toast.show(restoreToastText(item.name));
+  };
+
+  // R65: 옮긴 거점의 목록이 다 오면 그 곳을 연다. 목록에 없으면(수집 전 등) 단건(R13)으로 받아 연다
+  useEffect(() => {
+    if (!pendingOpen || pendingOpen.hubId !== hub.id || !listIsHub || loading) return;
+    const { id } = pendingOpen;
+    setPendingOpen(null);
+    const p = latest.get(id);
+    if (p) {
+      onSelect(p);
+      return;
+    }
+    fetchPlace(id)
+      .then((found) => setSelected(found))
+      .catch(() => showToast("가게 정보를 불러오지 못했어요"));
+    // onSelect는 매 렌더 새로 만들어진다 — 목록이 왔을 때 한 번만 부르면 된다
+  }, [pendingOpen, hub.id, listIsHub, loading, latest, showToast]);
 
   // R35: 필터를 바꾼 뒤(다시 불러오기가 끝난 상태에서) 후보가 0곳이면 한 번 남긴다
   const settled = data !== null && !loading && !polling;
@@ -544,15 +621,19 @@ export default function App() {
 
   return (
     // R61: 첫 접속 질문이 떠 있으면 토스트(예: 공유된 가게를 못 찾음)를 위쪽에 띄워 거점 줄을 가리지 않게 한다 (.has-sheet)
-    <div className={`app${trioOpen || cardPlace || pickerOpen ? " has-sheet" : ""}${trioOpen ? " has-trio" : ""}`}>
+    <div className={`app${trioOpen || cardPlace || pickerOpen || mineOpen ? " has-sheet" : ""}${trioOpen ? " has-trio" : ""}`}>
       {/* R61: 질문이 떠 있는 동안 뒤 화면은 누를 수도 포커스할 수도 없다 */}
-      <header className="topbar" inert={pickerOpen || infoOpen}>
+      <header className="topbar" inert={pickerOpen || infoOpen || mineOpen}>
         <h1 className="logo">
           <img src="/brand/logo.webp" alt="모먹죠" width={63} height={28} draggable={false} />
         </h1>
-        <HubChip hub={hub} onChange={setHub} buttonRef={hubButton} />
+        {/* R65: 거점 칩 왼쪽에 "내 가게" */}
+        <div className="topbar-end">
+          <MineButton onClick={openMine} />
+          <HubChip hub={hub} onChange={setHub} buttonRef={hubButton} />
+        </div>
       </header>
-      <main className="main" inert={pickerOpen || infoOpen}>
+      <main className="main" inert={pickerOpen || infoOpen || mineOpen}>
         <section className="map-wrap">
           <MapView
             center={center}
@@ -576,6 +657,8 @@ export default function App() {
               onClose={closeCard}
               onShare={(p) => onShare([p])}
               onKakao={onKakao}
+              favorite={isFavorite(cardPlace.id)}
+              onFavorite={onFavorite}
             />
           )}
           {trioOpen && (
@@ -600,6 +683,8 @@ export default function App() {
               onExclude={onExclude}
               infoOpen={infoOpen}
               onInfo={() => setPickInfo(true)}
+              isFavorite={isFavorite}
+              onFavorite={onFavorite}
             />
           )}
         </section>
@@ -625,6 +710,15 @@ export default function App() {
       </main>
       {pickerOpen && <HubPicker onPick={pickHub} onDismiss={dismissHubPicker} />}
       {infoOpen && <PickInfo onClose={closeInfo} />}
+      {mineOpen && (
+        <MineSheet
+          sections={mine}
+          onOpen={onMineOpen}
+          onToggleFavorite={(item) => toggleFavorite(item.id, latest.get(item.id))}
+          onRestore={onRestore}
+          onClose={closeMine}
+        />
+      )}
       <p className="sr-only" role="status" aria-live="polite">
         {hubNotice}
       </p>

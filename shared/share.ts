@@ -89,6 +89,14 @@ export function topicParticle(name: string): "은" | "는" {
 /** R37: "다음부터 안 보기"를 누른 뒤 되돌리기와 함께 띄우는 알림 문구 */
 export const excludeToastText = (name: string): string => `${name}${topicParticle(name)} 다음부터 안 뽑아요`;
 
+/** R65: 이름 뒤 조사 "을/를" — ㄹ을 포함해 받침이 있으면 "을", 없으면 "를" (숫자·영문은 읽는 소리, topicParticle과 같은 규칙) */
+export function objectParticle(name: string): "을" | "를" {
+  return finalOf(name) === "none" ? "를" : "을";
+}
+
+/** R65: "내 가게"의 뺀 곳에서 "다시 보기"를 누른 뒤 알림 문구 */
+export const restoreToastText = (name: string): string => `${name}${objectParticle(name)} 다시 뽑아요`;
+
 /** R47: 펼친 결과 카드의 "여기로 가자고 공유" — 한 곳을 확정해서 보내는 문구 (카카오맵 링크 + 그 한 곳의 공유 링크) */
 export function shareConfirmText(p: ApiPlace, hubId: string, radius: number, origin: string): string {
   const walk = p.walkMinutes !== undefined ? ` 도보 ${p.walkMinutes}분` : "";

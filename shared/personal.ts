@@ -10,10 +10,30 @@ import type { CategoryGroup } from "./types";
 export type SignalKind = "kakao_open" | "shared" | "received" | "shown";
 /** cat: 카테고리 마지막 단계(R40). 예전 신호에는 없다 */
 export type Signal = { id: string; group: CategoryGroup; kind: SignalKind; at: number; cat?: string };
-export type PersonalState = { signals: Signal[]; excluded: Record<string, number> };
+/**
+ * R65: "내 가게"가 서버를 부르지 않고 이름을 보여주려고 기억하는 것. at = 마지막으로 남긴 시각.
+ * 즐겨찾기·카카오맵 열기·공유·"다음부터 안 보기" 때 남기고, 그 셋 중 어디에서도 가리키지 않으면 버린다 (pruneSnapshots)
+ */
+export type Snapshot = { name: string; group: CategoryGroup; cat?: string; lat: number; lng: number; at: number };
+/**
+ * excluded·favorites: id → 그렇게 한 시각. R65 favorites·snapshots는 나중에 더해서 예전 저장값에는 없다 (parsePersonal이 빈 값으로 채운다)
+ */
+export type PersonalState = {
+  signals: Signal[];
+  excluded: Record<string, number>;
+  favorites: Record<string, number>;
+  snapshots: Record<string, Snapshot>;
+};
 
-export const EMPTY_PERSONAL: PersonalState = { signals: [], excluded: {} };
+export const EMPTY_PERSONAL: PersonalState = { signals: [], excluded: {}, favorites: {}, snapshots: {} };
 export const MAX_SIGNALS = 300;
+/** R65: 즐겨찾기 최대 수 (넘치면 가장 오래 전에 넣은 곳부터 뺀다) */
+export const MAX_FAVORITES = 100;
+/** R65: 이름 기억 최대 수 (넘치면 즐겨찾기는 지키고 오래된 것부터 버린다) */
+export const MAX_SNAPSHOTS = 200;
+export const MAX_NAME_LENGTH = 80;
+/** R65: 즐겨찾기는 조금 더 나온다 (최근 신호·그룹 가산·피로도와 곱한다 — 방금 간 즐겨찾기도 며칠은 쉰다) */
+export const FAVORITE_BOOST = 1.3;
 
 const HOUR = 3600_000;
 const DAY = 24 * HOUR;
@@ -24,7 +44,7 @@ export const DECAY_MS: Record<SignalKind, number> = { kakao_open: 3 * DAY, share
 export const RECENCY_FLOOR = 0.05;
 const BOOST_STEP = 0.15;
 const BOOST_MAX = 1.45;
-const PREFERENCE_KINDS: ReadonlySet<SignalKind> = new Set(["kakao_open", "shared"]);
+export const PREFERENCE_KINDS: ReadonlySet<SignalKind> = new Set(["kakao_open", "shared"]);
 export const FATIGUE_WINDOW_MS = 36 * HOUR;
 export const FATIGUE_STEP = 0.6;
 export const FATIGUE_FLOOR = 0.4;
@@ -67,13 +87,14 @@ export function categoryFatigue(s: PersonalState, cat: string, now: number): num
   return Math.max(FATIGUE_FLOOR, FATIGUE_STEP ** events.size);
 }
 
-/** category(카카오 카테고리 전체 문자열)가 없으면 피로도는 보지 않는다 */
+/** category(카카오 카테고리 전체 문자열)가 없으면 피로도는 보지 않는다. R65: 즐겨찾기 ×1.3, 뺀 곳은 즐겨찾기여도 0 */
 export function personalMultiplier(
   s: PersonalState, p: { id: string; group: CategoryGroup; category?: string }, now: number,
 ): number {
   if (Object.hasOwn(s.excluded, p.id)) return 0;
   const fatigue = p.category === undefined ? 1 : categoryFatigue(s, lastLevel(p.category), now);
-  return recencyFactor(s, p.id, now) * groupBoost(s, p.group, now) * fatigue;
+  const favorite = isFavorite(s, p.id) ? FAVORITE_BOOST : 1;
+  return recencyFactor(s, p.id, now) * groupBoost(s, p.group, now) * fatigue * favorite;
 }
 
 /** 신호가 아직 효과가 있는 동안만 남긴다: 취향 신호는 30일, 나머지는 감쇠 창이 끝날 때까지 */
@@ -99,6 +120,55 @@ export function includePlace(s: PersonalState, id: string): PersonalState {
   return { ...s, excluded: rest };
 }
 
+export const isFavorite = (s: PersonalState, id: string): boolean => Object.hasOwn(s.favorites, id);
+
+/** 시각이 늦은 n개만 남긴다 */
+function newest(m: Record<string, number>, n: number): Record<string, number> {
+  const entries = Object.entries(m);
+  if (entries.length <= n) return m;
+  return Object.fromEntries(entries.sort((a, b) => b[1] - a[1]).slice(0, n));
+}
+
+/** R65: 즐겨찾기에 넣는다. 빼 둔 곳이면 "다음부터 안 보기"를 푼다. 100곳을 넘으면 가장 오래 전에 넣은 곳부터 뺀다 */
+export function addFavorite(s: PersonalState, id: string, now: number): PersonalState {
+  return { ...includePlace(s, id), favorites: newest({ ...s.favorites, [id]: now }, MAX_FAVORITES) };
+}
+
+export function removeFavorite(s: PersonalState, id: string): PersonalState {
+  const { [id]: _, ...rest } = s.favorites;
+  return { ...s, favorites: rest };
+}
+
+/** 이름을 기억할 가게 (ApiPlace의 일부) */
+export type SnapshotSource = { id: string; name: string; group: CategoryGroup; category?: string; lat: number; lng: number };
+
+/** R65: 이름·그룹·세부 종류·좌표를 기억한다 (있으면 새 값으로). 틀린 값은 남기지 않는다 — 정리는 pruneSnapshots */
+export function saveSnapshots(s: PersonalState, places: SnapshotSource[], now: number): PersonalState {
+  const snapshots = { ...s.snapshots };
+  for (const p of places) {
+    const cat = p.category === undefined ? "" : lastLevel(p.category);
+    const snap: Snapshot = {
+      name: p.name.trim().slice(0, MAX_NAME_LENGTH), group: p.group, ...(isCat(cat) ? { cat } : {}), lat: p.lat, lng: p.lng, at: now,
+    };
+    if (PLACE_ID.test(p.id) && isSnapshot(snap)) snapshots[p.id] = snap;
+  }
+  return { ...s, snapshots };
+}
+
+/**
+ * R65: 즐겨찾기·뺀 곳·최근 30일 카카오맵/공유(= "최근 열어 본 곳" 후보)가 가리키는 이름만 남기고,
+ * 200곳을 넘으면 즐겨찾기는 지키고 나머지는 오래된 것부터 버린다
+ */
+export function pruneSnapshots(s: PersonalState, now: number): PersonalState {
+  const live = new Set([...Object.keys(s.favorites), ...Object.keys(s.excluded)]);
+  for (const x of s.signals) if (PREFERENCE_KINDS.has(x.kind) && now - x.at <= SIGNAL_TTL_MS) live.add(x.id);
+  const kept = Object.entries(s.snapshots).filter(([id]) => live.has(id));
+  if (kept.length === Object.keys(s.snapshots).length && kept.length <= MAX_SNAPSHOTS) return s;
+  const rank = (id: string) => (isFavorite(s, id) ? 1 : 0);
+  kept.sort((a, b) => rank(b[0]) - rank(a[0]) || b[1].at - a[1].at);
+  return { ...s, snapshots: Object.fromEntries(kept.slice(0, MAX_SNAPSHOTS)) };
+}
+
 const PLACE_ID = /^\d{1,15}$/;
 const KINDS: ReadonlySet<string> = new Set(Object.keys(STRENGTH));
 const GROUPS: ReadonlySet<string> = new Set<CategoryGroup>([
@@ -106,6 +176,28 @@ const GROUPS: ReadonlySet<string> = new Set<CategoryGroup>([
 ]);
 
 const isCat = (x: unknown): x is string => typeof x === "string" && x.length > 0 && x.length <= MAX_CAT_LENGTH;
+const isTime = (x: unknown): x is number => typeof x === "number" && Number.isFinite(x);
+const isRecord = (x: unknown): x is Record<string, unknown> => typeof x === "object" && x !== null && !Array.isArray(x);
+
+/** R65: cat은 따로 검사한다 (틀리면 cat만 버린다) */
+function isSnapshot(x: unknown): x is Snapshot {
+  if (!isRecord(x)) return false;
+  return (
+    typeof x.name === "string" && x.name.length > 0 && x.name.length <= MAX_NAME_LENGTH &&
+    typeof x.group === "string" && GROUPS.has(x.group) &&
+    isTime(x.lat) && Math.abs(x.lat) <= 90 &&
+    isTime(x.lng) && Math.abs(x.lng) <= 180 &&
+    isTime(x.at)
+  );
+}
+
+/** id → 시각 모음 (뺀 곳·즐겨찾기). 틀린 항목만 버린다 */
+function parseTimes(x: unknown): Record<string, number> {
+  const out: Record<string, number> = {};
+  if (!isRecord(x)) return out;
+  for (const [id, at] of Object.entries(x)) if (PLACE_ID.test(id) && isTime(at)) out[id] = at;
+  return out;
+}
 
 /** cat은 따로 검사한다 (틀려도 신호는 살리고 cat만 버린다) */
 function isSignal(x: unknown): x is Signal {
@@ -135,11 +227,18 @@ export function parsePersonal(raw: string | null): PersonalState {
         id, group, kind, at, ...(isCat(cat) ? { cat } : {}),
       }))
     : [];
-  const excluded: Record<string, number> = {};
-  if (typeof o.excluded === "object" && o.excluded !== null && !Array.isArray(o.excluded)) {
-    for (const [id, at] of Object.entries(o.excluded)) {
-      if (PLACE_ID.test(id) && typeof at === "number" && Number.isFinite(at)) excluded[id] = at;
+  const snapshots: Record<string, Snapshot> = {};
+  if (isRecord(o.snapshots)) {
+    for (const [id, x] of Object.entries(o.snapshots)) {
+      if (!PLACE_ID.test(id) || !isSnapshot(x)) continue;
+      const { name, group, cat, lat, lng, at } = x;
+      snapshots[id] = { name, group, ...(isCat(cat) ? { cat } : {}), lat, lng, at };
     }
   }
-  return { signals, excluded };
+  return {
+    signals,
+    excluded: parseTimes(o.excluded),
+    favorites: newest(parseTimes(o.favorites), MAX_FAVORITES),
+    snapshots,
+  };
 }

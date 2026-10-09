@@ -55,3 +55,18 @@ export function SearchIcon({ size = 16, className }: P) {
     </svg>
   );
 }
+
+/** R65: 즐겨찾기 하트. 빈 하트(선)와 찬 하트(채움) 두 가지 */
+export function HeartIcon({ size = 20, className, filled = false }: P & { filled?: boolean }) {
+  return (
+    <svg className={className} width={size} height={size} viewBox="0 0 20 20" aria-hidden="true" focusable="false">
+      <path
+        d="M10 16.6S2.75 12.2 2.75 7.35A3.85 3.85 0 0 1 6.6 3.5c1.45 0 2.65.75 3.4 1.95.75-1.2 1.95-1.95 3.4-1.95a3.85 3.85 0 0 1 3.85 3.85C17.25 12.2 10 16.6 10 16.6Z"
+        fill={filled ? "currentColor" : "none"}
+        stroke="currentColor"
+        strokeWidth="1.6"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}

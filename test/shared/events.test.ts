@@ -97,6 +97,15 @@ describe("events", () => {
     expect(EventSchema.safeParse(ev({ t: "hub_change", props: { onboarding: "yes" } })).success).toBe(false);
   });
 
+  it("R65: 내 가게 이벤트 — 즐겨찾기 넣기·빼기, 뺀 곳 다시 보기(가게 id), 내 가게 열기", () => {
+    for (const t of ["favorite_add", "favorite_remove", "restore_exclude"]) {
+      expect(EventSchema.safeParse(ev({ t, placeId: "12345" })).success, t).toBe(true);
+    }
+    expect(EventSchema.safeParse(ev({ t: "open_mine" })).success).toBe(true);
+    expect(EventSchema.safeParse(ev({ t: "favorite" })).success).toBe(false);
+    expect(EventSchema.safeParse(ev({ t: "favorite_add", placeId: "x" })).success).toBe(false);
+  });
+
   it("R35: 저장 행은 서버 기준 시각, KST 날짜·시, 짧은 props JSON(없으면 null)", () => {
     const late = Date.UTC(2027, 0, 14, 15, 3);
     expect(toStored({ t: "share", ts: late, hub: "ddp", props: { picks: ["1", "2"] } }, late + 60_000)).toEqual({

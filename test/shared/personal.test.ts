@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
-  EMPTY_PERSONAL, MAX_SIGNALS, addSignals, categoryFatigue, decay, excludePlace, groupBoost, includePlace, parsePersonal,
-  personalMultiplier, recencyFactor, type PersonalState, type Signal,
+  EMPTY_PERSONAL, FAVORITE_BOOST, MAX_FAVORITES, MAX_NAME_LENGTH, MAX_SIGNALS, MAX_SNAPSHOTS, addFavorite, addSignals,
+  categoryFatigue, decay, excludePlace, groupBoost, includePlace, isFavorite, parsePersonal, personalMultiplier, pruneSnapshots,
+  recencyFactor, removeFavorite, saveSnapshots, type PersonalState, type Signal, type Snapshot,
 } from "../../shared/personal";
 
 const NOW = Date.parse("2026-10-05T12:00:00+09:00");
@@ -10,7 +11,7 @@ const D = 24 * H;
 const sig = (kind: Signal["kind"], ageMs: number, id = "1", group: Signal["group"] = "korean"): Signal => ({
   id, group, kind, at: NOW - ageMs,
 });
-const state = (...signals: Signal[]): PersonalState => ({ signals, excluded: {} });
+const state = (...signals: Signal[]): PersonalState => ({ ...EMPTY_PERSONAL, signals });
 const place = (id = "1", group: Signal["group"] = "korean") => ({ id, group });
 
 describe("R37 개인화 (기기 안에서만)", () => {
@@ -131,6 +132,9 @@ describe("R37 개인화 (기기 안에서만)", () => {
     expect(parsePersonal(raw)).toEqual({
       signals: [{ id: "1", group: "korean", kind: "shared", at: NOW }],
       excluded: { "5": NOW },
+      // R65: 즐겨찾기·이름 기억이 없는 예전 저장값은 빈 값으로
+      favorites: {},
+      snapshots: {},
     });
   });
 });
@@ -185,5 +189,149 @@ describe("R40 최근 먹은 종류 피로도", () => {
       { id: "3", group: "korean", kind: "shared", at: NOW },
       { id: "4", group: "korean", kind: "shared", at: NOW },
     ]);
+  });
+});
+
+describe("R65 내 가게 — 즐겨찾기·이름 기억 (기기 안에서만)", () => {
+  const snap = (name: string, at = NOW, o: Partial<Snapshot> = {}): Snapshot => ({
+    name, group: "korean", lat: 37.514, lng: 127.06, at, ...o,
+  });
+  const src = (id: string, name = `가게${id}`) => ({
+    id, name, group: "korean" as const, category: "음식점 > 한식 > 국밥", lat: 37.514, lng: 127.06,
+  });
+
+  it("R65: 즐겨찾기 넣기·빼기 — 원래 상태는 그대로, 넣은 시각을 기억한다", () => {
+    const s = addFavorite(EMPTY_PERSONAL, "7", NOW);
+    expect(s.favorites).toEqual({ "7": NOW });
+    expect(isFavorite(s, "7")).toBe(true);
+    expect(isFavorite(s, "8")).toBe(false);
+    expect(EMPTY_PERSONAL.favorites).toEqual({});
+    const off = removeFavorite(s, "7");
+    expect(off.favorites).toEqual({});
+    expect(isFavorite(off, "7")).toBe(false);
+    expect(s.favorites).toEqual({ "7": NOW });
+    // 이미 있으면 시각만 새로
+    expect(addFavorite(s, "7", NOW + H).favorites).toEqual({ "7": NOW + H });
+  });
+
+  it("R65: 즐겨찾기는 최대 100곳 — 넘치면 가장 오래 전에 넣은 곳부터 뺀다", () => {
+    let s = EMPTY_PERSONAL;
+    for (let i = 0; i < MAX_FAVORITES; i++) s = addFavorite(s, String(i + 1), NOW + i);
+    expect(MAX_FAVORITES).toBe(100);
+    expect(Object.keys(s.favorites)).toHaveLength(MAX_FAVORITES);
+    s = addFavorite(s, "999", NOW + 1000);
+    expect(Object.keys(s.favorites)).toHaveLength(MAX_FAVORITES);
+    expect(isFavorite(s, "1")).toBe(false);
+    expect(isFavorite(s, "2")).toBe(true);
+    expect(isFavorite(s, "999")).toBe(true);
+  });
+
+  it("R65: 뺀 곳을 즐겨찾기에 넣으면 '다음부터 안 보기'가 풀린다", () => {
+    const hidden = excludePlace(EMPTY_PERSONAL, "3", NOW);
+    const fav = addFavorite(hidden, "3", NOW + H);
+    expect(fav.excluded).toEqual({});
+    expect(isFavorite(fav, "3")).toBe(true);
+    expect(personalMultiplier(fav, place("3"), NOW + H)).toBeCloseTo(FAVORITE_BOOST, 9);
+  });
+
+  it("R65: 즐겨찾기는 ×1.3 — 최근 신호·그룹 가산·피로도와 함께 곱하고, 빼 둔 곳은 언제나 0", () => {
+    expect(FAVORITE_BOOST).toBe(1.3);
+    const fav = addFavorite(EMPTY_PERSONAL, "1", NOW);
+    expect(personalMultiplier(fav, place("1"), NOW)).toBeCloseTo(1.3, 9);
+    expect(personalMultiplier(fav, place("2"), NOW)).toBe(1);
+    // 방금 카카오맵을 연 즐겨찾기도 며칠은 쉰다: 0.15(최근) × 1.15(그룹) × 1.3
+    const visited = addFavorite(state(sig("kakao_open", 0, "1")), "1", NOW);
+    expect(personalMultiplier(visited, place("1"), NOW)).toBeCloseTo(0.15 * 1.15 * 1.3, 9);
+    // R40 피로도도 곱한다: 어제 국밥집 2를 연 뒤 국밥집 1(즐겨찾기) = 1.15 × 0.6 × 1.3
+    const tired = addFavorite(state({ ...sig("kakao_open", 20 * H, "2"), cat: "국밥" }), "1", NOW);
+    expect(personalMultiplier(tired, { ...place("1"), category: "음식점 > 한식 > 국밥" }, NOW)).toBeCloseTo(1.15 * 0.6 * 1.3, 9);
+    // 즐겨찾기를 그대로 둔 채 빼면(저장값이 그렇게 왔어도) 뺀 것이 이긴다
+    const both: PersonalState = { ...fav, excluded: { "1": NOW } };
+    expect(personalMultiplier(both, place("1"), NOW)).toBe(0);
+  });
+
+  it("R65: 이름 기억 — 이름·그룹·세부 종류·좌표·시각을 남기고, 다시 남기면 새 값으로", () => {
+    const s = saveSnapshots(EMPTY_PERSONAL, [src("5", "중앙해장")], NOW);
+    expect(s.snapshots).toEqual({
+      "5": { name: "중앙해장", group: "korean", cat: "국밥", lat: 37.514, lng: 127.06, at: NOW },
+    });
+    expect(EMPTY_PERSONAL.snapshots).toEqual({});
+    const again = saveSnapshots(s, [{ ...src("5", "중앙해장 본점"), category: "" }], NOW + H);
+    expect(again.snapshots["5"]).toEqual({ name: "중앙해장 본점", group: "korean", lat: 37.514, lng: 127.06, at: NOW + H });
+    // 긴 이름은 잘라서 남긴다, 틀린 id·좌표는 남기지 않는다
+    const long = saveSnapshots(EMPTY_PERSONAL, [src("6", "가".repeat(MAX_NAME_LENGTH + 5))], NOW);
+    expect(long.snapshots["6"].name).toBe("가".repeat(MAX_NAME_LENGTH));
+    const bad = saveSnapshots(EMPTY_PERSONAL, [src("x1"), { ...src("7"), lat: Number.NaN }, { ...src("8"), name: "" }], NOW);
+    expect(bad.snapshots).toEqual({});
+  });
+
+  it("R65: 이름 기억 정리 — 즐겨찾기·뺀 곳·최근 30일 카카오맵/공유가 가리키는 것만 남긴다", () => {
+    const base: PersonalState = {
+      ...EMPTY_PERSONAL,
+      signals: [sig("kakao_open", 2 * D, "recent"), sig("shared", D, "shared"), sig("shown", H, "shown"), sig("kakao_open", 31 * D, "old")],
+      favorites: { fav: NOW },
+      excluded: { hid: NOW },
+      snapshots: {
+        fav: snap("즐겨찾기", NOW - 90 * D), hid: snap("뺀 곳"), recent: snap("최근"), shared: snap("공유"),
+        shown: snap("보여줌"), old: snap("오래된 카카오맵"), loose: snap("아무것도 아님"),
+      },
+    };
+    expect(Object.keys(pruneSnapshots(base, NOW).snapshots).sort()).toEqual(["fav", "hid", "recent", "shared"]);
+  });
+
+  it("R65: 이름 기억은 최대 200곳 — 넘치면 즐겨찾기는 지키고 오래된 것부터 버린다", () => {
+    expect(MAX_SNAPSHOTS).toBe(200);
+    const excluded: Record<string, number> = {};
+    const snapshots: Record<string, Snapshot> = {};
+    for (let i = 0; i < MAX_SNAPSHOTS + 10; i++) {
+      excluded[`${i + 1}`] = NOW;
+      snapshots[`${i + 1}`] = snap(`가게${i + 1}`, NOW - (MAX_SNAPSHOTS + 10 - i) * H); // 1이 가장 오래됨
+    }
+    snapshots["9000"] = snap("아주 오래된 즐겨찾기", NOW - 365 * D);
+    const s = pruneSnapshots({ ...EMPTY_PERSONAL, excluded, favorites: { "9000": NOW }, snapshots }, NOW);
+    const kept = Object.keys(s.snapshots);
+    expect(kept).toHaveLength(MAX_SNAPSHOTS);
+    expect(kept).toContain("9000");
+    expect(kept).not.toContain("1");
+    expect(kept).not.toContain("11");
+    expect(kept).toContain("12");
+    expect(kept).toContain(`${MAX_SNAPSHOTS + 10}`);
+  });
+
+  it("R65: 저장값 파싱 — 즐겨찾기·이름 기억도 틀린 항목만 버린다 (예전 저장값은 빈 값으로)", () => {
+    const old = parsePersonal(JSON.stringify({ signals: [], excluded: { "5": NOW } }));
+    expect(old.favorites).toEqual({});
+    expect(old.snapshots).toEqual({});
+    const raw = JSON.stringify({
+      signals: [],
+      excluded: {},
+      favorites: { "1": NOW, x: NOW, "2": "y", "3": Number.MAX_VALUE * 2 },
+      snapshots: {
+        "1": { name: "중앙해장", group: "korean", cat: "해장국", lat: 37.5, lng: 127.0, at: NOW },
+        "2": { name: "카테고리 이상", group: "korean", cat: 5, lat: 37.5, lng: 127.0, at: NOW },
+        "3": { name: "", group: "korean", lat: 37.5, lng: 127.0, at: NOW },
+        "4": { name: "가".repeat(MAX_NAME_LENGTH + 1), group: "korean", lat: 37.5, lng: 127.0, at: NOW },
+        "5": { name: "그룹 이상", group: "pizza", lat: 37.5, lng: 127.0, at: NOW },
+        "6": { name: "좌표 이상", group: "korean", lat: "37.5", lng: 127.0, at: NOW },
+        "7": { name: "위도 범위 밖", group: "korean", lat: 137.5, lng: 127.0, at: NOW },
+        "8": { name: "시각 없음", group: "korean", lat: 37.5, lng: 127.0 },
+        x: { name: "id 이상", group: "korean", lat: 37.5, lng: 127.0, at: NOW },
+        "9": "문자열",
+      },
+    });
+    const s = parsePersonal(raw);
+    expect(s.favorites).toEqual({ "1": NOW });
+    expect(s.snapshots).toEqual({
+      "1": { name: "중앙해장", group: "korean", cat: "해장국", lat: 37.5, lng: 127.0, at: NOW },
+      "2": { name: "카테고리 이상", group: "korean", lat: 37.5, lng: 127.0, at: NOW },
+    });
+    // 배열·문자열 같은 엉뚱한 모양이어도 앱이 죽지 않는다
+    expect(parsePersonal(JSON.stringify({ signals: [], excluded: {}, favorites: [1], snapshots: "x" }))).toEqual(EMPTY_PERSONAL);
+    // 즐겨찾기가 100곳을 넘게 저장돼 있으면 최근 100곳만
+    const many = Object.fromEntries(Array.from({ length: MAX_FAVORITES + 3 }, (_, i) => [String(i + 1), NOW + i]));
+    const capped = parsePersonal(JSON.stringify({ signals: [], excluded: {}, favorites: many }));
+    expect(Object.keys(capped.favorites)).toHaveLength(MAX_FAVORITES);
+    expect(capped.favorites["1"]).toBeUndefined();
+    expect(capped.favorites[String(MAX_FAVORITES + 3)]).toBe(NOW + MAX_FAVORITES + 2);
   });
 });

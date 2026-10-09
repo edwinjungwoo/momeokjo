@@ -3,6 +3,7 @@ import { lastLevel } from "../../shared/category";
 import { photoWideUrl } from "../../shared/photo";
 import type { ApiPlace } from "../../shared/types";
 import { openState, priceText, walkText, won } from "../format";
+import { HeartButton } from "./HeartButton";
 import { CloseIcon } from "./Icons";
 import { RankPill } from "./RankPill";
 import { Rating } from "./Rating";
@@ -19,6 +20,9 @@ type Props = {
   onShare: (p: ApiPlace) => void;
   /** R37: 카카오맵을 열면 강한 신호로 기록한다 */
   onKakao: (p: ApiPlace) => void;
+  /** R65: 즐겨찾기인가, 제목 옆 ♡를 누름 (넣기·빼기) */
+  favorite: boolean;
+  onFavorite: (p: ApiPlace) => void;
 };
 
 /**
@@ -26,7 +30,7 @@ type Props = {
  * 모바일은 뽑기 바 위 바텀 시트, 데스크톱은 지도 위 오버레이 (styles.css).
  * 위계: 이름 → 도보·평점·영업 → 카테고리·가격·강점 → 메뉴 → 행동 → 출처
  */
-export function PlaceCard({ place, eyebrow, topPercent, now, onClose, onShare, onKakao }: Props) {
+export function PlaceCard({ place, eyebrow, topPercent, now, onClose, onShare, onKakao, favorite, onFavorite }: Props) {
   const [menusOpen, setMenusOpen] = useState(false);
   const [heroFailed, setHeroFailed] = useState(false);
   const swipe = useSwipeDown(onClose);
@@ -84,6 +88,8 @@ export function PlaceCard({ place, eyebrow, topPercent, now, onClose, onShare, o
             <RankPill top={topPercent} />
           </p>
         </div>
+        {/* R65: 즐겨찾기 ♡ — 행동 줄(공유·카카오맵)이 아니라 제목 옆 */}
+        <HeartButton on={favorite} onToggle={() => onFavorite(place)} />
       </div>
       {sub && <p className="sub">{sub}</p>}
       {!d && <p className="sub">평점과 메뉴 정보를 아직 불러오지 못했어요</p>}

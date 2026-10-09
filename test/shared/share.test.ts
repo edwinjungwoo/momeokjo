@@ -1,6 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
 import { DEFAULT_FILTERS } from "../../shared/recommend";
-import { isAdminPath, parseHubPath, parseShareParams, shareConfirmText, excludeToastText, shareText, shareUrl, toParticle, topicParticle } from "../../shared/share";
+import {
+  isAdminPath, objectParticle, parseHubPath, parseShareParams, restoreToastText, shareConfirmText, excludeToastText, shareText, shareUrl,
+  toParticle, topicParticle,
+} from "../../shared/share";
 import { HUBS, isHubId } from "../../shared/hubs";
 import wranglerRaw from "../../wrangler.jsonc?raw";
 import { apiPlace } from "../helpers/apiPlace";
@@ -223,5 +226,24 @@ describe("R37 \"다음부터 안 보기\" 알림 문구", () => {
     expect(excludeToastText("중앙해장")).toBe("중앙해장은 다음부터 안 뽑아요");
     expect(excludeToastText("스시하루")).toBe("스시하루는 다음부터 안 뽑아요");
     expect(excludeToastText("Hotel 2")).toBe("Hotel 2는 다음부터 안 뽑아요");
+  });
+});
+
+describe("R65 뺀 곳 다시 보기 알림 문구", () => {
+  it("R65: 조사 — 받침이 있으면(ㄹ 포함) '을', 없으면 '를'. 숫자·영문은 읽는 소리로, 끝의 괄호·공백은 건너뛴다", () => {
+    expect(objectParticle("중앙해장")).toBe("을");
+    expect(objectParticle("카페 서울")).toBe("을");
+    expect(objectParticle("스시하루")).toBe("를");
+    expect(objectParticle("중앙해장(본점)")).toBe("을");
+    expect(objectParticle("포차 7")).toBe("을");
+    expect(objectParticle("포차 2")).toBe("를");
+    expect(objectParticle("Hotel")).toBe("을");
+    expect(objectParticle("Cafe")).toBe("를");
+  });
+
+  it("R65: 알림 문구 — '{이름}을/를 다시 뽑아요'", () => {
+    expect(restoreToastText("중앙해장")).toBe("중앙해장을 다시 뽑아요");
+    expect(restoreToastText("스시하루")).toBe("스시하루를 다시 뽑아요");
+    expect(restoreToastText("이전에 뺀 가게")).toBe("이전에 뺀 가게를 다시 뽑아요");
   });
 });
