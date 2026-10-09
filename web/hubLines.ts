@@ -4,6 +4,7 @@ import { PUBLIC_HUBS, type Hub } from "../shared/hubs";
 export type Line = { label: string; name: string; color: string };
 
 export const LINES: Record<string, Line> = {
+  "1": { label: "1", name: "1호선", color: "#0052A4" },
   "2": { label: "2", name: "2호선", color: "#00A84D" },
   "4": { label: "4", name: "4호선", color: "#00A5DE" },
   "5": { label: "5", name: "5호선", color: "#996CAC" },
@@ -28,6 +29,8 @@ export const HUB_LINES: Record<string, string[]> = {
   seonjeongneung: ["9", "suinbundang"],
   seolleung: ["2", "suinbundang"],
   samseong: ["2"],
+  cityhall: ["1", "2"],
+  euljiro1ga: ["2"],
 };
 
 /** 역 고르기 목록 (헤더 메뉴·첫 접속 질문): 공개 거점을 가나다순으로 */

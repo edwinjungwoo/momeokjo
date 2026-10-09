@@ -25,6 +25,8 @@ describe("역 고르기 — 호선 배지·가나다순", () => {
       seonjeongneung: ["9", "suinbundang"],
       seolleung: ["2", "suinbundang"],
       samseong: ["2"],
+      cityhall: ["1", "2"],
+      euljiro1ga: ["2"],
     });
   });
 

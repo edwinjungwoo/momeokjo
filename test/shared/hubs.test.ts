@@ -5,7 +5,7 @@ import { DEFAULT_HUB_ID, HUBS, PUBLIC_HUBS, hubById, isHubId, isPublicHubId, pub
 import { UNREADY_HUB } from "../helpers/unreadyHub";
 
 describe("hubs", () => {
-  it("R24: 거점은 봉은사역(기본), 동대문역사문화공원역, 판교역, 내방역, 정부과천청사역, 강남역, 여의도역, 광화문역, 역삼역, 선정릉역, 선릉역, 삼성역", () => {
+  it("R24: 거점은 봉은사역(기본), 동대문역사문화공원역, 판교역, 내방역, 정부과천청사역, 강남역, 여의도역, 광화문역, 역삼역, 선정릉역, 선릉역, 삼성역, 시청역, 을지로입구역", () => {
     expect(HUBS).toEqual([
       { id: "bongeunsa", name: "봉은사역", lat: 37.514255, lng: 127.060234, ready: true, refreshDay: 1 },
       { id: "ddp", name: "동대문역사문화공원역", lat: 37.5651, lng: 127.00749, ready: true, refreshDay: 2 },
@@ -19,6 +19,8 @@ describe("hubs", () => {
       { id: "seonjeongneung", name: "선정릉역", lat: 37.510324, lng: 127.044015, ready: true, refreshDay: 1 },
       { id: "seolleung", name: "선릉역", lat: 37.504497, lng: 127.048963, ready: true, refreshDay: 1 },
       { id: "samseong", name: "삼성역", lat: 37.508823, lng: 127.063023, ready: true, refreshDay: 1 },
+      { id: "cityhall", name: "시청역", lat: 37.565345, lng: 126.977198, ready: false, refreshDay: 4 },
+      { id: "euljiro1ga", name: "을지로입구역", lat: 37.566036, lng: 126.982195, ready: false, refreshDay: 4 },
     ]);
     expect(DEFAULT_HUB_ID).toBe("bongeunsa");
     expect(new Set(HUBS.map((h) => h.id)).size).toBe(HUBS.length);
@@ -31,9 +33,9 @@ describe("hubs", () => {
     expect(isHubId("atlantis")).toBe(false);
   });
 
-  it("R62: 공개 거점은 ready인 거점 — 강남역·여의도역·광화문역은 2026-10-08, 역삼역·선정릉역·선릉역·삼성역은 2026-10-09에 감사를 마치고 공개해 지금은 12곳 모두 공개", () => {
+  it("R62: 공개 거점은 ready인 거점 — 강남역·여의도역·광화문역은 2026-10-08, 역삼역·선정릉역·선릉역·삼성역은 2026-10-09에 감사를 마치고 공개해 12곳 공개, 같은 날 더한 시청역·을지로입구역은 준비 중", () => {
     expect(PUBLIC_HUBS.map((h) => h.id)).toEqual(["bongeunsa", "ddp", "pangyo", "naebang", "gwacheon", "gangnam", "yeouido", "gwanghwamun", "yeoksam", "seonjeongneung", "seolleung", "samseong"]);
-    expect(HUBS.filter((h) => !h.ready)).toEqual([]);
+    expect(HUBS.filter((h) => !h.ready).map((h) => h.id)).toEqual(["cityhall", "euljiro1ga"]);
     // 기본 거점은 언제나 공개 거점이어야 한다 (저장값·링크가 틀리면 여기로 간다)
     expect(PUBLIC_HUBS.some((h) => h.id === DEFAULT_HUB_ID)).toBe(true);
   });
