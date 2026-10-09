@@ -16,6 +16,7 @@ import { createTapGate } from "../shared/tapGate";
 import type { ApiDetail, ApiPlace, LatLng } from "../shared/types";
 import { filterProps, setTrackingHub, startTracking, track, trackFilters } from "./analytics";
 import { fetchPlace } from "./api";
+import { RESOLVE_CONCURRENCY, forEachLimited } from "./mineResolve";
 import { trackHubPicked } from "./onboarding";
 import { autoDrawOffDay, autoDrawnThisSession, markAutoDrawn, turnOffAutoDraw, useInteracted } from "./autoDraw";
 import { EmptyState, ErrorState } from "./components/EmptyState";
@@ -84,7 +85,7 @@ export default function App() {
   const { data, loading, error, polling, fromCache, reload } = usePlaces(hub.id, !askHub);
   const now = useNow();
   const personal = usePersonal();
-  const { isExcluded, isFavorite, record } = personal;
+  const { isExcluded, isFavorite, record, refresh: refreshNames } = personal;
   const [trio, setTrio] = useState<Trio | null>(null);
   const [focusId, setFocusId] = useState<string | null>(null);
   /** 목록·핀에서 연 한 곳 (뽑기 결과 위에 잠깐 겹쳐 연다) */
@@ -145,6 +146,8 @@ export default function App() {
     fetchPlace(detailId, ctrl.signal)
       .then((p) => {
         setDetailPending(null);
+        // R65: 단건 응답에 나온 곳은 이름 기억을 새로 한다 (내 가게가 가리키는 곳만)
+        refreshNames([p]);
         const full = fullOf(p);
         if (full) setFullDetails((m) => ({ ...m, [p.id]: full }));
       })
@@ -152,7 +155,7 @@ export default function App() {
         if (!ctrl.signal.aborted) setDetailPending(null);
       });
     return () => ctrl.abort();
-  }, [detailId, haveFull]);
+  }, [detailId, haveFull, refreshNames]);
   /** 결과 카드를 펼친다. 단건이 아직 없으면 같은 렌더에서 "받는 중"으로 둔다 — 첫 화면부터 R49 전화 자리를 잡아 두게 */
   const expand = (id: string | null) => {
     if (id !== null && !(id in fullDetails)) setDetailPending(id);
@@ -161,6 +164,10 @@ export default function App() {
 
   // 폴링으로 목록이 바뀌면 최신 객체를 쓰고, 받아 둔 전체 상세와 현재 거점 기준 도보 시간을 붙인다
   const latest = useMemo(() => new Map((data?.places ?? []).map((p) => [p.id, p])), [data]);
+  // R65: 새로 받은 거점 목록에 나온 곳(즐겨찾기·최근·뺀 곳)의 이름 기억을 새로 한다 — 요청을 더 하지 않고 자주 보는 곳은 늘 3일 안
+  useEffect(() => {
+    if (data) refreshNames(data.places);
+  }, [data, refreshNames]);
   const resolve = useCallback(
     (p: ApiPlace) => {
       const base = latest.get(p.id) ?? p;
@@ -237,6 +244,7 @@ export default function App() {
       const seen = seenSnapshot();
       recordSeen(found.map((p) => p.id));
       record("received", found);
+      refreshNames(found);
       if (ids.length === 1) {
         setReceivedSingle(found[0].id);
         setSelected(found[0]);
@@ -246,7 +254,7 @@ export default function App() {
       const missing = ids.length - found.length;
       if (missing > 0) showToast(`${missing}곳은 찾지 못했어요`);
     });
-  }, [share.placeIds, showToast, record]);
+  }, [share.placeIds, showToast, record, refreshNames]);
 
   /** 거점·반경이 바뀌면 진행 중인 셔플과 공유 불러오기를 멈추고 결과를 비운다 (QA S-3) */
   const clearTrio = () => {
@@ -484,6 +492,8 @@ export default function App() {
   // R37: "다음부터 안 보기" → "{이름}은/는 다음부터 안 뽑아요" + 되돌리기
   const onExclude = (p: ApiPlace) => {
     track("exclude_place", { placeId: p.id, props: rankOf(p.id) });
+    // R65: 즐겨찾기였으면 즐겨찾기에서도 빠진다 — 되돌리기가 둘 다 돌려 놓게 빼기 전 값을 받아 둔다
+    const favoriteAt = personal.favoriteAt(p.id);
     personal.exclude(p);
     setFocusId(null);
     // 이름을 넣은 알림 + 8초 되돌리기
@@ -492,7 +502,7 @@ export default function App() {
       action: {
         label: "되돌리기",
         onClick: () => {
-          personal.include(p.id);
+          personal.undoExclude(p.id, favoriteAt);
           track("undo_exclude", { placeId: p.id });
         },
       },
@@ -515,10 +525,42 @@ export default function App() {
 
   // R65: "내 가게" 시트. 목록은 열려 있을 때만 만든다 (이름은 지금 받아 둔 목록 → 기억한 이름)
   const [mineOpen, setMineOpen] = useState(false);
+  /** 이름을 다시 불러오는 중인 곳 */
+  const [resolving, setResolving] = useState<ReadonlySet<string>>(() => new Set());
   const mine = useMemo(
-    () => (mineOpen ? personal.mine(Date.now(), (id) => latest.get(id)) : NO_MINE),
-    [mineOpen, personal.mine, latest],
+    () => (mineOpen ? personal.mine(Date.now(), (id) => latest.get(id), (id) => resolving.has(id)) : NO_MINE),
+    [mineOpen, personal.mine, latest, resolving],
   );
+  // R65: 시트를 열 때, 지금 목록에도 3일 안 이름 기억에도 없는 곳(최근 것부터 최대 30곳)을 단건으로 3곳씩 불러와 이름을 새로 기억한다.
+  // 실패는 조용히 넘기고 "이전에 담은 가게"·"이전에 뺀 가게"로 둔다. 닫으면 멈춘다. 열 때 한 번만 고른다
+  const unresolvedNow = useRef(personal.unresolved);
+  unresolvedNow.current = personal.unresolved;
+  const latestNow = useRef(latest);
+  latestNow.current = latest;
+  useEffect(() => {
+    if (!mineOpen) return;
+    const ids = unresolvedNow.current(Date.now(), (id) => latestNow.current.get(id));
+    if (ids.length === 0) return;
+    const ctrl = new AbortController();
+    setResolving(new Set(ids));
+    const settle = (id: string) =>
+      setResolving((r) => {
+        const next = new Set(r);
+        next.delete(id);
+        return next;
+      });
+    void forEachLimited(ids, RESOLVE_CONCURRENCY, async (id) => {
+      try {
+        refreshNames([await fetchPlace(id, ctrl.signal)]);
+      } finally {
+        if (!ctrl.signal.aborted) settle(id);
+      }
+    }, ctrl.signal);
+    return () => {
+      ctrl.abort();
+      setResolving(new Set());
+    };
+  }, [mineOpen, refreshNames]);
   const openMine = () => {
     setMineOpen(true);
     track("open_mine");
@@ -531,6 +573,8 @@ export default function App() {
    * 없으면 1km 안의 공개 역으로 옮기고 그 목록이 오면 연다. 가까운 역이 없으면 카카오맵 장소 페이지를 새 탭으로
    */
   const onMineOpen = (item: MineItem) => {
+    // 이름을 다시 불러오는 동안은 어디로 갈지 몰라 기다린다 (곧 이름·위치가 채워진다)
+    if (item.loading) return;
     const here = listIsHub ? latest.get(item.id) : undefined;
     if (here) {
       setMineOpen(false);
@@ -563,10 +607,13 @@ export default function App() {
       return;
     }
     fetchPlace(id)
-      .then((found) => setSelected(found))
+      .then((found) => {
+        refreshNames([found]);
+        setSelected(found);
+      })
       .catch(() => showToast("가게 정보를 불러오지 못했어요"));
     // onSelect는 매 렌더 새로 만들어진다 — 목록이 왔을 때 한 번만 부르면 된다
-  }, [pendingOpen, hub.id, listIsHub, loading, latest, showToast]);
+  }, [pendingOpen, hub.id, listIsHub, loading, latest, showToast, refreshNames]);
 
   // R35: 필터를 바꾼 뒤(다시 불러오기가 끝난 상태에서) 후보가 0곳이면 한 번 남긴다
   const settled = data !== null && !loading && !polling;

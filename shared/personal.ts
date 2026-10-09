@@ -1,4 +1,5 @@
 import { lastLevel } from "./category";
+import { PLACES_CACHE_MAX_AGE_MS } from "./placesCache";
 import type { CategoryGroup } from "./types";
 
 /**
@@ -11,8 +12,10 @@ export type SignalKind = "kakao_open" | "shared" | "received" | "shown";
 /** cat: 카테고리 마지막 단계(R40). 예전 신호에는 없다 */
 export type Signal = { id: string; group: CategoryGroup; kind: SignalKind; at: number; cat?: string };
 /**
- * R65: "내 가게"가 서버를 부르지 않고 이름을 보여주려고 기억하는 것. at = 마지막으로 남긴 시각.
- * 즐겨찾기·카카오맵 열기·공유·"다음부터 안 보기" 때 남기고, 그 셋 중 어디에서도 가리키지 않으면 버린다 (pruneSnapshots)
+ * R65: "내 가게"가 이름을 보여주려고 잠깐 기억하는 것. at = 마지막으로 남긴(새로 한) 시각.
+ * 즐겨찾기·카카오맵 열기·공유·"다음부터 안 보기" 때와 그 곳이 목록·단건 응답에 나올 때 남기고,
+ * 3일(SNAPSHOT_MAX_AGE_MS — 기기 목록 저장본과 같은 기준, 스펙 §3.1)이 지나거나 어디에서도 가리키지 않으면 버린다 (pruneSnapshots).
+ * 즐겨찾기·뺀 곳·최근 신호 자체는 id와 시각만 오래 남는다 — 이름은 3일이 지나면 다시 불러온다
  */
 export type Snapshot = { name: string; group: CategoryGroup; cat?: string; lat: number; lng: number; at: number };
 /**
@@ -32,6 +35,10 @@ export const MAX_FAVORITES = 100;
 /** R65: 이름 기억 최대 수 (넘치면 즐겨찾기는 지키고 오래된 것부터 버린다) */
 export const MAX_SNAPSHOTS = 200;
 export const MAX_NAME_LENGTH = 80;
+/** R65: 이름 기억을 쓰고 남기는 최대 기간 — 기기 목록 저장본(R45)과 같은 3일 */
+export const SNAPSHOT_MAX_AGE_MS = PLACES_CACHE_MAX_AGE_MS;
+/** R65: 목록이 다시 와도 이 시간 안에 새로 한 이름은 그대로 둔다 (폴링마다 저장하지 않게) */
+export const SNAPSHOT_REFRESH_MS = 3600_000;
 /** R65: 즐겨찾기는 조금 더 나온다 (최근 신호·그룹 가산·피로도와 곱한다 — 방금 간 즐겨찾기도 며칠은 쉰다) */
 export const FAVORITE_BOOST = 1.3;
 
@@ -111,8 +118,16 @@ export function addSignals(s: PersonalState, add: Signal[], now: number): Person
   return { ...s, signals: [...prefs, ...weak].sort((a, b) => a.at - b.at) };
 }
 
+/** R65: 즐겨찾기였으면 즐겨찾기에서도 뺀다 (두 목록에 함께 있지 않게). 되돌리기는 undoExclude */
 export function excludePlace(s: PersonalState, id: string, now: number): PersonalState {
-  return { ...s, excluded: { ...s.excluded, [id]: now } };
+  const { [id]: _, ...favorites } = s.favorites;
+  return { ...s, excluded: { ...s.excluded, [id]: now }, favorites };
+}
+
+/** R37/R65: 8초 "되돌리기" — 빼기를 풀고, 빼기 전에 즐겨찾기였으면(favoriteAt) 그 시각 그대로 돌려 놓는다 */
+export function undoExclude(s: PersonalState, id: string, favoriteAt: number | undefined): PersonalState {
+  const next = includePlace(s, id);
+  return favoriteAt === undefined ? next : { ...next, favorites: { ...next.favorites, [id]: favoriteAt } };
 }
 
 export function includePlace(s: PersonalState, id: string): PersonalState {
@@ -155,14 +170,45 @@ export function saveSnapshots(s: PersonalState, places: SnapshotSource[], now: n
   return { ...s, snapshots };
 }
 
+/** 즐겨찾기·뺀 곳·최근 30일 카카오맵/공유(= "최근 열어 본 곳" 후보) — 이름을 기억해 둘 곳 */
+function referenced(s: PersonalState, now: number): Set<string> {
+  const ids = new Set([...Object.keys(s.favorites), ...Object.keys(s.excluded)]);
+  for (const x of s.signals) if (PREFERENCE_KINDS.has(x.kind) && now - x.at <= SIGNAL_TTL_MS) ids.add(x.id);
+  return ids;
+}
+
+const isFresh = (x: Snapshot, now: number) => now - x.at <= SNAPSHOT_MAX_AGE_MS;
+
+/** R65: 쓸 수 있는(3일 안) 이름 기억. 정리 전이어도 지난 것은 쓰지 않는다 */
+export function freshSnapshot(s: PersonalState, id: string, now: number): Snapshot | undefined {
+  const x = Object.hasOwn(s.snapshots, id) ? s.snapshots[id] : undefined;
+  return x && isFresh(x, now) ? x : undefined;
+}
+
 /**
- * R65: 즐겨찾기·뺀 곳·최근 30일 카카오맵/공유(= "최근 열어 본 곳" 후보)가 가리키는 이름만 남기고,
+ * R65: 목록·단건 응답에 나온 곳 중 내 가게가 가리키는 곳의 이름 기억을 새로 한다 (요청을 더 하지 않고 자주 보는 곳은 늘 3일 안).
+ * 1시간 안에 같은 값으로 새로 했으면 그대로 — 바뀐 것이 없으면 같은 상태 객체를 돌려준다 (저장·다시 그리기 없음)
+ */
+export function refreshSnapshots(s: PersonalState, places: SnapshotSource[], now: number): PersonalState {
+  const ids = referenced(s, now);
+  const due = places.filter((p) => {
+    if (!ids.has(p.id)) return false;
+    const old = s.snapshots[p.id];
+    if (!old || now - old.at > SNAPSHOT_REFRESH_MS) return true;
+    const cat = p.category === undefined ? "" : lastLevel(p.category);
+    return old.name !== p.name.trim().slice(0, MAX_NAME_LENGTH) || old.group !== p.group || (old.cat ?? "") !== (isCat(cat) ? cat : "") ||
+      old.lat !== p.lat || old.lng !== p.lng;
+  });
+  return due.length === 0 ? s : saveSnapshots(s, due, now);
+}
+
+/**
+ * R65: 내 가게가 가리키는 3일 안의 이름만 남기고(즐겨찾기·뺀 곳·최근 신호 자체는 그대로),
  * 200곳을 넘으면 즐겨찾기는 지키고 나머지는 오래된 것부터 버린다
  */
 export function pruneSnapshots(s: PersonalState, now: number): PersonalState {
-  const live = new Set([...Object.keys(s.favorites), ...Object.keys(s.excluded)]);
-  for (const x of s.signals) if (PREFERENCE_KINDS.has(x.kind) && now - x.at <= SIGNAL_TTL_MS) live.add(x.id);
-  const kept = Object.entries(s.snapshots).filter(([id]) => live.has(id));
+  const live = referenced(s, now);
+  const kept = Object.entries(s.snapshots).filter(([id, x]) => live.has(id) && isFresh(x, now));
   if (kept.length === Object.keys(s.snapshots).length && kept.length <= MAX_SNAPSHOTS) return s;
   const rank = (id: string) => (isFavorite(s, id) ? 1 : 0);
   kept.sort((a, b) => rank(b[0]) - rank(a[0]) || b[1].at - a[1].at);

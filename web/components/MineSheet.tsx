@@ -39,8 +39,15 @@ function Section({ kind, title, caption, items, props }: {
       <ul className="mine-list">
         {items.map((it) => (
           <li key={it.id} className="mine-row">
-            <button type="button" className="mine-open" onClick={() => props.onOpen(it)}>
-              <span className="mine-name">{it.name}</span>
+            <button type="button" className="mine-open" aria-busy={it.loading || undefined} onClick={() => props.onOpen(it)}>
+              {it.loading ? (
+                // 3일 지난 이름을 단건으로 다시 불러오는 동안 이름 자리 뼈대
+                <span className="mine-name mine-skeleton">
+                  <span className="sr-only">불러오는 중</span>
+                </span>
+              ) : (
+                <span className="mine-name">{it.name}</span>
+              )}
               {it.line && <span className="mine-line">{it.line}</span>}
             </button>
             {kind === "excluded" ? (

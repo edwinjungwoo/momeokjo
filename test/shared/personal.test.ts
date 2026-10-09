@@ -1,9 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
-  EMPTY_PERSONAL, FAVORITE_BOOST, MAX_FAVORITES, MAX_NAME_LENGTH, MAX_SIGNALS, MAX_SNAPSHOTS, addFavorite, addSignals,
-  categoryFatigue, decay, excludePlace, groupBoost, includePlace, isFavorite, parsePersonal, personalMultiplier, pruneSnapshots,
-  recencyFactor, removeFavorite, saveSnapshots, type PersonalState, type Signal, type Snapshot,
+  EMPTY_PERSONAL, FAVORITE_BOOST, MAX_FAVORITES, MAX_NAME_LENGTH, MAX_SIGNALS, MAX_SNAPSHOTS, SNAPSHOT_MAX_AGE_MS,
+  SNAPSHOT_REFRESH_MS, addFavorite, addSignals, categoryFatigue, decay, excludePlace, freshSnapshot, groupBoost, includePlace,
+  isFavorite, parsePersonal, personalMultiplier, pruneSnapshots, recencyFactor, refreshSnapshots, removeFavorite, saveSnapshots,
+  undoExclude, type PersonalState, type Signal, type Snapshot,
 } from "../../shared/personal";
+import { PLACES_CACHE_MAX_AGE_MS } from "../../shared/placesCache";
 
 const NOW = Date.parse("2026-10-05T12:00:00+09:00");
 const H = 3600_000;
@@ -272,7 +274,7 @@ describe("R65 내 가게 — 즐겨찾기·이름 기억 (기기 안에서만)",
       favorites: { fav: NOW },
       excluded: { hid: NOW },
       snapshots: {
-        fav: snap("즐겨찾기", NOW - 90 * D), hid: snap("뺀 곳"), recent: snap("최근"), shared: snap("공유"),
+        fav: snap("즐겨찾기", NOW - 2 * D), hid: snap("뺀 곳"), recent: snap("최근"), shared: snap("공유"),
         shown: snap("보여줌"), old: snap("오래된 카카오맵"), loose: snap("아무것도 아님"),
       },
     };
@@ -285,9 +287,9 @@ describe("R65 내 가게 — 즐겨찾기·이름 기억 (기기 안에서만)",
     const snapshots: Record<string, Snapshot> = {};
     for (let i = 0; i < MAX_SNAPSHOTS + 10; i++) {
       excluded[`${i + 1}`] = NOW;
-      snapshots[`${i + 1}`] = snap(`가게${i + 1}`, NOW - (MAX_SNAPSHOTS + 10 - i) * H); // 1이 가장 오래됨
+      snapshots[`${i + 1}`] = snap(`가게${i + 1}`, NOW - (MAX_SNAPSHOTS + 10 - i) * 60_000); // 1이 가장 오래됨
     }
-    snapshots["9000"] = snap("아주 오래된 즐겨찾기", NOW - 365 * D);
+    snapshots["9000"] = snap("가장 오래된 즐겨찾기", NOW - 2 * D);
     const s = pruneSnapshots({ ...EMPTY_PERSONAL, excluded, favorites: { "9000": NOW }, snapshots }, NOW);
     const kept = Object.keys(s.snapshots);
     expect(kept).toHaveLength(MAX_SNAPSHOTS);
@@ -333,5 +335,65 @@ describe("R65 내 가게 — 즐겨찾기·이름 기억 (기기 안에서만)",
     expect(Object.keys(capped.favorites)).toHaveLength(MAX_FAVORITES);
     expect(capped.favorites["1"]).toBeUndefined();
     expect(capped.favorites[String(MAX_FAVORITES + 3)]).toBe(NOW + MAX_FAVORITES + 2);
+  });
+
+  it("R65: 이름 기억은 3일(기기 목록 저장본과 같은 기준)이 지나면 쓰지도 남기지도 않는다 — 즐겨찾기도 id·시각만 남는다", () => {
+    expect(SNAPSHOT_MAX_AGE_MS).toBe(PLACES_CACHE_MAX_AGE_MS);
+    expect(SNAPSHOT_MAX_AGE_MS).toBe(3 * D);
+    const s: PersonalState = {
+      ...EMPTY_PERSONAL,
+      favorites: { "1": NOW - 400 * D, "2": NOW },
+      excluded: { "3": NOW - 400 * D },
+      snapshots: { "1": snap("오래된 이름", NOW - 3 * D - 1), "2": snap("딱 3일", NOW - 3 * D), "3": snap("뺀 곳 오래된 이름", NOW - 10 * D) },
+    };
+    const pruned = pruneSnapshots(s, NOW);
+    expect(Object.keys(pruned.snapshots)).toEqual(["2"]);
+    // 즐겨찾기·뺀 곳 자체(id → 시각)는 그대로
+    expect(pruned.favorites).toEqual(s.favorites);
+    expect(pruned.excluded).toEqual(s.excluded);
+    // 정리 전이어도 지난 이름은 쓰지 않는다
+    expect(freshSnapshot(s, "1", NOW)).toBeUndefined();
+    expect(freshSnapshot(s, "2", NOW)?.name).toBe("딱 3일");
+    expect(freshSnapshot(s, "9", NOW)).toBeUndefined();
+  });
+
+  it("R65: 목록·단건 응답에 나온 곳은 이름 기억을 새로 한다 — 내 가게가 가리키는 곳만, 1시간 안에 새로 했으면 그대로", () => {
+    const s: PersonalState = {
+      ...EMPTY_PERSONAL,
+      signals: [sig("kakao_open", D, "3")],
+      favorites: { "1": NOW - 10 * D },
+      excluded: { "2": NOW - 10 * D },
+      snapshots: { "1": snap("예전 이름", NOW - 2 * D) },
+    };
+    const next = refreshSnapshots(s, [src("1", "새 이름"), src("2"), src("3"), src("4")], NOW);
+    expect(next.snapshots["1"]).toMatchObject({ name: "새 이름", at: NOW });
+    expect(next.snapshots["2"]?.at).toBe(NOW);
+    expect(next.snapshots["3"]?.at).toBe(NOW);
+    // 아무 데서도 가리키지 않는 곳은 기억하지 않는다
+    expect(next.snapshots["4"]).toBeUndefined();
+    // 방금 새로 했으면(1시간 안) 상태를 바꾸지 않는다 — 폴링마다 저장하지 않게
+    expect(SNAPSHOT_REFRESH_MS).toBe(H);
+    expect(refreshSnapshots(next, [src("1", "새 이름"), src("2")], NOW + H - 1)).toBe(next);
+    expect(refreshSnapshots(next, [src("1", "더 새 이름")], NOW + H - 1).snapshots["1"].name).toBe("더 새 이름");
+    expect(refreshSnapshots(next, [src("1", "새 이름")], NOW + H + 1).snapshots["1"].at).toBe(NOW + H + 1);
+    expect(refreshSnapshots(s, [src("4")], NOW)).toBe(s);
+  });
+
+  it("R65: 즐겨찾기에서 '다음부터 안 보기'를 하면 즐겨찾기에서도 빠지고, 되돌리기는 둘 다 되돌린다", () => {
+    const fav = addFavorite(EMPTY_PERSONAL, "5", NOW - D);
+    const hidden = excludePlace(fav, "5", NOW);
+    expect(hidden.excluded).toEqual({ "5": NOW });
+    expect(isFavorite(hidden, "5")).toBe(false);
+    // 되돌리기: 빼기 전 즐겨찾기 시각을 그대로 돌려 놓는다
+    const undone = undoExclude(hidden, "5", fav.favorites["5"]);
+    expect(undone.excluded).toEqual({});
+    expect(undone.favorites).toEqual({ "5": NOW - D });
+    // 즐겨찾기가 아니던 곳의 되돌리기는 빼기만 푼다
+    const plain = undoExclude(excludePlace(EMPTY_PERSONAL, "6", NOW), "6", undefined);
+    expect(plain).toEqual(EMPTY_PERSONAL);
+    // 내 가게 "다시 보기"(includePlace)는 빼기만 푼다 — 즐겨찾기로 돌려 놓지 않는다
+    const restored = includePlace(hidden, "5");
+    expect(restored.excluded).toEqual({});
+    expect(isFavorite(restored, "5")).toBe(false);
   });
 });

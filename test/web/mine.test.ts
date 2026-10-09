@@ -10,9 +10,9 @@ import { apiPlace } from "../helpers/apiPlace";
 
 const POS = { lat: 37.514, lng: 127.06 };
 const FULL: MineSections = {
-  favorites: [{ id: "1", name: "중앙해장", line: "해장국 · 봉은사역 근처", pos: POS }],
-  recent: [{ id: "2", name: "만리장성", line: "중국요리 · 삼성역 근처", pos: POS }],
-  excluded: [{ id: "3", name: "이전에 뺀 가게", line: "", pos: null }],
+  favorites: [{ id: "1", name: "중앙해장", line: "해장국 · 봉은사역 근처", pos: POS, loading: false }],
+  recent: [{ id: "2", name: "만리장성", line: "중국요리 · 삼성역 근처", pos: POS, loading: false }],
+  excluded: [{ id: "3", name: "이전에 뺀 가게", line: "", pos: null, loading: false }],
 };
 const noop = () => {};
 const sheet = (sections: MineSections) =>
@@ -113,5 +113,13 @@ describe("R65 내 가게 — 화면", () => {
     expect(html).toContain("카드의 ♡를 누르면 여기 모여요");
     expect(html).toContain('class="mascot');
     expect(html).not.toContain("</h3>");
+  });
+
+  it("R65: 이름을 다시 불러오는 줄은 이름 자리에 뼈대(읽기 도구에는 '불러오는 중')", () => {
+    const html = sheet({ ...FULL, favorites: [{ id: "9", name: "", line: "", pos: null, loading: true }] });
+    const fav = section(html, "즐겨찾기");
+    expect(fav).toContain("mine-skeleton");
+    expect(fav).toContain("불러오는 중");
+    expect(fav).toContain('aria-busy="true"');
   });
 });
