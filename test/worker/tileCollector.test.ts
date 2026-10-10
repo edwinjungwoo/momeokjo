@@ -113,4 +113,38 @@ describe("collectTiles", () => {
     expect(r).toEqual({ collected: [], incomplete: [], failed: [KEY] });
     expect((await getTiles(env.DB, [KEY])).has(KEY)).toBe(false);
   });
+
+  it("R14/R10: 일시 오류(5xx·네트워크)는 그 격자만 failed이고 다음 격자를 계속 부른다", async () => {
+    const kakao = fakeKakaoLocal([], { status: 503 });
+    const r = await collectTiles(deps(kakao.fetcher), [KEY, "1:1", "1:2"]);
+    expect(r).toEqual({ collected: [], incomplete: [], failed: [KEY, "1:1", "1:2"] });
+    expect(kakao.calls).toHaveLength(3);
+  });
+
+  it("R14/R10: 키·권한·한도 오류(401·403·429)면 남은 격자는 부르지 않고 모두 failed — 같은 실행의 외부 호출 예산을 상세 보충에 남긴다", async () => {
+    for (const status of [401, 403, 429]) {
+      const kakao = fakeKakaoLocal([], { status });
+      const d = deps(kakao.fetcher);
+      const r = await collectTiles(d, [KEY, "1:1", "1:2"]);
+      expect(r, String(status)).toEqual({ collected: [], incomplete: [], failed: [KEY, "1:1", "1:2"] });
+      expect(kakao.calls, String(status)).toHaveLength(1);
+      expect(d.budget.left, String(status)).toBe(39);
+    }
+    expect((await getTiles(env.DB, [KEY, "1:1", "1:2"])).size).toBe(0);
+  });
+
+  it("R10: 예산은 격자를 넘어 정확히 센다 — 30곳 격자 둘(호출 2번씩)은 예산 4면 둘 다, 3이면 첫 격자만 모으고 둘째는 incomplete (호출 3번)", async () => {
+    const K2 = `${Number(KEY.split(":")[0]) + 1}:${KEY.split(":")[1]}`;
+    const docs = [...gridDocs("x", 30, RECT), ...gridDocs("y", 30, tileRect(K2))];
+    const four = fakeKakaoLocal(docs);
+    expect(await collectTiles(deps(four.fetcher, 4), [KEY, K2])).toEqual({ collected: [KEY, K2], incomplete: [], failed: [] });
+    expect(four.calls).toHaveLength(4);
+    await env.DB.prepare("DELETE FROM tiles").run();
+    const three = fakeKakaoLocal(docs);
+    const d = deps(three.fetcher, 3);
+    expect(await collectTiles(d, [KEY, K2])).toEqual({ collected: [KEY], incomplete: [K2], failed: [] });
+    expect(three.calls).toHaveLength(3);
+    expect(d.budget.left).toBe(0);
+    expect((await getTiles(env.DB, [KEY, K2])).has(K2)).toBe(false);
+  });
 });

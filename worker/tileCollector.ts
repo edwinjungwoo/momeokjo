@@ -15,6 +15,12 @@ export type CollectResult = { collected: string[]; incomplete: string[]; failed:
 
 type RectResult = { ids: string[]; saturated: boolean } | "budget";
 
+/**
+ * 키·권한·한도 오류 (401 키, 403 권한, 429 한도) — 다음 격자도 똑같이 실패하므로 남은 격자는 부르지 않는다.
+ * 격자 수집과 상세 보충은 실행의 외부 호출 예산 하나를 나눠 쓴다 (상세는 다른 API라 그대로 할 수 있다)
+ */
+const STOP_STATUSES = new Set([401, 403, 429]);
+
 /** 로컬 API 응답은 이 함수 안에서만 쓰고, 밖으로는 기록할 ID만 내보낸다 */
 const idsToRecord = (places: Place[]) => places.filter((p) => p.group !== "dessert").map((p) => p.id);
 
@@ -67,8 +73,13 @@ export async function collectTiles(
       await replaceTilePlaces(deps.db, key, r.ids, deps.now, r.saturated);
       result.collected.push(key);
     } catch (e) {
-      if (e instanceof UpstreamError) result.failed.push(key);
-      else throw e;
+      if (!(e instanceof UpstreamError)) throw e;
+      // 남은 격자는 부르지 않았지만 같은 이유로 실패한 것으로 센다 (모두 부른 것과 결과가 같다 — stale·incomplete 집계 그대로)
+      if (STOP_STATUSES.has(e.status)) {
+        result.failed.push(...due.slice(i));
+        break;
+      }
+      result.failed.push(key);
     }
   }
   return result;
