@@ -29,9 +29,9 @@ export const HUBS: Hub[] = [
   // 2026-10-09 추가·공개 (좌표는 카카오 로컬 SW8, 2호선 출구). 테헤란로 빈 곳 — 갱신은 많이 겹치는 봉은사·선정릉과 같은 월요일
   { id: "seolleung", name: "선릉역", lat: 37.504497, lng: 127.048963, ready: true, refreshDay: 1 },
   { id: "samseong", name: "삼성역", lat: 37.508823, lng: 127.063023, ready: true, refreshDay: 1 },
-  // 2026-10-09 추가 (좌표는 카카오 로컬 SW8). 도심 사무실 — 갱신은 많이 겹치는 광화문과 같은 목요일. R62: 수집·감사가 끝날 때까지 준비 중
-  { id: "cityhall", name: "시청역", lat: 37.565345, lng: 126.977198, ready: false, refreshDay: 4 },
-  { id: "euljiro1ga", name: "을지로입구역", lat: 37.566036, lng: 126.982195, ready: false, refreshDay: 4 },
+  // 2026-10-09 추가, 2026-10-10 공개 (좌표는 카카오 로컬 SW8). 도심 사무실 — 갱신은 많이 겹치는 광화문과 같은 목요일
+  { id: "cityhall", name: "시청역", lat: 37.565345, lng: 126.977198, ready: true, refreshDay: 4 },
+  { id: "euljiro1ga", name: "을지로입구역", lat: 37.566036, lng: 126.982195, ready: true, refreshDay: 4 },
 ];
 
 /** R62: 사용자에게 보이는 거점 (ready만) */
