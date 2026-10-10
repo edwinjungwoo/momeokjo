@@ -1,3 +1,4 @@
+import type { FpKind } from "../shared/adaptiveRefresh";
 import { utcDay } from "../shared/kst";
 
 /**
@@ -5,7 +6,19 @@ import { utcDay } from "../shared/kst";
  * 요청·Cron 실행마다 D1 결과의 meta.rows_read/rows_written을 메모리에 모으고, 끝날 때 한 번만 meta에 더한다.
  * 한도는 UTC 자정(KST 09:00)에 초기화되므로 날짜 키도 UTC 날짜다 ("wait until tomorrow (midnight UTC)").
  */
-export type D1Usage = { read: number; written: number; calls?: number };
+export type D1Usage = { read: number; written: number; calls?: number; details?: DetailTally };
+
+/**
+ * R66 관리 화면 계수: 이번 실행이 저장한 상세를 지난번 지문과 비교한 수 (같음·바뀜·처음). 실행 끝의 사용량 기록 문장에
+ * 같이 더한다 — meta detail_{same|changed|first}:{UTC 날짜} (계수 때문에 D1 문장이 늘지 않는다)
+ */
+export type DetailTally = Record<FpKind, number>;
+export const newTally = (): DetailTally => ({ same: 0, changed: 0, first: 0 });
+export const DETAIL_KINDS: readonly FpKind[] = ["same", "changed", "first"];
+export const detailCounterKey = (kind: FpKind, day: string) => `detail_${kind}:${day}`;
+/** 사용량 기록 문장에 더할 [key, value] (0인 계수는 빼서 쓰기 행을 늘리지 않는다) */
+const tallyPairs = (usage: D1Usage, day: string): string[] =>
+  DETAIL_KINDS.flatMap((k) => ((usage.details?.[k] ?? 0) > 0 ? [detailCounterKey(k, day), String(usage.details![k])] : []));
 
 export const DEFAULT_READ_SOFT_CAP = 3_000_000;
 /** 하루 쓰기 100,000행 중 이벤트 수집(R35)이 넘지 않게 멈추는 선 */
@@ -95,7 +108,8 @@ export function meteredDb(db: D1Database, usage: D1Usage): D1Database {
   return wrapped as unknown as D1Database;
 }
 
-const ADD_UPSERT = `INSERT INTO meta (key, value) VALUES (?, ?), (?, ?)
+/** 더하는 UPSERT (n쌍) — 사용량 2쌍 + R66 계수 0~3쌍 */
+const addUpsert = (pairs: number) => `INSERT INTO meta (key, value) VALUES ${Array.from({ length: pairs }, () => "(?, ?)").join(", ")}
   ON CONFLICT(key) DO UPDATE SET value = CAST(meta.value AS INTEGER) + CAST(excluded.value AS INTEGER)`;
 
 /** 이벤트 한 개를 넣을 때 쓰는 행 수 (표 + 인덱스 2 + 일련번호; 로컬 측정) */
@@ -111,13 +125,14 @@ export function addWrittenStatement(db: D1Database, rows: number, now: number): 
     .bind(writtenKey(utcDay(now)), String(Math.round(rows)));
 }
 
-/** 오늘(UTC) 사용량에 더한다 — UPSERT 한 문장. 이 기록 자체(몇 행)는 세지 않는다 */
+/** 오늘(UTC) 사용량(+ R66 계수)에 더한다 — UPSERT 한 문장. 이 기록 자체(몇 행)는 세지 않는다 */
 export async function recordD1Usage(db: D1Database, usage: D1Usage, now: number): Promise<void> {
-  if (usage.read <= 0 && usage.written <= 0) return;
   const day = utcDay(now);
+  const tally = tallyPairs(usage, day);
+  if (usage.read <= 0 && usage.written <= 0 && tally.length === 0) return;
   await db
-    .prepare(ADD_UPSERT)
-    .bind(readKey(day), String(Math.round(usage.read)), writtenKey(day), String(Math.round(usage.written)))
+    .prepare(addUpsert(2 + tally.length / 2))
+    .bind(readKey(day), String(Math.round(usage.read)), writtenKey(day), String(Math.round(usage.written)), ...tally)
     .run();
 }
 
@@ -128,7 +143,7 @@ export const CRON_DETAIL_LAST_KEY = "cron_detail_last";
 
 /**
  * R38 + R59: Cron 실행의 사용량 기록과 마지막 실행 요약(cron_last)을 UPSERT 한 문장으로 쓴다 (요약 때문에 늘어나는 쓰기는 실행당 1행).
- * 사용량은 더하고, 요약은 바꿔 쓴다
+ * 사용량과 R66 계수(0이 아닌 것만)는 더하고, 요약은 바꿔 쓴다
  */
 export async function recordCronRun(
   db: D1Database, usage: D1Usage, now: number, summary: object,
@@ -136,15 +151,17 @@ export async function recordCronRun(
   summaryKey: typeof CRON_LAST_KEY | typeof CRON_DETAIL_LAST_KEY = CRON_LAST_KEY,
 ): Promise<void> {
   const day = utcDay(now);
+  const tally = tallyPairs(usage, day);
   await db
     .prepare(
       // summaryKey는 코드의 상수 둘 중 하나다 (밖에서 오는 값이 아니다)
-      `INSERT INTO meta (key, value) VALUES (?, ?), (?, ?), ('${summaryKey}', ?)
+      `INSERT INTO meta (key, value) VALUES (?, ?), (?, ?), ('${summaryKey}', ?)${", (?, ?)".repeat(tally.length / 2)}
        ON CONFLICT(key) DO UPDATE SET value = CASE WHEN meta.key = '${summaryKey}' THEN excluded.value
          ELSE CAST(meta.value AS INTEGER) + CAST(excluded.value AS INTEGER) END`,
     )
     .bind(
       readKey(day), String(Math.round(usage.read)), writtenKey(day), String(Math.round(usage.written)), JSON.stringify(summary),
+      ...tally,
     )
     .run();
 }
@@ -196,10 +213,13 @@ export async function overWriteBudget(db: D1Database, env: Env, now: number): Pr
   return (await d1UsageOn(db, utcDay(now))).written >= writeSoftCap(env);
 }
 
-/** 오래된 날짜의 사용량 키를 지운다 (meta가 날마다 2행씩 늘지 않게) */
+/** 오래된 날짜의 사용량·R66 계수 키를 지운다 (meta가 날마다 2~5행씩 늘지 않게) */
 export async function pruneD1Usage(db: D1Database, beforeDay: string): Promise<void> {
   await db
-    .prepare("DELETE FROM meta WHERE (key LIKE 'd1_read:%' OR key LIKE 'd1_written:%') AND substr(key, -10) < ?")
+    .prepare(
+      `DELETE FROM meta WHERE (key LIKE 'd1_read:%' OR key LIKE 'd1_written:%' OR key LIKE 'detail_same:%' OR key LIKE 'detail_changed:%'
+         OR key LIKE 'detail_first:%') AND substr(key, -10) < ?`,
+    )
     .bind(beforeDay)
     .run();
 }

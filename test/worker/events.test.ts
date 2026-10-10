@@ -271,6 +271,15 @@ describe("보관 기간", () => {
     expect(await d1UsageOn(env.DB, "2027-01-14")).toEqual({ read: 7, written: 1 });
   });
 
+  it("R35/R66: R66 상세 계수(detail_same·changed·first) 키도 같은 기준으로 지운다", async () => {
+    const tally = { same: 2, changed: 1, first: 1 };
+    await recordD1Usage(env.DB, { read: 1, written: 1, details: tally }, KST_0402 - 91 * DAY_MS);
+    await recordD1Usage(env.DB, { read: 1, written: 1, details: tally }, KST_0402);
+    await pruneOldEvents(env.DB, KST_0402);
+    const keys = (await env.DB.prepare("SELECT key FROM meta WHERE key LIKE 'detail_%' ORDER BY key").all<{ key: string }>()).results;
+    expect(keys.map((k) => k.key)).toEqual(["detail_changed:2027-01-14", "detail_first:2027-01-14", "detail_same:2027-01-14"]);
+  });
+
   it("R35: Cron은 정리 시간에만 오래된 이벤트를 지운다 (읽기 예산을 넘은 날에도)", async () => {
     for (const h of HUBS) for (const k of tilesCoveringCircle(h, PREWARM_RADIUS)) await markTile(env.DB, k, NOW, 0, false);
     await seed([{ anon: ANON, session: SESSION, hub: "ddp", type: "app_open", ts: KST_0402 - 100 * DAY_MS }]);

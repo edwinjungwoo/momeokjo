@@ -1,11 +1,13 @@
+import { detailFingerprint, fpKind } from "../shared/adaptiveRefresh";
 import type { LatLng } from "../shared/types";
 import type { Budget } from "./budget";
 import { DEFAULT_DETAIL_CHAR_BUDGET } from "./config";
+import type { DetailTally } from "./d1Usage";
 import type { FetchFn } from "./fetchFn";
 import { fetchPlaceDetail } from "./kakaoPlace";
 import { mapLimit } from "./pool";
 import {
-  detailGate, detailsAllowed, nearestDetailIds, pickDetailIds, recordPlaceBlock, saveDetail, saveDetailFailure, saveDetails,
+  detailGate, detailsAllowed, nearestDetailStates, pickDetailIds, recordPlaceBlock, saveDetail, saveDetailFailure, saveDetails,
   type DetailSave, type DetailScope, type TilePlaceState,
 } from "./repo";
 
@@ -25,8 +27,10 @@ export type EnrichDeps = {
   scope?: DetailScope;
   /** 이미 읽어 둔 격자-장소 상태가 있으면 D1을 다시 훑지 않고 여기서 고른다 */
   candidates?: TilePlaceState[];
-  /** R63: 이미 순서대로 고른 ID (Cron — pickCronIds). 있으면 candidates·center로 다시 고르지 않는다 */
+  /** R63: 이미 순서대로 고른 ID (Cron — pickCronIds). 있으면 candidates·center로 다시 고르지 않는다 (candidates는 R66 지난 지문으로만 본다) */
   ids?: string[];
+  /** R66: 저장한 상세를 지난 지문(후보 상태의 fp — 없으면 처음)과 비교해 같음·바뀜·처음을 센다 (실행 끝의 사용량 기록이 쓴다) */
+  tally?: DetailTally;
   /** 한 번에 풀 상세 JSON 글자 수 (없으면 DEFAULT_DETAIL_CHAR_BUDGET) — Task 34 */
   charBudget?: number;
   /** Task 34: 실행의 D1 호출 예산. 새 상세는 저장·차단 기록 몫이 남았을 때만 시작하고, 한 곳씩 다시 저장은 그만큼 남았을 때만 */
@@ -69,13 +73,20 @@ export async function enrichDetails(
   if (!detailsAllowed(await detailGate(deps.db), deps.now)) return result;
   const scope = deps.scope ?? "due";
   let ids: string[];
+  // R66: id → 지난 지문 (후보를 읽은 질의에 있다 — 상세 행이 없거나 지문이 없으면 null = 처음)
+  const prevFp = new Map<string, string | null>();
+  const notePrev = (states: TilePlaceState[]) => {
+    for (const t of states) prevFp.set(t.id, t.meta?.fp ?? null);
+  };
+  if (deps.candidates) notePrev(deps.candidates);
   if (deps.ids) ids = deps.ids.slice(0, Math.max(0, deps.batchSize));
   else if (deps.candidates) ids = pickDetailIds(deps.candidates, center, deps.now, deps.batchSize, scope);
   else {
-    const picked = await nearestDetailIds(
+    const picked = await nearestDetailStates(
       deps.db, Array.isArray(center) ? center[0] : center, radiusM, deps.now, deps.batchSize, scope,
     );
-    ids = picked.ids;
+    notePrev(picked.states);
+    ids = picked.states.map((t) => t.id);
     result.truncated = picked.truncated;
   }
   const charBudget = deps.charBudget ?? DEFAULT_DETAIL_CHAR_BUDGET;
@@ -87,9 +98,14 @@ export async function enrichDetails(
   const keep = (error: unknown) => {
     failure ??= { error };
   };
+  // R66: 저장한 상세만 센다 (실패·저장 오류는 세지 않는다)
+  const count = (x: DetailSave) => {
+    if (deps.tally && "summary" in x && x.fp !== undefined) deps.tally[fpKind(prevFp.get(x.id), x.fp)] += 1;
+  };
   const persist = async (group: DetailSave[]) => {
     try {
       await saveDetails(deps.db, group, deps.now);
+      group.forEach(count);
     } catch (e) {
       if (deps.d1 && !deps.d1.has(group.length + 1)) {
         // D1 호출 예산이 모자라면 한 곳씩 다시는 하지 않는다 — 이 묶음은 다음 실행이 다시 가져온다
@@ -100,8 +116,9 @@ export async function enrichDetails(
       console.error("detail batch save failed — saving one by one", e);
       for (const x of group) {
         try {
-          if ("summary" in x) await saveDetail(deps.db, x.id, x.summary, x.detail, deps.now);
+          if ("summary" in x) await saveDetail(deps.db, x.id, x.summary, x.detail, deps.now, { fp: x.fp });
           else await saveDetailFailure(deps.db, x.id, x.reason, deps.now);
+          count(x);
         } catch (e2) {
           keep(e2);
         }
@@ -126,7 +143,7 @@ export async function enrichDetails(
       }
       const r = await fetchPlaceDetail(deps.fetcher, id, { budget: deps.budget, sleep: deps.sleep, onBody });
       if (r.ok) {
-        queue.push({ id, summary: r.summary, detail: r.detail });
+        queue.push({ id, summary: r.summary, detail: r.detail, fp: detailFingerprint(r.summary, r.detail) });
         result.enriched += 1;
       } else if (r.reason !== "budget") {
         queue.push({ id, reason: r.reason });

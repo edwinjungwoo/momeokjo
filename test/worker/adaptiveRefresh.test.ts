@@ -1,17 +1,25 @@
-import { env } from "cloudflare:test";
+import { createExecutionContext, env, waitOnExecutionContext } from "cloudflare:test";
 import { describe, expect, it } from "vitest";
-import { WEEK_MS, detailFingerprint } from "../../shared/adaptiveRefresh";
+import { SHOW_REFRESH_AFTER_MS, WEEK_MS, detailFingerprint } from "../../shared/adaptiveRefresh";
 import { ASEM, DETAIL_OK_TTL_MS } from "../../shared/constants";
 import { tileKeyOf, tilesCoveringCircle } from "../../shared/geo";
 import { HUBS, hubById } from "../../shared/hubs";
+import { utcDay } from "../../shared/kst";
+import { createApp } from "../../worker/app";
+import { d1UsageOn, recordCronRun, recordD1Usage } from "../../worker/d1Usage";
+import { runScheduled } from "../../worker/maintenance";
+import { parseDetail } from "../../worker/detailParser";
+import { SNAPSHOT_DIRTY_PREFIX } from "../../worker/snapshotDirty";
 import { hubStatuses } from "../../worker/dashboard";
 import { hubHasDue } from "../../worker/hubRefresh";
 import { dueSinceOf, tileRefreshStarts } from "../../worker/refreshSchedule";
 import {
   EXPIRED_DUE_SCAN_SQL, detailJitterMs, expiredDetailStates, idsNeedingDetail, isPlaceDue, pickCronIds, pickDetailIds,
-  replaceTilePlaces, saveDetail, saveDetailFailure, saveDetails, tilePlaceStates, type DetailMeta, type TilePlaceState,
+  placeById, recordPlaceBlock, replaceTilePlaces, saveDetail, saveDetailFailure, saveDetails, tilePlaceStates, type DetailMeta, type TilePlaceState,
 } from "../../worker/repo";
-import { makeSummary, sampleDetail } from "../helpers/places";
+import { callApp } from "../helpers/callApp";
+import { fakePlaceApi } from "../helpers/fakeKakao";
+import { makeSummary, placeJson, sampleDetail } from "../helpers/places";
 import { recordingDb } from "../helpers/recordDb";
 
 const NOW = 1_800_000_000_000;
@@ -208,5 +216,193 @@ describe("R66 관리 화면 남은 갱신", () => {
     await replaceTilePlaces(env.DB, KB, ["long", "weekly", "legacy", "fresh"], T, false);
     const bong = (await hubStatuses(env.DB, T)).find((h) => h.hub === "bongeunsa")!;
     expect(bong).toMatchObject({ ok: 4, due: 2 });
+  });
+});
+
+// ── R66 계수 (관리 화면): 같음·바뀜·처음 ─────────────────────────────
+
+const counters = async (day: string) => {
+  const r = await env.DB.prepare("SELECT key, value FROM meta WHERE key LIKE 'detail_%'").all<{ key: string; value: string }>();
+  const get = (k: string) => Number(r.results.find((x) => x.key === `${k}:${day}`)?.value ?? 0);
+  return { same: get("detail_same"), changed: get("detail_changed"), first: get("detail_first") };
+};
+const ALL_KEYS = [...new Set(HUBS.flatMap((h) => tilesCoveringCircle(h, 1000)))];
+async function markFresh(keys: string[], at: number) {
+  for (let i = 0; i < keys.length; i += 200) {
+    await env.DB.prepare(
+      "INSERT OR REPLACE INTO tiles (key, collected_at, place_count, saturated) SELECT value, ?, 0, 0 FROM json_each(?)",
+    ).bind(at, JSON.stringify(keys.slice(i, i + 200))).run();
+  }
+}
+const bongJson = (name: string) => placeJson({ name, lat: BONG.lat, lng: BONG.lng });
+
+describe("R66 계수 — UTC 하루마다 detail_same·detail_changed·detail_first", () => {
+  it("R66/R38: 사용량 기록 한 문장에 계수를 같이 더한다 (0인 계수는 쓰지 않는다) — 요청(recordD1Usage)·Cron(recordCronRun) 모두", async () => {
+    const day = utcDay(T);
+    const { db, log } = recordingDb(env.DB);
+    await recordD1Usage(db, { read: 10, written: 2, details: { same: 3, changed: 1, first: 0 } }, T);
+    await recordCronRun(db, { read: 5, written: 1, details: { same: 1, changed: 0, first: 2 } }, T, { at: T });
+    expect(log).toHaveLength(2);
+    expect(await counters(day)).toEqual({ same: 4, changed: 1, first: 2 });
+    expect(await d1UsageOn(env.DB, day)).toEqual({ read: 15, written: 3 });
+    expect(await env.DB.prepare("SELECT count(*) AS n FROM meta WHERE key LIKE 'detail_changed:%' OR key LIKE 'detail_first:%'").first<{ n: number }>()).toEqual({ n: 2 });
+  });
+
+  it("R66: Cron은 처음 가져온 곳은 first, 다시 가져와 지문이 같으면 same, 다르면 changed로 센다 — 계수 쓰기는 끝의 사용량 기록 문장 하나뿐", async () => {
+    await markFresh(ALL_KEYS, T);
+    await replaceTilePlaces(env.DB, KB, ["a", "b"], T, false);
+    const place = fakePlaceApi({ a: [bongJson("a"), bongJson("a")], b: [bongJson("b"), bongJson("b 새이름")] });
+    const run = async (now: number) => {
+      const { db, log } = recordingDb(env.DB);
+      await runScheduled({ ...env, DB: db }, { fetcher: place.fetcher, now, sleep: async () => {}, hubs: [BONG] });
+      return log.filter((x) => /detail_(same|changed|first)/.test(x.sql) || x.sql.includes("cron_last")).length;
+    };
+    expect(await run(T)).toBe(1);
+    expect(await counters(utcDay(T))).toEqual({ same: 0, changed: 0, first: 2 });
+    // 둘 다 다시 대상으로 (시작 전으로 되돌린다)
+    await env.DB.prepare("UPDATE places SET due_after = ? WHERE id IN ('a', 'b')").bind(S_BONG - 1).run();
+    expect(await run(T + 5 * 60_000)).toBe(1);
+    expect(await counters(utcDay(T))).toEqual({ same: 1, changed: 1, first: 2 });
+    expect(await adaptive("a")).toMatchObject({ w: 2 });
+    expect(await adaptive("b")).toMatchObject({ w: 1 });
+  });
+});
+
+describe("R66 계수 — 요청 경로", () => {
+  it("R66/R38: 요청이 저장한 상세(단건 처음 가져오기·warm 보충)도 요청 끝의 사용량 기록 문장에 계수를 더한다", async () => {
+    await replaceTilePlaces(env.DB, KB, ["601"], T, false);
+    const place = fakePlaceApi({ "601": bongJson("가게601"), "602": bongJson("가게602"), "603": bongJson("가게603") });
+    const app = createApp({ fetcher: place.fetcher, now: () => T, sleep: async () => {}, rateLimit: async () => true });
+    expect((await callApp(app, "/api/places/601")).status).toBe(200);
+    expect(await counters(utcDay(T))).toEqual({ same: 0, changed: 0, first: 1 });
+    // warm: 격자는 방금 모았고(빈 격자), 기록된 가게 둘의 상세를 처음 가져온다
+    await markFresh(tilesCoveringCircle(BONG, 300), T);
+    await replaceTilePlaces(env.DB, KB, ["601", "602", "603"], T, false);
+    const res = await callApp(app, `/api/admin/warm?lat=${BONG.lat}&lng=${BONG.lng}&radius=300`, {
+      method: "POST", headers: { Authorization: "Bearer test-admin-token" },
+    });
+    expect(await res.json()).toMatchObject({ enriched: 2 });
+    expect(await counters(utcDay(T))).toEqual({ same: 0, changed: 0, first: 3 });
+  });
+});
+
+// ── R66 볼 때 신선하게 (GET /api/places/:id) ─────────────────────────────
+
+describe("R66 볼 때 신선하게 — 단건 조회의 stale-while-revalidate", () => {
+  const STALE = T - SHOW_REFRESH_AFTER_MS - 1;
+  const seedShown = async (id: string, fetchedAt: number, name = "예전이름") => {
+    await saveDetail(env.DB, id, makeSummary(BONG.lat, BONG.lng, { name }), sampleDetail(), fetchedAt);
+    await replaceTilePlaces(env.DB, KB, [id], fetchedAt, false);
+  };
+  const appWith = (responses: Record<string, unknown>, opts: { allow?: boolean } = {}) => {
+    const place = fakePlaceApi(responses);
+    let limited = 0;
+    const app = createApp({
+      fetcher: place.fetcher, now: () => T, sleep: async () => {},
+      rateLimit: async () => {
+        limited += 1;
+        return opts.allow ?? true;
+      },
+    });
+    return { app, place, limited: () => limited };
+  };
+  const stamp = async () =>
+    Number((await env.DB.prepare("SELECT value FROM meta WHERE key = ?").bind(SNAPSHOT_DIRTY_PREFIX + "bongeunsa").first<{ value: string }>())?.value ?? 0);
+
+  it("R66: 7일 넘게 지난 ok 가게를 열면 저장된 그대로 바로 답하고, 뒤에서 그 한 곳만 다시 가져와 저장한다 — 주기 1주·스냅샷 표시·계수", async () => {
+    await seedShown("501", STALE);
+    const before = await stamp();
+    const { app, place } = appWith({ "501": bongJson("새이름") });
+    const res = await callApp(app, "/api/places/501");
+    expect(res.status).toBe(200);
+    expect(await res.json()).toMatchObject({ id: "501", name: "예전이름", fetchedAt: STALE });
+    expect(place.calls.map((c) => c.id)).toEqual(["501"]);
+    const row = (await placeById(env.DB, "501"))!;
+    expect(row.place.name).toBe("새이름");
+    expect(row.meta.fetchedAt).toBe(T);
+    expect(await adaptive("501")).toMatchObject({ w: 1, dueAfter: T });
+    expect(await stamp()).toBeGreaterThan(before);
+    expect(await counters(utcDay(T))).toEqual({ same: 0, changed: 1, first: 0 });
+    // 다시 열면 이제 신선하다 — 부르지 않는다
+    await callApp(app, "/api/places/501");
+    expect(place.calls).toHaveLength(1);
+  });
+
+  it("R66: 지문이 같아도 열어 본 가게는 주기 1주로 둔다 (긴 주기였어도) — 계수는 same", async () => {
+    // 상세 응답을 그대로 두 번 저장해 주기 2주 (응답과 같은 지문)
+    const parsed = parseDetail(bongJson("같은이름"));
+    if (!parsed.ok) throw new Error("fixture");
+    await saveDetail(env.DB, "502", parsed.summary, parsed.detail, STALE - 7 * DAY);
+    await saveDetail(env.DB, "502", parsed.summary, parsed.detail, STALE);
+    await replaceTilePlaces(env.DB, KB, ["502"], STALE, false);
+    expect((await adaptive("502"))?.w).toBe(2);
+    const { app, place } = appWith({ "502": bongJson("같은이름") });
+    await callApp(app, "/api/places/502");
+    expect(place.calls).toHaveLength(1);
+    expect(await adaptive("502")).toMatchObject({ w: 1, dueAfter: T });
+    expect(await counters(utcDay(T))).toEqual({ same: 1, changed: 0, first: 0 });
+  });
+
+  it("R66: 7일 안이면 다시 가져오지 않는다 (정확히 7일도)", async () => {
+    await seedShown("503", T - SHOW_REFRESH_AFTER_MS);
+    const { app, place, limited } = appWith({ "503": bongJson("새이름") });
+    expect((await callApp(app, "/api/places/503")).status).toBe(200);
+    expect(place.calls).toHaveLength(0);
+    expect(limited()).toBe(0);
+  });
+
+  it("R66/R52/R10/R44/R15: 읽기 전용·쿨다운·frozen·요청 제한이면 다시 가져오지 않는다 (응답은 그대로)", async () => {
+    await seedShown("504", STALE);
+    const ro = appWith({ "504": bongJson("새이름") });
+    expect((await callApp(ro.app, "/api/places/504", undefined, { ...env, READ_ONLY: "1" } as unknown as Env)).status).toBe(200);
+    expect(ro.place.calls).toHaveLength(0);
+    const limited = appWith({ "504": bongJson("새이름") }, { allow: false });
+    expect((await callApp(limited.app, "/api/places/504")).status).toBe(200);
+    expect(limited.place.calls).toHaveLength(0);
+    expect(limited.limited()).toBe(1);
+    await recordPlaceBlock(env.DB, T - 60_000); // 쿨다운
+    const cool = appWith({ "504": bongJson("새이름") });
+    expect((await callApp(cool.app, "/api/places/504")).status).toBe(200);
+    expect(cool.place.calls).toHaveLength(0);
+    await env.DB.prepare("INSERT OR REPLACE INTO meta (key, value) VALUES ('place_blocked_until', '0'), ('detail_mode', ?)")
+      .bind(JSON.stringify({ mode: "frozen", since: T - HOUR, until: T + HOUR })).run();
+    const frozen = appWith({ "504": bongJson("새이름") });
+    expect((await callApp(frozen.app, "/api/places/504")).status).toBe(200);
+    expect(frozen.place.calls).toHaveLength(0);
+    expect((await placeById(env.DB, "504"))?.place.name).toBe("예전이름");
+  });
+
+  it("R66/R9/R10: 다시 가져오기가 실패하면 Cron처럼 실패를 기록하고(표시 정보는 그대로), 403·429면 쿨다운을 건다", async () => {
+    await seedShown("505", STALE);
+    const { app } = appWith({ "505": 429 });
+    expect((await callApp(app, "/api/places/505")).status).toBe(200);
+    const row = (await placeById(env.DB, "505"))!;
+    expect(row.meta).toMatchObject({ status: "failed", reason: "http_429", fetchedAt: T });
+    expect(row.place.name).toBe("예전이름");
+    expect(await adaptive("505")).toMatchObject({ w: 1, dueAfter: STALE });
+    expect((await env.DB.prepare("SELECT value FROM meta WHERE key = 'place_blocked_until'").first<{ value: string }>())?.value).toBe(String(T + 30 * 60_000));
+  });
+
+  it("R66: 같은 isolate에서 같은 가게를 동시에 여러 번 열어도 다시 가져오기는 한 번 (상세 API 한 번)", async () => {
+    await seedShown("506", STALE);
+    let release!: () => void;
+    const gate = new Promise<void>((ok) => (release = ok));
+    const place = fakePlaceApi({ "506": bongJson("새이름") });
+    const app = createApp({
+      fetcher: async (input, init) => {
+        await gate;
+        return place.fetcher(input, init);
+      },
+      now: () => T, sleep: async () => {}, rateLimit: async () => true,
+    });
+    const ctxs = [createExecutionContext(), createExecutionContext()];
+    const res = await Promise.all(ctxs.map((ctx) => app.fetch(new Request("http://localhost/api/places/506"), env, ctx)));
+    expect(res.map((r) => r.status)).toEqual([200, 200]);
+    release();
+    for (const ctx of ctxs) await waitOnExecutionContext(ctx);
+    expect(place.calls).toHaveLength(1);
+    // 끝나면 다시 열 수 있다 (이번에는 신선해서 부르지 않는다)
+    await callApp(app, "/api/places/506");
+    expect(place.calls).toHaveLength(1);
   });
 });

@@ -5,8 +5,8 @@ import type { LatLng } from "../shared/types";
 import { Budget } from "./budget";
 import { detailOnlyExtraFrom, limitsFrom } from "./config";
 import {
-  CRON_DETAIL_LAST_KEY, D1CallBudget, d1UsageOn, meteredDb, overReadBudget, readSoftCap, readTodayAndMeta, recordCronRun, recordD1Usage,
-  type D1Usage,
+  CRON_DETAIL_LAST_KEY, D1CallBudget, d1UsageOn, meteredDb, newTally, overReadBudget, readSoftCap, readTodayAndMeta, recordCronRun,
+  recordD1Usage, type D1Usage, type DetailTally,
 } from "./d1Usage";
 import { utcDay } from "../shared/kst";
 import { enrichCallReserve, enrichDetails } from "./detailEnricher";
@@ -34,6 +34,8 @@ export type WarmDeps = {
   detailCharBudget?: number;
   /** Task 34: 이 요청의 D1 호출 예산 (없으면 보지 않는다) */
   d1?: D1CallBudget;
+  /** R66: 같음·바뀜·처음 계수 (요청 미들웨어의 사용량 기록이 쓴다) */
+  tally?: DetailTally;
   now: number;
   sleep?: (ms: number) => Promise<void>;
 };
@@ -71,7 +73,7 @@ export async function warmOnce(
   const e = await enrichDetails(
     {
       db: deps.db, fetcher: deps.fetcher, budget, now: deps.now, batchSize: deps.batchSize, sleep: deps.sleep,
-      charBudget: deps.detailCharBudget, d1,
+      charBudget: deps.detailCharBudget, d1, tally: deps.tally,
     },
     center,
     radiusM,
@@ -188,14 +190,14 @@ export async function runScheduled(
   env: Env,
   opts: { fetcher: FetchFn; now: number; sleep?: (ms: number) => Promise<void>; hubs?: Hub[] },
 ): Promise<CronResult> {
-  // R38: 이번 실행이 읽고 쓴 행 수를 모아 끝에 한 번 기록한다
-  const usage: D1Usage = { read: 0, written: 0 };
+  // R38: 이번 실행이 읽고 쓴 행 수(+ R66 같음·바뀜·처음 계수)를 모아 끝에 한 번 기록한다
+  const usage: D1Usage = { read: 0, written: 0, details: newTally() };
   const db = meteredDb(env.DB, usage);
   // Task 34: 실행 하나의 D1 호출 예산 (끝의 recordCronRun 몫은 남긴다)
   const calls = new D1CallBudget(usage, CRON_D1_CALL_LIMIT - CRON_D1_RESERVE);
   let result: CronResult | null = null;
   try {
-    result = await maintain(env, db, { ...opts, calls });
+    result = await maintain(env, db, { ...opts, calls, tally: usage.details });
     // R59: 밀린 일별 집계 (따라잡았으면 meta 한 문장, 4키). 읽기 예산을 넘은 날은 건너뛴다(R59 30% 가드는 runRollups 안). 실패해도 수집 결과는 그대로 둔다
     // Task 34: D1 호출이 모자라면 다음 실행으로 미룬다
     if (!result.skipped && !calls.has(ROLLUP_D1_CALLS)) (result.d1Skipped ??= []).push("rollup");
@@ -325,7 +327,7 @@ export async function runDetailCron(
   env: Env, opts: { fetcher: FetchFn; now: number; sleep?: (ms: number) => Promise<void>; hubs?: Hub[] },
 ): Promise<DetailCronResult> {
   if (isReadOnly(env)) return { enriched: 0, failed: 0, calls: 0, skipped: "read_only" };
-  const usage: D1Usage = { read: 0, written: 0 };
+  const usage: D1Usage = { read: 0, written: 0, details: newTally() };
   const db = meteredDb(env.DB, usage);
   const calls = new D1CallBudget(usage, CRON_D1_CALL_LIMIT - CRON_D1_RESERVE);
   const result: DetailCronResult = { enriched: 0, failed: 0, calls: 0 };
@@ -356,7 +358,7 @@ export async function runDetailCron(
     const { changedAt } = await readCronMeta(db, []);
     await refreshDetails(db, {
       fetcher: opts.fetcher, now: opts.now, sleep: opts.sleep, hubs, keys, calls, budget, batchSize, changedAt,
-      charBudget: detailCharBudget,
+      charBudget: detailCharBudget, tally: usage.details,
     }, result);
     result.calls = budgetSize - budget.left;
     result.d1Calls = calls.used;
@@ -383,7 +385,7 @@ async function refreshDetails(
   db: D1Database,
   ctx: {
     fetcher: FetchFn; now: number; sleep?: (ms: number) => Promise<void>; hubs: Hub[]; keys: string[]; calls: D1CallBudget;
-    budget: Budget; batchSize: number; changedAt: number; charBudget: number;
+    budget: Budget; batchSize: number; changedAt: number; charBudget: number; tally?: DetailTally;
   },
   out: {
     enriched: number; failed: number; deferred?: number; chars?: number; enrichError?: true; d1Skipped?: string[];
@@ -421,7 +423,7 @@ async function pickAndEnrich(
   db: D1Database,
   ctx: {
     fetcher: FetchFn; now: number; sleep?: (ms: number) => Promise<void>; hubs: Hub[]; calls: D1CallBudget;
-    budget: Budget; batchSize: number; charBudget: number;
+    budget: Budget; batchSize: number; charBudget: number; tally?: DetailTally;
   },
   candidates: TilePlaceState[],
   out: { enriched: number; failed: number; deferred?: number; chars?: number; enrichError?: true },
@@ -434,6 +436,8 @@ async function pickAndEnrich(
     {
       db, fetcher: ctx.fetcher, budget: ctx.budget, now: ctx.now, batchSize, sleep: ctx.sleep, ids, charBudget: ctx.charBudget,
       d1: calls,
+      // R66: 고른 id의 지난 지문은 후보 상태에 있다 (같음·바뀜·처음 계수 — 실행 끝의 recordCronRun 한 문장에 더한다)
+      candidates, tally: ctx.tally,
     },
     ctx.hubs,
     PREWARM_RADIUS,
@@ -452,7 +456,7 @@ async function pickAndEnrich(
 
 async function maintain(
   env: Env, db: D1Database,
-  opts: { fetcher: FetchFn; now: number; sleep?: (ms: number) => Promise<void>; hubs?: Hub[]; calls: D1CallBudget },
+  opts: { fetcher: FetchFn; now: number; sleep?: (ms: number) => Promise<void>; hubs?: Hub[]; calls: D1CallBudget; tally?: DetailTally },
 ): Promise<CronResult> {
   const { budgetSize, batchSize: configured, detailCharBudget } = limitsFrom(env);
   const calls = opts.calls;
@@ -515,7 +519,7 @@ async function maintain(
   const { changedAt, refreshed } = await readCronMeta(db, hubs.map((h) => h.id));
   const candidates = await refreshDetails(db, {
     fetcher: opts.fetcher, now: opts.now, sleep: opts.sleep, hubs, keys, calls, budget, batchSize, changedAt,
-    charBudget: detailCharBudget,
+    charBudget: detailCharBudget, tally: opts.tally,
   }, result);
   if (batchSize > 0) {
     const done = await completeHubRefresh(db, hubs, opts.now, refreshed, {

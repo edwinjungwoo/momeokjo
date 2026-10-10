@@ -419,14 +419,22 @@ async function readNearest(
 export async function nearestDetailIds(
   db: D1Database, center: LatLng, radiusM: number, now: number, limit: number, scope: DetailScope = "due",
 ): Promise<{ ids: string[]; truncated: boolean }> {
+  const { states, truncated } = await nearestDetailStates(db, center, radiusM, now, limit, scope);
+  return { ids: states.map((t) => t.id), truncated };
+}
+
+/** nearestDetailIds와 같은 고르기 — 고른 곳의 상태(R66 지난 지문 포함)까지 (warm 보충이 같음·바뀜을 센다) */
+export async function nearestDetailStates(
+  db: D1Database, center: LatLng, radiusM: number, now: number, limit: number, scope: DetailScope = "due",
+): Promise<{ states: TilePlaceState[]; truncated: boolean }> {
   const want = Math.max(0, Math.floor(limit));
   const keys = tilesCoveringCircle(center, radiusM);
-  if (want === 0 || keys.length === 0) return { ids: [], truncated: false };
+  if (want === 0 || keys.length === 0) return { states: [], truncated: false };
   const out: TilePlaceState[] = [];
   const groups = rankGroups(keys, [center]);
   const ranked = scope === "unfetched" ? rankedJson(groups) : rankedJson(groups, now);
   const { truncated } = await readNearest(db, ranked, now, want, scope, new Set(), out);
-  return { ids: out.map((t) => t.id), truncated };
+  return { states: out, truncated };
 }
 
 /** Cron 미수집 앞선(frontier) 커서 — meta unfetched_from */

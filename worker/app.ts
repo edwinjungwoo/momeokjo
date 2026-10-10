@@ -10,7 +10,8 @@ import type { PlacesResponse } from "../shared/types";
 import { auditArea } from "./audit";
 import { limitsFrom } from "./config";
 import {
-  D1CallBudget, d1UsageOn, meteredDb, overReadBudget, overWriteBudget, readSoftCap, recordD1Usage, writeSoftCap, type D1Usage,
+  D1CallBudget, d1UsageOn, meteredDb, newTally, overReadBudget, overWriteBudget, readSoftCap, recordD1Usage, writeSoftCap, type D1Usage,
+  type DetailTally,
 } from "./d1Usage";
 import { DASHBOARD_CACHE_MS, buildDashboard, cachedJson, dashboardCacheKey, putJson, type DashboardQuery } from "./dashboard";
 import { eventStats, insertEvents } from "./events";
@@ -141,6 +142,8 @@ type Vars = {
   db: D1Database;
   /** 응답 뒤에 이어지는 작업. 끝난 뒤에 이 요청의 D1 사용량을 기록한다 */
   defer: (p: Promise<unknown>) => void;
+  /** R66: 이 요청(이어지는 작업 포함)이 저장한 상세의 같음·바뀜·처음 계수 — 사용량 기록 문장에 같이 더한다 (이벤트 수집은 없음) */
+  tally?: DetailTally;
 };
 type AppEnv = { Bindings: Env; Variables: Vars };
 type Ctx = Context<AppEnv>;
@@ -160,10 +163,11 @@ export function createApp(deps: AppDeps) {
       c.set("defer", (p) => c.executionCtx.waitUntil(p));
       return next();
     }
-    const usage: D1Usage = { read: 0, written: 0 };
+    const usage: D1Usage = { read: 0, written: 0, details: newTally() };
     const later: Promise<unknown>[] = [];
     c.set("db", meteredDb(c.env.DB, usage));
     c.set("defer", (p) => later.push(p));
+    c.set("tally", usage.details);
     try {
       await next();
     } finally {
@@ -188,6 +192,7 @@ export function createApp(deps: AppDeps) {
       waitUntil: (p) => c.var.defer(p),
       sleep: deps.sleep,
       readOnly: isReadOnly(c.env),
+      tally: c.var.tally,
     };
   };
 
@@ -351,6 +356,7 @@ export function createApp(deps: AppDeps) {
         sleep: deps.sleep,
         // Task 34: 요청 하나의 D1 호출 예산 (앞의 읽기 예산 확인과 미들웨어의 사용량 기록 몫은 남긴다)
         d1: new D1CallBudget(usage, CRON_D1_CALL_LIMIT - CRON_D1_RESERVE),
+        tally: c.var.tally,
       },
       { lat: q.data.lat, lng: q.data.lng },
       q.data.radius,

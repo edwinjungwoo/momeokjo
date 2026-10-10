@@ -1,7 +1,9 @@
+import { SHOW_REFRESH_AFTER_MS, detailFingerprint, fpKind } from "../shared/adaptiveRefresh";
 import { boundingBox, haversine, tilesCoveringCircle } from "../shared/geo";
 import type { Hub } from "../shared/hubs";
 import type { ApiPlace, LatLng } from "../shared/types";
 import { Budget } from "./budget";
+import type { DetailTally } from "./d1Usage";
 import { BLOCK_SIGNALS, enrichDetails } from "./detailEnricher";
 import type { FetchFn } from "./fetchFn";
 import { readHubRefreshed } from "./hubRefresh";
@@ -10,7 +12,8 @@ import { fetchPlaceDetail } from "./kakaoPlace";
 import { toApiPlace, withDistance, type PlacesMeta } from "./present";
 import {
   countUnfetchedIn, detailGate, detailRow, detailsAllowed, frozenSince, getMeta, isInTiles, getTiles, isDetailDue, isTileDue,
-  listRowsInBox, placeById, recordPlaceBlock, saveDetail, saveDetailFailure, tilePlaceStates, type ListRow, type TilePlaceState,
+  listRowsInBox, placeById, recordPlaceBlock, saveDetail, saveDetailFailure, tilePlaceStates, type ListRow, type PlaceRow,
+  type TilePlaceState,
 } from "./repo";
 import { collectTiles } from "./tileCollector";
 
@@ -28,6 +31,8 @@ export type ServiceDeps = {
   sleep?: (ms: number) => Promise<void>;
   /** R52: 읽기 전용(개발 서버가 운영 D1에 붙을 때) — 격자 수집·상세 보충·상세 저장을 하지 않는다 */
   readOnly?: boolean;
+  /** R66: 저장한 상세의 같음·바뀜·처음 계수 (요청 미들웨어가 사용량 기록 문장에 같이 더한다) */
+  tally?: DetailTally;
 };
 
 /** R12 응답: 메타 필드 + 거리순 목록 원소 JSON 조각 (본문은 present.ts placesBody로 이어 붙인다) */
@@ -133,7 +138,7 @@ export async function getPlaces(
       enrichDetails(
         {
           db: deps.db, fetcher: deps.fetcher, budget, now: deps.now, batchSize: deps.batchSize, sleep: deps.sleep,
-          scope: "unfetched", candidates: tileStates, charBudget: deps.detailCharBudget,
+          scope: "unfetched", candidates: tileStates, charBudget: deps.detailCharBudget, tally: deps.tally,
         },
         center,
         radiusM,
@@ -162,7 +167,10 @@ export type PlaceMiss = { place: null; cacheable: boolean };
 
 export async function getPlace(deps: ServiceDeps, id: string): Promise<PlaceResult | PlaceMiss> {
   const row = await placeById(deps.db, id);
-  if (row) return { place: toApiPlace(row, { full: true }), stored: true };
+  if (row) {
+    refreshOnShow(deps, row);
+    return { place: toApiPlace(row, { full: true }), stored: true };
+  }
   if (!isDetailDue(await getMeta(deps.db, id), deps.now, id)) return { place: null, cacheable: false };
   if (!detailsAllowed(await detailGate(deps.db), deps.now)) return { place: null, cacheable: false };
   if (!(await deps.rateLimit())) return { place: null, cacheable: false };
@@ -185,7 +193,45 @@ export async function getPlace(deps: ServiceDeps, id: string): Promise<PlaceResu
   if (!(await isInTiles(deps.db, id, hubTileKeys()))) {
     return { place: toApiPlace(detailRow(id, r.summary, r.detail, deps.now), { full: true }), stored: false };
   }
-  await saveDetail(deps.db, id, r.summary, r.detail, deps.now);
+  const fp = detailFingerprint(r.summary, r.detail);
+  await saveDetail(deps.db, id, r.summary, r.detail, deps.now, { fp });
+  // 표시 정보가 있는 행이 없었다 = 한 번도 성공하지 못한 곳 (지난 지문 없음)
+  if (deps.tally) deps.tally[fpKind(null, fp)] += 1;
   const fresh = await placeById(deps.db, id);
   return fresh ? { place: toApiPlace(fresh, { full: true }), stored: true } : { place: null, cacheable: false };
+}
+
+/** R66: 이 isolate에서 지금 다시 가져오는 중인 가게 (같은 가게를 동시에 두 번 부르지 않는다) */
+const showRefreshing = new Set<string>();
+
+/**
+ * R66 볼 때 신선하게 (stale-while-revalidate): 저장된 ok 가게를 열었는데 상세가 SHOW_REFRESH_AFTER_MS(7일)보다 오래됐으면
+ * 응답은 저장된 그대로 주고, 응답 뒤(waitUntil)에 그 한 곳만 다시 가져온다. R52 읽기 전용이면 하지 않는다.
+ * 뒤 작업: R10 쿨다운·R44 frozen이면 그만, R15 요청 제한, 외부 호출 예산 Budget(3)(상세 한 곳 — 재시도 포함), 저장은 Cron과 같다
+ * (스냅샷 표시 R56 같은 batch, 실패는 실패 기록, 403·429는 쿨다운) — 다만 주기는 지문과 상관없이 1주(사람들이 여는 가게는 매주 본다).
+ */
+function refreshOnShow(deps: ServiceDeps, row: PlaceRow): void {
+  const id = row.place.id;
+  if (deps.readOnly || row.meta.status !== "ok" || deps.now - row.meta.fetchedAt <= SHOW_REFRESH_AFTER_MS) return;
+  if (showRefreshing.has(id)) return;
+  showRefreshing.add(id);
+  deps.waitUntil(
+    refreshShown(deps, id, row.fp ?? null)
+      .catch((e) => console.error("show refresh failed", id, e))
+      .finally(() => showRefreshing.delete(id)),
+  );
+}
+
+async function refreshShown(deps: ServiceDeps, id: string, prevFp: string | null): Promise<void> {
+  if (!detailsAllowed(await detailGate(deps.db), deps.now)) return;
+  if (!(await deps.rateLimit())) return;
+  const r = await fetchPlaceDetail(deps.fetcher, id, { budget: new Budget(3), sleep: deps.sleep });
+  if (!r.ok) {
+    if (r.reason !== "budget") await saveDetailFailure(deps.db, id, r.reason, deps.now);
+    if (BLOCK_SIGNALS.has(r.reason)) await recordPlaceBlock(deps.db, deps.now);
+    return;
+  }
+  const fp = detailFingerprint(r.summary, r.detail);
+  await saveDetail(deps.db, id, r.summary, r.detail, deps.now, { fp, weekly: true });
+  if (deps.tally) deps.tally[fpKind(prevFp, fp)] += 1;
 }
