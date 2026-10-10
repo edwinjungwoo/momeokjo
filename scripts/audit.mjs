@@ -2,8 +2,19 @@ import { readFileSync } from "node:fs";
 import { areasFromArgs } from "./area.mjs";
 
 const base = process.env.MMJ_BASE ?? "https://mmj.itmz.me";
-const token =
-  process.env.ADMIN_TOKEN ?? readFileSync(".dev.vars", "utf8").match(/^ADMIN_TOKEN=(.+)$/m)?.[1]?.trim();
+// 토큰은 환경 변수(없으면 .dev.vars)에서 읽고 출력하지 않는다. 없으면 요청하지 않고 멈춘다 (warm.mjs·backfill.mjs와 같다)
+const fromDevVars = () => {
+  try {
+    return readFileSync(".dev.vars", "utf8").match(/^ADMIN_TOKEN=(.+)$/m)?.[1]?.trim();
+  } catch {
+    return undefined;
+  }
+};
+const token = process.env.ADMIN_TOKEN ?? fromDevVars();
+if (!token) {
+  console.error("ADMIN_TOKEN이 없어요 (환경 변수 또는 .dev.vars)");
+  process.exit(1);
+}
 const [{ label, lat, lng, radius }] = areasFromArgs(process.argv.slice(2));
 
 const res = await fetch(`${base}/api/admin/audit?lat=${lat}&lng=${lng}&radius=${radius}`, {
