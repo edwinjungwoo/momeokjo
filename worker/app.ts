@@ -77,6 +77,18 @@ export function dashboardQuery(p: z.infer<typeof DashboardParams>, now: number):
   return { tab: p.tab, from, to, hub: p.hub, compare: p.compare === "1" };
 }
 
+/**
+ * R36: 비밀값 비교 — 앞에서부터 맞은 글자 수만큼 일찍 끝나지 않게 crypto.subtle.timingSafeEqual로 (토큰을 한 글자씩 맞혀 보는
+ * 시간 차 공격). 길이가 다르면 같은 길이 비교를 한 번 하고 거짓 (길이만 드러난다 — Cloudflare 문서의 방법)
+ */
+export function sameSecret(a: string, b: string): boolean {
+  const enc = new TextEncoder();
+  const x = enc.encode(a);
+  const y = enc.encode(b);
+  if (x.byteLength !== y.byteLength) return !crypto.subtle.timingSafeEqual(x, x);
+  return crypto.subtle.timingSafeEqual(x, y);
+}
+
 /** 카카오 장소 ID: 숫자만, 최대 15자리 */
 export const PLACE_ID = /^\d{1,15}$/;
 
@@ -334,7 +346,7 @@ export function createApp(deps: AppDeps) {
     const ip = c.req.header("cf-connecting-ip") ?? "anonymous";
     if (!(await adminRateLimit(c.env, `admin:${ip}`))) return c.json({ error: "rate_limited" }, 429);
     const token = c.env.ADMIN_TOKEN;
-    if (token && c.req.header("authorization") === `Bearer ${token}`) return next();
+    if (token && sameSecret(c.req.header("authorization") ?? "", `Bearer ${token}`)) return next();
     return c.json({ error: "unauthorized" }, 401);
   });
 

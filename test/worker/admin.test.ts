@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import { ASEM, PREWARM_RADIUS } from "../../shared/constants";
 import { HUBS, type Hub } from "../../shared/hubs";
 import { tileKeyOf, tilesCoveringCircle } from "../../shared/geo";
-import { createApp } from "../../worker/app";
+import { createApp, sameSecret } from "../../worker/app";
 import { auditArea } from "../../worker/audit";
 import { MAX_DETAIL_BATCH_SIZE, limitsFrom } from "../../worker/config";
 import { hubOrder, runScheduled } from "../../worker/maintenance";
@@ -80,6 +80,31 @@ describe("admin", () => {
       const headers = auth === undefined ? undefined : { Authorization: auth };
       expect(await call("/api/admin/stats", { headers }), String(auth)).toBe(401);
       expect(await call(`/api/admin/warm?${AREA}`, { method: "POST", headers }), String(auth)).toBe(401);
+    }
+  });
+
+  it("R36: sameSecret은 글자가 모두 같을 때만 참이다 — 앞부분만 같거나 길이·대소문자가 다르면 거짓", () => {
+    expect(sameSecret("Bearer test-admin-token", "Bearer test-admin-token")).toBe(true);
+    expect(sameSecret("", "")).toBe(true);
+    for (const wrong of ["Bearer test-admin-toke", "Bearer test-admin-tokenX", "bearer test-admin-token", "Bearer test-admin-token ", "", "Bearer 토큰"]) {
+      expect(sameSecret(wrong, "Bearer test-admin-token"), wrong).toBe(false);
+    }
+  });
+
+  it("R36: 토큰은 시간 차가 없는 비교(crypto.subtle.timingSafeEqual)로 확인한다 — 앞부분만 맞거나 길이가 다른 토큰도 401", async () => {
+    const { app } = setup();
+    const safe = vi.spyOn(crypto.subtle, "timingSafeEqual");
+    try {
+      // 헤더 값 앞뒤 공백은 플랫폼이 지운다 (HTTP 규칙) — 그래서 끝 공백 하나는 여기서 다르지 않다
+      for (const auth of ["Bearer test-admin-toke", "Bearer test-admin-tokenX", "bearer test-admin-token", "Bearer  test-admin-token"]) {
+        expect((await callApp(app, "/api/admin/stats", { headers: { Authorization: auth } })).status, auth).toBe(401);
+      }
+      expect(safe).toHaveBeenCalled();
+      safe.mockClear();
+      expect((await callApp(app, "/api/admin/stats", { headers: AUTH })).status).toBe(200);
+      expect(safe).toHaveBeenCalledTimes(1);
+    } finally {
+      safe.mockRestore();
     }
   });
 
