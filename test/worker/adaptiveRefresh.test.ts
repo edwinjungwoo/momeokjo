@@ -1,7 +1,7 @@
 import { createExecutionContext, env, waitOnExecutionContext } from "cloudflare:test";
 import { describe, expect, it } from "vitest";
-import { SHOW_REFRESH_AFTER_MS, WEEK_MS, detailFingerprint } from "../../shared/adaptiveRefresh";
-import { ASEM, DETAIL_OK_TTL_MS } from "../../shared/constants";
+import { SHOW_REFRESH_AFTER_MS, WEEK_MS, detailFingerprint, idHash, refreshGapWeeks } from "../../shared/adaptiveRefresh";
+import { ASEM, DETAIL_JITTER_MS, DETAIL_OK_TTL_MS } from "../../shared/constants";
 import { tileKeyOf, tilesCoveringCircle } from "../../shared/geo";
 import { HUBS, hubById } from "../../shared/hubs";
 import { utcDay } from "../../shared/kst";
@@ -27,6 +27,9 @@ const NOW = 1_800_000_000_000;
 const DAY = 24 * 3600_000;
 const S = makeSummary(ASEM.lat, ASEM.lng, { name: "가게" });
 
+/** R66 Fix 1: 주기 n으로 at에 저장한 가게 id의 due_after (id 위상으로 흩은 간격) */
+const dueOf = (id: string, at: number, n: number) => at + (refreshGapWeeks(id, at, n) - 1) * WEEK_MS;
+
 /** 저장된 R66 열 */
 async function adaptive(id: string) {
   return env.DB.prepare("SELECT interval_weeks AS w, fp, due_after AS dueAfter, fetched_at AS fetchedAt, status FROM places WHERE id = ?")
@@ -46,20 +49,45 @@ describe("R66 0008 마이그레이션", () => {
 });
 
 describe("R66 상세 저장 — 지문과 주기", () => {
-  it("R66: 처음 저장은 주기 1, 지문이 같으면 2 → 4 → 4, 다르면 1 — due_after = 가져온 시각 + (주기 − 1) × 7일", async () => {
+  it("R66: 처음 저장은 주기 1, 지문이 같으면 2 → 4 → 4, 다르면 1 — due_after = 가져온 시각 + (간격 − 1) × 7일 (간격은 id 위상, Fix 1)", async () => {
     const d = sampleDetail();
     const fp = detailFingerprint(S, d);
     await saveDetail(env.DB, "1", S, d, NOW);
     expect(await adaptive("1")).toMatchObject({ w: 1, fp, dueAfter: NOW, fetchedAt: NOW });
     await saveDetail(env.DB, "1", S, d, NOW + 7 * DAY);
-    expect(await adaptive("1")).toMatchObject({ w: 2, fp, dueAfter: NOW + 7 * DAY + WEEK_MS });
+    expect(await adaptive("1")).toMatchObject({ w: 2, fp, dueAfter: dueOf("1", NOW + 7 * DAY, 2) });
     await saveDetail(env.DB, "1", S, sampleDetail({ reviewCount: 999 }), NOW + 14 * DAY); // 리뷰 수만 바뀜 = 같음
-    expect(await adaptive("1")).toMatchObject({ w: 4, fp, dueAfter: NOW + 14 * DAY + 3 * WEEK_MS });
+    expect(await adaptive("1")).toMatchObject({ w: 4, fp, dueAfter: dueOf("1", NOW + 14 * DAY, 4) });
     await saveDetail(env.DB, "1", S, d, NOW + 35 * DAY);
-    expect(await adaptive("1")).toMatchObject({ w: 4, dueAfter: NOW + 35 * DAY + 3 * WEEK_MS });
+    expect(await adaptive("1")).toMatchObject({ w: 4, dueAfter: dueOf("1", NOW + 35 * DAY, 4) });
     const changed = sampleDetail({ price: 15000 });
     await saveDetail(env.DB, "1", S, changed, NOW + 63 * DAY);
     expect(await adaptive("1")).toMatchObject({ w: 1, fp: detailFingerprint(S, changed), dueAfter: NOW + 63 * DAY });
+  });
+
+  it("R66 Fix 1: 저장 SQL의 due_after는 id 위상 간격을 쓴다 — 주기 4로 같은 때 저장한 가게들이 네 주에 나뉘어 돌아온다 (주기 1은 그대로)", async () => {
+    const d = sampleDetail();
+    // 같은 때 주기 4가 되는 가게 40곳 (같은 지문으로 세 번 저장: 1 → 2 → 4)
+    const ids = Array.from({ length: 40 }, (_, i) => String(9000 + i));
+    for (const [k, at] of [NOW, NOW + 7 * DAY, NOW + 14 * DAY].entries()) {
+      await saveDetails(env.DB, ids.map((id) => ({ id, summary: S, detail: d })), at);
+      if (k === 0) for (const id of ids.slice(0, 3)) expect((await adaptive(id))?.dueAfter, id).toBe(NOW);
+    }
+    const at = NOW + 14 * DAY;
+    const gaps = new Set<number>();
+    for (const id of ids) {
+      const r = (await adaptive(id))!;
+      expect(r.w).toBe(4);
+      expect(r.dueAfter, id).toBe(dueOf(id, at, 4));
+      gaps.add(refreshGapWeeks(id, at, 4));
+    }
+    expect([...gaps].sort()).toEqual([1, 2, 3, 4]);
+  });
+
+  it("R66 Fix 1/R9: 위상 해시는 R9 지터와 같은 해시다 (idHash)", () => {
+    for (const id of ["a", "b", "27531028", "1000000"]) {
+      expect(detailJitterMs(id)).toBe(Math.floor((idHash(id) / 0x1_0000_0000) * DETAIL_JITTER_MS));
+    }
   });
 
   it("R66/R9: 실패는 주기·지문·due_after를 바꾸지 않는다 — 다음 성공은 실패 전 지문과 비교한다", async () => {
@@ -70,7 +98,7 @@ describe("R66 상세 저장 — 지문과 주기", () => {
     await saveDetailFailure(env.DB, "1", "http_500", NOW + 21 * DAY);
     expect(await adaptive("1")).toMatchObject({ status: "failed", w: before!.w, fp: before!.fp, dueAfter: before!.dueAfter, fetchedAt: NOW + 21 * DAY });
     await saveDetail(env.DB, "1", S, d, NOW + 22 * DAY);
-    expect(await adaptive("1")).toMatchObject({ status: "ok", w: 4, dueAfter: NOW + 22 * DAY + 3 * WEEK_MS });
+    expect(await adaptive("1")).toMatchObject({ status: "ok", w: 4, dueAfter: dueOf("1", NOW + 22 * DAY, 4) });
   });
 
   it("R66: 마이그레이션 전 행(지문 없음)과 한 번도 성공하지 못한 행은 처음처럼 주기 1에서 시작한다", async () => {
@@ -92,7 +120,7 @@ describe("R66 상세 저장 — 지문과 주기", () => {
     await saveDetail(env.DB, "1", S, d, NOW + 14 * DAY, { weekly: true });
     expect(await adaptive("1")).toMatchObject({ w: 1, dueAfter: NOW + 14 * DAY });
     await saveDetails(env.DB, [{ id: "1", summary: S, detail: d }, { id: "2", summary: S, detail: d }], NOW + 21 * DAY);
-    expect(await adaptive("1")).toMatchObject({ w: 2, dueAfter: NOW + 21 * DAY + WEEK_MS });
+    expect(await adaptive("1")).toMatchObject({ w: 2, dueAfter: dueOf("1", NOW + 21 * DAY, 2) });
     expect(await adaptive("2")).toMatchObject({ w: 1, dueAfter: NOW + 21 * DAY });
   });
 });

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
-  INTERVAL_WEEKS, MAX_INTERVAL_WEEKS, SHOW_REFRESH_AFTER_MS, WEEK_MS, detailFingerprint, dueAfterOf, fpKind,
+  INTERVAL_WEEKS, MAX_INTERVAL_WEEKS, SHOW_REFRESH_AFTER_MS, WEEK_MS, detailFingerprint, dueAfterOf, fpKind, idHash, refreshGapWeeks,
+  weekIndex,
 } from "../../shared/adaptiveRefresh";
 import type { PlaceDetail, PlaceSummary } from "../../shared/types";
 
@@ -65,7 +66,7 @@ describe("R66 표시 정보 지문 (fp)", () => {
     expect(fpKind("abcd1234", "0000ffff")).toBe("changed");
   });
 
-  it("R66: 주기는 1·2·4주, 다음 갱신 기준 = 가져온 시각 + (주기 − 1) × 7일, 열어 본 가게는 7일이 지나면 다시 가져온다", () => {
+  it("R66: 주기는 1·2·4주, 다음 갱신 기준 = 가져온 시각 + (간격 − 1) × 7일, 열어 본 가게는 7일이 지나면 다시 가져온다", () => {
     expect(INTERVAL_WEEKS).toEqual([1, 2, 4]);
     expect(MAX_INTERVAL_WEEKS).toBe(4);
     expect(WEEK_MS).toBe(7 * 24 * 3600_000);
@@ -73,5 +74,51 @@ describe("R66 표시 정보 지문 (fp)", () => {
     expect(dueAfterOf(1000, 1)).toBe(1000);
     expect(dueAfterOf(1000, 2)).toBe(1000 + WEEK_MS);
     expect(dueAfterOf(1000, 4)).toBe(1000 + 3 * WEEK_MS);
+  });
+});
+
+describe("R66 Fix 1 — 주기 2·4주 가게를 id 위상으로 흩는다", () => {
+  const T = Date.UTC(2026, 9, 10, 3); // 2026-10-10 12:00 KST
+  const IDS = Array.from({ length: 4000 }, (_, i) => String(1_000_000 + i * 7919));
+
+  it("R66: 간격은 1 ≤ 간격 ≤ 주기이고, (가져온 주 + 간격) ≡ hash(id) mod 주기 — 주기 1은 언제나 1, 해시는 지터와 같은 해시", () => {
+    for (const id of IDS.slice(0, 200)) {
+      expect(refreshGapWeeks(id, T, 1)).toBe(1);
+      for (const n of [2, 4]) {
+        const g = refreshGapWeeks(id, T, n);
+        expect(g).toBeGreaterThanOrEqual(1);
+        expect(g).toBeLessThanOrEqual(n);
+        expect((weekIndex(T) + g) % n).toBe(idHash(id) % n);
+      }
+    }
+    expect(weekIndex(T)).toBe(Math.floor(T / WEEK_MS));
+    expect(idHash("a")).toBe(idHash("a"));
+    expect(idHash("a")).not.toBe(idHash("b"));
+  });
+
+  it("R66: 같은 때 가져온 많은 가게 중 어느 한 주에 돌아오는 몫은 주기 2면 ≈ 1/2, 4면 ≈ 1/4 (한 주에 몰리지 않는다)", () => {
+    for (const n of [2, 4]) {
+      const byWeek = new Map<number, number>();
+      for (const id of IDS) {
+        const w = weekIndex(T) + refreshGapWeeks(id, T, n);
+        byWeek.set(w, (byWeek.get(w) ?? 0) + 1);
+      }
+      expect(byWeek.size, String(n)).toBe(n);
+      for (const [w, c] of byWeek) expect(Math.abs(c / IDS.length - 1 / n), `${n} @${w}`).toBeLessThan(0.03);
+    }
+  });
+
+  it("R66: 첫 간격 뒤에는 정확히 주기마다 — 같은 가게의 위상이 그대로다 (같은 요일·시각에 다시 가져올 때)", () => {
+    for (const id of IDS.slice(0, 300)) {
+      for (const n of [1, 2, 4]) {
+        let t = T + (idHash(id) % 7) * 24 * 3600_000; // 가게마다 다른 요일
+        t += refreshGapWeeks(id, t, n) * WEEK_MS;
+        for (let k = 0; k < 4; k++) {
+          const g = refreshGapWeeks(id, t, n);
+          expect(g, `${id} n=${n}`).toBe(n);
+          t += g * WEEK_MS;
+        }
+      }
+    }
   });
 });

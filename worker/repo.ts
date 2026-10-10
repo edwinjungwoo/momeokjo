@@ -1,4 +1,4 @@
-import { MAX_INTERVAL_WEEKS, WEEK_MS, detailFingerprint } from "../shared/adaptiveRefresh";
+import { MAX_INTERVAL_WEEKS, WEEK_MS, detailFingerprint, idHash, refreshGapWeeks } from "../shared/adaptiveRefresh";
 import { categoryGroup } from "../shared/category";
 import {
   DETAIL_FAIL_TTL_MS, DETAIL_FREEZE_AFTER_BLOCKS, DETAIL_FREEZE_MS, DETAIL_JITTER_MS, DETAIL_OK_TTL_MS, LIST_JSON_VERSION,
@@ -247,14 +247,9 @@ export async function markTilesFresh(db: D1Database, fp: string, now: number): P
   await db.prepare(META_UPSERT).bind(TILES_FRESH_KEY, JSON.stringify(value)).run();
 }
 
-/** id로 정해지는 0 ≤ jitter < 24시간 (FNV-1a 32비트 + murmur3 마무리 섞기 — 연속된 id도 고르게 흩어진다) */
+/** id로 정해지는 0 ≤ jitter < 24시간 (idHash — FNV-1a 32비트 + murmur3 마무리 섞기, 연속된 id도 고르게 흩어진다. R66 위상과 같은 해시) */
 export function detailJitterMs(id: string): number {
-  let h = 0x811c9dc5;
-  for (let i = 0; i < id.length; i++) h = Math.imul(h ^ id.charCodeAt(i), 0x01000193);
-  h = Math.imul(h ^ (h >>> 16), 0x85ebca6b);
-  h = Math.imul(h ^ (h >>> 13), 0xc2b2ae35);
-  h = (h ^ (h >>> 16)) >>> 0;
-  return Math.floor((h / 0x1_0000_0000) * DETAIL_JITTER_MS);
+  return Math.floor((idHash(id) / 0x1_0000_0000) * DETAIL_JITTER_MS);
 }
 
 /** R9: 격자와 상관없는 만료 — ok 3일 + 지터, 실패 6시간 (거점 밖 격자, 단건 R13의 실패 재시도) */
@@ -266,7 +261,7 @@ export function isDetailDue(meta: DetailMeta, now: number, id: string): boolean 
 
 /**
  * R63: tileKey 격자에 기록된 가게의 상세를 다시 가져올 때인가. 거점 격자의 ok는 그 격자의 갱신 기준 시각
- * (덮는 거점들의 가장 늦은 시작)보다 due_after(R66 — fetched_at + (주기 − 1) × 7일, 없으면 fetched_at)가 이를 때,
+ * (덮는 거점들의 가장 늦은 시작)보다 due_after(R66 — fetched_at + (간격 − 1) × 7일, 간격은 주기 안의 id 위상, 없으면 fetched_at)가 이를 때,
  * 거점 밖 격자는 isDetailDue(3일 + 지터, fetched_at). 미수집은 언제나, 실패는 6시간
  */
 export function isPlaceDue(meta: DetailMeta, tileKey: string, now: number, id: string): boolean {
@@ -988,13 +983,14 @@ export async function getMeta(db: D1Database, id: string): Promise<DetailMeta> {
  * 상세 한 곳을 쓰는 문장 (saveDetail과 saveDetails가 같은 문장을 쓴다). 예전처럼 행을 통째로 바꿔 쓰고(INSERT OR REPLACE),
  * R66 주기는 바꾸기 전 행(PK로 한 행)의 지문·주기로 정한다: 지문이 같으면 MIN(4, 주기 × 2), 다르거나 이전 지문이 없거나(처음·마이그레이션
  * 전 행·실패만 있던 행) 행이 없으면 1. ?21(weekly)이면 지문과 상관없이 1 (R66 볼 때 신선하게 — 열어 본 가게).
- * due_after = fetched_at + (주기 − 1) × 7일. 바인드: ?1 id … ?18 now, ?19 list_json, ?20 fp, ?21 weekly(0/1)
+ * due_after = fetched_at + (간격 − 1) × 7일 — 간격은 정해진 주기의 id 위상 간격(R66 Fix 1, refreshGapWeeks: Worker가 주기 2·4일 때를
+ * 미리 계산해 ?22·?23으로 넘긴다, 주기 1은 1). 바인드: ?1 id … ?18 now, ?19 list_json, ?20 fp, ?21 weekly(0/1), ?22 간격(2주), ?23 간격(4주)
  */
 const DETAIL_SAVE_SQL = `INSERT OR REPLACE INTO places (id, status, name, category_name, category_group, lat, lng, address, phone, photo_url,
     rating, review_count, price, menus_json, hours_json, strengths_json, tags_json, bookable, fail_reason, fetched_at,
     list_json, fp, interval_weeks, due_after)
   SELECT ?1, 'ok', ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, NULL, ?18,
-    ?19, ?20, w.iv, ?18 + (w.iv - 1) * ${WEEK_MS}
+    ?19, ?20, w.iv, ?18 + ((CASE w.iv WHEN 2 THEN ?22 WHEN 4 THEN ?23 ELSE 1 END) - 1) * ${WEEK_MS}
   FROM (SELECT CASE WHEN ?21 THEN 1 ELSE COALESCE(
     (SELECT CASE WHEN o.fp = ?20 THEN MIN(${MAX_INTERVAL_WEEKS}, o.interval_weeks * 2) ELSE 1 END FROM places o WHERE o.id = ?1), 1)
     END AS iv) AS w`;
@@ -1012,6 +1008,8 @@ function detailInsertStmt(
       storedListJson(detailRow(id, s, d, now)),
       opts.fp ?? detailFingerprint(s, d),
       opts.weekly ? 1 : 0,
+      refreshGapWeeks(id, now, 2),
+      refreshGapWeeks(id, now, 4),
     );
 }
 
