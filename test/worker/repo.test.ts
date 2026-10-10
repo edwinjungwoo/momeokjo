@@ -253,6 +253,28 @@ describe("repo", () => {
     expect((await scan([KB, KA, KB])).cursorWrites).toBe(0);
   });
 
+  it("R11/R38/R9: 실패 커서는 읽은 행이 하나도 없으면(재설정이 아닐 때) 상한(now − 6시간)만 따라 다시 쓰지 않는다 — 다음 실행은 같은 빈 범위부터 읽을 뿐이고, 대상 실패 행이 생기면 찾는다 (Task 57: 할 일 없는 실행마다 D1 호출 1번·쓰기 1행)", async () => {
+    await seedOutsideAndHub(5);
+    const failedCursor = async () =>
+      (await env.DB.prepare("SELECT value FROM meta WHERE key = 'expired_from:failed'").first<{ value: string }>())?.value ?? null;
+    expect((await scan([KA])).cursorWrites).toBe(2); // 처음(재설정): 두 커서(ok·실패)를 한 batch로
+    const first = await failedCursor();
+    expect(first).not.toBeNull();
+    for (const dt of [60_000, 120_000, 3600_000]) {
+      const r = await scan([KA], NOW + dt);
+      expect(r.ids).toEqual(["h1", "h2"]);
+      expect(r.cursorWrites, String(dt)).toBe(0);
+    }
+    expect(await failedCursor()).toBe(first);
+    // 6시간 지난 실패 행이 생기면 그 실행이 찾고 커서를 그 자리로 옮긴다
+    await saveDetailFailure(env.DB, "f1", "http_500", NOW + 1000);
+    await replaceTilePlaces(env.DB, KA, ["h1", "h2", "f1"], NOW, false);
+    const later = NOW + 1000 + DETAIL_FAIL_TTL_MS;
+    const found = await scan([KA], later);
+    expect(found.ids).toContain("f1");
+    expect(JSON.parse((await failedCursor())!)).toMatchObject({ from: NOW + 1000 });
+  });
+
   it("R11/R38: fetched_at이 같은 행이 한 쪽(300행)보다 많아도 커서가 (fetched_at, rowid)로 넘어가 멈추지 않는다", async () => {
     const T = NOW - 10 * DETAIL_OK_TTL_MS;
     const ties = Array.from({ length: 1000 }, (_, i) => `t${i}`);

@@ -221,7 +221,7 @@ describe("Task 40: 운영 크기에서 Cron 한 번이 읽는 D1 행 (정상 상
   });
 
   it.each(["backlog", "refresh", "idle"] as const)(
-    "R38/R10/R63: %s — 상세만 실행은 meta를 한 번만 읽고(오늘 읽기·쿨다운·frozen·tiles_changed_at·미수집·만료 커서) 보충은 쿨다운을 다시 읽지 않는다 — D1 호출 ≤ 8번(전 11~13번). 본 Cron은 시작(오늘 읽기·격자 확인 표시·백필 커서)과 격자 수집 뒤(쿨다운·완료 기록·커서·집계) 두 번 — ≤ 8번(전 13~14번) (Task 57)",
+    "R38/R10/R63: %s — 상세만 실행은 meta를 한 번만 읽고(오늘 읽기·쿨다운·frozen·tiles_changed_at·미수집·만료 커서) 보충은 쿨다운을 다시 읽지 않는다 — D1 호출 ≤ 7번(전 11~13번). 본 Cron은 시작(오늘 읽기·격자 확인 표시·백필 커서)과 격자 수집 뒤(쿨다운·완료 기록·커서·집계) 두 번 — ≤ 7번(전 13~14번). 빈 범위만 읽은 만료 커서는 다시 쓰지 않는다 (Task 57)",
     async (s) => {
       await seed(s);
       const now = await warmUp(s === "backlog" ? NOW + MIN5 : NOW);
@@ -229,10 +229,10 @@ describe("Task 40: 운영 크기에서 Cron 한 번이 읽는 D1 행 (정상 상
       const m = await mainRun(now);
       expect(m.r.d1Skipped).toBeUndefined();
       expect(metaReads(m.log), JSON.stringify(m.log.map((x) => x.sql.slice(0, 60)))).toBe(2);
-      expect(m.r.d1Calls).toBeLessThanOrEqual(8);
+      expect(m.r.d1Calls).toBeLessThanOrEqual(7);
       const d = await detailRun(now + 60_000);
       expect(metaReads(d.log), JSON.stringify(d.log.map((x) => x.sql.slice(0, 60)))).toBe(1);
-      expect(d.r.d1Calls).toBeLessThanOrEqual(8);
+      expect(d.r.d1Calls).toBeLessThanOrEqual(7);
       if (s !== "idle") expect(d.r.enriched + (d.r.deferred ?? 0)).toBe(limitsFrom(env).batchSize);
     },
   );

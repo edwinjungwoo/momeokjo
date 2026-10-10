@@ -822,9 +822,11 @@ export async function expiredDetailStates(
     // 처음부터: ok는 NULL 구간부터(R66), 실패는 0부터 — 실패 행은 언제나 fetched_at이 있다
     let pos: ScanPos = reset ? { from: status === "ok" ? null : 0, rid: 0 } : { from: cursor.from, rid: cursor.rid };
     let next: ScanPos | null = null;
+    let rows = 0;
     // R63: 재설정이 아니어도 대상 행이 나올 때까지 EXPIRED_RESET_PAGES쪽까지 (갱신 창이 겹치면 대상 아닌 행이 끼어 있다 — 최악 호출 수는 그대로)
     for (let page = 0; page < EXPIRED_RESET_PAGES && next === null; page++) {
       const r = await db.prepare(sql).bind(status, pos.from, pos.rid, before, EXPIRED_SCAN_LIMIT).all<ExpiredRow>();
+      rows += r.results.length;
       for (const x of r.results) {
         if (x.tile_key === null || !okBefore.has(x.tile_key) || !due(x, x.tile_key)) continue;
         next ??= posOf(x);
@@ -840,7 +842,10 @@ export async function expiredDetailStates(
       pos = posOf(r.results[r.results.length - 1]);
     }
     next ??= pos;
-    if (reset || next.from !== cursor.from || next.rid !== cursor.rid) {
+    // Task 57: 재설정이 아니고 읽은 행이 하나도 없으면 커서를 그대로 둔다 — 커서와 상한 사이가 비어 있었다는 뜻이라 다음 실행이 같은
+    // 빈 범위부터 읽어도 고르는 행은 같다 (새 행의 fetched_at·due_after는 그 실행의 now 근처라 상한(실패 now − 6시간, ok 갱신 시작) 뒤에
+    // 생긴다). 실패 커서는 상한이 now를 따라 움직여서 할 일 없는 실행마다 D1 호출 1번·쓰기 1행을 썼다
+    if (reset || (rows > 0 && (next.from !== cursor.from || next.rid !== cursor.rid))) {
       const value: ScanCursor = { from: next.from, rid: next.rid, changedAt, keys: fingerprint };
       writes.push(db.prepare(META_UPSERT).bind(key, JSON.stringify(value)));
     }
