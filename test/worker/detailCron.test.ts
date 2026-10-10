@@ -41,7 +41,7 @@ const metaValue = async (key: string) =>
   (await env.DB.prepare("SELECT value FROM meta WHERE key = ?").bind(key).first<{ value: string }>())?.value ?? null;
 
 describe("R63 둘째 트리거 (홀수 분) — 스냅샷·쉼·상세만 보충", () => {
-  it("R63/R56: 둘째 트리거는 매 분(* * * * *)이고 UTC 분으로 나눈다 — 7·17·…·57은 스냅샷, 5의 배수는 쉼(본 Cron 분), 나머지 홀수 분은 상세만, 짝수 분은 DETAIL_ONLY_EXTRA가 \"1\"일 때만 상세만(아니면 쉼)", () => {
+  it("R63/R56: 둘째 트리거는 매 분(* * * * *)이고 UTC 분으로 나눈다 — 2·7·12·…·57은 스냅샷(Task 56 시간당 12번), 5의 배수는 쉼(본 Cron 분), 나머지 홀수 분은 상세만, 나머지 짝수 분은 DETAIL_ONLY_EXTRA가 \"1\"일 때만 상세만(아니면 쉼)", () => {
     expect(SECOND_CRON).toBe("* * * * *");
     expect(wranglerConfig).toContain(`"${MAIN_CRON}"`);
     expect(wranglerConfig).toContain(`"${SECOND_CRON}"`);
@@ -56,18 +56,18 @@ describe("R63 둘째 트리거 (홀수 분) — 스냅샷·쉼·상세만 보충
       return jobs;
     };
     const fives = Array.from({ length: 12 }, (_, i) => i * 5);
-    const snapshots = [7, 17, 27, 37, 47, 57];
+    const snapshots = [2, 7, 12, 17, 22, 27, 32, 37, 42, 47, 52, 57];
     const odd = Array.from({ length: 30 }, (_, i) => 2 * i + 1).filter((m) => m % 5 !== 0 && m % 10 !== 7);
-    const even = Array.from({ length: 30 }, (_, i) => 2 * i).filter((m) => m % 5 !== 0);
+    const even = Array.from({ length: 30 }, (_, i) => 2 * i).filter((m) => m % 5 !== 0 && m % 10 !== 2);
     expect(odd).toHaveLength(18);
-    expect(even).toHaveLength(24);
+    expect(even).toHaveLength(18);
 
-    // 부스트 켬: 스냅샷 6 · 쉼 12(본 Cron 분) · 상세만 42 (홀수 18 + 짝수 24)
+    // 부스트 켬: 스냅샷 12 · 쉼 12(본 Cron 분) · 상세만 36 (홀수 18 + 짝수 18)
     const on = table(true);
     expect(on.get("snapshot")).toEqual(snapshots);
     expect(on.get("skip")).toEqual(fives);
     expect(on.get("detail")).toEqual([...odd, ...even].sort((a, b) => a - b));
-    expect(on.get("detail")).toHaveLength(42);
+    expect(on.get("detail")).toHaveLength(36);
     // 부스트 끔: 예전(1-59/2)과 같은 홀수 분 18번만, 짝수 분은 쉼
     const off = table(false);
     expect(off.get("snapshot")).toEqual(snapshots);

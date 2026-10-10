@@ -241,13 +241,16 @@ export const SECOND_CRON = "* * * * *";
 
 export type SecondCronJob = "snapshot" | "skip" | "detail";
 /**
- * 둘째 트리거의 예정 시각(UTC 분)으로 할 일: 7·17·…·57분은 R56 스냅샷(시간당 6번), 5의 배수(0·5·…·55)는 쉼 — 본 Cron이
- * 도는 분이라 겹치지 않게, 나머지 홀수 분(시간당 18번)은 R63 상세만 보충, 나머지 짝수 분(시간당 24번)은 extra(DETAIL_ONLY_EXTRA "1",
- * 채우기 부스트)일 때만 상세만 보충이고 아니면 쉼
+ * 둘째 트리거의 예정 시각(UTC 분)으로 할 일: 2·7·12·…·57분(10으로 나눈 나머지 2·7)은 R56 스냅샷(시간당 12번), 5의 배수(0·5·…·55)는
+ * 쉼 — 본 Cron이 도는 분이라 겹치지 않게, 나머지 홀수 분(시간당 18번)은 R63 상세만 보충, 나머지 짝수 분(시간당 18번)은 extra
+ * (DETAIL_ONLY_EXTRA "1", 채우기 부스트)일 때만 상세만 보충이고 아니면 쉼.
+ * 스냅샷 시간당 12번(Task 56, 예전 6번): 한 번에 한 거점이고 스냅샷은 2시간 쓰므로 동시에 쓸 수 있는 스냅샷은 많아야 24개 —
+ * 공개 거점 14곳이 6번 × 2시간 = 12개에 막혀 늘 두 곳 넘게 지금 경로(미스마다 수천 행·CPU 22~53ms)로 답했다. 깨끗한 스냅샷은
+ * 다시 만들지 않고 시각만 새로 해서(maintainSnapshots) 실행이 늘어도 무거운 만들기는 늘지 않는다
  */
 export function secondCronJob(scheduledTime: number, extra = false): SecondCronJob {
   const m = new Date(scheduledTime).getUTCMinutes();
-  if (m % 10 === 7) return "snapshot";
+  if (m % 10 === 7 || m % 10 === 2) return "snapshot";
   if (m % 5 === 0) return "skip";
   if (m % 2 === 1) return "detail";
   return extra ? "detail" : "skip";

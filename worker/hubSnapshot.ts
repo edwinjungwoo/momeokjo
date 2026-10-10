@@ -4,7 +4,9 @@ import type { Hub } from "../shared/hubs";
 import { readHubRefreshed } from "./hubRefresh";
 import { placesPayload, readListRows } from "./placesService";
 import { placesBody } from "./present";
-import { countUnfetchedIn, detailGate, detailsAllowed, frozenSince, getTiles, isTileDue, tilePlaceStates } from "./repo";
+import {
+  countUnfetchedIn, detailGate, detailsAllowed, frozenSince, getTiles, isTileDue, tilePlaceStates, type DetailGate,
+} from "./repo";
 import { SNAPSHOT_DIRTY_PREFIX } from "./snapshotDirty";
 
 /**
@@ -98,6 +100,23 @@ const UPSERT = `INSERT INTO hub_snapshots (hub, version, built_at, source_at, en
     encoding = excluded.encoding, etag = excluded.etag, body = excluded.body`;
 
 /**
+ * 쿨다운·frozen이 지금부터 SNAPSHOT_MAX_AGE_MS 안에 끝나는가 — 그러면 지금 만들거나 새로 한 스냅샷이 쓰이는 동안
+ * detailsPaused·detailsFrozenSince가 틀려진다 (끝나는 것은 표시를 올리지 않는다. 새로 걸리는 것은 recordPlaceBlock이 행을 지운다)
+ */
+function gateEndsWithinMaxAge(gate: DetailGate, now: number): boolean {
+  const frozen = frozenSince(gate, now);
+  const ends = [gate.blockedUntil > now ? gate.blockedUntil : null, frozen !== null ? gate.frozen!.until : null];
+  return ends.some((t) => t !== null && t < now + SNAPSHOT_MAX_AGE_MS);
+}
+
+/** 거점 1000m 격자 중 만료됐거나 수집하지 않은 격자가 있는가 (incompleteTiles·stale은 수집하는 지금 경로가 정한다) */
+async function hubTilesDue(db: D1Database, hub: Hub, now: number): Promise<boolean> {
+  const keys = tilesCoveringCircle({ lat: hub.lat, lng: hub.lng }, MAX_RADIUS);
+  const tiles = await getTiles(db, keys);
+  return keys.some((k) => isTileDue(k, tiles.get(k), now));
+}
+
+/**
  * 한 거점의 스냅샷을 만든다. 본문은 요청 경로(getPlaces)와 같은 읽기(readList)·같은 조립(placesPayload, placesBody)이다.
  * 만들지 않는 때 (지금 경로가 답한다):
  * - pending: 상세가 없는 가게가 있다 — 지금 경로가 보충을 시작하고 pending을 알린다 (pending 0이라고 말하는 스냅샷을 두지 않는다)
@@ -113,14 +132,11 @@ export async function buildHubSnapshot(db: D1Database, hub: Hub, now: number): P
   const stamp = await dirtyStamp(db, hub.id);
   const gate = await detailGate(db);
   const frozen = frozenSince(gate, now);
-  const ends = [gate.blockedUntil > now ? gate.blockedUntil : null, frozen !== null ? gate.frozen!.until : null];
-  if (ends.some((t) => t !== null && t < now + SNAPSHOT_MAX_AGE_MS)) return skip("paused");
+  if (gateEndsWithinMaxAge(gate, now)) return skip("paused");
 
-  const keys = tilesCoveringCircle(center, MAX_RADIUS);
-  const tiles = await getTiles(db, keys);
-  if (keys.some((k) => isTileDue(k, tiles.get(k), now))) return skip("tiles");
+  if (await hubTilesDue(db, hub, now)) return skip("tiles");
   // pending은 목록(무거운 list_json)을 읽기 전에 본다
-  const tileStates = await tilePlaceStates(db, keys);
+  const tileStates = await tilePlaceStates(db, tilesCoveringCircle(center, MAX_RADIUS));
   if (countUnfetchedIn(tileStates) > 0) return skip("pending");
   const rows = await readListRows(db, center, MAX_RADIUS, tileStates);
   // R63: 지금 경로와 같은 완료 기록 (기록이 바뀌면 recordHubRefreshed가 표시를 올려 다시 만든다)
@@ -142,6 +158,30 @@ export async function buildHubSnapshot(db: D1Database, hub: Hub, now: number): P
     .run();
   if (!Number(r.meta?.changes)) return skip("raced");
   return { status: "built", hub: hub.id, places: items.length, bytes: raw.byteLength, gzipBytes: gz.byteLength };
+}
+
+/** 표시가 만든 때 그대로이고 행도 그대로일 때만 만든 시각을 바꾼다 (바꾸는 사이 더러워졌거나 다시 만들어졌으면 0행) */
+const RENEW = `UPDATE hub_snapshots SET built_at = ?5
+  WHERE hub = ?1 AND version = ?2 AND built_at = ?3 AND source_at = ?4
+    AND COALESCE((SELECT CAST(value AS INTEGER) FROM meta WHERE key = ?6), 0) = ?4`;
+
+/**
+ * 깨끗한 스냅샷 새로 하기 (Task 56): 표시가 만든 때 그대로(source_at)면 본문도 그대로다 — 본문을 바꾸는 쓰기(상세 저장·실패 기록,
+ * 격자 ID 변경, R63 완료 기록)는 같은 batch에서 표시를 올리고, 새 ID와 쿨다운 시작은 행을 지운다. 그래서 목록(수천 행)을 다시 읽고
+ * gzip하지 않고 built_at만 지금으로 바꾼다 (D1 3번, 읽기 ~60행). 시간이 바꾸는 두 가지는 만들 때와 같이 다시 본다: 만료 격자
+ * (R63 갱신 요일 — 있으면 지금 경로가 수집해야 한다), 새로 한 스냅샷이 쓰이는 동안 안에 끝나는 쿨다운·frozen. 그러면(또는 바꾸는 사이
+ * 표시가 바뀌었으면) false — 부르는 쪽이 만들기 경로로 간다(건너뜀·다시 만들기).
+ */
+async function renewHubSnapshot(
+  db: D1Database, hub: Hub, row: { built_at: number; source_at: number }, now: number,
+): Promise<boolean> {
+  if (gateEndsWithinMaxAge(await detailGate(db), now)) return false;
+  if (await hubTilesDue(db, hub, now)) return false;
+  const r = await db
+    .prepare(RENEW)
+    .bind(hub.id, HUB_SNAPSHOT_VERSION, row.built_at, row.source_at, now, SNAPSHOT_DIRTY_PREFIX + hub.id)
+    .run();
+  return Number(r.meta?.changes) > 0;
 }
 
 /** 읽은 스냅샷. body가 null이면 If-None-Match와 ETag가 같아서 본문 열을 받지 않았다 (304) */
@@ -218,12 +258,14 @@ export function snapshotResponse(
 export const notModifiedResponse = (etag: string, source: ResponseSource) =>
   new Response(null, { status: 304, headers: { etag: `W/${etag}`, "cache-control": "no-store", "x-mmj-source": source } });
 
-export type SnapshotRun = SnapshotBuild | { status: "idle" };
+/** renewed: 깨끗한 스냅샷의 만든 시각만 새로 했다 (renewHubSnapshot) */
+export type SnapshotRun = SnapshotBuild | { status: "idle" } | { status: "renewed"; hub: string };
 
 /**
  * R56 Cron: 실행마다 거점 하나만 만든다 (CPU·D1 읽기를 실행마다 나눈다).
  * 고르는 순서: 스냅샷이 없거나 판이 다른 거점(넘겨받은 순서 = 실행마다 돌아가는 hubOrder) →
  * 만료 SNAPSHOT_REFRESH_BEFORE_MS 전이 된 것, 또는 더러운데(표시 ≠ source_at) 만든 지 SNAPSHOT_DIRTY_REBUILD_MS가 지난 것 중 가장 오래된 것.
+ * 고른 것이 깨끗한(표시 = source_at) 쓸 수 있는 스냅샷이면 먼저 새로 한다(renewHubSnapshot — 만든 시각만, 무거운 읽기 없음).
  * snapshot_skip:{hub}의 until이 지금보다 뒤인 거점은 고르지 않는다 (skipBackoffMs).
  * 만들기 전에 {until: 지금 + 기다림, attempts: 이전 + 1}을 써 둔다 — 실행이 CPU 초과로 죽으면 표시가 남고, 이어서 죽을수록
  * 기다림이 두 배씩(20 → 40 → 80분 … 최대 6시간) 는다. 만들었거나 기다릴 필요가 없는 건너뜀(paused·raced)이면 지우고,
@@ -270,6 +312,11 @@ export async function maintainSnapshots(db: D1Database, hubs: Hub[], now: number
   const skipKey = SNAPSHOT_SKIP_PREFIX + hubId;
   // 쓸 수 있는 스냅샷이 있으면 그 만료 SNAPSHOT_SKIP_EXPIRY_MARGIN_MS 전 너머로는 기다리지 않는다 (스냅샷이 끊기지 않게)
   const valid = metas.results.find((x) => x.hub === hubId && x.version === HUB_SNAPSHOT_VERSION && x.built_at <= now);
+  const hadSkip = stamps.results.some((x) => x.key === skipKey);
+  if (valid && valid.source_at === metaNum(SNAPSHOT_DIRTY_PREFIX + hubId) && (await renewHubSnapshot(db, pick.hub, valid, now))) {
+    if (hadSkip) await db.prepare("DELETE FROM meta WHERE key = ?").bind(skipKey).run();
+    return { status: "renewed", hub: hubId };
+  }
   const skipUntil = (wait: number) =>
     valid ? Math.min(now + wait, valid.built_at + SNAPSHOT_MAX_AGE_MS - SNAPSHOT_SKIP_EXPIRY_MARGIN_MS) : now + wait;
   const setSkip = (s: SkipState) => db.prepare(META_SET).bind(skipKey, JSON.stringify(s)).run();

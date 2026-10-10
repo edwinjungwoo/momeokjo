@@ -20,7 +20,7 @@
     // R36: 관리자 API 전용 (모든 /api/admin/* 요청을 토큰 비교 전에 IP별로 센다)
     { "name": "ADMIN_LIMITER", "namespace_id": "1002", "simple": { "limit": 120, "period": 60 } }
   ],
-  // 본 Cron(5분마다: 격자·보충·완료·집계)과 둘째 트리거(매 분, R63) — UTC 분으로 7·17·…·57은 R56 스냅샷, 5의 배수는 쉼,
+  // 본 Cron(5분마다: 격자·보충·완료·집계)과 둘째 트리거(매 분, R63) — UTC 분으로 2·7·12·…·57은 R56 스냅샷(시간당 12번), 5의 배수는 쉼,
   // 나머지 홀수 분은 상세만 보충, 나머지 짝수 분은 DETAIL_ONLY_EXTRA가 "1"일 때만 상세만 보충(아니면 쉼)
   // (worker/maintenance.ts MAIN_CRON·SECOND_CRON·secondCronJob). 트리거 수는 그대로 2개.
   // 주의: 채우기 부스트 앞 버전으로 롤백하면 둘째 트리거를 1-59/2로(R63 앞 버전이면 2-59/5로) 되돌린다 (docs/deploy.md)

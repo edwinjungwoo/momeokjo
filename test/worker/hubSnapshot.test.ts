@@ -4,7 +4,7 @@ import {
   DETAIL_FREEZE_MS, LIST_JSON_VERSION, MAX_RADIUS, PLACE_BLOCK_COOLDOWN_MS, PREWARM_RADIUS, TILE_TTL_MS,
 } from "../../shared/constants";
 import { tileKeyOf, tilesCoveringCircle } from "../../shared/geo";
-import { HUBS, hubById, type Hub } from "../../shared/hubs";
+import { HUBS, PUBLIC_HUBS, hubById, type Hub } from "../../shared/hubs";
 import { utcDay } from "../../shared/kst";
 import { PLACES_CACHE_MS, PLACES_CACHE_VERSION, createApp, placesCacheKey } from "../../worker/app";
 import {
@@ -12,7 +12,7 @@ import {
   SNAPSHOT_SKIP_BACKOFF_MS, SNAPSHOT_SKIP_MAX_BACKOFF_MS, SNAPSHOT_SKIP_PREFIX, acceptsGzip, skipBackoffMs, buildHubSnapshot, etagMatches, maintainSnapshots, readHubSnapshot, snapshotEdgeTtlMs,
 } from "../../worker/hubSnapshot";
 import { hubsOfTile } from "../../worker/hubTiles";
-import { MAIN_CRON, SECOND_CRON, runCron, runSnapshotCron } from "../../worker/maintenance";
+import { MAIN_CRON, SECOND_CRON, runCron, runSnapshotCron, secondCronJob } from "../../worker/maintenance";
 import { markTile, recordPlaceBlock, replaceTilePlaces, saveDetail, saveDetailFailure } from "../../worker/repo";
 import { SNAPSHOT_DIRTY_PREFIX, markHubsDirtyStmt } from "../../worker/snapshotDirty";
 import { callApp } from "../helpers/callApp";
@@ -443,7 +443,7 @@ describe("R56 거점 스냅샷 — Cron", () => {
     expect(await maintainSnapshots(env.DB, [hubs[1], hubs[2], hubs[0]], NOW + 5)).toMatchObject({ status: "built", hub: "ddp" });
   });
 
-  it("R56: 더러운 스냅샷은 SNAPSHOT_DIRTY_REBUILD_MS가 지나면, 깨끗한 스냅샷은 만료 SNAPSHOT_REFRESH_BEFORE_MS 전에 다시 만든다", async () => {
+  it("R56: 더러운 스냅샷은 SNAPSHOT_DIRTY_REBUILD_MS가 지나면 다시 만들고, 깨끗한 스냅샷은 만료 SNAPSHOT_REFRESH_BEFORE_MS 전에 새로 한다", async () => {
     await freshAll();
     for (let i = 0; i < hubs.length; i++) await maintainSnapshots(env.DB, hubs, NOW + i);
     await env.DB.batch([markHubsDirtyStmt(env.DB, ["ddp"], NOW + 10)]);
@@ -451,11 +451,11 @@ describe("R56 거점 스냅샷 — Cron", () => {
     expect(await maintainSnapshots(env.DB, hubs, NOW + SNAPSHOT_DIRTY_REBUILD_MS + 1)).toMatchObject({ status: "built", hub: "ddp" });
     const t = NOW + SNAPSHOT_MAX_AGE_MS - SNAPSHOT_REFRESH_BEFORE_MS;
     expect(await maintainSnapshots(env.DB, hubs, t - 10)).toEqual({ status: "idle" });
-    // 가장 오래된 것부터
-    expect(await maintainSnapshots(env.DB, hubs, t + 5)).toMatchObject({ status: "built", hub: "bongeunsa" });
+    // 가장 오래된 것부터 (깨끗하니 만든 시각만 새로 한다 — Task 56)
+    expect(await maintainSnapshots(env.DB, hubs, t + 5)).toEqual({ status: "renewed", hub: "bongeunsa" });
   });
 
-  it("R56/R63: 스냅샷 Cron은 따로 돈다 — 본 Cron(MAIN_CRON)은 수집·보충만, 둘째 트리거(SECOND_CRON)의 7·17·…분은 외부 호출 없이 한 거점만 만든다", async () => {
+  it("R56/R63: 스냅샷 Cron은 따로 돈다 — 본 Cron(MAIN_CRON)은 수집·보충만, 둘째 트리거(SECOND_CRON)의 2·7·12·…분은 외부 호출 없이 한 거점만 만든다", async () => {
     expect(wranglerConfig).toContain(`"${MAIN_CRON}"`);
     expect(wranglerConfig).toContain(`"${SECOND_CRON}"`);
     for (const h of HUBS) for (const k of tilesCoveringCircle(h, PREWARM_RADIUS)) await markTile(env.DB, k, NOW, 0, false);
@@ -472,6 +472,66 @@ describe("R56 거점 스냅샷 — Cron", () => {
     expect(snap).toMatchObject({ cron: "snapshot", result: { status: "built" } });
     expect(local.calls.length).toBe(fetchedBefore);
     expect(await env.DB.prepare("SELECT count(*) AS c FROM hub_snapshots").first<{ c: number }>()).toEqual({ c: 1 });
+  });
+
+  it("R56: 깨끗한(표시 = source_at) 스냅샷이 만료 15분 전이 되면 본문을 다시 만들지 않고 built_at만 새로 한다 — 격자-장소·목록을 읽지 않는다", async () => {
+    await freshAll();
+    for (let i = 0; i < hubs.length; i++) await maintainSnapshots(env.DB, hubs, NOW + i);
+    const before = await snapshotRow("bongeunsa");
+    const t = NOW + SNAPSHOT_MAX_AGE_MS - SNAPSHOT_REFRESH_BEFORE_MS + 5;
+    const rec = recordingDb(env.DB);
+    expect(await maintainSnapshots(rec.db, hubs, t)).toEqual({ status: "renewed", hub: "bongeunsa" });
+    // 본문·ETag·표시는 그대로, 만든 시각만 지금 — 원래 만료(NOW + 2시간) 뒤에도 쓴다
+    expect(await snapshotRow("bongeunsa")).toEqual({ ...before, built_at: t });
+    expect(await readHubSnapshot(env.DB, "bongeunsa", NOW + SNAPSHOT_MAX_AGE_MS + 60_000, undefined)).toMatchObject({ etag: before!.etag });
+    // 무거운 읽기(격자-장소·목록)가 없다 — 메타·게이트·격자 상태·갱신 한 문장
+    expect(rec.log.some((x) => /tile_places|list_json/.test(x.sql))).toBe(false);
+    expect(rec.log.reduce((n, x) => n + x.read, 0)).toBeLessThan(200);
+    // 더러운 스냅샷은 다시 만든다 (본문이 바뀌었을 수 있다)
+    await env.DB.batch([markHubsDirtyStmt(env.DB, ["ddp"], t)]);
+    expect(await maintainSnapshots(env.DB, hubs, NOW + SNAPSHOT_DIRTY_REBUILD_MS + 60_000 + SNAPSHOT_MAX_AGE_MS / 2))
+      .toMatchObject({ status: "built", hub: "ddp" });
+  });
+
+  it("R56: 새로 하기 전에 지금 만들 수 있는지 다시 본다 — 만료 격자가 있거나 쿨다운·frozen이 쓰는 동안 안에 끝나면 새로 하지 않는다(만들기 경로가 건너뜀)", async () => {
+    await freshAll();
+    for (let i = 0; i < hubs.length; i++) await maintainSnapshots(env.DB, hubs, NOW + i);
+    const t = NOW + SNAPSHOT_MAX_AGE_MS - SNAPSHOT_REFRESH_BEFORE_MS + 5;
+    // 만료 격자 (거점 갱신 요일에 격자가 만료됐다 — 다시 모으기 전)
+    await env.DB.prepare("DELETE FROM tiles WHERE key = ?").bind(tileKeyOf(HUB)).run();
+    expect(await maintainSnapshots(env.DB, hubs, t)).toMatchObject({ status: "skipped", hub: "bongeunsa", reason: "tiles" });
+    expect((await snapshotRow("bongeunsa"))!.built_at).toBe(NOW);
+    // frozen이 새로 한 스냅샷이 쓰일 동안 안에 끝난다 (본문의 detailsPaused·detailsFrozenSince가 틀린 채로 남지 않게)
+    const frozen = { mode: "frozen", since: NOW - 1000, until: t + SNAPSHOT_MAX_AGE_MS - 1 };
+    await env.DB.prepare("INSERT INTO meta (key, value) VALUES ('detail_mode', ?)").bind(JSON.stringify(frozen)).run();
+    expect(await maintainSnapshots(env.DB, hubs, t + 1)).toMatchObject({ status: "skipped", hub: "ddp", reason: "paused" });
+    expect((await snapshotRow("ddp"))!.built_at).toBe(NOW + 1);
+  });
+
+  it("R56: 수용량 — 스냅샷 실행(둘째 트리거의 2·7·12·…분, 시간당 12번) × 쓰는 시간(2시간)이 공개 거점 수보다 25% 넘게 넉넉하다", () => {
+    const perHour = Array.from({ length: 60 }, (_, m) => secondCronJob(Date.UTC(2026, 9, 7, 1, m))).filter((j) => j === "snapshot").length;
+    expect(perHour).toBe(12);
+    expect(PUBLIC_HUBS.length * 1.25).toBeLessThanOrEqual((perHour * SNAPSHOT_MAX_AGE_MS) / 3_600_000);
+  });
+
+  it("R56: 공개 거점이 모두 깨끗하면 스냅샷 Cron만으로 모든 공개 거점의 스냅샷이 끊기지 않고 유지된다 (6시간)", async () => {
+    const keys = [...new Set(PUBLIC_HUBS.flatMap((h) => tilesCoveringCircle(h, PREWARM_RADIUS)))];
+    await env.DB.prepare(
+      "INSERT OR REPLACE INTO tiles (key, collected_at, place_count, saturated) SELECT value, ?, 0, 0 FROM json_each(?)",
+    ).bind(NOW, JSON.stringify(keys)).run();
+    const start = Date.UTC(2027, 0, 15, 8, 0);
+    expect(start).toBe(NOW);
+    const valid = async (t: number) =>
+      (await env.DB.prepare("SELECT count(*) AS c FROM hub_snapshots WHERE version = ? AND built_at > ? AND built_at <= ?")
+        .bind(HUB_SNAPSHOT_VERSION, t - SNAPSHOT_MAX_AGE_MS, t).first<{ c: number }>())!.c;
+    const counts: number[] = [];
+    for (let m = 0; m < 6 * 60; m++) {
+      const t = start + m * 60_000;
+      if (secondCronJob(t) !== "snapshot") continue;
+      await runSnapshotCron(env, { now: t });
+      if (m >= 2 * 60) counts.push(await valid(t));
+    }
+    expect(Math.min(...counts)).toBe(PUBLIC_HUBS.length);
   });
 
   it("R38/R56: 스냅샷 Cron은 자기 D1 사용량을 따로 기록하고, 읽기 예산을 넘은 날에는 만들지 않는다", async () => {
@@ -600,14 +660,15 @@ describe("R56 Fix wave 11 — 만들 수 없는 거점의 비용 상한", () => 
     await seedHub();
     await buildHubSnapshot(env.DB, HUB, NOW);
     const t = NOW + SNAPSHOT_MAX_AGE_MS - SNAPSHOT_REFRESH_BEFORE_MS + 1;
-    await env.DB.prepare("DELETE FROM places WHERE id = '1002'").run();
-    expect(await maintainSnapshots(env.DB, [HUB], t)).toMatchObject({ status: "skipped", reason: "pending" });
+    // 만들 수 없는 거점 (만료 격자 — 깨끗해도 새로 하지 않고 만들기 경로가 건너뛴다)
+    await env.DB.prepare("DELETE FROM tiles WHERE key = ?").bind(tileKeyOf(HUB)).run();
+    expect(await maintainSnapshots(env.DB, [HUB], t)).toMatchObject({ status: "skipped", reason: "tiles" });
     const skipKey = SNAPSHOT_SKIP_PREFIX + "bongeunsa";
     const v = JSON.parse((await env.DB.prepare("SELECT value FROM meta WHERE key = ?").bind(skipKey).first<{ value: string }>())!.value);
     expect(v.until).toBe(NOW + SNAPSHOT_MAX_AGE_MS - 5 * 60_000);
     expect(v.until).toBeLessThan(t + SNAPSHOT_SKIP_BACKOFF_MS);
     // 그때 다시 본다 (스냅샷이 아직 쓸 수 있을 때)
-    expect(await maintainSnapshots(env.DB, [HUB], v.until)).toMatchObject({ status: "skipped", reason: "pending" });
+    expect(await maintainSnapshots(env.DB, [HUB], v.until)).toMatchObject({ status: "skipped", reason: "tiles" });
     // 쓸 수 있는 스냅샷이 없으면 그대로 20분
     await env.DB.prepare("DELETE FROM hub_snapshots").run();
     await env.DB.prepare("DELETE FROM meta WHERE key = ?").bind(skipKey).run();
