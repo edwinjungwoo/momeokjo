@@ -23,6 +23,7 @@ import {
   type DetailGate, type TilePlaceState,
 } from "./repo";
 import { collectTiles } from "./tileCollector";
+import { hubTiles } from "./hubTiles";
 
 export type WarmDeps = {
   db: D1Database;
@@ -377,7 +378,7 @@ export async function runDetailCron(
     }
     const budget = new Budget(budgetSize);
     const hubs = hubOrder(opts.hubs ?? HUBS, opts.now);
-    const keys = [...new Set(hubs.flatMap((h) => tilesCoveringCircle(h, PREWARM_RADIUS)))];
+    const keys = [...new Set(hubs.flatMap((h) => hubTiles(h)))];
     const batchSize = cronBatchFor(calls.left, configured);
     result.batch = batchSize;
     const gate = detailGateFrom((k) => start.meta.get(k));
@@ -499,7 +500,7 @@ async function maintain(
   const calls = opts.calls;
   const budget = new Budget(budgetSize);
   const hubs = hubOrder(opts.hubs ?? HUBS, opts.now);
-  const keys = [...new Set(hubs.flatMap((h) => tilesCoveringCircle(h, PREWARM_RADIUS)))];
+  const keys = [...new Set(hubs.flatMap((h) => hubTiles(h)))];
   // R35: 하루 한 번 90일 지난 이벤트를 지운다 (지울 행만 인덱스로 읽어서 읽기 예산을 넘은 날에도 돈다)
   if (isRetentionWindow(opts.now)) {
     await pruneOldEvents(db, opts.now).catch((e) => console.error("event prune failed", e));
@@ -589,7 +590,7 @@ export function pickRefreshCheck(
     .map((hub) => ({ hub, start: hubRefreshStart(hub, now) }))
     .filter(({ hub, start }) => {
       if (refreshed.get(hub.id)?.start === start) return false;
-      return !tilesCoveringCircle(hub, PREWARM_RADIUS).some((k) => seen.pendingTiles.has(k) || seen.candidateTiles.has(k));
+      return !hubTiles(hub).some((k) => seen.pendingTiles.has(k) || seen.candidateTiles.has(k));
     })
     .sort((a, b) => a.start - b.start || (a.hub.id < b.hub.id ? -1 : a.hub.id > b.hub.id ? 1 : 0));
   return open.length === 0 ? null : open[Math.floor(now / CRON_INTERVAL_MS) % open.length];

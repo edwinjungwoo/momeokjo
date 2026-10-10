@@ -8,11 +8,12 @@ import { limitsFrom } from "../../worker/config";
 import { HUB_SNAPSHOT_VERSION } from "../../worker/hubSnapshot";
 import { HUB_DUE_EXISTS_SQL, HUB_REFRESHED_PREFIX } from "../../worker/hubRefresh";
 import { hubOrder, runDetailCron, runScheduled, runSnapshotCron } from "../../worker/maintenance";
+import { hubTiles } from "../../worker/hubTiles";
 import { hubRefreshStart } from "../../worker/refreshSchedule";
 import {
   EXPIRED_DUE_SCAN_SQL, EXPIRED_SCAN_SQL, NEAREST_UNFETCHED_SQL, TILES_FRESH_KEY, TILES_FRESH_RECHECK_MS, UNFETCHED_CHUNK_TILES, UNFETCHED_FROM_KEY,
   UNFETCHED_MAX_CHUNKS, UNFETCHED_PROBE_TILES,
-  nearestUnfetchedStates, pickCronIds, tilePlaceStates, unfetchedStates,
+  nearestUnfetchedStates, pickCronIds, tileDistance, tilePlaceStates, tileSetFingerprint, unfetchedStates,
 } from "../../worker/repo";
 import { placeJson } from "../helpers/places";
 import { recordingDb, type Executed } from "../helpers/recordDb";
@@ -245,6 +246,42 @@ describe("Task 40: 운영 크기에서 Cron 한 번이 읽는 D1 행 (정상 상
     const { db, log } = recordingDb(env.DB);
     expect(await runSnapshotCron({ ...env, DB: db }, { now: NOW })).toEqual({ status: "idle" });
     expect(reads(log), `snapshot reads ${reads(log)}`).toBeLessThanOrEqual(100);
+  });
+});
+
+describe("Task 57: 실행마다 다시 계산하던 격자 값 (새 isolate의 Cron CPU)", () => {
+  it("R11/R63: 거점 격자(PREWARM_RADIUS)는 좌표마다 isolate에서 한 번 계산해 같은(바꿀 수 없는) 배열을 돌려주고 tilesCoveringCircle과 같다 — 좌표가 다르면 따로", () => {
+    for (const h of HUBS) {
+      const a = hubTiles(h);
+      expect(a).toEqual(tilesCoveringCircle(h, PREWARM_RADIUS));
+      expect(hubTiles({ ...h })).toBe(a);
+      expect(Object.isFrozen(a)).toBe(true);
+    }
+    const moved = { ...BONG, lat: BONG.lat + 0.01 };
+    expect(hubTiles(moved)).toEqual(tilesCoveringCircle(moved, PREWARM_RADIUS));
+    expect(hubTiles(moved)).not.toEqual(hubTiles(BONG));
+  });
+
+  it("R11/R63: 칸에서 가장 가까운 거점까지 거리(순위·Cron 순서의 기준)는 거점마다 haversine의 최솟값과 같은 값이다", () => {
+    for (const hubs of [HUBS, hubOrder(HUBS, NOW + MIN5), [BONG], [DDP, BONG]]) {
+      for (const k of KEYS) {
+        const r = tileRect(k);
+        const mid = { lat: (r.minLat + r.maxLat) / 2, lng: (r.minLng + r.maxLng) / 2 };
+        expect(tileDistance(k, hubs)).toBe(Math.min(...hubs.map((h) => haversine(h, mid))));
+      }
+    }
+    expect(tileDistance(KEYS[0], [])).toBe(Infinity);
+  });
+
+  it("R11/R38: 격자 집합 지문은 같은 내용을 다시 받아도 같은 값이고(순서·중복 무관), 내용이 바뀌면 다르다", () => {
+    const fp = tileSetFingerprint(KEYS);
+    expect(fp).toMatch(/^669:[0-9a-f]+$/);
+    expect(tileSetFingerprint([...KEYS])).toBe(fp);
+    expect(tileSetFingerprint([...KEYS].reverse())).toBe(fp);
+    expect(tileSetFingerprint([...KEYS, KEYS[0]])).toBe(fp);
+    expect(tileSetFingerprint(KEYS.slice(1))).not.toBe(fp);
+    expect(tileSetFingerprint(KEYS)).toBe(fp);
+    expect(tileSetFingerprint(new Set(KEYS))).toBe(fp);
   });
 });
 

@@ -10,7 +10,7 @@ import type { CategoryGroup, LatLng, Place, PlaceDetail, PlaceSummary, Rect, Sto
 import { HUBS, type Hub } from "../shared/hubs";
 import { hubsOfTile } from "./hubTiles";
 import { listItemJson, storedListJson, usableListJson, usableListJsonSql } from "./present";
-import { dueSinceOf, okDueBefore, refreshStartsIndex, tileFreshFrom, tileRefreshStart } from "./refreshSchedule";
+import { dueSinceOf, okDueBefore, okDueBeforeOf, refreshStartsIndex, tileFreshFrom, tileRefreshStart } from "./refreshSchedule";
 import { deleteSnapshotsStmt, markHubsDirtyStmt, markPlaceHubsDirtyStmt, markPlacesHubsDirtyStmt } from "./snapshotDirty";
 
 /**
@@ -316,11 +316,21 @@ export async function idsNeedingDetail(
   return (await nearestDetailIds(db, center, radiusM, now, limit, scope)).ids;
 }
 
-/** 기준점(여럿이면 가장 가까운 곳)에서 격자 중심까지 거리 — pickDetailIds와 SQL 순위(rankGroups)가 같은 값을 쓴다 */
-function tileDistance(key: string, centers: readonly LatLng[]): number {
+/**
+ * 기준점(여럿이면 가장 가까운 곳)에서 격자 중심까지 거리 — pickDetailIds와 SQL 순위(rankGroups)가 같은 값을 쓴다.
+ * Math.min(...centers.map(haversine))과 같은 값 (NaN이 있으면 NaN, 기준점이 없으면 Infinity) — Task 57: 칸마다 배열을 만들지 않는다
+ * (순위는 칸 669개 × 거점 14곳)
+ */
+export function tileDistance(key: string, centers: readonly LatLng[]): number {
   const r = tileRect(key);
   const mid = { lat: (r.minLat + r.maxLat) / 2, lng: (r.minLng + r.maxLng) / 2 };
-  return Math.min(...centers.map((c) => haversine(c, mid)));
+  let best = Infinity;
+  for (const c of centers) {
+    const d = haversine(c, mid);
+    if (d < best || d !== d) best = d;
+    if (best !== best) break;
+  }
+  return best;
 }
 
 /** 거리 순위가 같은 격자들 (rank 0부터 빈틈없이, 오름차순) */
@@ -704,8 +714,29 @@ function parseCursor(raw: string | undefined): ScanCursor | null {
   }
 }
 
-/** 격자 집합의 지문 (순서·중복 무관): 개수 + FNV-1a 32비트 */
+/** Task 57: 같은 실행이 같은 격자 집합의 지문을 여러 번 구한다(미수집 커서·만료 커서) — 최근 입력 몇 개의 결과를 둔다 */
+const FP_MEMO_SIZE = 4;
+const fpMemo: { keys: readonly string[]; fp: string }[] = [];
+const sameKeys = (a: readonly string[], b: readonly string[]) => {
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return false;
+  return true;
+};
+
+/** 격자 집합의 지문 (순서·중복 무관): 개수 + FNV-1a 32비트. 배열은 내용(순서까지)이 같은 최근 입력이면 다시 계산하지 않는다 */
 export function tileSetFingerprint(keys: Iterable<string>): string {
+  if (Array.isArray(keys)) {
+    const hit = fpMemo.find((x) => sameKeys(x.keys, keys));
+    if (hit) return hit.fp;
+    const fp = setFingerprint(keys);
+    fpMemo.unshift({ keys: [...keys], fp });
+    fpMemo.length = Math.min(fpMemo.length, FP_MEMO_SIZE);
+    return fp;
+  }
+  return setFingerprint(keys);
+}
+
+function setFingerprint(keys: Iterable<string>): string {
   const sorted = [...new Set(keys)].sort();
   let h = 0x811c9dc5;
   for (const k of sorted) {
@@ -752,8 +783,10 @@ export async function expiredDetailStates(
   const unique = [...new Set(keys)];
   if (unique.length === 0) return [];
   // 칸 → ok 기준(이 시각 전이 대상), 거점 칸인가 (R66: 거점 칸은 due_after, 밖은 fetched_at을 본다)
-  const okBefore = new Map(unique.map((k) => [k, okDueBefore(k, now)] as const));
-  const hubTile = new Set(unique.filter((k) => tileRefreshStart(k, now) !== null));
+  // Task 57: 칸마다 갱신 시작을 한 번만 구한다 (예전에는 okDueBefore와 거점 칸 판단이 따로 구했다 — 669칸 × 2)
+  const starts = unique.map((k) => tileRefreshStart(k, now));
+  const okBefore = new Map(unique.map((k, i) => [k, okDueBeforeOf(starts[i], now)] as const));
+  const hubTile = new Set(unique.filter((_, i) => starts[i] !== null));
   const keysFingerprint = tileSetFingerprint(unique);
   // 거점 격자의 기준(갱신 시작)은 다음 갱신 요일까지 그대로라 지문에 넣는다. 거점 밖 칸의 기준은 now를 따라 움직여서 넣지 않는다
   const okFingerprint = `${OK_CURSOR_VERSION}:${tileSetFingerprint(unique.map((k) => (hubTile.has(k) ? `${k}@${okBefore.get(k)}` : k)))}`;

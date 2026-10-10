@@ -1,6 +1,6 @@
-import { PREWARM_RADIUS } from "../shared/constants";
-import { haversine, tileRect, tilesCoveringCircle } from "../shared/geo";
+import { haversine, tileRect } from "../shared/geo";
 import type { Hub } from "../shared/hubs";
+import { hubTiles } from "./hubTiles";
 import { hubRefreshStart } from "./refreshSchedule";
 import { TILES_CHANGED_KEY } from "./repo";
 import { markHubsDirtyStmt } from "./snapshotDirty";
@@ -77,7 +77,7 @@ function farthestFirst(hub: Hub): string[] {
     const r = tileRect(k);
     return haversine(hub, { lat: (r.minLat + r.maxLat) / 2, lng: (r.minLng + r.maxLng) / 2 });
   };
-  return tilesCoveringCircle(hub, PREWARM_RADIUS)
+  return hubTiles(hub)
     .map((k) => [k, d(k)] as const)
     .sort((a, b) => b[1] - a[1] || (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0))
     .map(([k]) => k);

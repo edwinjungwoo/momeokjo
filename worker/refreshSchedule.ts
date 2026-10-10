@@ -1,8 +1,7 @@
-import { DETAIL_FAIL_TTL_MS, DETAIL_OK_TTL_MS, PREWARM_RADIUS, TILE_TTL_MS } from "../shared/constants";
-import { tilesCoveringCircle } from "../shared/geo";
+import { DETAIL_FAIL_TTL_MS, DETAIL_OK_TTL_MS, TILE_TTL_MS } from "../shared/constants";
 import { HUBS, type Hub } from "../shared/hubs";
 import { refreshStart } from "../shared/refresh";
-import { hubsOfTile } from "./hubTiles";
+import { hubTiles, hubsOfTile } from "./hubTiles";
 
 /**
  * R63 거점별 주 1회 갱신 (shared/hubs.ts `refreshDay`, shared/refresh.ts `refreshStart`).
@@ -28,7 +27,7 @@ function startsAt(now: number): Map<string, number> {
  */
 export function tileRefreshStarts(key: string, now: number, hubs?: readonly Hub[]): number[] {
   if (hubs) {
-    return hubs.filter((h) => tilesCoveringCircle(h, PREWARM_RADIUS).includes(key)).map((h) => hubRefreshStart(h, now)).sort((a, b) => a - b);
+    return hubs.filter((h) => hubTiles(h).includes(key)).map((h) => hubRefreshStart(h, now)).sort((a, b) => a - b);
   }
   const ids = hubsOfTile(key);
   if (ids.length === 0) return [];
@@ -52,15 +51,18 @@ export function tileFreshFrom(key: string, now: number): number {
  * 밖은 지터 전 기준 now − 3일 + 1 (실제 만료는 지터를 더해 다시 본다 — isPlaceDue)
  */
 export function okDueBefore(key: string, now: number): number {
-  return tileRefreshStart(key, now) ?? now - DETAIL_OK_TTL_MS + 1;
+  return okDueBeforeOf(tileRefreshStart(key, now), now);
 }
+
+/** okDueBefore를 이미 구한 칸의 갱신 기준 시각(tileRefreshStart — 거점 격자가 아니면 null)으로 (같은 칸을 두 번 계산하지 않게) */
+export const okDueBeforeOf = (start: number | null, now: number): number => start ?? now - DETAIL_OK_TTL_MS + 1;
 
 /** 넘겨받은 거점들로 격자 → 그 격자를 덮는 거점들의 이번 시작(오름차순) (Cron 순서 — 전역 HUBS를 보지 않는다) */
 export function refreshStartsIndex(hubs: readonly Hub[], now: number): Map<string, number[]> {
   const out = new Map<string, number[]>();
   for (const h of hubs) {
     const start = hubRefreshStart(h, now);
-    for (const k of tilesCoveringCircle(h, PREWARM_RADIUS)) out.set(k, [...(out.get(k) ?? []), start]);
+    for (const k of hubTiles(h)) out.set(k, [...(out.get(k) ?? []), start]);
   }
   for (const v of out.values()) v.sort((a, b) => a - b);
   return out;
