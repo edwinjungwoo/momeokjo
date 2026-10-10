@@ -285,6 +285,9 @@ type StateRow = {
 const stateMeta = (x: Omit<StateRow, "id" | "tile_key">): DetailMeta =>
   metaOf(x.status, x.fetched_at, x.fail_reason, { dueAfter: x.due_after, fp: x.fp });
 
+/** tilePlaceStates·getTiles가 격자 n칸을 읽는 D1 호출 수 (CHUNK칸마다 1번) — D1 호출 예산 계산용 */
+export const tileReadCalls = (n: number): number => Math.ceil(n / CHUNK);
+
 export async function tilePlaceStates(db: D1Database, keys: string[]): Promise<TilePlaceState[]> {
   const out: TilePlaceState[] = [];
   for (const chunk of chunked(keys)) {

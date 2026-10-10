@@ -43,3 +43,37 @@ export function recordingDb(db: D1Database): { db: D1Database; log: Executed[] }
   };
   return { db: wrapped as unknown as D1Database, log };
 }
+
+/**
+ * 테스트용: 실행 하나의 D1 호출 수를 센다 (무료 플랜은 Worker 실행당 D1 질의 50개 — batch()는 왕복 하나, exec도 하나).
+ * callApp(app, path, init, { ...env, DB: c.db })로 넘기면 요청 미들웨어의 사용량 기록까지 센다
+ */
+export function countingDb(db: D1Database): { db: D1Database; calls: () => number } {
+  let calls = 0;
+  const inner = new WeakMap<object, D1PreparedStatement>();
+  const wrap = (s: D1PreparedStatement): D1PreparedStatement => {
+    const w = {
+      bind: (...values: unknown[]) => wrap(s.bind(...values)),
+      all: (...a: []) => ((calls += 1), s.all(...a)),
+      run: (...a: []) => ((calls += 1), s.run(...a)),
+      first: (...a: [string?]) => ((calls += 1), s.first(...(a as []))),
+      raw: (...a: [{ columnNames?: false }?]) => ((calls += 1), s.raw(...(a as []))),
+    };
+    inner.set(w, s);
+    return w as unknown as D1PreparedStatement;
+  };
+  const wrapped = {
+    prepare: (sql: string) => wrap(db.prepare(sql)),
+    batch: <T>(stmts: D1PreparedStatement[]) => {
+      calls += 1;
+      return db.batch<T>(stmts.map((s) => inner.get(s) ?? s));
+    },
+    exec: (sql: string) => {
+      calls += 1;
+      return db.exec(sql);
+    },
+    withSession: (c?: string) => db.withSession(c),
+    dump: () => db.dump(),
+  };
+  return { db: wrapped as unknown as D1Database, calls: () => calls };
+}

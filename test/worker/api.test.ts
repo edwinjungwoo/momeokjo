@@ -4,7 +4,7 @@ import {
   DETAIL_JITTER_MS, DETAIL_OK_TTL_MS, PLACE_BLOCK_COOLDOWN_MS, TILE_TTL_MS,
 } from "../../shared/constants";
 import { hubById, isHubId } from "../../shared/hubs";
-import { tileKeyOf, tilesCoveringCircle, walkMinutes } from "../../shared/geo";
+import { tileKeyOf, tileRect, tilesCoveringCircle, walkMinutes } from "../../shared/geo";
 import type { PlacesResponse } from "../../shared/types";
 import {
   PLACES_CACHE_MS, PLACES_PENDING_CACHE_MS, PLACE_TRANSIENT_CACHE_MS, createApp, placeCacheKey, placesCacheKey, placesCacheTtl,
@@ -13,6 +13,8 @@ import {
   detailGate, getMeta, markTile, recordPlaceBlock, replaceTilePlaces, resetCorruptWarnings, saveDetailFailure,
 } from "../../worker/repo";
 import { callApp } from "../helpers/callApp";
+import { countingDb } from "../helpers/recordDb";
+import { CRON_D1_CALL_LIMIT } from "../../worker/maintenance";
 import { recordHubRefreshed } from "../../worker/hubRefresh";
 import { hubRefreshStart } from "../../worker/refreshSchedule";
 import { doc, fakeKakaoLocal, fakePlaceApi, gridDocs, routeFetch } from "../helpers/fakeKakao";
@@ -151,6 +153,35 @@ describe("GET /api/places", () => {
     // 수집과 보충이 모두 일어났다 (예산을 나눠 쓴 경우를 실제로 거쳤다)
     expect(local.calls.length).toBeGreaterThan(budget);
     expect(enrichedAny).toBe(true);
+  });
+
+  it("R12/R38: 요청 하나의 D1 호출(응답 뒤 보충·사용량 기록 포함)은 무료 플랜 한도(50)를 넘지 않는다 — 1000m 격자가 모두 만료된 성긴 거점은 남은 격자를 incompleteTiles로 남기고 다음 요청이 잇는다", async () => {
+    // 갱신 요일 00:00에 거점 격자가 한꺼번에 만료된 성긴 거점 (격자마다 가게 한 곳 = 로컬 호출 1번, D1 2번)
+    const hub = hubById("gwacheon");
+    const keys = tilesCoveringCircle(hub, 1000);
+    expect(keys.length).toBeGreaterThan(limitsFrom(env).budgetSize);
+    const docs = keys.map((k, i) => {
+      const r = tileRect(k);
+      return doc(`77${i}`, (r.minLat + r.maxLat) / 2, (r.minLng + r.maxLng) / 2);
+    });
+    const local = fakeKakaoLocal(docs);
+    const place = fakePlaceApi(Object.fromEntries(docs.map((d) => [d.id, placeJson({ name: d.place_name, lat: +d.y, lng: +d.x })])));
+    const app = createApp({ fetcher: routeFetch(local.fetcher, place.fetcher), now: () => NOW, sleep: async () => {}, rateLimit: async () => true });
+    let requests = 0;
+    for (; requests < 12; requests++) {
+      const d1 = countingDb(env.DB);
+      const res = await callApp(app, "/api/places?hub=gwacheon&radius=1000", undefined, { ...env, DB: d1.db });
+      expect(res.status, `request ${requests}`).toBe(200);
+      expect(d1.calls(), `request ${requests}`).toBeLessThanOrEqual(CRON_D1_CALL_LIMIT);
+      const body = (await res.json()) as PlacesResponse;
+      if (requests === 0) expect(body.incompleteTiles).toBeGreaterThan(0);
+      if (body.incompleteTiles === 0) break;
+    }
+    // 남은 격자는 이어지는 요청(화면 폴링)이 모은다
+    expect(requests).toBeGreaterThan(1);
+    const collected = await env.DB.prepare(`SELECT COUNT(*) AS n FROM tiles WHERE key IN (SELECT value FROM json_each(?))`)
+      .bind(JSON.stringify(keys)).first<{ n: number }>();
+    expect(collected?.n).toBe(keys.length);
   });
 
   it("R14: 공식 API가 실패하고 캐시도 없으면 502", async () => {

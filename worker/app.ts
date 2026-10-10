@@ -156,6 +156,11 @@ type Vars = {
   defer: (p: Promise<unknown>) => void;
   /** R66: 이 요청(이어지는 작업 포함)이 저장한 상세의 같음·바뀜·처음 계수 — 사용량 기록 문장에 같이 더한다 (이벤트 수집은 없음) */
   tally?: DetailTally;
+  /**
+   * 이 요청(이어지는 작업 포함) 하나의 D1 호출 예산 — 무료 플랜은 실행당 D1 질의 50개. 끝의 사용량 기록 몫(CRON_D1_RESERVE)은 남긴다.
+   * 목록 지금 경로의 격자 수집·응답 뒤 보충이 이 안에서 줄인다 (이벤트 수집은 없음)
+   */
+  d1?: D1CallBudget;
 };
 type AppEnv = { Bindings: Env; Variables: Vars };
 type Ctx = Context<AppEnv>;
@@ -180,6 +185,7 @@ export function createApp(deps: AppDeps) {
     c.set("db", meteredDb(c.env.DB, usage));
     c.set("defer", (p) => later.push(p));
     c.set("tally", usage.details);
+    c.set("d1", new D1CallBudget(usage, CRON_D1_CALL_LIMIT - CRON_D1_RESERVE));
     try {
       await next();
     } finally {
@@ -205,6 +211,7 @@ export function createApp(deps: AppDeps) {
       sleep: deps.sleep,
       readOnly: isReadOnly(c.env),
       tally: c.var.tally,
+      d1: c.var.d1,
     };
   };
 

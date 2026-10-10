@@ -3,8 +3,8 @@ import { boundingBox, haversine, tilesCoveringCircle } from "../shared/geo";
 import type { Hub } from "../shared/hubs";
 import type { ApiPlace, LatLng } from "../shared/types";
 import { Budget } from "./budget";
-import type { DetailTally } from "./d1Usage";
-import { BLOCK_SIGNALS, enrichDetails } from "./detailEnricher";
+import type { D1CallBudget, DetailTally } from "./d1Usage";
+import { BLOCK_SIGNALS, enrichCallReserve, enrichDetails } from "./detailEnricher";
 import type { FetchFn } from "./fetchFn";
 import { readHubRefreshed } from "./hubRefresh";
 import { hubTileKeys } from "./hubTiles";
@@ -12,8 +12,8 @@ import { fetchPlaceDetail } from "./kakaoPlace";
 import { toApiPlace, withDistance, type PlacesMeta } from "./present";
 import {
   countUnfetchedIn, detailGate, detailRow, detailsAllowed, frozenSince, getMeta, isInTiles, getTiles, isDetailDue, isTileDue,
-  listRowsInBox, placeById, recordPlaceBlock, saveDetail, saveDetailFailure, tilePlaceStates, type ListRow, type PlaceRow,
-  type TilePlaceState,
+  listRowsInBox, placeById, recordPlaceBlock, saveDetail, saveDetailFailure, tilePlaceStates, tileReadCalls, type ListRow,
+  type PlaceRow, type TilePlaceState,
 } from "./repo";
 import { collectTiles } from "./tileCollector";
 
@@ -33,6 +33,8 @@ export type ServiceDeps = {
   readOnly?: boolean;
   /** R66: 저장한 상세의 같음·바뀜·처음 계수 (요청 미들웨어가 사용량 기록 문장에 같이 더한다) */
   tally?: DetailTally;
+  /** 이 요청(응답 뒤 보충 포함)의 D1 호출 예산 (요청 미들웨어가 만든다 — 없으면 보지 않는다) */
+  d1?: D1CallBudget;
 };
 
 /** R12 응답: 메타 필드 + 거리순 목록 원소 JSON 조각 (본문은 present.ts placesBody로 이어 붙인다) */
@@ -106,11 +108,20 @@ export async function getPlaces(
   let incompleteTiles = 0;
   let failedTiles = 0;
   let stale = false;
+  // 무료 플랜 실행당 D1 질의 50개: 격자 하나 = D1 2번(지금 ID 읽기 + 바꾸기). 뒤 단계 몫(목록 읽기 + 게이트 + 완료 기록 + 응답 뒤 보충 최악)이
+  // 남을 때만 다음 격자를 시작한다 — 남은 격자는 incompleteTiles라 화면이 폴링하고 다음 요청(또는 Cron)이 잇는다
+  const d1 = deps.d1;
+  const afterCollect = tileReadCalls(keys.length) + 1 + 1 + 1 + enrichCallReserve(deps.batchSize);
   // R52: 읽기 전용이면 만료된 격자도 저장된 그대로 쓴다 (수집은 운영 Cron 몫 — incompleteTiles로 세지 않아 화면이 다시 부르지 않는다)
   if (due.length > 0 && !deps.readOnly) {
     if (await allow()) {
       const r = await collectTiles(
-        { db: deps.db, fetcher: deps.fetcher, restKey: deps.restKey, budget, now: deps.now }, due, states,
+        {
+          db: deps.db, fetcher: deps.fetcher, restKey: deps.restKey, budget, now: deps.now,
+          canStartTile: d1 ? () => d1.has(2 + afterCollect) : undefined,
+        },
+        due,
+        states,
       );
       incompleteTiles = r.incomplete.length;
       failedTiles = r.failed.length;
@@ -138,7 +149,7 @@ export async function getPlaces(
       enrichDetails(
         {
           db: deps.db, fetcher: deps.fetcher, budget, now: deps.now, batchSize: deps.batchSize, sleep: deps.sleep,
-          scope: "unfetched", candidates: tileStates, charBudget: deps.detailCharBudget, tally: deps.tally,
+          scope: "unfetched", candidates: tileStates, charBudget: deps.detailCharBudget, tally: deps.tally, d1,
         },
         center,
         radiusM,
