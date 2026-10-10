@@ -103,11 +103,17 @@ describe("repo", () => {
     expect(isTileDue(OUT, s, NOW + TILE_TTL_MS)).toBe(true);
   });
 
-  it("R3: 키가 많아도(150개) 한 번에 조회한다", async () => {
+  it("R3: 키가 많아도(150개) 나눠 조회해 합친다 — 묶음 경계 양쪽(89·90번째)과 뒤 묶음 끝의 키도 빠지지 않는다", async () => {
+    const at = [0, 1, 89, 90, 149];
     const keys = Array.from({ length: 150 }, (_, i) => `k:${i}`);
-    for (const k of keys.slice(0, 3)) await replaceTilePlaces(env.DB, k, [k], NOW, false);
-    expect((await getTiles(env.DB, keys)).size).toBe(3);
-    expect(await tilePlaceStates(env.DB, keys)).toHaveLength(3);
+    for (const i of at) await replaceTilePlaces(env.DB, keys[i], [`p${i}`], NOW, false);
+    const want = at.map((i) => keys[i]).sort();
+    expect([...(await getTiles(env.DB, keys)).keys()].sort()).toEqual(want);
+    expect((await tilePlaceStates(env.DB, keys)).map((t) => t.tileKey).sort()).toEqual(want);
+    // 장소 id로 읽기도 같다
+    const ids = Array.from({ length: 150 }, (_, i) => String(5000 + i));
+    for (const i of at) await seedPlace(env.DB, ids[i], ASEM.lat, ASEM.lng, { now: NOW });
+    expect((await placesByIds(env.DB, ids)).map((r) => r.place.id).sort()).toEqual(at.map((i) => ids[i]).sort());
   });
 
   it("R6: 상세 저장 후 조회하면 표시 정보와 JSON 필드가 복원된다", async () => {
