@@ -57,6 +57,22 @@ describe("parseDetail", () => {
     expect(d.tags.length).toBeLessThanOrEqual(30);
   });
 
+  it("R6: tags 상한 — 서로 다른 라벨이 40개(중복·빈 라벨 섞임)여도 처음 나온 순서대로 30개만", () => {
+    const labels = Array.from({ length: 40 }, (_, i) => `t${i}`);
+    const contents = labels.flatMap((label, i) => (i % 5 === 0 ? [{ label }, { label }, { label: "" }] : [{ label }]));
+    const d = ok({
+      summary: SUMMARY,
+      place_add_info: { full_detail_infos: [{ items: [{ contents: contents.slice(0, 20) }] }, { items: [{ contents: contents.slice(20) }] }] },
+    });
+    expect(d.tags).toEqual(labels.slice(0, 30));
+  });
+
+  it("R6: '예약가능'이 ai_mate 아이콘에만 있어도 bookable true, 둘 다 없으면 false", () => {
+    expect(ok({ summary: SUMMARY, place_add_info: { ai_mate: { store_facility_icons: [{ text: "주차" }, { text: "예약가능" }] } } }).bookable).toBe(true);
+    expect(ok({ summary: SUMMARY, place_add_info: { store_facility_icons: [{ text: "주차" }], ai_mate: { store_facility_icons: [{ text: "포장" }] } } }).bookable).toBe(false);
+    expect(ok({ summary: SUMMARY, place_add_info: { ai_mate: null } }).bookable).toBe(false);
+  });
+
   it("R6: 리뷰가 0개면 rating null", () => {
     const d = ok({ summary: SUMMARY, kakaomap_review: { score_set: { review_count: 0, average_score: 0 } } });
     expect(d.rating).toBeNull();

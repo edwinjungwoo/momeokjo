@@ -94,11 +94,11 @@ export function parseDetail(raw: unknown): DetailParseResult {
   const reviewCount = review?.score_set?.review_count ?? null;
   const average = review?.score_set?.average_score ?? null;
   const rating = reviewCount !== null && reviewCount > 0 && average !== null ? average : null;
-  const strengthNames = new Map((review?.strength_description ?? []).map((s) => [s.id, s.name]));
+  const strengthNames = new Map((review?.strength_description ?? []).map((d) => [d.id, d.name]));
   const strengths = [...(review?.score_set?.strength_counts ?? [])]
     .sort((a, b) => b.count - a.count)
     .slice(0, 2)
-    .map((s) => strengthNames.get(s.id))
+    .map((c) => strengthNames.get(c.id))
     .filter((n): n is string => typeof n === "string");
 
   const menuSection = section(MenuSchema, r.menu);
