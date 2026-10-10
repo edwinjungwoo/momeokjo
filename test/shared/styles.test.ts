@@ -51,3 +51,19 @@ describe("R28: 지도 핀이 카카오 기본 지도 아이콘과 섞이지 않�
     expect(rule(".pin-chip")).toMatch(/box-shadow:/);
   });
 });
+
+describe("R28: 화면 높이(dvh) 폴백", () => {
+  it("R28: dvh를 쓰는 선언마다 같은 규칙 앞에 vh로 쓴 같은 속성이 있다 (dvh를 모르는 브라우저는 그 줄을 버려서 높이 상한이 없어진다)", () => {
+    const missing = rules(css).flatMap((r) => {
+      const decls = r.body.split(";").map((d) => d.trim()).filter(Boolean);
+      const prop = (d: string) => d.slice(0, d.indexOf(":")).trim();
+      return decls.flatMap((d, i) => {
+        if (!/\ddvh\b/.test(d)) return [];
+        const fallback = decls.slice(0, i).some((e) => prop(e) === prop(d) && /\dvh\b/.test(e) && !/dvh/.test(e));
+        return fallback ? [] : [`${r.selector} { ${d} }`];
+      });
+    });
+    expect(rules(css).some((r) => /\ddvh\b/.test(r.body))).toBe(true);
+    expect(missing).toEqual([]);
+  });
+});
