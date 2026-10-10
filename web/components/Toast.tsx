@@ -45,7 +45,11 @@ export function useToast() {
   return { msg, show, hide, pause, resume };
 }
 
-/** 아이콘 하나 + 한 줄. 행동이 있으면(되돌리기) 오른쪽에 글자 버튼 하나 */
+/**
+ * 아이콘 하나 + 한 줄. 행동이 있으면(되돌리기) 오른쪽에 글자 버튼 하나.
+ * 스크린리더: 글과 함께 새로 붙는 알림 영역은 읽히지 않을 수 있어서(VoiceOver) 늘 붙어 있는 sr-only 영역에 글을 쓴다 —
+ * 메시지마다 새 줄(key)이라 같은 글이 이어서 와도 다시 읽는다. 보이는 토스트는 알림 영역이 아니다 (두 번 읽지 않게)
+ */
 export function Toast(props: {
   msg: ToastMsg | null;
   onAction: () => void;
@@ -53,33 +57,35 @@ export function Toast(props: {
   onResume: () => void;
 }) {
   const { msg, onAction, onPause, onResume } = props;
-  if (!msg) return null;
-  const cls = `toast${msg.pose ? " has-pose" : ""}${msg.action ? " has-action" : ""}`;
+  // 알림 영역은 메시지가 없어도 같은 자리에 붙어 있다 (구조가 바뀌어 다시 붙지 않게 언제나 같은 조각)
   return (
-    <div
-      className={cls}
-      role="status"
-      aria-live="polite"
-      key={msg.id}
-      onPointerEnter={(e) => e.pointerType === "mouse" && onPause()}
-      onPointerLeave={(e) => e.pointerType === "mouse" && onResume()}
-      onFocus={onPause}
-      onBlur={onResume}
-    >
-      {msg.pose && <Mascot pose={msg.pose} height={32} eager />}
-      <span>{msg.text}</span>
-      {msg.action && (
-        <button
-          type="button"
-          className="toast-action"
-          onClick={() => {
-            msg.action!.onClick();
-            onAction();
-          }}
-        >
-          {msg.action.label}
-        </button>
-      )}
-    </div>
+    <>
+      <p className="sr-only" role="status" aria-live="polite">
+        {msg && <span key={msg.id}>{msg.text}</span>}
+      </p>
+      {msg && <div
+        className={`toast${msg.pose ? " has-pose" : ""}${msg.action ? " has-action" : ""}`}
+        key={msg.id}
+        onPointerEnter={(e) => e.pointerType === "mouse" && onPause()}
+        onPointerLeave={(e) => e.pointerType === "mouse" && onResume()}
+        onFocus={onPause}
+        onBlur={onResume}
+      >
+        {msg.pose && <Mascot pose={msg.pose} height={32} eager />}
+        <span>{msg.text}</span>
+        {msg.action && (
+          <button
+            type="button"
+            className="toast-action"
+            onClick={() => {
+              msg.action!.onClick();
+              onAction();
+            }}
+          >
+            {msg.action.label}
+          </button>
+        )}
+      </div>}
+    </>
   );
 }

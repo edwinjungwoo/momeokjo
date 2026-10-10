@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { lastLevel } from "../../shared/category";
 import { photoWideUrl } from "../../shared/photo";
 import type { ApiPlace } from "../../shared/types";
+import { focusedNow, restoreFocus } from "../focus";
 import { openState, priceText, walkText, won } from "../format";
 import { HeartButton } from "./HeartButton";
 import { CloseIcon } from "./Icons";
@@ -44,10 +45,12 @@ export function PlaceCard({ place, eyebrow, topPercent, now, onClose, onShare, o
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose]);
 
-  // 카드가 열리면 닫기 버튼으로 초점을 옮긴다 (키보드·스크린리더가 카드부터 읽게)
+  // 카드가 열리면 닫기 버튼으로 초점을 옮기고 (키보드·스크린리더가 카드부터 읽게), 닫히면 연 곳(목록 줄 등)으로 돌려준다
+  const [opener] = useState(focusedNow);
   useEffect(() => {
     closeBtn.current?.focus({ preventScroll: true });
-  }, []);
+    return () => restoreFocus(document, opener);
+  }, [opener]);
 
   const d = place.detail;
   const open = openState(place, now);

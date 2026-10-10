@@ -5,6 +5,7 @@ import { photoThumbUrl } from "../../shared/photo";
 import type { Reason } from "../../shared/reasons";
 import type { Party } from "../../shared/recommend";
 import type { ApiPlace, CategoryGroup, Menu } from "../../shared/types";
+import { focusedNow, restoreFocus } from "../focus";
 import { MENU_PREVIEW, callFirst, menuPreview, openState, ratingTone, priceText, todayHoursText, won } from "../format";
 import { HeartButton } from "./HeartButton";
 import { ChevronDown, CloseIcon, InfoIcon } from "./Icons";
@@ -230,6 +231,9 @@ export function TrioSheet(props: Props) {
   useEffect(() => {
     if (!shuffling && firstId) closeBtn.current?.focus({ preventScroll: true });
   }, [shuffling, firstId]);
+  // 닫히면(✕·Esc·끌어내리기) 연 곳(모먹죠? 버튼)으로 초점을 돌려준다 — 없어졌으면 뽑기 버튼
+  const [opener] = useState(focusedNow);
+  useEffect(() => () => restoreFocus(document, opener, () => document.querySelector<HTMLElement>(".draw")), [opener]);
 
   // "다음부터 안 보기" 뒤: 눌렀던 버튼이 사라지므로 다음 카드(없으면 제목)로 포커스를 옮긴다
   const afterExclude = useRef<string | null>(null);
