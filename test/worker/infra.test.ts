@@ -11,15 +11,18 @@ describe("infra", () => {
     expect(names).not.toContain("place_details");
   });
 
+  // 둘 다 한 행을 넣고 자기 행만 보이는지 본다 — 어느 쪽이 먼저 돌든(순서·-t로 하나만 돌려도) 격리가 깨지면 나중 것이 두 행을 본다
+  const keysAfterInsert = async (key: string) => {
+    await env.DB.prepare("INSERT INTO tiles (key, collected_at, place_count) VALUES (?, 1, 0)").bind(key).run();
+    return (await env.DB.prepare("SELECT key FROM tiles").all<{ key: string }>()).results.map((r) => r.key);
+  };
+
   it("infra: 테스트 사이에 데이터가 격리된다 (1)", async () => {
-    await env.DB.prepare("INSERT INTO tiles (key, collected_at, place_count) VALUES ('a', 1, 0)").run();
-    const r = await env.DB.prepare("SELECT count(*) AS c FROM tiles").first<{ c: number }>();
-    expect(r?.c).toBe(1);
+    expect(await keysAfterInsert("a")).toEqual(["a"]);
   });
 
   it("infra: 테스트 사이에 데이터가 격리된다 (2)", async () => {
-    const r = await env.DB.prepare("SELECT count(*) AS c FROM tiles").first<{ c: number }>();
-    expect(r?.c).toBe(0);
+    expect(await keysAfterInsert("b")).toEqual(["b"]);
   });
 
   it("infra: /api/health가 ok를 반환한다", async () => {
