@@ -7,3 +7,6 @@ dist/
 .DS_Store
 .superpowers/
 .claude/worktrees/
+.env
+.env.*
+.dev.vars.*
