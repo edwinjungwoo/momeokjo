@@ -5,6 +5,10 @@ describe("photo", () => {
   it("R33: 카카오 CDN 사진만 받아들이고 https로 바꾼다", () => {
     expect(kakaoPhotoUrl("http://t1.kakaocdn.net/fiy_reboot/place/B6D1")).toBe("https://t1.kakaocdn.net/fiy_reboot/place/B6D1");
     expect(kakaoPhotoUrl("https://t1.kakaocdn.net/a?original")).toBe("https://t1.kakaocdn.net/a?original");
+    // 하위 도메인 없는 apex도 카카오 CDN이다. 비슷한 이름의 다른 도메인은 아니다
+    expect(kakaoPhotoUrl("http://kakaocdn.net/a")).toBe("https://kakaocdn.net/a");
+    expect(kakaoPhotoUrl("https://kakaocdn.net.evil.example/a")).toBeNull();
+    expect(kakaoPhotoUrl("https://notkakaocdn.net/a")).toBeNull();
   });
   it("R33: 네이버 블로그 등 다른 호스트, 빈 값, 깨진 URL은 null", () => {
     expect(kakaoPhotoUrl("https://postfiles.pstatic.net/x.JPG?type=w773")).toBeNull();
