@@ -173,6 +173,18 @@ describe("admin", () => {
     expect(await warm()).toEqual({ incompleteTiles: 0, pending: 0, enriched: 0, failed: 0, deferred: 0, chars: expect.any(Number), truncated: false, ...ROWS });
   });
 
+  it("R31/R9: 상세를 가져오지 못한 곳이 있어도 warm은 0으로 수렴한다 — 실패는 기록하고 6시간 안에는 다시 부르지 않는다", async () => {
+    const local = fakeKakaoLocal([doc("1001", at(0.0005), ASEM.lng), doc("1002", at(0.001), ASEM.lng)]);
+    const place = fakePlaceApi({ "1001": placeJson({ name: "a", lat: at(0.0005), lng: ASEM.lng }), "1002": 404 });
+    const app = createApp({ fetcher: routeFetch(local.fetcher, place.fetcher), now: () => NOW, sleep: async () => {}, rateLimit: async () => true });
+    const warm = async () => (await callApp(app, `/api/admin/warm?${AREA}`, { method: "POST", headers: AUTH })).json<any>();
+    expect(await warm()).toMatchObject({ incompleteTiles: 0, pending: 0, enriched: 1, failed: 1, deferred: 0 });
+    const calls = place.calls.length;
+    expect(await warm()).toMatchObject({ incompleteTiles: 0, pending: 0, enriched: 0, failed: 0, deferred: 0 });
+    expect(place.calls).toHaveLength(calls);
+    expect(await getMeta(env.DB, "1002")).toMatchObject({ status: "failed", reason: "http_404" });
+  });
+
   it("R31/R10: warm은 상세 JSON 글자 예산(DETAIL_CHAR_BUDGET)을 다 쓰면 남은 곳을 남기고 pending은 more — 다음 warm이 이어 하고 끝나면 0", async () => {
     const ids = ["2001", "2002", "2003", "2004", "2005"];
     const local = fakeKakaoLocal(ids.map((id, k) => doc(id, at(0.0002 * (k + 1)), ASEM.lng)));

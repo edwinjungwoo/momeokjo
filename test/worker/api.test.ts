@@ -13,7 +13,8 @@ import { detailGate, getMeta, markTile, recordPlaceBlock, replaceTilePlaces, res
 import { callApp } from "../helpers/callApp";
 import { recordHubRefreshed } from "../../worker/hubRefresh";
 import { hubRefreshStart } from "../../worker/refreshSchedule";
-import { doc, fakeKakaoLocal, fakePlaceApi, routeFetch } from "../helpers/fakeKakao";
+import { doc, fakeKakaoLocal, fakePlaceApi, gridDocs, routeFetch } from "../helpers/fakeKakao";
+import { limitsFrom } from "../../worker/config";
 import { markOuterTilesFresh, placeJson, seedPlace } from "../helpers/places";
 import { UNREADY_HUB } from "../helpers/unreadyHub";
 
@@ -120,6 +121,34 @@ describe("GET /api/places", () => {
     expect(body.places[0].detail).not.toHaveProperty("tags");
     expect(body.pending).toBe(0);
     expect(body.places[0].photoUrl).toBe("https://t1.kakaocdn.net/fiy_reboot/place/B6D1BA174D394DEDB42B4411705FFDE7");
+  });
+
+  it("R10/R12: 요청 하나의 외부 호출(격자 수집 + 응답 뒤 상세 보충)은 SUBREQUEST_BUDGET(40)을 넘지 않는다 — 둘이 예산 하나를 나눠 쓴다", async () => {
+    const budget = limitsFrom(env).budgetSize;
+    expect(budget).toBe(40);
+    // 거점 둘레 300m에 200곳 (한 칸이 45곳을 넘어 4등분이 필요한 칸도 있다), 상세는 모두 받을 수 있다
+    const box = { minLat: HUB.lat - 0.0025, maxLat: HUB.lat + 0.0025, minLng: HUB.lng - 0.003, maxLng: HUB.lng + 0.003 };
+    const docs = gridDocs("9", 200, box);
+    const local = fakeKakaoLocal(docs);
+    const place = fakePlaceApi(Object.fromEntries(docs.map((d) => [d.id, placeJson({ name: d.place_name, lat: +d.y, lng: +d.x })])));
+    const app = createApp({ fetcher: routeFetch(local.fetcher, place.fetcher), now: () => NOW, sleep: async () => {}, rateLimit: async () => true });
+    const used = () => local.calls.length + place.calls.length;
+    // 1000m 격자를 모두 비워 둔 첫 요청(수집할 칸이 예산보다 많다)과, 이어지는 요청들(남은 칸 수집 + 미수집 보충)
+    await env.DB.prepare("DELETE FROM tiles").run();
+    let before = 0;
+    let enrichedAny = false;
+    for (let i = 0; i < 6; i++) {
+      const body = (await (await callApp(app, Q)).json()) as PlacesResponse;
+      const n = used() - before;
+      expect(n, `request ${i}`).toBeLessThanOrEqual(budget);
+      expect(n, `request ${i}`).toBeGreaterThan(0);
+      if (place.calls.length > 0) enrichedAny = true;
+      before = used();
+      if (body.incompleteTiles === 0 && body.pending === 0) break;
+    }
+    // 수집과 보충이 모두 일어났다 (예산을 나눠 쓴 경우를 실제로 거쳤다)
+    expect(local.calls.length).toBeGreaterThan(budget);
+    expect(enrichedAny).toBe(true);
   });
 
   it("R14: 공식 API가 실패하고 캐시도 없으면 502", async () => {
