@@ -2,7 +2,7 @@ import { z } from "zod";
 import { categoryGroup } from "../shared/category";
 import { KAKAO_PAGE_SIZE } from "../shared/constants";
 import type { Place, Rect } from "../shared/types";
-import { UpstreamError, type FetchFn } from "./fetchFn";
+import { UPSTREAM_TIMEOUT_MS, UpstreamError, discardBody, type FetchFn } from "./fetchFn";
 
 const DocSchema = z.object({
   id: z.string(),
@@ -44,7 +44,10 @@ export function parseLocalResponse(json: unknown): LocalPage | null {
   };
 }
 
-export async function searchRect(fetcher: FetchFn, restKey: string, rect: Rect, page: number): Promise<LocalPage> {
+/** timeoutMs(기본 UPSTREAM_TIMEOUT_MS)가 지나면 끊고 UpstreamError(0, "network"). 성공이 아닌 응답의 본문은 버린다 */
+export async function searchRect(
+  fetcher: FetchFn, restKey: string, rect: Rect, page: number, timeoutMs = UPSTREAM_TIMEOUT_MS,
+): Promise<LocalPage> {
   const url = new URL("https://dapi.kakao.com/v2/local/search/category.json");
   url.searchParams.set("category_group_code", "FD6");
   url.searchParams.set("rect", `${rect.minLng},${rect.minLat},${rect.maxLng},${rect.maxLat}`);
@@ -53,11 +56,14 @@ export async function searchRect(fetcher: FetchFn, restKey: string, rect: Rect, 
   url.searchParams.set("sort", "accuracy");
   let res: Response;
   try {
-    res = await fetcher(url.toString(), { headers: { Authorization: `KakaoAK ${restKey}` } });
+    res = await fetcher(url.toString(), { headers: { Authorization: `KakaoAK ${restKey}` }, signal: AbortSignal.timeout(timeoutMs) });
   } catch {
     throw new UpstreamError(0, "network");
   }
-  if (!res.ok) throw new UpstreamError(res.status);
+  if (!res.ok) {
+    discardBody(res);
+    throw new UpstreamError(res.status);
+  }
   const page_ = parseLocalResponse(await res.json().catch(() => null));
   if (!page_) throw new UpstreamError(res.status, "schema");
   return page_;

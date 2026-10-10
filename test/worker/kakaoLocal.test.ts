@@ -8,6 +8,18 @@ import { doc, fakeKakaoLocal } from "../helpers/fakeKakao";
 const rect = { minLat: 37.51, minLng: 127.05, maxLat: 37.52, maxLng: 127.06 };
 
 describe("kakaoLocal", () => {
+  it("R14: 응답이 오지 않으면 시간 초과로 끊고 UpstreamError(network) · 성공이 아닌 응답의 본문은 버린다", async () => {
+    const hang = (_: RequestInfo | URL, init?: RequestInit) =>
+      new Promise<Response>((_, reject) => init?.signal?.addEventListener("abort", () => reject(init.signal!.reason)));
+    const err = await searchRect(hang, "k", rect, 1, 20).catch((e) => e);
+    expect(err).toBeInstanceOf(UpstreamError);
+    expect(err).toMatchObject({ status: 0, message: "network" });
+    let cancelled = 0;
+    const res = new Response(new ReadableStream({ pull: (c) => c.enqueue(new TextEncoder().encode("x")), cancel: () => void (cancelled += 1) }), { status: 500 });
+    expect(await searchRect(async () => res, "k", rect, 1).catch((e) => e)).toMatchObject({ status: 500 });
+    expect(cancelled).toBe(1);
+  });
+
   it("R2: 실제 응답을 Place로 변환한다 (하동관)", () => {
     const page = parseLocalResponse(dense)!;
     expect(page.totalCount).toBe(125);

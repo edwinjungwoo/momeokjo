@@ -2,13 +2,49 @@ import { describe, expect, it } from "vitest";
 import { Budget } from "../../worker/budget";
 import { parseDetail } from "../../worker/detailParser";
 import { fetchPlaceDetail } from "../../worker/kakaoPlace";
+import { UPSTREAM_TIMEOUT_MS } from "../../worker/fetchFn";
 import jungang from "../fixtures/place-detail/27531028-jungang-haejang.json";
 import { fakePlaceApi } from "../helpers/fakeKakao";
 
 const sleeps: number[] = [];
 const sleep = async (ms: number) => { sleeps.push(ms); };
 
+/** 응답하지 않는 서버 흉내 (막힌 대신 붙잡아 두는 차단): 요청의 signal이 끊어야만 끝난다 */
+const hanging = () => {
+  let calls = 0;
+  const fetcher = (_: RequestInfo | URL, init?: RequestInit) => {
+    calls += 1;
+    return new Promise<Response>((_, reject) => init?.signal?.addEventListener("abort", () => reject(init.signal!.reason)));
+  };
+  return { fetcher, calls: () => calls };
+};
+/** 본문을 읽지 않고 버리면(cancel) 센다 */
+const tracked = (status: number) => {
+  let cancelled = 0;
+  const res = () =>
+    new Response(new ReadableStream({ pull: (c) => c.enqueue(new TextEncoder().encode("x")), cancel: () => void (cancelled += 1) }), { status });
+  return { res, cancelled: () => cancelled };
+};
+
 describe("fetchPlaceDetail", () => {
+  it("R9/R10: 응답이 오지 않으면 시간 초과(기본 10초)로 끊고 network로 재시도·실패한다 — 붙잡아 두는 차단에 실행이 CPU·시간 한도까지 매달리지 않는다", async () => {
+    sleeps.length = 0;
+    const api = hanging();
+    expect(await fetchPlaceDetail(api.fetcher, "a", { budget: new Budget(5), sleep, timeoutMs: 20 })).toEqual({ ok: false, reason: "network" });
+    expect(api.calls()).toBe(3);
+    expect(UPSTREAM_TIMEOUT_MS).toBe(10_000);
+  });
+
+  it("R9: 성공이 아닌 응답의 본문은 읽지 않고 버린다 (재시도 전에도 — 동시 연결 6개를 붙잡지 않게)", async () => {
+    const t = tracked(503);
+    const r = await fetchPlaceDetail(async () => t.res(), "a", { budget: new Budget(5), sleep });
+    expect(r).toEqual({ ok: false, reason: "http_503" });
+    expect(t.cancelled()).toBe(3);
+    const nf = tracked(404);
+    expect(await fetchPlaceDetail(async () => nf.res(), "a", { budget: new Budget(5), sleep })).toEqual({ ok: false, reason: "http_404" });
+    expect(nf.cancelled()).toBe(1);
+  });
+
   it("R6: 정상 응답이면 파싱된 상세를 돌려주고 필수 헤더를 보낸다", async () => {
     const api = fakePlaceApi({ "27531028": jungang });
     const r = await fetchPlaceDetail(api.fetcher, "27531028", { budget: new Budget(5), sleep });
