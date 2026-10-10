@@ -86,6 +86,27 @@ describe("collectTiles", () => {
     expect(ids.every((id) => id.startsWith("new"))).toBe(true);
   });
 
+  it("R11/R38: 다음 격자를 시작할 D1 호출이 없으면(canStartTile 거짓) 남은 격자는 부르지 않고 incomplete — 처음부터 거짓이면 수집할 격자가 모두 incomplete라서 본 Cron은 격자 확인 표시(tiles_fresh)를 쓰지 않는다(수집·incomplete·failed가 모두 0일 때만 쓴다)", async () => {
+    const kakao = fakeKakaoLocal(gridDocs("z", 5, RECT));
+    const keys = [KEY, "1:1", "1:2"];
+    expect(await collectTiles({ ...deps(kakao.fetcher), canStartTile: () => false }, keys)).toEqual({
+      collected: [], incomplete: keys, failed: [],
+    });
+    expect(kakao.calls).toHaveLength(0);
+    // 한 격자만 시작할 수 있으면 첫 격자만
+    let left = 1;
+    expect(await collectTiles({ ...deps(kakao.fetcher), canStartTile: () => left-- > 0 }, keys)).toEqual({
+      collected: [KEY], incomplete: ["1:1", "1:2"], failed: [],
+    });
+    // 수집할 격자가 없으면 묻지도 않고 결과가 비어 있다 (본 Cron은 이때만 표시를 쓴다)
+    for (const k of keys) await markTile(env.DB, k, NOW, 0, false);
+    let asked = 0;
+    expect(await collectTiles({ ...deps(kakao.fetcher), canStartTile: () => (asked++, false) }, keys)).toEqual({
+      collected: [], incomplete: [], failed: [],
+    });
+    expect(asked).toBe(0);
+  });
+
   it("R10: 예산이 부족하면 격자를 incomplete로 남기고 기록하지 않는다", async () => {
     const kakao = fakeKakaoLocal(gridDocs("d", 100, RECT));
     const r = await collectTiles(deps(kakao.fetcher, 2), [KEY, "1:1"]);

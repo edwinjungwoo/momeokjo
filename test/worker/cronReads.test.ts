@@ -1,7 +1,7 @@
 import { env } from "cloudflare:test";
 import { describe, expect, it } from "vitest";
 import { DETAIL_FAIL_TTL_MS, LIST_JSON_VERSION, PREWARM_RADIUS } from "../../shared/constants";
-import { tilesCoveringCircle } from "../../shared/geo";
+import { haversine, tileRect, tilesCoveringCircle } from "../../shared/geo";
 import { HUBS, PUBLIC_HUBS, hubById } from "../../shared/hubs";
 import type { FetchFn } from "../../worker/fetchFn";
 import { limitsFrom } from "../../worker/config";
@@ -165,6 +165,34 @@ describe("Task 40: 운영 크기에서 Cron 한 번이 읽는 D1 행 (정상 상
     expect(reads(d.log), `detail reads ${reads(d.log)}`).toBeLessThanOrEqual(1500);
   });
 
+  it("R38/R11: 운영 배치(DETAIL_BATCH_SIZE 4)의 보통 실행은 넉넉한 실행이다 — 미수집을 먼저 읽고 만료 후보는 그 뒤에만, 격자 확인·표시 쓰기·list_json 백필이 다 있는 실행(여유가 가장 적다)도 (여유가 줄어 빠듯한 순서로 바뀌면 여기서 알린다)", async () => {
+    expect(limitsFrom(env).batchSize).toBe(4);
+    await seed("backlog");
+    // list_json 백필이 아직 남은 운영 상태 (백필 커서 읽기 + 행 읽기 + 쓰기)
+    await env.DB.prepare("DELETE FROM meta WHERE key LIKE 'list_json_backfill:%'").run();
+    await env.DB.prepare("UPDATE places SET list_json = NULL WHERE rowid IN (SELECT rowid FROM places LIMIT 5)").run();
+    const order = (log: Executed[]) => {
+      const unfetched = log.findIndex((x) => x.sql === NEAREST_UNFETCHED_SQL);
+      const expired = log.findIndex((x) => isExpiredScan(x.sql));
+      return { unfetched, expired };
+    };
+    // 첫 실행: 격자 확인 + 수집할 격자 없음 표시 쓰기 + 백필 + 미수집 커서 재설정
+    const first = await mainRun(NOW);
+    expect(first.log.some((x) => x.sql.includes(DUETILE_SQL))).toBe(true);
+    expect(first.r.listJsonFilled).toBeGreaterThan(0);
+    expect(first.r.d1Skipped).toBeUndefined();
+    const o1 = order(first.log);
+    expect(o1.unfetched).toBeGreaterThanOrEqual(0);
+    expect(o1.expired === -1 || o1.unfetched < o1.expired, JSON.stringify(o1)).toBe(true);
+    // 보통 실행
+    const now = await warmUp(NOW + MIN5);
+    const { r, log } = await mainRun(now);
+    expect(r.d1Skipped).toBeUndefined();
+    const o = order(log);
+    expect(o.unfetched).toBeGreaterThanOrEqual(0);
+    expect(o.expired === -1 || o.unfetched < o.expired, JSON.stringify(o)).toBe(true);
+  });
+
   it("R38/R63: 주간 갱신 중(미수집 없음) 본 Cron·상세만 실행은 실행마다 ≤1.5천 행 — 미수집 커서는 끝이라 묶음 질의가 없고 만료 쪽 하나", async () => {
     await seed("refresh");
     const now = await warmUp();
@@ -229,13 +257,12 @@ describe("Task 40: 본 Cron 격자 확인 표시 (tiles_fresh)", () => {
       now: thu, sleep: async () => {},
     });
     expect(log.some((x) => x.sql.includes(DUETILE_SQL))).toBe(true);
-    expect(r.tiles.collected + r.tiles.incomplete).toBeGreaterThan(0);
-    // 다 모으지 못했으면 표시를 새로 쓰지 않는다 — 다음 실행도 확인한다
-    if (r.tiles.incomplete > 0) {
-      expect(JSON.parse((await metaValue(TILES_FRESH_KEY))!).at).toBe(thu - MIN5);
-      const next = await mainRun(thu + MIN5);
-      expect(next.log.some((x) => x.sql.includes(DUETILE_SQL))).toBe(true);
-    }
+    expect(r.tiles.collected).toBeGreaterThan(0);
+    // 두 거점 격자는 한 실행의 D1 호출 예산(격자마다 2번)보다 많다 — 다 모으지 못했으니 표시를 새로 쓰지 않고 다음 실행도 확인한다
+    expect(r.tiles.incomplete).toBeGreaterThan(0);
+    expect(JSON.parse((await metaValue(TILES_FRESH_KEY))!).at).toBe(thu - MIN5);
+    const next = await mainRun(thu + MIN5);
+    expect(next.log.some((x) => x.sql.includes(DUETILE_SQL))).toBe(true);
   });
 
   it("R11: 표시가 젊어도 격자 집합이 바뀌면(거점 추가 등) 다시 확인한다 — 표시 지문이 격자와 기준 시각을 담는다", async () => {
@@ -275,17 +302,28 @@ describe("Task 40: 미수집 앞선 자리 작게 읽기", () => {
     }
     return { keys, ranked: states };
   }
+  /** 칸 순위와 같은 거리 — 가장 가까운 거점에서 칸 중심까지 (repo.ts tileDistance·rankGroups와 같은 값) */
   const dist = (k: string, hubs: typeof HUBS) => {
-    const [i, j] = k.split(":").map(Number);
-    return Math.min(...hubs.map((h) => Math.hypot(i - h.lat / 0.00225, j - h.lng / 0.0028)));
+    const r = tileRect(k);
+    const mid = { lat: (r.minLat + r.maxLat) / 2, lng: (r.minLng + r.maxLng) / 2 };
+    return Math.min(...hubs.map((h) => haversine(h, mid)));
   };
   const oracle = async (keys: string[], hubs: typeof HUBS, limit: number) =>
     pickCronIds(await unfetchedStates(env.DB, keys), hubs, NOW, limit);
-  const run = async (keys: string[], hubs: typeof HUBS, limit = 4) => {
+  const run = async (keys: string[], hubs: typeof HUBS, limit = 4, maxQueries?: number) => {
     const { db, log } = recordingDb(env.DB);
-    const r = await nearestUnfetchedStates(db, keys, hubs, limit);
+    const r = await nearestUnfetchedStates(db, keys, hubs, limit, { maxQueries });
     return { ids: r.states.map((t) => t.id), cleared: r.cleared, read: reads(log, (q) => q === NEAREST_UNFETCHED_SQL), log };
   };
+  /** 앞선 자리(ranked 100번째부터)의 미수집을 290번째 앞까지 채운다 — 다음 미수집은 작은 묶음 합(30칸)보다 훨씬 뒤 */
+  async function drainHitArea(ranked: string[]) {
+    const fill = ranked.slice(100, 290).flatMap((k, i) => Array.from({ length: 10 }, (_, n) => `d${100 + i}_${n}`));
+    for (let i = 0; i < fill.length; i += 1000) {
+      await env.DB.prepare("INSERT INTO places (id, status, fetched_at) SELECT value, 'ok', ? FROM json_each(?)")
+        .bind(NOW, JSON.stringify(fill.slice(i, i + 1000))).run();
+    }
+    expect(ranked.length).toBeGreaterThan(290);
+  }
 
   it("R11/R38: 지난 실행이 커서 자리에서 미수집을 찾았으면(hit) 다음 실행은 그 자리의 작은 묶음만 읽는다 — 고르는 가게는 미수집 전부에서 고른 것과 같다", async () => {
     const { keys } = await seedDense(HUBS, 100);
@@ -303,15 +341,28 @@ describe("Task 40: 미수집 앞선 자리 작게 읽기", () => {
   it("R11: hit 자리의 미수집이 다 채워져도 같은 실행에서 작은 묶음을 늘려 가며 다음 미수집을 찾고, 예전처럼 30칸 묶음 6개까지 이어 읽는다 (한 실행이 읽는 칸은 줄지 않는다)", async () => {
     const { keys, ranked } = await seedDense(HUBS, 100);
     await run(keys, HUBS);
-    // 앞선 자리부터 300칸 가까이를 채운다 — 다음 미수집은 작은 묶음 합(30칸)보다 훨씬 뒤
-    const fill = ranked.slice(100, 290).flatMap((k, i) => Array.from({ length: 10 }, (_, n) => `d${100 + i}_${n}`));
-    for (let i = 0; i < fill.length; i += 1000) {
-      await env.DB.prepare("INSERT INTO places (id, status, fetched_at) SELECT value, 'ok', ? FROM json_each(?)")
-        .bind(NOW, JSON.stringify(fill.slice(i, i + 1000))).run();
-    }
-    expect(ranked.length).toBeGreaterThan(290);
+    await drainHitArea(ranked);
     const r = await run(keys, HUBS);
     expect(r.ids).toEqual(await oracle(keys, HUBS, 4));
     expect(r.ids.length).toBe(4);
+  });
+
+  it("R11/R38: D1 호출이 빠듯한 실행(maxQueries 8)은 작은 묶음도 질의를 써서 hit 자리가 다 채워졌으면 이번에는 덜 걷는다 — 커서는 읽은 데까지 나아가고 hit가 풀려, 다음 빠듯한 실행이 큰 묶음으로 이어 찾는다 (빠뜨리지 않고 한 실행 늦을 뿐)", async () => {
+    const { keys, ranked } = await seedDense(HUBS, 100);
+    await run(keys, HUBS, 4, 8);
+    expect(JSON.parse((await metaValue(UNFETCHED_FROM_KEY))!)).toMatchObject({ hit: true });
+    await drainHitArea(ranked);
+    const want = await oracle(keys, HUBS, 4);
+    expect(want).toHaveLength(4);
+    // 이번 실행: 작은 묶음 4개(2·4·8·16칸) + 30칸 묶음 2개 = 질의 6개(8 − 커서 읽기·쓰기)로는 190칸 뒤까지 닿지 않는다
+    const first = await run(keys, HUBS, 4, 8);
+    expect(first.log.filter((x) => x.sql === NEAREST_UNFETCHED_SQL)).toHaveLength(6);
+    expect(first.ids).toEqual([]);
+    expect(first.cleared).toBe(false);
+    const cursor = JSON.parse((await metaValue(UNFETCHED_FROM_KEY))!);
+    expect(cursor.hit).toBeUndefined();
+    // 다음 빠듯한 실행: hit가 풀려 30칸 묶음부터 — 찾는다
+    const second = await run(keys, HUBS, 4, 8);
+    expect(second.ids).toEqual(want);
   });
 });

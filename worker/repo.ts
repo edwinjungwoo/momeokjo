@@ -444,9 +444,14 @@ export const UNFETCHED_CHUNK_TILES = 30;
 export const UNFETCHED_MAX_CHUNKS = 6;
 /**
  * Task 40: 지난 실행이 커서 순위에서 미수집을 찾았으면(hit) 먼저 작은 묶음들(이 칸 수씩 — 순위 묶음은 쪼개지 않는다)을 읽고,
- * 그래도 못 채우면 예전처럼 UNFETCHED_CHUNK_TILES칸 묶음 UNFETCHED_MAX_CHUNKS개까지 읽는다 (작은 묶음은 그 수에 넣지 않는다 —
- * 한 실행이 읽을 수 있는 칸은 예전보다 줄지 않는다). 미수집이 몰린 앞선 자리(새 거점)에서 실행마다 30칸(≈2천 행)을 다시 읽지 않게.
- * hit가 아니면(재설정·드문 미수집을 찾아 걷는 중) 예전처럼 처음부터 UNFETCHED_CHUNK_TILES칸씩
+ * 그래도 못 채우면 예전처럼 UNFETCHED_CHUNK_TILES칸 묶음 UNFETCHED_MAX_CHUNKS개까지 읽는다 (작은 묶음은 묶음 수에 넣지 않는다).
+ * 미수집이 몰린 앞선 자리(새 거점)에서 실행마다 30칸(≈2천 행)을 다시 읽지 않게.
+ * hit가 아니면(재설정·드문 미수집을 찾아 걷는 중) 예전처럼 처음부터 UNFETCHED_CHUNK_TILES칸씩.
+ * D1 호출 상한(maxQueries)이 넉넉하면(UNFETCHED_MAX_QUERIES) 한 실행이 읽을 수 있는 칸은 예전보다 줄지 않는다. 빠듯하면(본 Cron의
+ * 빠듯한 실행 — 격자를 많이 모았거나 배치 8) 작은 묶음도 질의를 하나씩 써서, hit 자리가 다 채워진 실행은 예전보다 적게 걷는다
+ * (예: maxQueries 8이면 2+4+8+16+30+30칸, 예전 30×6칸). 그래도 빠뜨리지 않는다: 못 찾으면 커서가 읽은 데까지 나아가고 hit가 풀려
+ * 다음 실행은 큰 묶음부터 걷는다 — 한 실행 늦어질 뿐이다. 빠듯한 실행에서도 작은 묶음을 쓰는 것은 hit 자리는 보통 첫 작은 묶음에서
+ * 채워져 읽기(D1 행)가 훨씬 적어서다 (cronReads.test.ts)
  */
 export const UNFETCHED_PROBE_TILES: readonly number[] = [2, 4, 8, 16];
 /** 미수집 찾기 한 번의 최대 D1 호출: 커서 읽기 1 + 작은 묶음 + 묶음 UNFETCHED_MAX_CHUNKS + 커서 쓰기 1 */

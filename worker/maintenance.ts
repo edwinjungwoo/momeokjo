@@ -409,7 +409,9 @@ async function refreshDetails(
     candidates.push(...unfetched, ...(await readExpired(unfetched.length >= batchSize ? "failed" : undefined)));
     return pickAndEnrich(db, ctx, candidates, out);
   }
-  // D1 호출이 모자란 실행(격자를 많이 모은 실행 등)은 예전 순서 그대로: 만료 후보(최악 몫이 남을 때만) → 남은 호출로 미수집
+  // D1 호출이 모자란 실행(격자를 많이 모은 실행, 배치 8 등)은 예전 순서 그대로: 만료 후보(최악 몫이 남을 때만) → 남은 호출로 미수집.
+  // 미수집 질의 상한은 UNFETCHED_MAX_QUERIES(작은 묶음 포함 12 — Task 40 전에는 8)와 남은 호출 중 작은 쪽이다. 남은 호출(보충·집계 몫을
+  // 뺀 것) 안이라 예산은 지키지만, 미수집 찾기가 예전보다 많이 쓰면 완료 확인(canCheck)이 다음 실행으로 밀릴 수 있다 — 늦어질 뿐 틀리지 않는다
   if (calls.has(EXPIRED_D1_CALLS + FRONTIER_MIN_CALLS + tail)) candidates.push(...(await readExpired()));
   else skip("expired");
   const maxQueries = Math.min(UNFETCHED_MAX_QUERIES, calls.left - tail);
