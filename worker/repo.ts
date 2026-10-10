@@ -1,3 +1,4 @@
+import { MAX_INTERVAL_WEEKS, WEEK_MS, detailFingerprint } from "../shared/adaptiveRefresh";
 import { categoryGroup } from "../shared/category";
 import {
   DETAIL_FAIL_TTL_MS, DETAIL_FREEZE_AFTER_BLOCKS, DETAIL_FREEZE_MS, DETAIL_JITTER_MS, DETAIL_OK_TTL_MS, LIST_JSON_VERSION,
@@ -915,23 +916,39 @@ export async function getMeta(db: D1Database, id: string): Promise<DetailMeta> {
   return r ? metaOf(r.status, r.fetched_at, r.fail_reason) : null;
 }
 
-/** 상세 한 곳을 쓰는 문장 (saveDetail과 saveDetails가 같은 문장을 쓴다) */
-function detailInsertStmt(db: D1Database, id: string, s: PlaceSummary, d: PlaceDetail, now: number): D1PreparedStatement {
+/**
+ * 상세 한 곳을 쓰는 문장 (saveDetail과 saveDetails가 같은 문장을 쓴다). 예전처럼 행을 통째로 바꿔 쓰고(INSERT OR REPLACE),
+ * R66 주기는 바꾸기 전 행(PK로 한 행)의 지문·주기로 정한다: 지문이 같으면 MIN(4, 주기 × 2), 다르거나 이전 지문이 없거나(처음·마이그레이션
+ * 전 행·실패만 있던 행) 행이 없으면 1. ?21(weekly)이면 지문과 상관없이 1 (R66 볼 때 신선하게 — 열어 본 가게).
+ * due_after = fetched_at + (주기 − 1) × 7일. 바인드: ?1 id … ?18 now, ?19 list_json, ?20 fp, ?21 weekly(0/1)
+ */
+const DETAIL_SAVE_SQL = `INSERT OR REPLACE INTO places (id, status, name, category_name, category_group, lat, lng, address, phone, photo_url,
+    rating, review_count, price, menus_json, hours_json, strengths_json, tags_json, bookable, fail_reason, fetched_at,
+    list_json, fp, interval_weeks, due_after)
+  SELECT ?1, 'ok', ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, NULL, ?18,
+    ?19, ?20, w.iv, ?18 + (w.iv - 1) * ${WEEK_MS}
+  FROM (SELECT CASE WHEN ?21 THEN 1 ELSE COALESCE(
+    (SELECT CASE WHEN o.fp = ?20 THEN MIN(${MAX_INTERVAL_WEEKS}, o.interval_weeks * 2) ELSE 1 END FROM places o WHERE o.id = ?1), 1)
+    END AS iv) AS w`;
+
+function detailInsertStmt(
+  db: D1Database, id: string, s: PlaceSummary, d: PlaceDetail, now: number, opts: SaveOpts = {},
+): D1PreparedStatement {
   return db
-    .prepare(
-      `INSERT OR REPLACE INTO places (id, status, name, category_name, category_group, lat, lng, address, phone, photo_url,
-         rating, review_count, price, menus_json, hours_json, strengths_json, tags_json, bookable, fail_reason, fetched_at,
-         list_json)
-       VALUES (?, 'ok', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?)`,
-    )
+    .prepare(DETAIL_SAVE_SQL)
     .bind(
       id, s.name, s.categoryName, categoryGroup(s.categoryName), s.lat, s.lng, s.address, s.phone, s.photoUrl,
       d.rating, d.reviewCount, d.price, JSON.stringify(d.menus), d.hours ? JSON.stringify(d.hours) : null,
       JSON.stringify(d.strengths), JSON.stringify(d.tags), d.bookable === null ? null : d.bookable ? 1 : 0, now,
       // R12: 목록 원소 조각을 같은 행에 같이 쓴다 (쓰기 행 수는 그대로)
       storedListJson(detailRow(id, s, d, now)),
+      opts.fp ?? detailFingerprint(s, d),
+      opts.weekly ? 1 : 0,
     );
 }
+
+/** R66 저장 선택: fp는 이미 계산한 지문(없으면 여기서), weekly면 주기 1로 (열어 본 가게) */
+export type SaveOpts = { fp?: string; weekly?: boolean };
 
 /** 실패 한 곳을 쓰는 문장 (표시 정보는 그대로 두고 상태만 바꾼다 — saveDetailFailure와 saveDetails가 같은 문장을 쓴다) */
 function detailFailureStmt(db: D1Database, id: string, reason: string, now: number): D1PreparedStatement {
@@ -945,15 +962,15 @@ function detailFailureStmt(db: D1Database, id: string, reason: string, now: numb
 
 /** R56: 상세 저장·실패 기록은 같은 batch에서 그 가게가 보이는 거점의 스냅샷 표시를 올린다 (snapshotDirty.ts) */
 export async function saveDetail(
-  db: D1Database, id: string, s: PlaceSummary, d: PlaceDetail, now: number,
+  db: D1Database, id: string, s: PlaceSummary, d: PlaceDetail, now: number, opts: SaveOpts = {},
 ): Promise<void> {
   // 표시 문장을 먼저 둔다 — 옮기기 전 좌표(저장된 행)도 보게
   const mark = markPlaceHubsDirtyStmt(db, id, { lat: s.lat, lng: s.lng }, now);
-  await db.batch([mark, detailInsertStmt(db, id, s, d, now)]);
+  await db.batch([mark, detailInsertStmt(db, id, s, d, now, opts)]);
 }
 
-/** 한 번의 보충에서 저장할 것: 상세(summary·detail) 또는 실패 사유 */
-export type DetailSave = { id: string; summary: PlaceSummary; detail: PlaceDetail } | { id: string; reason: string };
+/** 한 번의 보충에서 저장할 것: 상세(summary·detail, R66 fp — 없으면 저장할 때 계산) 또는 실패 사유 */
+export type DetailSave = { id: string; summary: PlaceSummary; detail: PlaceDetail; fp?: string } | { id: string; reason: string };
 
 /**
  * Task 34: 한 번의 보충 결과를 D1 batch 하나로 쓴다 (한 곳씩 saveDetail·saveDetailFailure를 부른 것과 같은 행·같은 list_json).
@@ -968,7 +985,9 @@ export async function saveDetails(db: D1Database, saves: DetailSave[], now: numb
   );
   await db.batch([
     mark,
-    ...saves.map((x) => ("summary" in x ? detailInsertStmt(db, x.id, x.summary, x.detail, now) : detailFailureStmt(db, x.id, x.reason, now))),
+    ...saves.map((x) =>
+      "summary" in x ? detailInsertStmt(db, x.id, x.summary, x.detail, now, { fp: x.fp }) : detailFailureStmt(db, x.id, x.reason, now)
+    ),
   ]);
 }
 

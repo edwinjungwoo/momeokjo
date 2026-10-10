@@ -407,6 +407,19 @@ describe("infra: 마이그레이션별 확인·후속 작업 목록", () => {
     ]);
   });
 
+  it("R66: 0008은 places 새 열 셋(interval_weeks·fp·due_after)과 idx_places_status_due를 확인하고 후속 작업이 없다 — 백필 UPDATE는 SQL 안에 있다", () => {
+    const c8 = MIGRATION_CHECKS["0008_adaptive_refresh.sql"];
+    expect(c8.checks).toEqual([
+      expect.objectContaining({ sql: "PRAGMA table_info(places)", expect: ["interval_weeks", "fp", "due_after"] }),
+      expect.objectContaining({ expect: ["idx_places_status_due"] }),
+    ]);
+    expect(c8.hooks ?? []).toEqual([]);
+    const sql = sqlOf("0008_adaptive_refresh.sql");
+    expect(sql).toMatch(/UPDATE places SET due_after = fetched_at/);
+    expect(sql).toMatch(/CREATE INDEX idx_places_status_due ON places\(status, due_after\)/);
+    expect(isDestructive(sql)).toEqual([]);
+  });
+
   it("infra: objectState — 기대한 이름이 모두·일부·하나도 없는지", () => {
     expect(objectState([{ name: "meta" }, { name: "idx_places_status_fetched_at" }], ["meta", "idx_places_status_fetched_at"])).toBe("all");
     expect(objectState([{ name: "meta" }], ["meta", "idx_places_status_fetched_at"])).toBe("partial");

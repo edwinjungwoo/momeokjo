@@ -58,6 +58,18 @@ export const MIGRATION_CHECKS = {
       },
     ],
   },
+  // R66: 적응형 상세 갱신 열 셋과 만료 후보 인덱스. 후속 작업 없음 — 지금 행의 due_after는 같은 SQL의 UPDATE가 fetched_at으로 채운다
+  // (모두 주기 1이라 대상 판단이 예전과 같다). 쓰기 ≈ 가게 수 × 2행 (UPDATE + 인덱스)
+  "0008_adaptive_refresh.sql": {
+    checks: [
+      { what: "places.interval_weeks·fp·due_after 열", sql: "PRAGMA table_info(places)", expect: ["interval_weeks", "fp", "due_after"] },
+      {
+        what: "idx_places_status_due 인덱스",
+        sql: "SELECT name FROM sqlite_master WHERE name IN ('idx_places_status_due')",
+        expect: ["idx_places_status_due"],
+      },
+    ],
+  },
 };
 
 /**
