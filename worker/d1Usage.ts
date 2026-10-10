@@ -178,6 +178,19 @@ export async function d1UsageOn(db: D1Database, day: string): Promise<D1Usage> {
   return { read: get(readKey(day)), written: get(writtenKey(day)) };
 }
 
+/** D1 질의 하나의 바인드 값 상한(100)보다 넉넉히 작은 수 — 이보다 많은 키는 json_each 목록으로 */
+const META_IN_MAX = 90;
+
+/**
+ * meta 여러 키를 한 질의로 읽는 문장. 키마다 기본 키로 찾는 자리표 목록(IN (?, …))이다 — Task 57: json_each 목록은 키마다 ~3행을
+ * 읽어서(본 Cron 시작·격자 수집 뒤 두 번에 71~76행) 자리표로 바꿨다. 키가 META_IN_MAX보다 많으면 예전처럼 json_each
+ */
+export function metaKeysStmt(db: D1Database, keys: readonly string[]): D1PreparedStatement {
+  return keys.length <= META_IN_MAX
+    ? db.prepare(`SELECT key, value FROM meta WHERE key IN (${keys.map(() => "?").join(", ")})`).bind(...keys)
+    : db.prepare("SELECT key, value FROM meta WHERE key IN (SELECT value FROM json_each(?))").bind(JSON.stringify(keys));
+}
+
 /**
  * Task 40: 오늘(UTC) 읽기 행 수와 meta 몇 키를 한 질의로 (본 Cron 시작 — 읽기 예산 확인과 격자 확인 표시를 D1 호출 하나로)
  */
@@ -185,10 +198,7 @@ export async function readTodayAndMeta(
   db: D1Database, now: number, keys: readonly string[],
 ): Promise<{ read: number; meta: Map<string, string> }> {
   const day = readKey(utcDay(now));
-  const r = await db
-    .prepare("SELECT key, value FROM meta WHERE key IN (SELECT value FROM json_each(?))")
-    .bind(JSON.stringify([day, ...keys]))
-    .all<{ key: string; value: string }>();
+  const r = await metaKeysStmt(db, [day, ...keys]).all<{ key: string; value: string }>();
   const meta = new Map(r.results.map((x) => [x.key, x.value] as const));
   const read = Number(meta.get(day) ?? 0);
   meta.delete(day);

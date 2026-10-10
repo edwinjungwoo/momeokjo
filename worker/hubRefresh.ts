@@ -2,6 +2,7 @@ import { haversine, tileRect } from "../shared/geo";
 import type { Hub } from "../shared/hubs";
 import { hubTiles } from "./hubTiles";
 import { hubRefreshStart } from "./refreshSchedule";
+import { metaKeysStmt } from "./d1Usage";
 import { TILES_CHANGED_KEY } from "./repo";
 import { markHubsDirtyStmt } from "./snapshotDirty";
 
@@ -49,9 +50,7 @@ export function cronMetaFrom(
 export async function readCronMeta(
   db: D1Database, hubIds: readonly string[], extraKeys: readonly string[] = [],
 ): Promise<{ changedAt: number; refreshed: Map<string, HubRefreshed>; meta: Map<string, string> }> {
-  const r = await db
-    .prepare("SELECT key, value FROM meta WHERE key IN (SELECT value FROM json_each(?))")
-    .bind(JSON.stringify([TILES_CHANGED_KEY, ...hubIds.map((id) => HUB_REFRESHED_PREFIX + id), ...extraKeys]))
+  const r = await metaKeysStmt(db, [TILES_CHANGED_KEY, ...hubIds.map((id) => HUB_REFRESHED_PREFIX + id), ...extraKeys])
     .all<{ key: string; value: string }>();
   const meta = new Map(r.results.map((x) => [x.key, x.value] as const));
   return { ...cronMetaFrom(meta, hubIds), meta };

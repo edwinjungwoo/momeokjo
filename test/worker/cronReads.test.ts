@@ -237,6 +237,29 @@ describe("Task 40: 운영 크기에서 Cron 한 번이 읽는 D1 행 (정상 상
     },
   );
 
+  it.each([
+    ["backlog", 50],
+    ["refresh", 110],
+    ["idle", 0],
+  ] as const)(
+    "R38/R56: %s — 실행의 meta 읽기는 키마다 기본 키로(본 Cron ≤ 50행·상세만 ≤ 12행 — json_each 목록은 71~76·17~18행이었다), 상세 저장의 스냅샷 표시 문장은 저장 전 좌표의 거점을 한 번만 구한다(실행당 ≤ %i행 — 거점마다 가게를 다시 찾아 backlog 88·refresh 136행이었다) (Task 57)",
+    async (s, dirtyMax) => {
+      await seed(s);
+      const now = await warmUp(s === "backlog" ? NOW + MIN5 : NOW);
+      const isMeta = (q: string) => /^SELECT (key, )?value FROM meta\b/.test(q);
+      const isDirty = (q: string) => q.includes("'snapshot_dirty:' || json_extract(h.value");
+      const m = await mainRun(now);
+      const d = await detailRun(now + 60_000);
+      expect(reads(m.log, isMeta), "main meta").toBeLessThanOrEqual(50);
+      expect(reads(d.log, isMeta), "detail meta").toBeLessThanOrEqual(12);
+      for (const { log } of [m, d]) {
+        expect(reads(log, isDirty), "dirty").toBeLessThanOrEqual(dirtyMax);
+        // 저장 묶음(첫 곳 혼자 + 3곳)마다 표시 한 문장 그대로
+        expect(log.filter((x) => isDirty(x.sql)).length).toBe(dirtyMax === 0 ? 0 : 2);
+      }
+    },
+  );
+
   it("R38/R56: 할 일이 없는 스냅샷 Cron은 ≤100행 (스냅샷 메타·표시만)", async () => {
     await seed("idle");
     await env.DB.batch(PUBLIC_HUBS.map((h) =>

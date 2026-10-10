@@ -57,14 +57,18 @@ export function markPlaceHubsDirtyStmt(db: D1Database, id: string, next: LatLng 
  * markPlaceHubsDirtyStmt를 여러 곳에 한 번에 (Task 34 — 한 번의 보충을 batch 하나로 저장할 때):
  * 어느 한 곳이라도 저장된 좌표(옮기기 전)나 새 좌표(next)가 1000m 상자 안인 거점의 표시를 거점마다 한 번 올린다.
  * 저장 문장들보다 먼저 둔다. 어느 거점과도 멀면 아무것도 쓰지 않는다.
- * 가게는 기본 키로 찾는다 (+p.lat·+p.lng: 좌표 인덱스로 상자를 훑지 않게 — 테스트가 계획을 고정한다)
+ * 가게는 기본 키로 찾는다 (+p.lat·+p.lng: 좌표 인덱스로 상자를 훑지 않게 — 테스트가 계획을 고정한다).
+ * Task 57: 저장 전 좌표가 든 거점들은 상관 없는 하위 질의로 한 번만 구한다 (예전 EXISTS는 거점 14곳마다 가게들을 다시 찾아
+ * 묶음마다 44~68행을 읽었다). 오르는 거점은 같다 — 새 좌표의 거점(?3) 또는 저장 전 좌표가 상자 안인 거점, 거점마다 한 번
  */
 export const MARK_PLACES_DIRTY_SQL = `INSERT INTO meta (key, value)
        SELECT '${SNAPSHOT_DIRTY_PREFIX}' || json_extract(h.value, '$[0]'), ?1 FROM json_each(?2) AS h
        WHERE json_extract(h.value, '$[0]') IN (SELECT value FROM json_each(?3))
-          OR EXISTS (SELECT 1 FROM places p WHERE p.id IN (SELECT value FROM json_each(?4))
-               AND +p.lat BETWEEN json_extract(h.value, '$[1]') AND json_extract(h.value, '$[2]')
-               AND +p.lng BETWEEN json_extract(h.value, '$[3]') AND json_extract(h.value, '$[4]'))
+          OR json_extract(h.value, '$[0]') IN (
+               SELECT json_extract(b.value, '$[0]') FROM places p CROSS JOIN json_each(?2) AS b
+               WHERE p.id IN (SELECT value FROM json_each(?4))
+                 AND +p.lat BETWEEN json_extract(b.value, '$[1]') AND json_extract(b.value, '$[2]')
+                 AND +p.lng BETWEEN json_extract(b.value, '$[3]') AND json_extract(b.value, '$[4]'))
        ${BUMP}`;
 export function markPlacesHubsDirtyStmt(
   db: D1Database, places: readonly { id: string; next: LatLng | null }[], now: number,
