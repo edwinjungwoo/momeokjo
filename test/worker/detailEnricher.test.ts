@@ -66,6 +66,37 @@ describe("enrichDetails", () => {
     expect(await getMeta(env.DB, "4")).toBeNull();
   });
 
+  it("R10: 차단 신호(403)가 와도 이미 떠난 요청(동시 3곳)의 성공은 저장하고, 새 곳은 시작하지 않으며, 쿨다운은 한 번만 기록한다", async () => {
+    await seedIds(["1", "2", "3", "4", "5"]);
+    let release!: () => void;
+    const gate = new Promise<void>((r) => (release = r));
+    const calls: string[] = [];
+    const fetcher = async (input: RequestInfo | URL) => {
+      const id = idOf(input);
+      calls.push(id);
+      if (id === "1") return new Response("blocked", { status: 403 });
+      await gate;
+      return Response.json(json(`가게${id}`));
+    };
+    const blocks = vi.spyOn(console, "warn").mockImplementation(() => {});
+    try {
+      const p = run(fetcher);
+      // 1의 차단 기록이 끝난 뒤에 2·3의 응답이 온다
+      await vi.waitFor(async () => expect((await detailGate(env.DB)).blockedUntil).toBe(NOW + PLACE_BLOCK_COOLDOWN_MS), { timeout: 10_000, interval: 5 });
+      release();
+      expect(await p).toEqual(res(2, 1, 0));
+    } finally {
+      blocks.mockRestore();
+    }
+    expect(calls.sort()).toEqual(["1", "2", "3"]);
+    expect((await getMeta(env.DB, "1"))?.status).toBe("failed");
+    for (const id of ["2", "3"]) expect((await placeById(env.DB, id))?.place.name, id).toBe(`가게${id}`);
+    for (const id of ["4", "5"]) expect(await getMeta(env.DB, id), id).toBeNull();
+    // R44 오늘 차단 횟수는 이 사고 하나
+    const count = await env.DB.prepare("SELECT value FROM meta WHERE key LIKE 'block_count:%'").all<{ value: string }>();
+    expect(count.results.map((x) => x.value)).toEqual(["1"]);
+  });
+
   it("R10: 403/429가 나오면 30분 동안 전체 상세 호출을 멈추는 쿨다운을 기록한다", async () => {
     await seedIds(["1"]);
     await run(fakePlaceApi({ "1": 429 }).fetcher);
