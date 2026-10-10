@@ -182,7 +182,7 @@ export type CronResult = {
  * R11: 모든 거점을 PREWARM_RADIUS로 유지한다 (R62 준비 중 거점 포함 — 공개 전에 채운다). 외부 호출 예산 하나를 거점끼리 나눠 쓴다.
  * 거점들의 격자를 합집합(중복 제거)으로 한 번에 처리하고, 상세 후보도 합집합에서 ID 중복 없이
  * 가장 가까운 거점 기준으로 고른다 — 겹치는 거점이 있어도 같은 격자·장소를 두 번 부르지 않는다.
- * D1 읽기를 아끼려고: 만료 후보는 (status, fetched_at) 인덱스와 커서로, 미수집은 앞선 커서(unfetched_from)부터 묶음씩 읽는다
+ * D1 읽기를 아끼려고: 만료 후보는 상태 인덱스(ok는 R66 (status, due_after), 실패는 (status, fetched_at))와 커서로, 미수집은 앞선 커서(unfetched_from)부터 묶음씩 읽는다
  * (커서가 끝이고 격자가 그대로면 meta 1행만). 실행당 D1 호출은 CRON_D1_CALL_LIMIT 안에서 단계마다 남은 수를 본다 (Task 34).
  * pending은 세지 않는다 (관리용 warm만 센다).
  */
