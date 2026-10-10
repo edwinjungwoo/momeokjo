@@ -450,6 +450,15 @@ const ROLLBACK_CAVEATS = [
  * @param {import("./release.d.mts").ReleaseOpts} opts
  * @param {import("./release.d.mts").ReleaseDeps} deps
  */
+/**
+ * R67: 스모크 감사(거점마다 D1 ~8천~1.6만 행)는 공개 거점 중 한 곳만 본다 — UTC 날짜로 돌려 고른다.
+ * 한 release의 기준·배포 뒤 스모크는 같은 거점을 봐야 FAIL을 비교할 수 있어서 release가 한 번 골라 넘긴다
+ */
+export function smokeAuditPick(publicHubIds, now) {
+  if (publicHubIds.length === 0) return undefined;
+  return publicHubIds[Math.floor(now / 86_400_000) % publicHubIds.length];
+}
+
 export async function runRelease(opts, deps) {
   // R62: 스모크 FAIL 분류("모든 거점 0곳")는 스모크가 목록을 본 공개 거점 기준. 백필 훅은 모든 거점(deps.hubIds)
   const smokeHubIds = deps.publicHubIds;
@@ -564,9 +573,11 @@ export async function runRelease(opts, deps) {
     return head;
   };
   // 기준 실행에만 SMOKE_BASELINE=1: 로컬 hubs.ts(새 코드)와 운영(이전 코드)의 ready 차이를 FAIL이 아니라 WARN으로 (smoke.sh 머리말)
+  const auditPick = smokeAuditPick(smokeHubIds, startedAt);
   const runSmoke = async ({ baseline = false } = {}) => {
     const env = { B: PROD_URL };
     if (baseline) env.SMOKE_BASELINE = "1";
+    if (auditPick) env.SMOKE_AUDIT_PICK = auditPick;
     if (deps.adminToken) env.ADMIN_TOKEN = deps.adminToken;
     const r = await exec("bash", ["scripts/smoke.sh"], { echo: true, env });
     return { code: r.code, summary: parseSmokeSummary(r.all), fails: parseSmokeFails(r.all) };

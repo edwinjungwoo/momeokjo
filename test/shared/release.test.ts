@@ -272,6 +272,13 @@ describe("R62 준비 중 거점 — 스모크", () => {
     expect(shouldRollback({ code: 1, summary: { requests: 25, fails: 1, warns: 0 }, fails: [f], baseline: [], hubIds: pub })).toMatchObject({ action: "rollback" });
   });
 
+  it("R67: smoke.sh 감사는 준비 중·공개 예정 거점은 모두, 공개 거점은 SMOKE_AUDIT_PICK 한 곳만 (SMOKE_AUDIT_ALL=1이면 모두)", () => {
+    expect(smokeSh).toMatch(/pick="\$\{SMOKE_AUDIT_PICK:-\}"/);
+    expect(smokeSh).toMatch(/if \[ "\$ready" = true \] && \[\[ "\$notyet" != \*" \$id "\* \]\] && \[ "\$\{SMOKE_AUDIT_ALL:-\}" != 1 \] && \[ "\$id" != "\$pick" \]; then/);
+    // 건너뛰기는 감사 요청(req) 앞에서
+    expect(smokeSh.indexOf('skipped=$((skipped + 1))')).toBeLessThan(smokeSh.indexOf('req "audit-$id"'));
+  });
+
   it("R62: smoke.sh는 SMOKE_BASELINE=1(기준 실행)에서만 운영과 로컬 ready 차이를 WARN으로 낮추고, hubs.ts를 못 읽어 내장 목록을 쓰면 알린다", () => {
     expect(smokeSh).toMatch(/\[ "\$\{SMOKE_BASELINE:-\}" = 1 \] && baseline=true/);
     expect(smokeSh).toMatch(/if \$baseline && \[ "\$code" = 400 \]; then\n\s+# [^\n]*\n\s+warn "공개 예정 \$id: 운영은 아직 숨김 \(400\)"/);

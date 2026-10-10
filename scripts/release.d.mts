@@ -117,3 +117,4 @@ export declare function deployLogLine(entry: {
   previous: string | null;
 }): string;
 export declare function runRelease(opts: ReleaseOpts, deps: ReleaseDeps): Promise<{ code: number; summary: ReleaseSummary }>;
+export function smokeAuditPick(publicHubIds: string[], now: number): string | undefined;

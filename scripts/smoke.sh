@@ -188,8 +188,21 @@ echo "== 관리자"
 expect_code adm-none 401 "통계 토큰 없이" "$B/api/admin/stats"
 expect_code adm-wrong 401 "통계 틀린 토큰" -H "Authorization: Bearer smoke-wrong-token" "$B/api/admin/stats"
 if [ -n "${ADMIN_TOKEN:-}" ]; then
+  # R67: 감사는 무거운 질의(거점마다 D1 ~8천~1.6만 행)라 준비 중·공개 예정 거점은 모두, 이미 공개된 거점은 한 곳만 본다 —
+  # SMOKE_AUDIT_PICK(release가 기준·배포 뒤 실행에 같은 값을 준다), 없으면 UTC 날짜로 돌린다. SMOKE_AUDIT_ALL=1이면 모두
+  pick="${SMOKE_AUDIT_PICK:-}"
+  if [ -z "$pick" ]; then
+    pub=()
+    for h in "${hubs[@]}"; do read -r id _ _ ready <<<"$h"; [ "$ready" = true ] && pub+=("$id"); done
+    [ ${#pub[@]} -gt 0 ] && pick="${pub[$(( $(date -u +%s) / 86400 % ${#pub[@]} ))]}"
+  fi
+  skipped=0
   for h in "${hubs[@]}"; do
     read -r id lat lng ready <<<"$h"
+    if [ "$ready" = true ] && [[ "$notyet" != *" $id "* ]] && [ "${SMOKE_AUDIT_ALL:-}" != 1 ] && [ "$id" != "$pick" ]; then
+      skipped=$((skipped + 1))
+      continue
+    fi
     # 토큰은 curl 설정(-K, 프로세스 치환)으로만 넘긴다 — 명령줄 인자·출력에 남지 않게.
     # bash -x(set -x)로 돌리지 않는다: 아래 printf 줄이 토큰을 그대로 찍는다
     req "audit-$id" -K <(printf 'header = "Authorization: Bearer %s"\n' "$ADMIN_TOKEN") \
@@ -210,6 +223,7 @@ if [ -n "${ADMIN_TOKEN:-}" ]; then
       bad "감사 $id → $code $(jq -c '{pass, tiles, detail: (.detail // null)}' "$f" 2>/dev/null)"
     fi
   done
+  [ "$skipped" -gt 0 ] && info "감사: 공개 거점은 $pick 한 곳만 봄 (${skipped}곳 건너뜀 — 모두 보려면 SMOKE_AUDIT_ALL=1)"
 else
   info "ADMIN_TOKEN이 없어 감사(Q1·Q2)는 건너뜀"
 fi

@@ -1,6 +1,6 @@
 // scripts/release.mjs runRelease를 가짜 실행기로 돌린다 — wrangler·npm·git·curl을 실제로 부르지 않는다
 import { describe, expect, it } from "vitest";
-import { runRelease, type ReleaseOpts, type RunResult } from "../../scripts/release.mjs";
+import { runRelease, smokeAuditPick, type ReleaseOpts, type RunResult } from "../../scripts/release.mjs";
 import sql0003 from "../../migrations/0003_meta.sql?raw";
 import sql0005 from "../../migrations/0005_list_json.sql?raw";
 import {
@@ -530,6 +530,19 @@ describe("infra: npm run release — 기준 스모크와 자동 롤백", () => {
     expect(smokeCalls).toHaveLength(2);
     expect(smokeCalls[0].env.SMOKE_BASELINE).toBe("1");
     expect(smokeCalls[1].env.SMOKE_BASELINE).toBeUndefined();
+  });
+
+  it("R67: 스모크 감사는 공개 거점 한 곳만 — release가 고른 거점(SMOKE_AUDIT_PICK)을 기준·배포 뒤 스모크에 같은 값으로 준다", async () => {
+    const h = harness({}, { publicHubIds: ["bongeunsa", "ddp", "pangyo"] });
+    const res = await runRelease(opts(), h.deps);
+    expect(res.code).toBe(0);
+    const picks = h.ran("bash scripts/smoke.sh").map((c) => c.env.SMOKE_AUDIT_PICK);
+    expect(picks).toHaveLength(2);
+    expect(picks[0]).toBe(picks[1]);
+    expect(["bongeunsa", "ddp", "pangyo"]).toContain(picks[0]);
+    expect(smokeAuditPick(["a", "b", "c"], Date.UTC(2026, 0, 1))).toBe(smokeAuditPick(["a", "b", "c"], Date.UTC(2026, 0, 1, 23)));
+    expect(new Set([0, 1, 2].map((d) => smokeAuditPick(["a", "b", "c"], Date.UTC(2026, 0, 1 + d))))).toEqual(new Set(["a", "b", "c"]));
+    expect(smokeAuditPick([], Date.UTC(2026, 0, 1))).toBeUndefined();
   });
 
   it("R62: 배포 뒤에도 공개한 거점이 400이면(코드 FAIL, 기준에는 없던 줄) 계속될 때 롤백한다 — 플래그 없는 스모크", async () => {
