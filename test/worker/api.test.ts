@@ -9,7 +9,9 @@ import type { PlacesResponse } from "../../shared/types";
 import {
   PLACES_CACHE_MS, PLACES_PENDING_CACHE_MS, PLACE_TRANSIENT_CACHE_MS, createApp, placeCacheKey, placesCacheKey, placesCacheTtl,
 } from "../../worker/app";
-import { detailGate, getMeta, markTile, recordPlaceBlock, replaceTilePlaces, resetCorruptWarnings } from "../../worker/repo";
+import {
+  detailGate, getMeta, markTile, recordPlaceBlock, replaceTilePlaces, resetCorruptWarnings, saveDetailFailure,
+} from "../../worker/repo";
 import { callApp } from "../helpers/callApp";
 import { recordHubRefreshed } from "../../worker/hubRefresh";
 import { hubRefreshStart } from "../../worker/refreshSchedule";
@@ -384,6 +386,17 @@ describe("GET /api/places — 응답 캐시와 목록 원소", () => {
     for (const p of body.places) expect(p).not.toHaveProperty("fetchedAt");
     const one = await (await callApp(s.app, "/api/places/1001")).json<any>();
     expect(one.fetchedAt).toBe(NOW);
+    expect(one.detail).not.toHaveProperty("fetchedAt");
+  });
+
+  it("R48: 상세 갱신이 실패한 가게(failed — 예전 평점·메뉴가 남아 있다)는 fetchedAt을 싣지 않는다 — 실패 시각을 \"오늘 확인\"으로 보이지 않게 카드의 확인 줄을 숨긴다", async () => {
+    await seedPlace(env.DB, "2001", at(0.0005), HUB.lng, { now: NOW - 3 * 24 * 3600_000 });
+    await saveDetailFailure(env.DB, "2001", "http_500", NOW - 60_000);
+    const res = await callApp(setup().app, "/api/places/2001");
+    expect(res.status).toBe(200);
+    const one = await res.json<any>();
+    expect(one.detail.rating).toBe(4.2);
+    expect(one).not.toHaveProperty("fetchedAt");
     expect(one.detail).not.toHaveProperty("fetchedAt");
   });
 });

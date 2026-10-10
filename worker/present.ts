@@ -16,6 +16,8 @@ const coord = (v: number) => Math.round(v * 1e6) / 1e6;
 
 /**
  * R12 목록 원소(거리, 메뉴 3개, 주소·전화 없음) / R13 단건(full: 메뉴 전부, 주소·전화, R48 상세 시각 포함).
+ * R48 상세 시각은 ok 행만 — 갱신이 실패한 행(failed)의 fetched_at은 실패 시각이라 남아 있는 예전 평점·메뉴를 "오늘 확인"으로
+ * 보이게 하므로 싣지 않는다 (화면은 fetchedAt이 없으면 확인 줄을 숨긴다).
  * distance를 이미 계산했으면 넘겨서 다시 계산하지 않는다.
  */
 export function toApiPlace(
@@ -33,7 +35,9 @@ export function toApiPlace(
     lat: coord(p.lat),
     lng: coord(p.lng),
     ...(distance === undefined ? {} : { distance, walkMinutes: walkMinutes(distance) }),
-    ...(opts.full ? { address: p.address, phone: p.phone, fetchedAt: d.fetchedAt } : {}),
+    ...(opts.full
+      ? { address: p.address, phone: p.phone, ...(row.meta.status === "ok" ? { fetchedAt: d.fetchedAt } : {}) }
+      : {}),
     url: p.url,
     photoUrl: p.photoUrl,
     detail: {
