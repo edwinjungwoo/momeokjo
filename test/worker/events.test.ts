@@ -116,6 +116,33 @@ describe("POST /api/events", () => {
     expect(await rows()).toHaveLength(0);
   });
 
+  it("R35: Content-Length 없이(chunked) 보낸 큰 본문은 8KB를 넘는 순간 읽기를 멈추고 400 — 본문 전체를 메모리에 받지 않는다", async () => {
+    const { app } = setup();
+    const chunk = new TextEncoder().encode("x".repeat(4 * 1024));
+    let pulls = 0;
+    const big = new ReadableStream<Uint8Array>({
+      pull(ctrl) {
+        pulls += 1;
+        if (pulls > 256) ctrl.close(); // 1MB
+        else ctrl.enqueue(chunk);
+      },
+    });
+    const res = await callApp(app, "/api/events", { method: "POST", headers: { "content-type": "application/json" }, body: big });
+    expect(res.status).toBe(400);
+    expect(await res.json()).toEqual({ error: "too_large" });
+    expect(pulls).toBeLessThan(10);
+    // 길이를 모르는 작은 본문은 그대로 받는다
+    const body = JSON.stringify({ anon: ANON, session: SESSION, events: [ev()] });
+    const small = new ReadableStream<Uint8Array>({
+      start(ctrl) {
+        ctrl.enqueue(new TextEncoder().encode(body));
+        ctrl.close();
+      },
+    });
+    expect((await callApp(app, "/api/events", { method: "POST", headers: { "content-type": "application/json" }, body: small })).status).toBe(204);
+    expect(await rows()).toHaveLength(1);
+  });
+
   it("R35: IP·User-Agent·Origin은 헤더에 있어도 어떤 열에도 저장하지 않는다", async () => {
     const { app } = setup();
     const res = await callApp(app, "/api/events", {

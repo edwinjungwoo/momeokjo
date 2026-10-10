@@ -97,6 +97,31 @@ const EVENT_ORIGIN = /^(?:https:\/\/mmj\.itmz\.me|http:\/\/(?:localhost|127\.0\.
 /** Origin이 없으면(curl, 일부 오래된 브라우저) 받고, 있으면 위 주소일 때만 받는다 */
 export const eventOriginAllowed = (origin: string | undefined): boolean => origin === undefined || EVENT_ORIGIN.test(origin);
 
+/** 본문을 max 바이트까지만 읽는다 — 넘으면 읽기를 멈추고(cancel) null */
+async function readCapped(body: ReadableStream<Uint8Array> | null, max: number): Promise<Uint8Array | null> {
+  if (!body) return new Uint8Array();
+  const reader = body.getReader();
+  const chunks: Uint8Array[] = [];
+  let size = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    size += value.byteLength;
+    if (size > max) {
+      await reader.cancel().catch(() => {});
+      return null;
+    }
+    chunks.push(value);
+  }
+  const out = new Uint8Array(size);
+  let at = 0;
+  for (const c of chunks) {
+    out.set(c, at);
+    at += c.byteLength;
+  }
+  return out;
+}
+
 /** R12 응답 캐시 (Workers Cache API의 일부). 없으면 캐시하지 않는다 */
 export type ResponseCache = {
   match(req: Request): Promise<Response | undefined>;
@@ -320,8 +345,9 @@ export function createApp(deps: AppDeps) {
     // 다른 사이트가 보낸 이벤트는 읽지도 저장하지도 않는다 (화면을 막지 않게 똑같이 204)
     if (!eventOriginAllowed(c.req.header("origin"))) return c.body(null, 204);
     if (Number(c.req.header("content-length") ?? 0) > MAX_EVENT_BODY_BYTES) return c.json({ error: "too_large" }, 400);
-    const buf = await c.req.arrayBuffer();
-    if (buf.byteLength > MAX_EVENT_BODY_BYTES) return c.json({ error: "too_large" }, 400);
+    // Content-Length가 없는(chunked·HTTP/2) 본문도 한도를 넘는 순간 읽기를 멈춘다 — 본문 전체(최대 100MB)를 메모리에 받지 않게
+    const buf = await readCapped(c.req.raw.body, MAX_EVENT_BODY_BYTES);
+    if (buf === null) return c.json({ error: "too_large" }, 400);
     let json: unknown;
     try {
       json = JSON.parse(new TextDecoder().decode(buf));
