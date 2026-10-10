@@ -42,12 +42,13 @@ export function gridDocs(prefix: string, n: number, rect: Rect, category?: strin
 const urlOf = (input: RequestInfo | URL) =>
   new URL(typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url);
 
-/** 카카오 로컬 rect 검색 흉내: 최대 45개, 15개씩 3페이지, total_count는 실제 개수 */
+/** 카카오 로컬 rect 검색 흉내: 최대 45개, 15개씩 3페이지, total_count는 실제 개수. 인증 헤더(KakaoAK <키>)가 없으면 실제처럼 401 */
 export function fakeKakaoLocal(docs: FakeDoc[], opts: { status?: number } = {}) {
   const calls: URL[] = [];
-  const fetcher: FetchFn = async (input) => {
+  const fetcher: FetchFn = async (input, init) => {
     const url = urlOf(input);
     calls.push(url);
+    if (!/^KakaoAK \S+$/.test(new Headers(init?.headers).get("authorization") ?? "")) return new Response("unauthorized", { status: 401 });
     if (opts.status) return new Response("error", { status: opts.status });
     const [minLng, minLat, maxLng, maxLat] = url.searchParams.get("rect")!.split(",").map(Number);
     const inRect = docs.filter((d) => +d.x >= minLng && +d.x <= maxLng && +d.y >= minLat && +d.y <= maxLat);
@@ -64,14 +65,15 @@ export function fakeKakaoLocal(docs: FakeDoc[], opts: { status?: number } = {}) 
 
 type PlaceResponse = unknown | number | "throw";
 
-/** 비공식 상세 API 흉내: id → JSON 본문 | 상태 코드 | "throw" | 순서대로 쓸 배열 */
+/** 비공식 상세 API 흉내: id → JSON 본문 | 상태 코드 | "throw" | 순서대로 쓸 배열 (넘긴 배열은 바꾸지 않고 사본을 쓴다) */
 export function fakePlaceApi(responses: Record<string, PlaceResponse | PlaceResponse[]>) {
   const calls: { id: string; headers: Headers }[] = [];
+  const queues = new Map(Object.entries(responses).map(([id, v]) => [id, Array.isArray(v) ? [...v] : v]));
   const fetcher: FetchFn = async (input, init) => {
     const url = urlOf(input);
     const id = decodeURIComponent(url.pathname.split("/").pop() ?? "");
     calls.push({ id, headers: new Headers(init?.headers) });
-    const entry = responses[id];
+    const entry = queues.get(id);
     const r = Array.isArray(entry) ? entry.shift() : entry;
     if (r === undefined) return new Response("not found", { status: 404 });
     if (r === "throw") throw new TypeError("network down");

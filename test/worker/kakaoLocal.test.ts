@@ -66,6 +66,14 @@ describe("kakaoLocal", () => {
     ).rejects.toBeInstanceOf(UpstreamError);
   });
 
+  it("infra: 가짜 카카오 로컬도 실제처럼 인증 헤더(KakaoAK <키>)가 없으면 401 — 키를 빠뜨린 호출을 테스트가 잡는다", async () => {
+    const { fetcher } = fakeKakaoLocal([doc("d0", 37.515, 127.055)]);
+    await expect(searchRect(fetcher, "", rect, 1)).rejects.toMatchObject({ name: "UpstreamError", status: 401 });
+    const url = "https://dapi.kakao.com/v2/local/search/category.json?rect=127.05,37.51,127.06,37.52&page=1";
+    expect((await fetcher(url)).status).toBe(401);
+    expect((await fetcher(url, { headers: { Authorization: "KakaoAK k" } })).status).toBe(200);
+  });
+
   it("R2: 가짜 서버로 페이지가 나뉜다", async () => {
     const docs = Array.from({ length: 20 }, (_, i) => doc(`d${i}`, 37.515, 127.055));
     const { fetcher } = fakeKakaoLocal(docs);

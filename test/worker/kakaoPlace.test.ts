@@ -35,15 +35,36 @@ describe("fetchPlaceDetail", () => {
     expect(api.calls).toHaveLength(3);
   });
 
-  it("R9: 네트워크 오류도 재시도하고, 끝내 실패하면 network", async () => {
+  it("R9: 네트워크 오류도 재시도하고(같은 백오프, 모두 3번), 끝내 실패하면 network", async () => {
+    sleeps.length = 0;
     const api = fakePlaceApi({ a: ["throw", "throw", "throw"] });
     expect(await fetchPlaceDetail(api.fetcher, "a", { budget: new Budget(5), sleep })).toEqual({ ok: false, reason: "network" });
+    expect(api.calls).toHaveLength(3);
+    expect(sleeps).toEqual([250, 1000]);
   });
 
   it("R9: 4xx는 재시도하지 않는다", async () => {
     const api = fakePlaceApi({ a: [404, jungang] });
     expect(await fetchPlaceDetail(api.fetcher, "a", { budget: new Budget(5), sleep })).toEqual({ ok: false, reason: "http_404" });
     expect(api.calls).toHaveLength(1);
+  });
+
+  it("R9/R10: 403·429도 재시도하지 않는다 — 차단 신호라서 더 두드리지 않고 부르는 쪽이 쿨다운을 건다", async () => {
+    for (const status of [403, 429]) {
+      const api = fakePlaceApi({ a: [status, jungang] });
+      expect(await fetchPlaceDetail(api.fetcher, "a", { budget: new Budget(5), sleep })).toEqual({ ok: false, reason: `http_${status}` });
+      expect(api.calls, String(status)).toHaveLength(1);
+    }
+  });
+
+  it("infra: 가짜 상세 API는 넘긴 응답 배열을 바꾸지 않는다 (같은 응답 목록으로 가짜를 여럿 만들어도 같다)", async () => {
+    const responses = { a: [500, jungang] };
+    for (let i = 0; i < 2; i++) {
+      const api = fakePlaceApi(responses);
+      expect((await fetchPlaceDetail(api.fetcher, "a", { budget: new Budget(5), sleep })).ok).toBe(true);
+      expect(api.calls).toHaveLength(2);
+    }
+    expect(responses.a).toEqual([500, jungang]);
   });
 
   it("R10: 시도마다 예산을 쓰고, 예산이 없으면 budget", async () => {
