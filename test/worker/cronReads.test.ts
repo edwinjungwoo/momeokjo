@@ -10,7 +10,7 @@ import { HUB_DUE_EXISTS_SQL, HUB_REFRESHED_PREFIX } from "../../worker/hubRefres
 import { hubOrder, runDetailCron, runScheduled, runSnapshotCron } from "../../worker/maintenance";
 import { hubRefreshStart } from "../../worker/refreshSchedule";
 import {
-  EXPIRED_SCAN_SQL, NEAREST_UNFETCHED_SQL, TILES_FRESH_KEY, TILES_FRESH_RECHECK_MS, UNFETCHED_CHUNK_TILES, UNFETCHED_FROM_KEY,
+  EXPIRED_DUE_SCAN_SQL, EXPIRED_SCAN_SQL, NEAREST_UNFETCHED_SQL, TILES_FRESH_KEY, TILES_FRESH_RECHECK_MS, UNFETCHED_CHUNK_TILES, UNFETCHED_FROM_KEY,
   UNFETCHED_MAX_CHUNKS, UNFETCHED_PROBE_TILES,
   nearestUnfetchedStates, pickCronIds, tilePlaceStates, unfetchedStates,
 } from "../../worker/repo";
@@ -37,6 +37,8 @@ const DDP_TILES = new Set(tilesCoveringCircle(DDP, PREWARM_RADIUS));
 const FAILED_ID = `${KEYS.indexOf(tilesCoveringCircle(BONG, PREWARM_RADIUS)[0])}_0`;
 
 const DUETILE_SQL = "WHERE NOT EXISTS (SELECT 1 FROM tiles t";
+/** 만료 후보 조회 — R66 뒤 ok는 (status, due_after), 실패는 (status, fetched_at) */
+const isExpiredScan = (q: string) => q === EXPIRED_SCAN_SQL || q === EXPIRED_DUE_SCAN_SQL;
 const reads = (log: Executed[], pred: (sql: string) => boolean = () => true) =>
   log.filter((x) => pred(x.sql)).reduce((n, x) => n + x.read, 0);
 
@@ -62,9 +64,11 @@ async function seed(s: Scenario) {
     }
   });
   for (let i = 0; i < places.length; i += 1000) {
+    // R66: 운영 행은 0008 적용 때 due_after = fetched_at으로 채워졌다 (모두 주기 1 — 예전과 같은 대상)
     await env.DB.prepare(
-      `INSERT INTO places (id, status, fetched_at, name, category_name, category_group, lat, lng)
-       SELECT json_extract(value, '$[0]'), json_extract(value, '$[1]'), json_extract(value, '$[2]'), '가게', '음식점 > 한식', 'korean', ?, ?
+      `INSERT INTO places (id, status, fetched_at, due_after, name, category_name, category_group, lat, lng)
+       SELECT json_extract(value, '$[0]'), json_extract(value, '$[1]'), json_extract(value, '$[2]'), json_extract(value, '$[2]'),
+         '가게', '음식점 > 한식', 'korean', ?, ?
        FROM json_each(?)`,
     ).bind(BONG.lat, BONG.lng, JSON.stringify(places.slice(i, i + 1000))).run();
   }
@@ -150,7 +154,7 @@ describe("Task 40: 운영 크기에서 Cron 한 번이 읽는 D1 행 (정상 상
     // 단계별 상한
     expect(log.some((x) => x.sql.includes(DUETILE_SQL))).toBe(false);
     expect(reads(log, (q) => q === NEAREST_UNFETCHED_SQL)).toBeLessThanOrEqual(600);
-    expect(reads(log, (q) => q === EXPIRED_SCAN_SQL)).toBeLessThanOrEqual(20);
+    expect(reads(log, isExpiredScan)).toBeLessThanOrEqual(20);
     expect(reads(log, (q) => q === HUB_DUE_EXISTS_SQL)).toBeLessThanOrEqual(100);
     expect(await metaValue("expired_from:ok")).toBe(okCursor); // ok 커서는 그대로 (다음에 읽을 때 잇는다)
     expect(reads(log), `main reads ${reads(log)}`).toBeLessThanOrEqual(1500);
@@ -170,7 +174,7 @@ describe("Task 40: 운영 크기에서 Cron 한 번이 읽는 D1 행 (정상 상
     expect(r.enriched + (r.deferred ?? 0)).toBe(B);
     expect(log.some((x) => x.sql.includes(DUETILE_SQL))).toBe(false);
     expect(log.some((x) => x.sql === NEAREST_UNFETCHED_SQL)).toBe(false);
-    expect(reads(log, (q) => q === EXPIRED_SCAN_SQL)).toBeLessThanOrEqual(1000);
+    expect(reads(log, isExpiredScan)).toBeLessThanOrEqual(1000);
     expect(reads(log), `main reads ${reads(log)}`).toBeLessThanOrEqual(1500);
     const d = await detailRun(now + 60_000);
     expect(d.r.enriched + (d.r.deferred ?? 0)).toBe(B);

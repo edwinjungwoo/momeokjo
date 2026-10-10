@@ -214,7 +214,7 @@ const HUB_TILES = `WITH k AS (SELECT json_extract(value, '$[0]') AS hub, json_ex
 const HUB_PLACES_SQL = `${HUB_TILES},
 tp AS MATERIALIZED (SELECT DISTINCT k.hub AS hub, k.start AS start, t.place_id AS id FROM k JOIN tile_places t ON t.tile_key = k.key)
 SELECT tp.hub AS hub, count(*) AS places,
-  count(CASE WHEN p.status = 'ok' AND p.fetched_at < tp.start THEN 1 END) AS due,
+  count(CASE WHEN p.status = 'ok' AND COALESCE(p.due_after, p.fetched_at) < tp.start THEN 1 END) AS due,
   count(CASE WHEN p.status = 'ok' THEN 1 END) AS ok,
   count(CASE WHEN p.status = 'failed' THEN 1 END) AS failed,
   count(CASE WHEN p.id IS NULL THEN 1 END) AS pending,
@@ -231,7 +231,8 @@ FROM k LEFT JOIN tiles t ON t.key = k.key GROUP BY k.hub`;
 
 /**
  * R60 거점마다: 가게 수, 상세 성공·실패·미수집, 목록에 보이는 곳·list_json 준비, 가장 오래된 상세, 격자 수·미완료(없거나
- * R63 갱신 시작 전에 수집)·포화, 마지막 격자 수집. R63: 갱신 요일·이번 시작·마지막 완료(meta hub_refreshed)·남은 갱신(시작 전 ok)
+ * R63 갱신 시작 전에 수집)·포화, 마지막 격자 수집. R63: 갱신 요일·이번 시작·마지막 완료(meta hub_refreshed)·남은 갱신(due_after가
+ * 시작 전인 ok — R66, NULL이면 fetched_at)
  */
 export async function hubStatuses(db: D1Database, now: number): Promise<HubStatus[]> {
   const pairs = JSON.stringify(

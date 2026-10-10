@@ -170,7 +170,8 @@ describe("R63 둘째 트리거 (홀수 분) — 스냅샷·쉼·상세만 보충
     // 설정으로 바꾼다
     expect(await run({ ...env, DETAIL_ONLY_READ_SHARE: "0.7" } as unknown as Env, 3)).toMatchObject({ enriched: 1 });
     // 한도 바로 아래면 돈다
-    await env.DB.prepare("UPDATE places SET fetched_at = ? WHERE id = 'old1'").bind(S_BONG - 1).run();
+    // R66: 대상 판단은 due_after — 둘 다 시작 전으로 되돌린다
+    await env.DB.prepare("UPDATE places SET fetched_at = ?1, due_after = ?1 WHERE id = 'old1'").bind(S_BONG - 1).run();
     await setRead(1_799_000);
     expect(await run(env, 9)).toMatchObject({ enriched: 1 });
     // 본 Cron은 이 몫과 상관없다 (소프트 한도 전까지 돈다)
@@ -223,10 +224,13 @@ describe("R63 둘째 트리거 (홀수 분) — 스냅샷·쉼·상세만 보충
       expect(row?.place.name, id).toBe(`가게${id}`);
       expect(row?.meta.status).toBe("ok");
     }
-    // 커서 값은 읽을 수 있는 모양으로 남는다
+    // 커서 값은 읽을 수 있는 모양으로 남는다 (R66: ok 커서의 from은 due_after — NULL 구간(배포 전 옛 코드가 쓴 행)이면 null)
     for (const k of ["expired_from:ok", "expired_from:failed"]) {
       const v = await metaValue(k);
-      if (v !== null) expect(JSON.parse(v)).toMatchObject({ from: expect.any(Number), rid: expect.any(Number) });
+      if (v === null) continue;
+      const c = JSON.parse(v) as { from: unknown; rid: unknown };
+      expect(typeof c.rid).toBe("number");
+      expect(typeof c.from === "number" || (k === "expired_from:ok" && c.from === null), `${k} ${v}`).toBe(true);
     }
     // 이어지는 실행들이 남은 것을 마저 하고, 완료가 기록된다
     for (let m = 13; m < 60 && (await metaValue("hub_refreshed:bongeunsa")) === null; m += 2) {

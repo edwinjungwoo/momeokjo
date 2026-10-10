@@ -122,7 +122,7 @@ describe("repo", () => {
     expect((await placeById(env.DB, "orphan"))?.place.id).toBe("orphan");
   });
 
-  it("R11/R63: 만료 후보는 fetched_at 인덱스로 고르고(거점 격자 ok는 갱신 시작 전), 미수집 ID는 따로 고른다 — 둘 다 주어진 격자만", async () => {
+  it("R11/R63/R66: 만료 후보는 상태 인덱스로 고르고(거점 격자 ok는 due_after가 갱신 시작 전), 미수집 ID는 따로 고른다 — 둘 다 주어진 격자만", async () => {
     expect(START).toBeGreaterThan(NOW - 7 * 24 * 3600_000);
     await replaceTilePlaces(env.DB, KA, ["new", "fresh", "afterstart", "old", "oldfail"], NOW, false);
     await replaceTilePlaces(env.DB, KB, ["otherold", "othernew"], NOW, false);
@@ -133,8 +133,9 @@ describe("repo", () => {
     await seedPlace(env.DB, "otherold", ASEM.lat, ASEM.lng, { now: START - 1 });
     const expired = await expiredDetailStates(env.DB, [KA], NOW);
     expect(expired.map((t) => t.id).sort()).toEqual(["old", "oldfail"]);
+    // R66: 후보에는 due_after와 지난 지문이 같이 실린다 (같음·바뀜 계수)
     expect(expired.find((t) => t.id === "old")).toEqual({
-      id: "old", tileKey: KA, meta: { status: "ok", fetchedAt: START - 1, reason: null },
+      id: "old", tileKey: KA, meta: { status: "ok", fetchedAt: START - 1, reason: null, dueAfter: START - 1, fp: expect.stringMatching(/^[0-9a-f]{8}$/) },
     });
     expect((await unfetchedStates(env.DB, [KA])).map((t) => [t.id, t.meta])).toEqual([["new", null]]);
   });

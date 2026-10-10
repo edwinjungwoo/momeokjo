@@ -347,7 +347,7 @@ describe("Task 34 리뷰 잔여", () => {
     const zero = { ...env, DB: db, DETAIL_BATCH_SIZE: "0" } as unknown as Env;
     const r = await runScheduled(zero, { fetcher: fakePlaceApi({}).fetcher, now: NOW, sleep: async () => {} });
     expect(r.batch).toBe(0);
-    expect(log.some((x) => /idx_places_status_fetched_at/.test(x.sql))).toBe(false);
+    expect(log.some((x) => /idx_places_status_(fetched_at|due)/.test(x.sql))).toBe(false); // R66: ok는 due_after 인덱스
     expect(await env.DB.prepare("SELECT count(*) AS n FROM meta WHERE key LIKE 'expired_from:%'").first<{ n: number }>()).toEqual({ n: 0 });
   });
 });

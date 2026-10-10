@@ -13,8 +13,15 @@ import { listItemJson, storedListJson, usableListJson, usableListJsonSql } from 
 import { dueSinceOf, okDueBefore, refreshStartsIndex, tileFreshFrom, tileRefreshStart } from "./refreshSchedule";
 import { deleteSnapshotsStmt, markHubsDirtyStmt, markPlaceHubsDirtyStmt, markPlacesHubsDirtyStmt } from "./snapshotDirty";
 
-export type DetailMeta = { status: "ok" | "failed"; fetchedAt: number; reason: string | null } | null;
-export type PlaceRow = { place: Place; detail: StoredDetail; meta: NonNullable<DetailMeta> };
+/**
+ * 상세 상태. R66: dueAfter·fp는 후보를 읽는 길(격자-장소 상태·만료 후보·가까운 순)에서만 싣는다 — dueAfter가 null·없음이면
+ * fetchedAt으로 본다(배포 전 옛 코드가 쓴 행), fp는 지난번 표시 정보 지문(관리 화면 계수 — 같음·바뀜·처음)
+ */
+export type DetailMeta = {
+  status: "ok" | "failed"; fetchedAt: number; reason: string | null; dueAfter?: number | null; fp?: string | null;
+} | null;
+/** fp: R66 지난번 표시 정보 지문 (저장된 행에서 읽었을 때만 — 단건 조회의 볼 때 갱신이 같음·바뀜을 센다) */
+export type PlaceRow = { place: Place; detail: StoredDetail; meta: NonNullable<DetailMeta>; fp?: string | null };
 export type TileState = { collectedAt: number; saturated: boolean };
 export type TilePlaceState = { id: string; tileKey: string; meta: DetailMeta };
 
@@ -41,12 +48,21 @@ type DbRow = {
   bookable: number | null; fail_reason: string | null; fetched_at: number;
   /** 0005: 목록 원소 조각 `v{LIST_JSON_VERSION}:{...}` (예전 행은 NULL이거나 예전 판) */
   list_json?: string | null;
+  /** 0008(R66): 표시 정보 지문·갱신 주기·다음 갱신 기준 시각 */
+  fp?: string | null; interval_weeks?: number; due_after?: number | null;
 };
 
 const SELECT_VISIBLE = `SELECT * FROM places WHERE name IS NOT NULL AND lat IS NOT NULL AND lng IS NOT NULL`;
 
-const metaOf = (status: string | null, fetchedAt: number | null, reason: string | null): DetailMeta =>
-  status === null || fetchedAt === null ? null : { status: status === "ok" ? "ok" : "failed", fetchedAt, reason };
+function metaOf(
+  status: string | null, fetchedAt: number | null, reason: string | null, adaptive?: { dueAfter: number | null; fp: string | null },
+): DetailMeta {
+  if (status === null || fetchedAt === null) return null;
+  return { status: status === "ok" ? "ok" : "failed", fetchedAt, reason, ...adaptive };
+}
+
+/** R66: ok 상세의 거점 갱신 판단 시각 = due_after (없거나 NULL이면 fetched_at — 배포 전 옛 코드가 쓴 행을 "지금 대상"으로 치지 않는다) */
+export const okDueAt = (meta: { fetchedAt: number; dueAfter?: number | null }): number => meta.dueAfter ?? meta.fetchedAt;
 
 /**
  * QA D-8: 저장된 JSON 열이 깨졌거나 모양이 틀려도 목록 전체가 500이 되지 않게 그 필드만 빈 값으로 읽는다.
@@ -109,6 +125,7 @@ function toRow(r: DbRow): PlaceRow {
       fetchedAt: r.fetched_at,
     },
     meta: metaOf(r.status, r.fetched_at, r.fail_reason) as NonNullable<DetailMeta>,
+    ...(r.fp === undefined ? {} : { fp: r.fp }),
   };
 }
 
@@ -249,16 +266,25 @@ export function isDetailDue(meta: DetailMeta, now: number, id: string): boolean 
 
 /**
  * R63: tileKey 격자에 기록된 가게의 상세를 다시 가져올 때인가. 거점 격자의 ok는 그 격자의 갱신 기준 시각
- * (덮는 거점들의 가장 늦은 시작) 전에 가져왔을 때, 거점 밖 격자는 isDetailDue(3일 + 지터). 미수집은 언제나, 실패는 6시간
+ * (덮는 거점들의 가장 늦은 시작)보다 due_after(R66 — fetched_at + (주기 − 1) × 7일, 없으면 fetched_at)가 이를 때,
+ * 거점 밖 격자는 isDetailDue(3일 + 지터, fetched_at). 미수집은 언제나, 실패는 6시간
  */
 export function isPlaceDue(meta: DetailMeta, tileKey: string, now: number, id: string): boolean {
   if (!meta || meta.status !== "ok") return isDetailDue(meta, now, id);
   const start = tileRefreshStart(tileKey, now);
-  return start === null ? isDetailDue(meta, now, id) : meta.fetchedAt < start;
+  return start === null ? isDetailDue(meta, now, id) : okDueAt(meta) < start;
 }
 
 /** due: 상세가 없거나 만료된 ID (Cron, warm) / unfetched: 한 번도 가져오지 않은 ID만 (요청 시점 보충) */
 export type DetailScope = "due" | "unfetched";
+
+/** 후보를 읽는 질의의 상세 열 (R66 due_after·fp 포함) */
+type StateRow = {
+  id: string; tile_key: string; status: string | null; fetched_at: number | null; fail_reason: string | null;
+  due_after: number | null; fp: string | null;
+};
+const stateMeta = (x: Omit<StateRow, "id" | "tile_key">): DetailMeta =>
+  metaOf(x.status, x.fetched_at, x.fail_reason, { dueAfter: x.due_after, fp: x.fp });
 
 export async function tilePlaceStates(db: D1Database, keys: string[]): Promise<TilePlaceState[]> {
   const out: TilePlaceState[] = [];
@@ -266,13 +292,13 @@ export async function tilePlaceStates(db: D1Database, keys: string[]): Promise<T
     const r = await db
       .prepare(
         `SELECT tp.place_id AS id, tp.tile_key AS tile_key, p.status AS status, p.fetched_at AS fetched_at,
-           p.fail_reason AS fail_reason
+           p.fail_reason AS fail_reason, p.due_after AS due_after, p.fp AS fp
          FROM tile_places tp LEFT JOIN places p ON p.id = tp.place_id
          WHERE tp.tile_key IN (${marks(chunk.length)})`,
       )
       .bind(...chunk)
-      .all<{ id: string; tile_key: string; status: string | null; fetched_at: number | null; fail_reason: string | null }>();
-    for (const x of r.results) out.push({ id: x.id, tileKey: x.tile_key, meta: metaOf(x.status, x.fetched_at, x.fail_reason) });
+      .all<StateRow>();
+    for (const x of r.results) out.push({ id: x.id, tileKey: x.tile_key, meta: stateMeta(x) });
   }
   return out;
 }
@@ -312,9 +338,13 @@ function rankGroups(keys: string[], centers: LatLng[]): RankGroup[] {
   for (const [k, d] of dist) groups[rankOf.get(d) as number].keys.push(k);
   return groups;
 }
-/** SQL ?1: [key, rank] JSON. now를 주면 [key, rank, okDueBefore] — 칸마다 ok 상세의 갱신 기준이 다르다 (R63) */
+/**
+ * SQL ?1: [key, rank] JSON. now를 주면 [key, rank, okDueBefore, 거점 칸이면 1] — 칸마다 ok 상세의 갱신 기준이 다르다 (R63).
+ * R66: 거점 칸은 due_after(없으면 fetched_at)를, 거점 밖 칸은 fetched_at을 기준과 비교한다
+ */
 const rankedJson = (groups: RankGroup[], now?: number) =>
-  JSON.stringify(groups.flatMap((g) => g.keys.map((k) => (now === undefined ? [k, g.rank] : [k, g.rank, okDueBefore(k, now)]))));
+  JSON.stringify(groups.flatMap((g) => g.keys.map((k) =>
+    now === undefined ? [k, g.rank] : [k, g.rank, okDueBefore(k, now), tileRefreshStart(k, now) === null ? 0 : 1])));
 
 /**
  * 후보를 SQL에서 줄 세워 쪽씩 읽는다: 첫 쪽 max(limit, DETAIL_PICK_FIRST_PAGE)행, 다음 쪽은 DETAIL_PICK_GROWTH배씩,
@@ -329,7 +359,7 @@ export const DETAIL_PICK_MAX_PAGES = 3;
  * 정렬 키에 tile_key까지 넣어 쪽 경계가 실행마다 같다
  */
 const nearestSql = (where: string) => `SELECT tp.place_id AS id, tp.tile_key AS tile_key, json_extract(k.value, '$[1]') AS r,
-    p.status AS status, p.fetched_at AS fetched_at, p.fail_reason AS fail_reason
+    p.status AS status, p.fetched_at AS fetched_at, p.fail_reason AS fail_reason, p.due_after AS due_after, p.fp AS fp
   FROM json_each(?1) AS k
   JOIN tile_places tp ON tp.tile_key = json_extract(k.value, '$[0]')
   LEFT JOIN places p ON p.id = tp.place_id
@@ -339,14 +369,14 @@ const nearestSql = (where: string) => `SELECT tp.place_id AS id, tp.tile_key AS 
 export const NEAREST_UNFETCHED_SQL = nearestSql("p.id IS NULL");
 /**
  * due일 수 있는 행: 상세 없음, ok는 칸의 기준(?1의 세 번째 값 okDueBefore — R63 거점 격자는 갱신 시작, 밖은 지터 전 3일) 전에
- * 가져옴(밖의 지터는 isPlaceDue로 다시 본다), 실패는 TTL이 지남. ?4 실패 기준(now − DETAIL_FAIL_TTL_MS)
+ * 가져옴 — R66 거점 칸(네 번째 값 1)은 due_after(NULL이면 fetched_at), 밖은 fetched_at(밖의 지터는 isPlaceDue로 다시 본다),
+ * 실패는 TTL이 지남. ?4 실패 기준(now − DETAIL_FAIL_TTL_MS)
  */
 export const NEAREST_DUE_SQL = nearestSql(
-  "(p.id IS NULL OR (p.status = 'ok' AND p.fetched_at < json_extract(k.value, '$[2]')) OR (p.status <> 'ok' AND p.fetched_at <= ?4))",
+  `(p.id IS NULL OR (p.status = 'ok' AND (CASE WHEN json_extract(k.value, '$[3]') = 1 THEN COALESCE(p.due_after, p.fetched_at)
+     ELSE p.fetched_at END) < json_extract(k.value, '$[2]')) OR (p.status <> 'ok' AND p.fetched_at <= ?4))`,
 );
-type NearestRow = {
-  id: string; tile_key: string; r: number; status: string | null; fetched_at: number | null; fail_reason: string | null;
-};
+type NearestRow = StateRow & { r: number };
 
 /**
  * ranked 격자의 후보를 (순위, id) 순서로 읽어 out을 want곳까지 채운다 (seen: 이미 본 id — 여러 칸에 기록된 가게는 처음 칸만).
@@ -372,7 +402,7 @@ async function readNearest(
       // 한 가게가 여러 칸에 기록됐으면 처음(가장 가까운 칸) 것만 — 상태는 칸과 상관없이 같다
       if (seen.has(x.id)) continue;
       seen.add(x.id);
-      const meta = metaOf(x.status, x.fetched_at, x.fail_reason);
+      const meta = stateMeta(x);
       if (scope === "unfetched" || isPlaceDue(meta, x.tile_key, now, x.id)) out.push({ id: x.id, tileKey: x.tile_key, meta });
     }
     if (out.length >= want || r.results.length < page) return { firstRank, truncated: false, pages: i + 1 };
@@ -554,7 +584,7 @@ export function pickCronIds(states: TilePlaceState[], hubs: readonly Hub[], now:
       ? true
       : t.meta.status !== "ok" || starts.length === 0
         ? isDetailDue(t.meta, now, t.id)
-        : t.meta.fetchedAt < starts[starts.length - 1];
+        : okDueAt(t.meta) < starts[starts.length - 1];
     if (!due) continue;
     const since = t.meta === null ? Number.NEGATIVE_INFINITY : dueSinceOf(t.meta, starts, detailJitterMs(t.id));
     let d = distOf.get(t.tileKey);
@@ -594,35 +624,54 @@ export const countUnfetchedIn = (states: TilePlaceState[]) =>
 export const EXPIRED_SCAN_LIMIT = 300;
 /** 한 실행이 대상 행이 나올 때까지 읽는 쪽 수 (재설정 포함) — 상태마다 최대 3 × 300행 */
 export const EXPIRED_RESET_PAGES = 3;
-const EXPIRED_COLS = `SELECT p.rowid AS rid, p.id AS id, p.status AS status, p.fetched_at AS fetched_at,
-    p.fail_reason AS fail_reason, tp.tile_key AS tile_key
-  FROM places p INDEXED BY idx_places_status_fetched_at LEFT JOIN tile_places tp ON tp.place_id = p.id`;
+/** 만료 후보 열 (R66 due_after·fp 포함). index: 범위를 읽을 인덱스 */
+const expiredCols = (index: string) => `SELECT p.rowid AS rid, p.id AS id, p.status AS status, p.fetched_at AS fetched_at,
+    p.fail_reason AS fail_reason, p.due_after AS due_after, p.fp AS fp, tp.tile_key AS tile_key
+  FROM places p INDEXED BY ${index} LEFT JOIN tile_places tp ON tp.place_id = p.id`;
 /**
- * (status, fetched_at) 인덱스를 오래된 순으로 범위만 읽는다. 격자는 행마다 place_id 인덱스로 붙인다.
+ * (status, fetched_at) 인덱스를 오래된 순으로 범위만 읽는다 (R66 뒤에는 실패 행만 — ok는 EXPIRED_DUE_SCAN_SQL). 격자는 행마다
+ * place_id 인덱스로 붙인다.
  * 위치는 (fetched_at, rowid)로 정해서 같은 fetched_at이 한 쪽보다 많아도 넘어간다. 인덱스 키가 (status, fetched_at, rowid)라
  * "같은 fetched_at의 rowid 이후" + "더 늦은 fetched_at" 두 범위를 인덱스 순서대로 합친다(MERGE, 정렬용 임시 B-트리 없음).
  * (행 값 비교 (fetched_at, rowid) >= (?, ?)는 SQLite가 fetched_at까지만 탐색에 써서 같은 시각 행을 처음부터 다시 읽는다)
  * 바인드: ?1 status, ?2 from(포함), ?3 fromRowid(포함), ?4 before(포함), ?5 limit
  */
-export const EXPIRED_SCAN_SQL = `${EXPIRED_COLS}
+export const EXPIRED_SCAN_SQL = `${expiredCols("idx_places_status_fetched_at")}
   WHERE p.status = ?1 AND p.fetched_at = ?2 AND p.rowid >= ?3 AND p.fetched_at <= ?4
 UNION ALL
-${EXPIRED_COLS}
+${expiredCols("idx_places_status_fetched_at")}
   WHERE p.status = ?1 AND p.fetched_at > ?2 AND p.fetched_at <= ?4
 ORDER BY fetched_at, rid LIMIT ?5`;
+/**
+ * R66 ok 만료 후보: (status, due_after) 인덱스를 due_after 오래된 순으로 범위만 읽는다 (EXPIRED_SCAN_SQL과 같은 위치·쪽 규칙).
+ * due_after가 NULL인 행(0008 적용 뒤·배포 전에 옛 코드가 쓴 행 — fetched_at으로 본다)은 인덱스 맨 앞 NULL 구간에 rowid 순으로
+ * 있어서 위치 from이 NULL이면 그 구간의 rowid ≥ ?3부터 읽고 이어서 NULL이 아닌 행 전부(≤ ?4)를 읽는다. from이 숫자면 NULL
+ * 구간은 건너뛴다(?2 IS NULL은 상수라 한 번만 본다). 바인드: ?1 status('ok'), ?2 from(포함, NULL = NULL 구간),
+ * ?3 fromRowid(포함), ?4 before(포함), ?5 limit
+ */
+export const EXPIRED_DUE_SCAN_SQL = `${expiredCols("idx_places_status_due")}
+  WHERE p.status = ?1 AND ?2 IS NULL AND p.due_after IS NULL AND p.rowid >= ?3
+UNION ALL
+${expiredCols("idx_places_status_due")}
+  WHERE p.status = ?1 AND p.due_after = ?2 AND p.rowid >= ?3 AND p.due_after <= ?4
+UNION ALL
+${expiredCols("idx_places_status_due")}
+  WHERE p.status = ?1 AND p.due_after > COALESCE(?2, -1) AND p.due_after <= ?4
+ORDER BY due_after, rid LIMIT ?5`;
 const EXPIRED_FROM_PREFIX = "expired_from:";
 /**
- * from·rid: 다음 실행이 읽기 시작할 위치. changedAt·keys: 커서를 쓸 때 본 tiles_changed_at과 거점 격자 집합 지문
- * (ok 커서의 지문에는 R63 칸마다의 갱신 시작도 들어간다 — 시작이 바뀌면 처음부터 다시 읽는다)
+ * from·rid: 다음 실행이 읽기 시작할 위치 (R66 ok 커서는 due_after — NULL이면 NULL 구간). changedAt·keys: 커서를 쓸 때 본
+ * tiles_changed_at과 거점 격자 집합 지문 (ok 커서의 지문에는 R63 칸마다의 갱신 시작도 들어간다 — 시작이 바뀌면 처음부터 다시 읽는다)
  */
-type ScanCursor = { from: number; rid: number; changedAt: number; keys: string };
+type ScanCursor = { from: number | null; rid: number; changedAt: number; keys: string };
+type ScanPos = Pick<ScanCursor, "from" | "rid">;
 
 function parseCursor(raw: string | undefined): ScanCursor | null {
   if (!raw) return null;
   try {
     const o = JSON.parse(raw) as Partial<Record<keyof ScanCursor, unknown>>;
     const { from, rid, changedAt, keys } = o;
-    return typeof from === "number" && typeof rid === "number" && typeof changedAt === "number" && typeof keys === "string"
+    return (typeof from === "number" || from === null) && typeof rid === "number" && typeof changedAt === "number" && typeof keys === "string"
       ? { from, rid, changedAt, keys }
       : null;
   } catch {
@@ -641,24 +690,30 @@ export function tileSetFingerprint(keys: Iterable<string>): string {
   return `${sorted.length}:${(h >>> 0).toString(16)}`;
 }
 
-type ExpiredRow = { rid: number; id: string; status: string; fetched_at: number; fail_reason: string | null; tile_key: string | null };
+type ExpiredRow = {
+  rid: number; id: string; status: string; fetched_at: number; fail_reason: string | null; due_after: number | null; fp: string | null;
+  tile_key: string | null;
+};
+/** R66: ok 커서 지문의 판 — 0008 배포 뒤 첫 실행은 (fetched_at으로 쓴) 예전 커서를 버리고 처음부터 읽는다 (NULL 구간까지) */
+const OK_CURSOR_VERSION = "due";
 
 /**
  * Cron용(R11): 주어진 격자(= 모든 거점의 PREWARM_RADIUS 격자)의 장소 중 갱신 대상일 수 있는 것.
- * R63: ok는 칸마다 기준(okDueBefore)이 다르다 — 거점 격자는 그 칸 거점들의 가장 늦은 갱신 시작 전에 가져온 것(정확),
- * 거점 밖 칸은 지터 전 3일(실제 만료는 isPlaceDue로 다시 확인). 실패는 6시간.
+ * R63: ok는 칸마다 기준(okDueBefore)이 다르다 — 거점 격자는 그 칸 거점들의 가장 늦은 갱신 시작보다 due_after(R66, NULL이면
+ * fetched_at)가 이른 것(정확), 거점 밖 칸은 지터 전 3일(fetched_at — 실제 만료는 isPlaceDue로 다시 확인). 실패는 6시간.
  *
- * R38 읽기 예산: 상태마다 (status, fetched_at) 인덱스를 오래된 순으로 EXPIRED_SCAN_LIMIT행까지만 읽는다.
+ * R38 읽기 예산: ok는 (status, due_after), 실패는 (status, fetched_at) 인덱스를 오래된 순으로 EXPIRED_SCAN_LIMIT행까지만 읽는다.
  * ok의 범위 상한은 주어진 칸 기준 중 가장 늦은 것(가장 최근에 시작한 거점의 시작)이고, 행마다 붙인 칸의 기준으로 거른다.
- * 대상이 아닌 행(거점 밖 행 — 예전 warm의 ASEM 1500m 고리, 격자에 없는 단건 조회 — 와 자기 거점 시작 뒤에 가져온 행)은
- * 늘 인덱스 앞쪽에 남으므로, 상태마다 "여기부터 읽는다" 커서(meta expired_from:{status} = (fetched_at, rowid))를 둔다 —
+ * (거점 밖 칸은 due_after 범위로 읽으니 주기가 긴 거점 밖 행은 늦게 보일 수 있다 — Cron은 거점 칸만 넘긴다)
+ * 대상이 아닌 행(거점 밖 행 — 예전 warm의 ASEM 1500m 고리, 격자에 없는 단건 조회 — 와 자기 거점 시작 뒤가 due_after인 행)은
+ * 늘 인덱스 앞쪽에 남으므로, 상태마다 "여기부터 읽는다" 커서(meta expired_from:{status} = (due_after 또는 fetched_at, rowid))를 둔다 —
  * 첫 대상 행의 위치, 없었으면 지나간 마지막 행(다 읽었으면 상한). 그 앞에는 대상 행이 없으니 다음 실행은 건너뛴다.
- * 대상 행은 갱신되면 fetched_at이 앞으로 가므로 커서 앞에 새로 생기지 않고, 대상이 아닌 행은 기준이 바뀌기 전에는 대상이
- * 되지 않는다(거점 격자의 기준은 다음 갱신 요일까지 그대로다). 처음부터 다시 읽는(재설정) 때:
+ * 대상 행은 갱신되면 due_after가 앞으로 가므로 커서 앞에 새로 생기지 않고, 대상이 아닌 행은 기준이 바뀌기 전에는 대상이
+ * 되지 않는다(거점 격자의 기준은 다음 갱신 요일까지 그대로다 — 주기가 길어 건너뛴 행도 같다). 처음부터 다시 읽는(재설정) 때:
  * - 커서를 쓸 때 본 tiles_changed_at과 지금 값이 다르다 (오래된 행이 거점 격자에 새로 들어왔을 수 있다).
  *   크기가 아니라 같은지로 본다 — 요청이 Cron보다 이른 시각으로 늦게 기록해도 놓치지 않는다.
  * - 거점 격자 집합(keys)의 지문이 다르다 (거점 추가·변경). ok는 칸마다의 갱신 시작도 지문에 넣는다 — 어느 거점이든 새 갱신
- *   요일이 되면(하루 한 번쯤) 커서 앞의 그 거점 행이 대상이 되므로 처음부터 다시 읽는다.
+ *   요일이 되면(하루 한 번쯤) 커서 앞의 그 거점 행이 대상이 되므로 처음부터 다시 읽는다 (due_after NULL 구간도 그때 다시 본다).
  * 실행마다 대상 행이 나올 때까지 EXPIRED_RESET_PAGES쪽까지 이어 읽는다 (R63 — 예전에는 재설정 때만, 다음 실행은 한 쪽씩이었다.
  * 거점마다 갱신 창이 겹치면 대상 행 사이에 대상 아닌 행이 끼어 있어서 실행마다 한 쪽만 나아가면 보충이 멈춘다).
  */
@@ -669,17 +724,25 @@ export async function expiredDetailStates(
 ): Promise<TilePlaceState[]> {
   const unique = [...new Set(keys)];
   if (unique.length === 0) return [];
-  // 칸 → ok 기준(이 시각 전에 가져온 것만 대상)
+  // 칸 → ok 기준(이 시각 전이 대상), 거점 칸인가 (R66: 거점 칸은 due_after, 밖은 fetched_at을 본다)
   const okBefore = new Map(unique.map((k) => [k, okDueBefore(k, now)] as const));
+  const hubTile = new Set(unique.filter((k) => tileRefreshStart(k, now) !== null));
   const keysFingerprint = tileSetFingerprint(unique);
   // 거점 격자의 기준(갱신 시작)은 다음 갱신 요일까지 그대로라 지문에 넣는다. 거점 밖 칸의 기준은 now를 따라 움직여서 넣지 않는다
-  const okFingerprint = tileSetFingerprint(unique.map((k) => (tileRefreshStart(k, now) === null ? k : `${k}@${okBefore.get(k)}`)));
+  const okFingerprint = `${OK_CURSOR_VERSION}:${tileSetFingerprint(unique.map((k) => (hubTile.has(k) ? `${k}@${okBefore.get(k)}` : k)))}`;
   // Cron은 한 번 읽은 tiles_changed_at을 넘겨서 다시 읽지 않는다 (Task 34 D1 호출 예산)
   const changedAt = observedChangedAt ?? (await tilesChangedAt(db));
   const failBefore = now - DETAIL_FAIL_TTL_MS;
   const statuses = [
-    { status: "ok", before: Math.max(...okBefore.values()) - 1, fingerprint: okFingerprint, due: (x: ExpiredRow, k: string) => x.fetched_at < (okBefore.get(k) as number) },
-    { status: "failed", before: failBefore, fingerprint: keysFingerprint, due: () => true },
+    {
+      status: "ok", sql: EXPIRED_DUE_SCAN_SQL, before: Math.max(...okBefore.values()) - 1, fingerprint: okFingerprint,
+      pos: (x: ExpiredRow): ScanPos => ({ from: x.due_after, rid: x.rid }),
+      due: (x: ExpiredRow, k: string) => (hubTile.has(k) ? (x.due_after ?? x.fetched_at) : x.fetched_at) < (okBefore.get(k) as number),
+    },
+    {
+      status: "failed", sql: EXPIRED_SCAN_SQL, before: failBefore, fingerprint: keysFingerprint,
+      pos: (x: ExpiredRow): ScanPos => ({ from: x.fetched_at, rid: x.rid }), due: () => true,
+    },
   ].filter((x) => only === undefined || x.status === only);
   const saved = await db
     .prepare(`SELECT key, value FROM meta WHERE key IN (${marks(statuses.length)})`)
@@ -687,32 +750,29 @@ export async function expiredDetailStates(
     .all<{ key: string; value: string }>();
   const out: TilePlaceState[] = [];
   const writes: D1PreparedStatement[] = [];
-  for (const { status, before, fingerprint, due } of statuses) {
+  for (const { status, sql, before, fingerprint, pos: posOf, due } of statuses) {
     const key = EXPIRED_FROM_PREFIX + status;
     const cursor = parseCursor(saved.results.find((x) => x.key === key)?.value);
     const reset = cursor === null || cursor.changedAt !== changedAt || cursor.keys !== fingerprint;
-    let pos = reset ? { from: 0, rid: 0 } : { from: cursor.from, rid: cursor.rid };
-    let next: { from: number; rid: number } | null = null;
+    // 처음부터: ok는 NULL 구간부터(R66), 실패는 0부터 — 실패 행은 언제나 fetched_at이 있다
+    let pos: ScanPos = reset ? { from: status === "ok" ? null : 0, rid: 0 } : { from: cursor.from, rid: cursor.rid };
+    let next: ScanPos | null = null;
     // R63: 재설정이 아니어도 대상 행이 나올 때까지 EXPIRED_RESET_PAGES쪽까지 (갱신 창이 겹치면 대상 아닌 행이 끼어 있다 — 최악 호출 수는 그대로)
     for (let page = 0; page < EXPIRED_RESET_PAGES && next === null; page++) {
-      const r = await db
-        .prepare(EXPIRED_SCAN_SQL)
-        .bind(status, pos.from, pos.rid, before, EXPIRED_SCAN_LIMIT)
-        .all<ExpiredRow>();
+      const r = await db.prepare(sql).bind(status, pos.from, pos.rid, before, EXPIRED_SCAN_LIMIT).all<ExpiredRow>();
       for (const x of r.results) {
         if (x.tile_key === null || !okBefore.has(x.tile_key) || !due(x, x.tile_key)) continue;
-        next ??= { from: x.fetched_at, rid: x.rid };
-        out.push({ id: x.id, tileKey: x.tile_key, meta: metaOf(x.status, x.fetched_at, x.fail_reason) });
+        next ??= posOf(x);
+        out.push({ id: x.id, tileKey: x.tile_key, meta: stateMeta(x) });
       }
       if (next !== null) break;
       if (r.results.length < EXPIRED_SCAN_LIMIT) {
-        // before까지 다 읽었다 — 다음 실행은 before부터
-        pos = { from: Math.max(pos.from, before), rid: 0 };
+        // before까지 다 읽었다 — 다음 실행은 before부터 (NULL 구간도 지났다)
+        pos = { from: Math.max(pos.from ?? before, before), rid: 0 };
         break;
       }
       // 한 쪽을 다 읽었는데 대상 행이 없다 — 마지막 행부터 잇는다 (포함: 두 칸에 기록된 가게가 쪽 경계에서 잘려도 놓치지 않게)
-      const last = r.results[r.results.length - 1];
-      pos = { from: last.fetched_at, rid: last.rid };
+      pos = posOf(r.results[r.results.length - 1]);
     }
     next ??= pos;
     if (reset || next.from !== cursor.from || next.rid !== cursor.rid) {

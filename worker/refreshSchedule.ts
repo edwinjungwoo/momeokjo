@@ -7,7 +7,8 @@ import { hubsOfTile } from "./hubTiles";
 /**
  * R63 거점별 주 1회 갱신 (shared/hubs.ts `refreshDay`, shared/refresh.ts `refreshStart`).
  * 거점의 "갱신 시작" = 지금 이하인 가장 최근의 그 요일 00:00 KST.
- * - 상세: 거점 격자에 기록된 가게 중 ok인데 시작 전에 가져온 것이 갱신 대상이다(실패는 그대로 6시간 뒤 다시).
+ * - 상세: 거점 격자에 기록된 가게 중 ok인데 due_after(R66 — fetched_at + (주기 − 1) × 7일)가 시작 전인 것이 갱신 대상이다
+ *   (실패는 그대로 6시간 뒤 다시).
  * - 격자: 거점 격자는 시작 전에 수집했으면 다시 수집한다 (7일 TTL 대신 — 시작은 언제나 7일 안이라 더 늦지 않다).
  * - 여러 거점이 덮는 격자(그 격자의 가게)는 어느 한 거점에게라도 대상이면 대상이다 = 가장 늦은 시작이 기준이다.
  * - 거점 격자가 아니면(관리자 warm의 임의 좌표) 예전 규칙: 상세 3일 + id별 지터, 격자 7일.
@@ -67,10 +68,14 @@ export function refreshStartsIndex(hubs: readonly Hub[], now: number): Map<strin
 
 /**
  * 갱신 대상이 된 시각 (Cron 순서: 오래 기다린 것부터). starts: 그 칸을 덮는 거점들의 이번 시작(오름차순, 거점 밖이면 빈 배열).
- * ok는 fetchedAt 뒤의 가장 이른 시작(거점 격자) 또는 fetchedAt + 3일 + 지터(밖), 실패는 fetchedAt + 6시간. 대상인 것에만 부른다
+ * ok는 due_after(R66 — 없으면 fetchedAt) 뒤의 가장 이른 시작(거점 격자) 또는 fetchedAt + 3일 + 지터(밖),
+ * 실패는 fetchedAt + 6시간. 대상인 것에만 부른다
  */
-export function dueSinceOf(meta: { status: "ok" | "failed"; fetchedAt: number }, starts: readonly number[], jitterMs: number): number {
+export function dueSinceOf(
+  meta: { status: "ok" | "failed"; fetchedAt: number; dueAfter?: number | null }, starts: readonly number[], jitterMs: number,
+): number {
   if (meta.status !== "ok") return meta.fetchedAt + DETAIL_FAIL_TTL_MS;
   if (starts.length === 0) return meta.fetchedAt + DETAIL_OK_TTL_MS + jitterMs;
-  return starts.find((s) => meta.fetchedAt < s) ?? starts[starts.length - 1];
+  const due = meta.dueAfter ?? meta.fetchedAt;
+  return starts.find((s) => due < s) ?? starts[starts.length - 1];
 }
