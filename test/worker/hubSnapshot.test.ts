@@ -8,8 +8,8 @@ import { HUBS, PUBLIC_HUBS, hubById, type Hub } from "../../shared/hubs";
 import { utcDay } from "../../shared/kst";
 import { PLACES_CACHE_MS, PLACES_CACHE_VERSION, createApp, placesCacheKey } from "../../worker/app";
 import {
-  HUB_SNAPSHOT_VERSION, SNAPSHOT_DIRTY_REBUILD_MS, SNAPSHOT_EDGE_CACHE_MS, SNAPSHOT_MAX_AGE_MS, SNAPSHOT_REFRESH_BEFORE_MS,
-  SNAPSHOT_SKIP_BACKOFF_MS, SNAPSHOT_SKIP_MAX_BACKOFF_MS, SNAPSHOT_SKIP_PREFIX, acceptsGzip, skipBackoffMs, buildHubSnapshot, etagMatches, maintainSnapshots, readHubSnapshot, snapshotEdgeTtlMs,
+  HUB_SNAPSHOT_VERSION, SNAPSHOT_DIRTY_REBUILD_MS, SNAPSHOT_EDGE_CACHE_MS, SNAPSHOT_FULL_PREFIX, SNAPSHOT_FULL_REBUILD_MS,
+  SNAPSHOT_MAX_AGE_MS, SNAPSHOT_REFRESH_BEFORE_MS, SNAPSHOT_SKIP_BACKOFF_MS, SNAPSHOT_SKIP_MAX_BACKOFF_MS, SNAPSHOT_SKIP_PREFIX, acceptsGzip, skipBackoffMs, buildHubSnapshot, etagMatches, maintainSnapshots, readHubSnapshot, snapshotEdgeTtlMs,
 } from "../../worker/hubSnapshot";
 import { hubsOfTile } from "../../worker/hubTiles";
 import { MAIN_CRON, SECOND_CRON, runCron, runSnapshotCron, secondCronJob } from "../../worker/maintenance";
@@ -512,6 +512,57 @@ describe("R56 거점 스냅샷 — Cron", () => {
     const perHour = Array.from({ length: 60 }, (_, m) => secondCronJob(Date.UTC(2026, 9, 7, 1, m))).filter((j) => j === "snapshot").length;
     expect(perHour).toBe(12);
     expect(PUBLIC_HUBS.length * 1.25).toBeLessThanOrEqual((perHour * SNAPSHOT_MAX_AGE_MS) / 3_600_000);
+  });
+
+  it("R56: 안전망 — 마지막으로 다시 만든 지 24시간이 지난 스냅샷은 깨끗해도 새로 하지 않고 다시 만든다 (표시를 빠뜨린 변화가 있어도 하루 안에 바로잡힌다)", async () => {
+    expect(SNAPSHOT_FULL_REBUILD_MS).toBe(24 * 3_600_000);
+    await freshAll();
+    for (let i = 0; i < hubs.length; i++) await maintainSnapshots(env.DB, hubs, NOW + i);
+    const fullAt = async (hub: string) =>
+      Number((await env.DB.prepare("SELECT value FROM meta WHERE key = ?").bind(SNAPSHOT_FULL_PREFIX + hub).first<{ value: string }>())?.value);
+    // 다시 만들면 그 시각을 남긴다 (스냅샷 행과 같은 batch)
+    expect(await fullAt("bongeunsa")).toBe(NOW);
+    // 새로 하기는 그 시각을 바꾸지 않는다
+    const t1 = NOW + SNAPSHOT_MAX_AGE_MS - SNAPSHOT_REFRESH_BEFORE_MS + 5;
+    expect(await maintainSnapshots(env.DB, hubs, t1)).toEqual({ status: "renewed", hub: "bongeunsa" });
+    expect(await fullAt("bongeunsa")).toBe(NOW);
+    // 하루가 지나 다시 고를 때가 되면(만료 15분 전) 깨끗해도 다시 만든다 — 행만 지나가게 둔 다른 거점은 새로 하기
+    const t2 = NOW + SNAPSHOT_FULL_REBUILD_MS + 60_000;
+    await env.DB.prepare("UPDATE hub_snapshots SET built_at = ?").bind(t2 - (SNAPSHOT_MAX_AGE_MS - SNAPSHOT_REFRESH_BEFORE_MS) - 60_000).run();
+    await env.DB.prepare("UPDATE meta SET value = ? WHERE key = ?").bind(String(t2 - 3_600_000), SNAPSHOT_FULL_PREFIX + "ddp").run();
+    const before = await snapshotRow("bongeunsa");
+    expect(await maintainSnapshots(env.DB, hubs, t2)).toMatchObject({ status: "built", hub: "bongeunsa" });
+    expect(await fullAt("bongeunsa")).toBe(t2);
+    expect((await snapshotRow("bongeunsa"))!.etag).toBe(before!.etag);
+    expect(await maintainSnapshots(env.DB, hubs, t2 + 1)).toEqual({ status: "renewed", hub: "ddp" });
+    // 다시 만든 기록이 없는 스냅샷(이 변경 앞에 만든 것)도 다시 만든다
+    await env.DB.prepare("DELETE FROM meta WHERE key = ?").bind(SNAPSHOT_FULL_PREFIX + "pangyo").run();
+    expect(await maintainSnapshots(env.DB, hubs, t2 + 2)).toMatchObject({ status: "built", hub: "pangyo" });
+  });
+
+  it("R56: 26시간 동안 깨끗한 공개 거점은 끊기지 않고, 무거운 다시 만들기는 거점마다 처음 한 번 + 하루 한 번(안전망)뿐이다", async () => {
+    // 토요일 01:00 KST — 월요일 00:00까지 갱신 요일 시작이 없어 격자가 만료되지 않는다
+    const start = Date.UTC(2027, 0, 15, 16, 0);
+    const keys = [...new Set(PUBLIC_HUBS.flatMap((h) => tilesCoveringCircle(h, PREWARM_RADIUS)))];
+    await env.DB.prepare(
+      "INSERT OR REPLACE INTO tiles (key, collected_at, place_count, saturated) SELECT value, ?, 0, 0 FROM json_each(?)",
+    ).bind(start, JSON.stringify(keys)).run();
+    const valid = async (t: number) =>
+      (await env.DB.prepare("SELECT count(*) AS c FROM hub_snapshots WHERE version = ? AND built_at > ? AND built_at <= ?")
+        .bind(HUB_SNAPSHOT_VERSION, t - SNAPSHOT_MAX_AGE_MS, t).first<{ c: number }>())!.c;
+    const built = new Map<string, number>();
+    let minValid = Infinity;
+    for (let m = 0; m < 26 * 60; m++) {
+      const t = start + m * 60_000;
+      if (secondCronJob(t) !== "snapshot") continue;
+      const r = await runSnapshotCron(env, { now: t });
+      if (r.status === "built") built.set(r.hub, (built.get(r.hub) ?? 0) + 1);
+      expect(r.status === "skipped", JSON.stringify(r)).toBe(false);
+      if (m >= 2 * 60) minValid = Math.min(minValid, await valid(t));
+    }
+    expect(minValid).toBe(PUBLIC_HUBS.length);
+    expect([...built.values()].every((n) => n === 2)).toBe(true);
+    expect(built.size).toBe(PUBLIC_HUBS.length);
   });
 
   it("R56: 공개 거점이 모두 깨끗하면 스냅샷 Cron만으로 모든 공개 거점의 스냅샷이 끊기지 않고 유지된다 (6시간)", async () => {

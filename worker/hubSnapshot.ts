@@ -43,6 +43,13 @@ export const SNAPSHOT_SKIP_MAX_BACKOFF_MS = 360 * MIN;
 export const SNAPSHOT_SKIP_EXPIRY_MARGIN_MS = 5 * MIN;
 /** meta snapshot_skip:{hub} = {until, attempts}: until 전에는 고르지 않는다. attempts = 이어서 끝나지 못한 시도 수 (끝나면 0) */
 export const SNAPSHOT_SKIP_PREFIX = "snapshot_skip:";
+/** meta snapshot_full:{hub} = 마지막으로 본문을 다시 만든(새로 하기가 아닌) 시각 — 스냅샷 행과 같은 batch로 쓴다 */
+export const SNAPSHOT_FULL_PREFIX = "snapshot_full:";
+/**
+ * 안전망: 마지막으로 다시 만든 지 이만큼 지난 스냅샷은 깨끗해도 새로 하지 않고 다시 만든다 — 새로 하기는 더러움 표시를 믿는데,
+ * 표시를 빠뜨린 변화(손으로 고친 D1, 앞으로의 버그)가 있어도 하루 안에 바로잡히게. 거점마다 하루 한 번(공개 14곳이면 하루 14번)
+ */
+export const SNAPSHOT_FULL_REBUILD_MS = 24 * 60 * MIN;
 /** 기다려야 하는 건너뜀 — 데이터가 바뀌어야 풀리고 판단에 무거운 읽기가 드는 것 (paused·raced는 싸거나 곧 풀려서 기다리지 않는다) */
 const BACKOFF_REASONS: ReadonlySet<SnapshotSkip> = new Set(["pending", "tiles", "oversize"]);
 const META_SET = "INSERT INTO meta (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value";
@@ -98,6 +105,10 @@ const UPSERT = `INSERT INTO hub_snapshots (hub, version, built_at, source_at, en
   WHERE COALESCE((SELECT CAST(value AS INTEGER) FROM meta WHERE key = ?8), 0) = ?4
   ON CONFLICT(hub) DO UPDATE SET version = excluded.version, built_at = excluded.built_at, source_at = excluded.source_at,
     encoding = excluded.encoding, etag = excluded.etag, body = excluded.body`;
+/** 다시 만든 시각 (UPSERT와 같은 조건 — 같은 batch라 스냅샷을 썼을 때만 쓴다) */
+const FULL_MARK = `INSERT INTO meta (key, value) SELECT ?1, ?2
+  WHERE COALESCE((SELECT CAST(value AS INTEGER) FROM meta WHERE key = ?3), 0) = ?4
+  ON CONFLICT(key) DO UPDATE SET value = excluded.value`;
 
 /**
  * 쿨다운·frozen이 지금부터 SNAPSHOT_MAX_AGE_MS 안에 끝나는가 — 그러면 지금 만들거나 새로 한 스냅샷이 쓰이는 동안
@@ -152,25 +163,32 @@ export async function buildHubSnapshot(db: D1Database, hub: Hub, now: number): P
   if (body.length > SNAPSHOT_MAX_CHARS) return skip("oversize");
   // 본문(gzip)에서 정하는 ETag — 같은 본문이면 다시 만들어도 같아서 화면의 저장본이 계속 304를 받는다
   const etag = `"${HUB_SNAPSHOT_VERSION}-${hub.id}-${await digestHex(gz)}"`;
-  const r = await db
-    .prepare(UPSERT)
-    .bind(hub.id, HUB_SNAPSHOT_VERSION, now, stamp, ENCODING, etag, body, SNAPSHOT_DIRTY_PREFIX + hub.id)
-    .run();
+  // 다시 만든 시각(SNAPSHOT_FULL_PREFIX — 새로 하기 안전망)도 같은 batch로 (D1 호출 수 그대로, 쓰기 +1행)
+  const [r] = await db.batch([
+    db.prepare(UPSERT).bind(hub.id, HUB_SNAPSHOT_VERSION, now, stamp, ENCODING, etag, body, SNAPSHOT_DIRTY_PREFIX + hub.id),
+    db.prepare(FULL_MARK).bind(SNAPSHOT_FULL_PREFIX + hub.id, String(now), SNAPSHOT_DIRTY_PREFIX + hub.id, stamp),
+  ]);
   if (!Number(r.meta?.changes)) return skip("raced");
   return { status: "built", hub: hub.id, places: items.length, bytes: raw.byteLength, gzipBytes: gz.byteLength };
 }
 
-/** 표시가 만든 때 그대로이고 행도 그대로일 때만 만든 시각을 바꾼다 (바꾸는 사이 더러워졌거나 다시 만들어졌으면 0행) */
+/**
+ * 표시가 만든 때 그대로이고 행도 그대로일 때만 만든 시각을 바꾼다 (바꾸는 사이 더러워졌거나 다시 만들어졌으면 0행).
+ * 안전망: 마지막으로 다시 만든 시각(snapshot_full:{hub})이 ?8(= 지금 − SNAPSHOT_FULL_REBUILD_MS)보다 뒤일 때만 — 지났거나 기록이 없으면
+ * 0행이라 만들기 경로로 간다 (D1 호출을 늘리지 않으려고 같은 문장에서 본다 — 할 일 없는 실행의 읽기는 그대로)
+ */
 const RENEW = `UPDATE hub_snapshots SET built_at = ?5
   WHERE hub = ?1 AND version = ?2 AND built_at = ?3 AND source_at = ?4
-    AND COALESCE((SELECT CAST(value AS INTEGER) FROM meta WHERE key = ?6), 0) = ?4`;
+    AND COALESCE((SELECT CAST(value AS INTEGER) FROM meta WHERE key = ?6), 0) = ?4
+    AND COALESCE((SELECT CAST(value AS INTEGER) FROM meta WHERE key = ?7), 0) > ?8`;
 
 /**
  * 깨끗한 스냅샷 새로 하기 (Task 56): 표시가 만든 때 그대로(source_at)면 본문도 그대로다 — 본문을 바꾸는 쓰기(상세 저장·실패 기록,
  * 격자 ID 변경, R63 완료 기록)는 같은 batch에서 표시를 올리고, 새 ID와 쿨다운 시작은 행을 지운다. 그래서 목록(수천 행)을 다시 읽고
  * gzip하지 않고 built_at만 지금으로 바꾼다 (D1 3번, 읽기 ~60행). 시간이 바꾸는 두 가지는 만들 때와 같이 다시 본다: 만료 격자
  * (R63 갱신 요일 — 있으면 지금 경로가 수집해야 한다), 새로 한 스냅샷이 쓰이는 동안 안에 끝나는 쿨다운·frozen. 그러면(또는 바꾸는 사이
- * 표시가 바뀌었으면) false — 부르는 쪽이 만들기 경로로 간다(건너뜀·다시 만들기).
+ * 표시가 바뀌었으면, 안전망 — 마지막으로 다시 만든 지 SNAPSHOT_FULL_REBUILD_MS가 지났거나 기록이 없으면) false — 부르는 쪽이
+ * 만들기 경로로 간다(건너뜀·다시 만들기).
  */
 async function renewHubSnapshot(
   db: D1Database, hub: Hub, row: { built_at: number; source_at: number }, now: number,
@@ -179,7 +197,10 @@ async function renewHubSnapshot(
   if (await hubTilesDue(db, hub, now)) return false;
   const r = await db
     .prepare(RENEW)
-    .bind(hub.id, HUB_SNAPSHOT_VERSION, row.built_at, row.source_at, now, SNAPSHOT_DIRTY_PREFIX + hub.id)
+    .bind(
+      hub.id, HUB_SNAPSHOT_VERSION, row.built_at, row.source_at, now, SNAPSHOT_DIRTY_PREFIX + hub.id, SNAPSHOT_FULL_PREFIX + hub.id,
+      now - SNAPSHOT_FULL_REBUILD_MS,
+    )
     .run();
   return Number(r.meta?.changes) > 0;
 }
@@ -266,6 +287,7 @@ export type SnapshotRun = SnapshotBuild | { status: "idle" } | { status: "renewe
  * 고르는 순서: 스냅샷이 없거나 판이 다른 거점(넘겨받은 순서 = 실행마다 돌아가는 hubOrder) →
  * 만료 SNAPSHOT_REFRESH_BEFORE_MS 전이 된 것, 또는 더러운데(표시 ≠ source_at) 만든 지 SNAPSHOT_DIRTY_REBUILD_MS가 지난 것 중 가장 오래된 것.
  * 고른 것이 깨끗한(표시 = source_at) 쓸 수 있는 스냅샷이면 먼저 새로 한다(renewHubSnapshot — 만든 시각만, 무거운 읽기 없음).
+ * 단 마지막으로 다시 만든 지 SNAPSHOT_FULL_REBUILD_MS(24시간)가 지났으면(기록이 없어도) 다시 만든다 (안전망).
  * snapshot_skip:{hub}의 until이 지금보다 뒤인 거점은 고르지 않는다 (skipBackoffMs).
  * 만들기 전에 {until: 지금 + 기다림, attempts: 이전 + 1}을 써 둔다 — 실행이 CPU 초과로 죽으면 표시가 남고, 이어서 죽을수록
  * 기다림이 두 배씩(20 → 40 → 80분 … 최대 6시간) 는다. 만들었거나 기다릴 필요가 없는 건너뜀(paused·raced)이면 지우고,

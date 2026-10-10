@@ -179,7 +179,7 @@ git add docs/deploys.md && git commit -m "docs(deploy): <날짜> 배포 기록" 
 
 - `places` 행을 손으로 지우면(`DELETE FROM places …`) 그 가게는 다시 "미수집"이 돼요. Cron은 미수집을 앞선 커서(`meta.unfetched_from`)부터 찾아서, 커서 앞 칸에 다시 생긴 미수집은 보지 못해요. **같이 커서와 "미수집 확인 끝" 표시도 지워요** (다음 Cron이 처음부터 다시 찾아요):
   `npx wrangler d1 execute momeokjo --remote --command "DELETE FROM meta WHERE key = 'unfetched_from'"` (예전 `unfetched_cleared_at` 키는 더 쓰지 않아요 — 남아 있어도 무시해요)
-  거점 스냅샷도 지워요 — 스냅샷 Cron은 표시가 그대로인 스냅샷을 다시 만들지 않고 시각만 새로 해서(R56 새로 하기), 손으로 생긴 미수집을 모르고 pending 0이라는 본문을 계속 내보내요: `npx wrangler d1 execute momeokjo --remote --command "DELETE FROM hub_snapshots"`
+  거점 스냅샷도 지워요 — 스냅샷 Cron은 표시가 그대로인 스냅샷을 다시 만들지 않고 시각만 새로 해서(R56 새로 하기), 손으로 생긴 미수집을 모르고 pending 0이라는 본문을 내보내요. 안전망(마지막으로 다시 만든 지 24시간이면 다시 만듦)이 늦어도 하루 안에 바로잡지만, 바로 맞추려면: `npx wrangler d1 execute momeokjo --remote --command "DELETE FROM hub_snapshots"`
 - 격자 ID(`tile_places`)를 앱이 아닌 SQL로 넣을 때도 같아요 — 앱(`replaceTilePlaces`)은 `tiles_changed_at`을 올려서 커서가 저절로 처음부터 읽어요.
 - 격자 상태(`tiles`) 행을 손으로 지우거나 `collected_at`을 되돌리면 **`meta.tiles_fresh`도 지워요** (Task 40 — 본 Cron은 "수집할 격자 없음"을 확인한 뒤 한 시간 동안, 거점 갱신 시작이 지나지 않는 한 격자 확인을 건너뛰어요. 지우지 않아도 한 시간 안에 다시 확인해요):
   `npx wrangler d1 execute momeokjo --remote --command "DELETE FROM meta WHERE key = 'tiles_fresh'"`
