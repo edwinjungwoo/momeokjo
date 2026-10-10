@@ -2,8 +2,10 @@ import { describe, expect, it } from "vitest";
 import { MIGRATION_CHECKS, objectState } from "../../scripts/migrationChecks.mjs";
 import {
   classifySmokeFails,
+  configuredCrons,
   confirmRollback,
   deployLogLine,
+  deployedCommit,
   dirtyPaths,
   formatDuration,
   isD1LimitError,
@@ -21,7 +23,9 @@ import {
   parseSmokeSummary,
   planRelease,
   shouldRollback,
+  sameCrons,
   smokeFailKey,
+  triggersDeployCommand,
 } from "../../scripts/release.mjs";
 import {
   D1_LIMIT_ERROR,
@@ -55,6 +59,38 @@ import { HUBS as ALL_HUBS } from "../../shared/hubs";
 const MIGRATION_SQL = import.meta.glob("../../migrations/*.sql", { query: "?raw", import: "default", eager: true }) as Record<string, string>;
 const sqlOf = (name: string) => MIGRATION_SQL[`../../migrations/${name}`];
 const HUBS = ["bongeunsa", "ddp", "pangyo", "naebang", "gwacheon"];
+
+describe("R63: 롤백 대상의 Cron 트리거 (Task 56)", () => {
+  const LOG = [
+    "| 날짜 (KST) | 버전 | 커밋 | 마이그레이션 | 결과 | 롤백 대상 |",
+    "|---|---|---|---|---|---|",
+    "| 2026-10-06 16:19 | f559fcf2 | 62c2cb5 | - | 롤백 (새 FAIL 3) — 둘째 트리거를 2-59/5로 되돌려야 해요 | 6eeb6e06 |",
+    "| 2026-10-07 08:49 | 67be6cbd | c0900b4 | - | 성공 | eee78cd5 |",
+    "| 2026-10-08 08:10 | 67be6cbd | e6de5cb | - | 성공 | 56fd969f |",
+    "| 2026-10-08 09:00 | ? | - | - | 배포됨 — 버전 불명, 확인 필요 | 67be6cbd |",
+  ].join("\n");
+
+  it("R63: docs/deploys.md에서 버전(앞 8자)을 배포한 커밋 — 같은 버전이 여러 줄이면 마지막 줄, 없거나 커밋 칸이 비면 null", () => {
+    expect(deployedCommit(LOG, "f559fcf2-1111-2222")).toBe("62c2cb5");
+    expect(deployedCommit(LOG, "67be6cbd")).toBe("e6de5cb");
+    expect(deployedCommit(LOG, "6eeb6e06")).toBeNull();
+    expect(deployedCommit(LOG, "?")).toBeNull();
+    expect(deployedCommit(undefined, "f559fcf2")).toBeNull();
+    expect(deployedCommit(LOG, null)).toBeNull();
+  });
+
+  it("R63: wrangler.jsonc의 crons만 읽는다 (주석 줄의 cron 문자열은 보지 않는다) · 순서와 상관없이 비교 · 되돌리는 명령", () => {
+    const text = '{\n  // 예전 "crons": ["2-59/5 * * * *"]\n  "triggers": { "crons": ["*/5 * * * *", "* * * * *"] },\n}';
+    expect(configuredCrons(text)).toEqual(["*/5 * * * *", "* * * * *"]);
+    expect(configuredCrons("{}")).toEqual([]);
+    expect(configuredCrons(undefined)).toEqual([]);
+    expect(sameCrons(["* * * * *", "*/5 * * * *"], ["*/5 * * * *", "* * * * *"])).toBe(true);
+    expect(sameCrons(["*/5 * * * *", "1-59/2 * * * *"], ["*/5 * * * *", "* * * * *"])).toBe(false);
+    expect(triggersDeployCommand(["*/5 * * * *", "1-59/2 * * * *"])).toBe(
+      'npx wrangler triggers deploy --triggers "*/5 * * * *" --triggers "1-59/2 * * * *"',
+    );
+  });
+});
 
 describe("infra: release 인자", () => {
   it("infra: 기본값은 모두 꺼짐, 플래그를 받는다", () => {

@@ -59,6 +59,8 @@ function happyReplies(): Record<string, Reply | Reply[]> {
     "node scripts/backfill.mjs": ok("완료 — 채운 행 10\n"),
     "bash scripts/smoke.sh": ok(smokeOutput(0)),
     "npx wrangler rollback": ok(`Current Version ID: ${PREV_VERSION}\n`),
+    // 롤백 대상 커밋의 설정 — 기본은 이번 배포와 같은 crons
+    "git show": ok(cronsConfig(CURRENT_CRONS)),
   };
 }
 
@@ -77,7 +79,8 @@ function harness(
     "dist/client/index.html": '<script src="https://dapi.kakao.com/v2/maps/sdk.js?appkey=abc&autoload=false"></script>',
     "migrations/0003_meta.sql": sql0003,
     "migrations/0005_list_json.sql": sql0005,
-    "docs/deploys.md": "# 배포 기록\n\n| 날짜 (KST) | 버전 | 커밋 | 마이그레이션 | 결과 | 롤백 대상 |\n|---|---|---|---|---|---|\n",
+    "docs/deploys.md": DEPLOY_LOG_WITH_PREV,
+    "wrangler.jsonc": cronsConfig(CURRENT_CRONS),
     ...extra.files,
   };
   let clock = Date.UTC(2026, 9, 6, 0, 0);
@@ -117,6 +120,14 @@ function harness(
   const ran = (prefix: string) => calls.filter((c) => c.line === prefix || c.line.startsWith(prefix + " "));
   return { deps, calls, logs, appended, written, files, sleeps, ran, output: () => logs.join("\n") };
 }
+
+/** 롤백 대상(PREV_VERSION)을 배포한 커밋 — docs/deploys.md 기록으로 찾는다 */
+const PREV_COMMIT = "a1b2c3d";
+const DEPLOY_LOG_EMPTY = "# 배포 기록\n\n| 날짜 (KST) | 버전 | 커밋 | 마이그레이션 | 결과 | 롤백 대상 |\n|---|---|---|---|---|---|\n";
+const DEPLOY_LOG_WITH_PREV = `${DEPLOY_LOG_EMPTY}| 2026-10-05 20:00 | ${PREV_VERSION.slice(0, 8)} | ${PREV_COMMIT} | - | 성공 | 1234abcd |\n`;
+const CURRENT_CRONS = ["*/5 * * * *", "* * * * *"];
+const cronsConfig = (crons: string[]) =>
+  `{\n  // 예전에는 "1-59/2 * * * *"였다\n  "triggers": { "crons": [${crons.map((c) => JSON.stringify(c)).join(", ")}] },\n}\n`;
 
 const opts = (o: Partial<ReleaseOpts> = {}): ReleaseOpts => ({ dryRun: false, skipTests: false, force: false, yes: true, allowDestructive: false, acceptBaselineFails: false, ...o });
 
@@ -560,35 +571,45 @@ describe("infra: npm run release — 기준 스모크와 자동 롤백", () => {
     expect(h.ran("npx wrangler rollback")).toHaveLength(1);
   });
 
-  it("R63: 자동 롤백했는데 지금 설정의 둘째 트리거가 1-59/2면 크게 알리고 종료 코드 3 — 옛 버전은 2-59/5를 기대한다 (wrangler rollback은 트리거를 되돌리지 않는다)", async () => {
-    const h = harness(smokes([], [FAIL_PLACES_500]), {
-      files: { "wrangler.jsonc": '"triggers": { "crons": ["*/5 * * * *", "1-59/2 * * * *"] },' },
-    });
+  it("R63: 롤백 대상의 커밋(docs/deploys.md)의 crons가 이번 배포와 다르면 배포 전에 알리고, 자동 롤백 뒤 되돌릴 crons와 명령을 크게 알리고 종료 코드 3 (wrangler rollback은 트리거를 되돌리지 않는다)", async () => {
+    const h = harness({ ...smokes([], [FAIL_PLACES_500]), "git show": ok(cronsConfig(["*/5 * * * *", "1-59/2 * * * *"])) });
     const res = await runRelease(opts(), h.deps);
     expect(res.code).toBe(3);
+    expect(h.ran("git show").map((c) => c.line)).toEqual([`git show ${PREV_COMMIT}:wrangler.jsonc`]);
     expect(h.ran("npx wrangler rollback")).toHaveLength(1);
     expect(res.summary.rolledBack).toBe(true);
-    expect(res.summary.result).toContain("둘째 트리거를 2-59/5로 되돌려야 해요 (대시보드 Triggers 또는 wrangler triggers deploy)");
-    expect(h.output()).toContain("둘째 트리거를 2-59/5로 되돌려야 해요 (대시보드 Triggers 또는 wrangler triggers deploy)");
-    // 설정에 1-59/2가 없으면(R63 앞 설정) 예전처럼 2
-    const old = harness(smokes([], [FAIL_PLACES_500]), { files: { "wrangler.jsonc": '"crons": ["*/5 * * * *", "2-59/5 * * * *"]' } });
-    expect((await runRelease(opts(), old.deps)).code).toBe(2);
+    const note = "Cron 트리거를 */5 * * * *, 1-59/2 * * * *(으)로 되돌려야 해요";
+    expect(res.summary.result).toContain(note);
+    expect(h.appended[0].text).toContain(note);
+    const out = h.output();
+    expect(out).toContain(`npx wrangler triggers deploy --triggers "*/5 * * * *" --triggers "1-59/2 * * * *"`);
+    expect(out).toContain("지금 운영 트리거는 */5 * * * *, * * * * *예요");
+    // 배포 전(롤백 대상 기록)에도 알린다
+    const before = out.slice(0, out.indexOf("== 6. 배포"));
+    expect(before).toContain(`롤백 대상(${PREV_COMMIT})의 Cron 트리거는 */5 * * * *, 1-59/2 * * * *이고 이번 배포는 */5 * * * *, * * * * *예요`);
   });
 
-  it("R63: 자동 롤백했는데 지금 설정의 둘째 트리거가 * * * * *(채우기 부스트)면 크게 알리고 종료 코드 3 — 부스트 앞 버전은 1-59/2를, R63 앞 버전은 2-59/5를 기대한다", async () => {
-    const h = harness(smokes([], [FAIL_PLACES_500]), {
-      files: { "wrangler.jsonc": '// 예전에는 "1-59/2 * * * *"였다\n"triggers": { "crons": ["*/5 * * * *", "* * * * *"] },' },
-    });
+  it("R63: 롤백 대상과 이번 배포의 crons가 같으면(지금 설정이 * * * * *여도) 트리거 경고 없이 자동 롤백 종료 코드 2 — 예전처럼 늘 1-59/2로 되돌리라고 하지 않는다", async () => {
+    const h = harness(smokes([], [FAIL_PLACES_500]));
     const res = await runRelease(opts(), h.deps);
+    expect(res.code).toBe(2);
+    expect(res.summary.result).toBe("롤백 (새 FAIL 1)");
+    const out = h.output();
+    expect(out).not.toContain("되돌려야 해요");
+    expect(out).not.toContain("1-59/2");
+    expect(out).toContain(`롤백 대상(${PREV_COMMIT})과 Cron 트리거가 같아요`);
+  });
+
+  it("R63: 롤백 대상의 커밋을 모르면(배포 기록에 없음·git show 실패) 트리거를 비교하지 못했다고 알리고 자동 롤백 뒤 종료 코드 3 (사람이 확인)", async () => {
+    const unknown = harness(smokes([], [FAIL_PLACES_500]), { files: { "docs/deploys.md": DEPLOY_LOG_EMPTY } });
+    const res = await runRelease(opts(), unknown.deps);
     expect(res.code).toBe(3);
-    expect(h.ran("npx wrangler rollback")).toHaveLength(1);
-    expect(res.summary.rolledBack).toBe(true);
-    const note = "둘째 트리거를 1-59/2로 되돌려야 해요 (부스트 앞 버전 — R63 앞 버전이면 2-59/5) (대시보드 Triggers 또는 wrangler triggers deploy)";
-    expect(res.summary.result).toContain(note);
-    expect(h.output()).toContain(note);
-    expect(h.output()).toContain("지금 운영 트리거는 */5 + * * * * *예요");
-    // 1-59/2 안내와 섞이지 않는다 (설정의 crons 배열만 본다 — 주석은 보지 않는다)
-    expect(h.output()).not.toContain("둘째 트리거를 2-59/5로 되돌려야 해요");
+    expect(unknown.ran("git show")).toHaveLength(0);
+    expect(res.summary.result).toContain("Cron 트리거 확인 필요");
+    expect(unknown.output()).toContain("Cron 트리거를 비교하지 못했어요");
+    const failed = harness({ ...smokes([], [FAIL_PLACES_500]), "git show": fail("fatal: invalid object name") });
+    expect((await runRelease(opts(), failed.deps)).code).toBe(3);
+    expect(failed.output()).toContain("Cron 트리거를 비교하지 못했어요");
   });
 
   it("infra: 기준에 없던 코드 수준 FAIL이 새로 생기면 기록한 버전으로 비대화식 롤백(--message, --yes), 종료 코드 2", async () => {

@@ -118,3 +118,9 @@ export declare function deployLogLine(entry: {
 }): string;
 export declare function runRelease(opts: ReleaseOpts, deps: ReleaseDeps): Promise<{ code: number; summary: ReleaseSummary }>;
 export function smokeAuditPick(publicHubIds: string[], now: number): string | undefined;
+/** wrangler.jsonc의 triggers.crons (주석 줄은 보지 않는다). 못 찾으면 [] */
+export declare function configuredCrons(text: string | undefined): string[];
+/** docs/deploys.md에서 그 버전(앞 8자)을 배포한 마지막 줄의 커밋. 없으면 null */
+export declare function deployedCommit(log: string | undefined, version: string | null | undefined): string | null;
+export declare function sameCrons(a: string[], b: string[]): boolean;
+export declare function triggersDeployCommand(crons: string[]): string;

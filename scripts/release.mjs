@@ -420,33 +420,47 @@ const tail = (text, n = 15) => {
   return (lines.length > n ? ["…", ...lines.slice(-n)] : lines).join("\n");
 };
 
-/** R63 둘째 트리거 (그 앞 버전은 2-59/5를 기대한다) */
-const SECOND_TRIGGER_R63 = "1-59/2 * * * *";
-const TRIGGER_RESTORE_NOTE = "둘째 트리거를 2-59/5로 되돌려야 해요 (대시보드 Triggers 또는 wrangler triggers deploy)";
-/** 채우기 부스트 둘째 트리거 (매 분 — 그 앞 버전은 1-59/2를, R63 앞 버전은 2-59/5를 기대한다) */
-const SECOND_TRIGGER_BOOST = "* * * * *";
-const BOOST_TRIGGER_RESTORE_NOTE =
-  "둘째 트리거를 1-59/2로 되돌려야 해요 (부스트 앞 버전 — R63 앞 버전이면 2-59/5) (대시보드 Triggers 또는 wrangler triggers deploy)";
-
 /** wrangler.jsonc의 triggers.crons 값들 (주석 속 cron 문자열은 보지 않는다). 못 찾으면 [] */
-function configuredCrons(text) {
-  const m = /"crons"\s*:\s*\[([^\]]*)\]/.exec(text ?? "");
+export function configuredCrons(text) {
+  const t = String(text ?? "").replace(/^\s*\/\/.*$/gm, "");
+  const m = /"crons"\s*:\s*\[([^\]]*)\]/.exec(t);
   return m ? [...m[1].matchAll(/"([^"]*)"/g)].map((x) => x[1]) : [];
 }
 
+/**
+ * docs/deploys.md에서 그 버전을 배포한 커밋 (버전 칸 앞 8자 = version 앞 8자인 마지막 줄의 커밋 칸). 없으면 null.
+ * 자동 롤백 대상(바로 앞 활성 버전)이 기대하는 Cron 트리거를 그 커밋의 wrangler.jsonc로 알아보려고
+ */
+export function deployedCommit(log, version) {
+  if (!version) return null;
+  let commit = null;
+  for (const line of String(log ?? "").split("\n")) {
+    const cells = line.split("|").map((c) => c.trim());
+    // | 날짜 | 버전 | 커밋 | 마이그레이션 | 결과 | 롤백 대상 |
+    if (cells.length < 8 || cells[2] !== String(version).slice(0, 8)) continue;
+    if (/^[0-9a-f]{7,40}$/.test(cells[3])) commit = cells[3];
+  }
+  return commit;
+}
+
+/** 두 crons가 같은 트리거인가 (순서는 보지 않는다) */
+export const sameCrons = (a, b) => JSON.stringify([...a].sort()) === JSON.stringify([...b].sort());
+
+/** 롤백 뒤 트리거를 되돌리는 명령 (wrangler triggers deploy --triggers 여러 번) */
+export const triggersDeployCommand = (crons) =>
+  `npx wrangler triggers deploy ${crons.map((c) => `--triggers "${c}"`).join(" ")}`;
+const cronList = (crons) => crons.join(", ");
+
 const ROLLBACK_CAVEATS = [
   "  ⚠ 마이그레이션은 되돌리지 않아요 — 그래서 마이그레이션은 더하기만 해요 (이전 버전도 새 스키마에서 돌아야 해요).",
-  "  ⚠ wrangler rollback은 Cron 트리거를 되돌리지 않아요 — 지금 wrangler.jsonc의 crons가 그대로 남아요. 이전 버전이 다른 주기를 기대하면 손으로 맞추세요 (docs/deploy.md).",
+  "  ⚠ wrangler rollback은 Cron 트리거를 되돌리지 않아요 — 이번 배포의 crons가 그대로 남아요. 롤백 대상 커밋의 설정과 다르면 아래에 되돌릴 값을 알려요 (docs/deploy.md).",
   "  ⚠ 롤백 대상은 이번 배포 직전에 운영 중이던 버전이에요. 다른 버전으로 손으로 롤백할 때는 docs/deploy.md의 '안전한 롤백 대상'을 보세요.",
-  "  ⚠ 채우기 부스트 앞 버전으로 되돌렸다면: 대시보드 Triggers에서 둘째 트리거 `* * * * *`를 `1-59/2 * * * *`로 되돌리세요 (R63 앞 버전이면 `2-59/5 * * * *` — 옛 코드는 모르는 cron을 본 Cron으로 돌려 매 분 전체 수집을 해요 — docs/deploy.md).",
-  "  ⚠ R63(주 1회 갱신) 앞 버전으로 되돌렸다면: 대시보드 Triggers에서 둘째 트리거(`* * * * *` 또는 `1-59/2 * * * *`)를 `2-59/5 * * * *`로 되돌리세요 (옛 코드는 모르는 cron을 본 Cron으로 돌려 전체 수집을 더 해요 — docs/deploy.md).",
-  "  ⚠ R56(스냅샷) 앞 버전으로 되돌렸다면: 대시보드 Triggers에서 둘째 트리거(`* * * * *`·`1-59/2`, R63 전이면 `2-59/5`)를 지우세요 (옛 코드는 두 트리거 모두 전체 수집을 돌려요). 이 버전을 다시 올리기 전에는 npx wrangler d1 execute momeokjo --remote --command \"DELETE FROM hub_snapshots\"",
 ];
 
 /**
  * npm run release 전체 흐름. 첫 실패에서 멈춘다.
  * 종료 코드: 0 성공 · 1 배포 전 중단(운영 코드는 그대로) · 2 스모크 실패 → 자동 롤백함 · 3 사람이 확인해야 함
- * (R63: 자동 롤백했어도 설정의 둘째 트리거가 * * * * *(채우기 부스트)나 1-59/2면 3 — 트리거를 손으로 1-59/2·2-59/5로 되돌려야 한다)
+ * (자동 롤백했어도 롤백 대상 커밋의 crons가 이번 배포와 다르거나 그 커밋을 모르면 3 — wrangler rollback은 트리거를 되돌리지 않는다)
  * @param {import("./release.d.mts").ReleaseOpts} opts
  * @param {import("./release.d.mts").ReleaseDeps} deps
  */
@@ -560,6 +574,29 @@ export async function runRelease(opts, deps) {
     if (!v.ok) throw new Stop(`롤백 대상을 정하지 못했어요: ${v.error}`);
     return v.id;
   };
+  /**
+   * 롤백 대상 버전이 기대하는 Cron 트리거: docs/deploys.md의 커밋 → git show <커밋>:wrangler.jsonc. 모르면 null (기록에 없음·git 실패).
+   * 이번 배포의 crons(지금 wrangler.jsonc — 작업 트리는 HEAD와 같다)와 비교해 배포 전에 알린다
+   */
+  const previousTriggers = async (version) => {
+    const commit = deployedCommit(deps.readFile(DEPLOY_LOG), version);
+    const current = configuredCrons(deps.readFile("wrangler.jsonc"));
+    if (!commit) {
+      log(`  ⚠ 롤백 대상 ${short(version)}을(를) 배포한 커밋을 ${DEPLOY_LOG}에서 찾지 못해 Cron 트리거를 비교하지 못했어요 — 자동 롤백하면 트리거를 손으로 확인해야 해요`);
+      return { commit: null, crons: null, current };
+    }
+    const r = await exec("git", ["show", `${commit}:wrangler.jsonc`]);
+    const crons = r.code === 0 ? configuredCrons(r.stdout) : [];
+    if (crons.length === 0) {
+      log(`  ⚠ 롤백 대상 커밋 ${commit}의 wrangler.jsonc에서 crons를 읽지 못해 Cron 트리거를 비교하지 못했어요 — 자동 롤백하면 트리거를 손으로 확인해야 해요`);
+      return { commit, crons: null, current };
+    }
+    if (sameCrons(crons, current)) log(`  ok 롤백 대상(${commit})과 Cron 트리거가 같아요 (${cronList(current)})`);
+    else {
+      log(`  ⚠ 롤백 대상(${commit})의 Cron 트리거는 ${cronList(crons)}이고 이번 배포는 ${cronList(current)}예요 — 자동 롤백하면 트리거를 손으로 되돌려야 해요 (wrangler rollback은 트리거를 되돌리지 않아요)`);
+    }
+    return { commit, crons, current };
+  };
   const checksOf = (name) => MIGRATION_CHECKS[name]?.checks ?? [];
   /** 작업 트리가 깨끗하고 HEAD = origin/<branch>인지 (expectedHead가 있으면 그 사이 HEAD가 바뀌지 않았는지도) */
   const gitGate = async (branch, expectedHead) => {
@@ -646,6 +683,7 @@ export async function runRelease(opts, deps) {
       log("== 4. 롤백 대상 (읽기만)");
       summary.previousVersion = await activeVersion();
       log(`  지금 활성 버전(롤백 대상): ${summary.previousVersion}`);
+      await previousTriggers(summary.previousVersion);
       log("dry-run: 여기서 멈춰요 — 운영은 바꾸지 않았어요");
       summary.result = "dry-run (운영 변경 없음)";
       return 0;
@@ -689,6 +727,7 @@ export async function runRelease(opts, deps) {
     const previous = await activeVersion();
     summary.previousVersion = previous;
     log(`  지금 활성 버전(롤백 대상): ${previous}`);
+    const triggers = await previousTriggers(previous);
 
     // 5. 기준 스모크 — 배포 전 지금 운영(이전 코드)의 FAIL. 배포 뒤에는 여기 없던 FAIL만 새 코드 탓으로 본다
     log("== 5. 기준 스모크 (배포 전, 지금 운영)");
@@ -835,20 +874,19 @@ export async function runRelease(opts, deps) {
     summary.rolledBack = true;
     summary.result = `롤백 (새 FAIL ${n})`;
     log(`  롤백했어요 — 지금 활성 버전은 ${previous}`);
-    // R63: wrangler rollback은 트리거를 되돌리지 않는다. 지금 설정의 둘째 트리거가 채우기 부스트(* * * * *)면 부스트 앞 버전은 1-59/2를
-    // (R63 앞이면 2-59/5를), R63 둘째 트리거(1-59/2)면 옛 버전은 2-59/5를 기대한다 — 그대로 두면 옛 코드가 모르는 cron을 본 Cron으로
-    // 돌려 그 분마다 전체 수집을 한다. 사람이 고쳐야 하니 크게 알리고 3
-    const crons = configuredCrons(deps.readFile("wrangler.jsonc"));
-    if (crons.includes(SECOND_TRIGGER_BOOST)) {
-      summary.result += ` — ${BOOST_TRIGGER_RESTORE_NOTE}`;
-      log(`  ✗✗ ${BOOST_TRIGGER_RESTORE_NOTE}`);
-      log(`     지금 운영 트리거는 */5 + * * * * *예요. 부스트 앞 버전은 1-59/2를(R63 앞 버전은 2-59/5를) 기대해요 — 바꾸기 전까지 본 Cron이 매 분 더 돌아요. 롤백한 버전이 이미 부스트 뒤 버전이면 그대로 두세요 (docs/deploy.md).`);
+    // wrangler rollback은 트리거를 되돌리지 않는다 — 이번 배포의 crons가 남는다. 롤백 대상 커밋의 crons와 다르면 옛 코드가 모르는 cron을
+    // 본 Cron으로 돌리거나 기대한 실행을 못 한다. 사람이 고쳐야 하니 크게 알리고 3 (커밋을 몰라 비교하지 못했어도 3)
+    if (!triggers.crons) {
+      summary.result += " — Cron 트리거 확인 필요 (롤백 대상 커밋을 몰라 비교하지 못함)";
+      log(`  ✗✗ Cron 트리거를 비교하지 못했어요 — 지금 운영 트리거는 ${cronList(triggers.current)}예요. 롤백한 버전 ${short(previous)}이(가) 다른 crons를 기대하면 대시보드 Triggers나 ${triggersDeployCommand(["<그 버전의 crons>"])}로 맞추세요 (docs/deploy.md).`);
       return 3;
     }
-    if (crons.includes(SECOND_TRIGGER_R63)) {
-      summary.result += ` — ${TRIGGER_RESTORE_NOTE}`;
-      log(`  ✗✗ ${TRIGGER_RESTORE_NOTE}`);
-      log(`     지금 운영 트리거는 */5 + 1-59/2예요. 롤백한 버전은 2-59/5를 기대해요 — 바꾸기 전까지 본 Cron이 홀수 분마다 더 돌아요 (docs/deploy.md).`);
+    if (!sameCrons(triggers.crons, triggers.current)) {
+      const note = `Cron 트리거를 ${cronList(triggers.crons)}(으)로 되돌려야 해요 (대시보드 Triggers 또는 wrangler triggers deploy)`;
+      summary.result += ` — ${note}`;
+      log(`  ✗✗ ${note}`);
+      log(`     지금 운영 트리거는 ${cronList(triggers.current)}예요. 롤백한 버전(${triggers.commit})은 ${cronList(triggers.crons)}를 기대해요 — 바꾸기 전까지 옛 코드가 모르는 cron을 본 Cron으로 돌려요 (docs/deploy.md).`);
+      log(`     ${triggersDeployCommand(triggers.crons)}`);
       return 3;
     }
     return 2;
