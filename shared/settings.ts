@@ -100,10 +100,15 @@ export type Start = {
   share: ShareParams;
   /** R43: 북마크 거점 경로로 열었으면 저장할 거점 id. R61: 거점 선택이 없는 기기에서 거점을 정한 공유 링크로 열었으면 그 거점 */
   saveHub: string | null;
-  /** 주소창을 바꿀 값 (바꿀 필요가 없으면 null) */
+  /** 주소창을 바꿀 값 (바꿀 필요가 없으면 null) — 언제나 같은 사이트의 경로 */
   replaceUrl: string | null;
   /** R61: 첫 접속이라 거점을 물어야 하는가 */
   askHub: boolean;
+  /**
+   * R25: 저장할 때의 기준 — 저장값 + 이번에 저장한 거점(saveHub). 공유 링크가 이번에만 바꾼 거점·반경은 사용자가 바꾸기 전까지
+   * 이 값으로 저장한다 (settingsToSave)
+   */
+  base: Settings;
 };
 
 /**
@@ -124,9 +129,34 @@ export function resolveStart(stored: string | null, pathname: string, search: st
   if (saveHub === null && !chosen && linkSetsHub(share)) saveHub = settings.hubId;
   const q = new URLSearchParams(search);
   const hasParams = SHARE_KEYS.some((k) => q.has(k));
-  const replaceUrl = hasParams ? (isShare ? "/" : pathname) : null;
+  // //x·/\x는 다른 호스트(https://x/)로 풀려 replaceState가 던진다 — 같은 사이트의 경로만 남긴다
+  const samePath = /^\/(?![/\\])/.test(pathname) ? pathname : "/";
+  const replaceUrl = hasParams ? (isShare ? "/" : samePath) : null;
   const askHub = needsHubPicker({ stored, tipSeen, path: pathname, query: search });
-  return { settings, share, saveHub, replaceUrl, askHub };
+  const parsed = parseSettings(stored);
+  const base = saveHub ? { ...parsed, hubId: saveHub } : parsed;
+  return { settings, share, saveHub, replaceUrl, askHub, base };
+}
+
+/** R25: 이번 세션에 사용자가 직접 바꾼 거점·반경 (공유 링크가 이번에만 정한 값과 구분한다) */
+export type Ownership = { hubId: boolean; radius: boolean };
+
+/** 설정이 prev → next로 바뀔 때 사용자가 바꾼 것을 표시한다 (한 번 바꾼 것은 계속 사용자 것) */
+export function noteOwnership(own: Ownership, prev: Settings, next: Settings): Ownership {
+  const hubId = own.hubId || next.hubId !== prev.hubId;
+  const radius = own.radius || next.filters.radius !== prev.filters.radius;
+  return hubId === own.hubId && radius === own.radius ? own : { hubId, radius };
+}
+
+/**
+ * R25/R43: 저장할 설정 — 공유 링크의 거점·반경은 이번에만이라 사용자가 직접 바꾸지 않았으면 저장값(base) 그대로 두고,
+ * 나머지는 지금 설정. 받은 사람이 인원·정렬만 바꿔도 친구가 보낸 거점·반경이 저장되던 것 (Task 56)
+ */
+export function settingsToSave(base: Settings, next: Settings, own: Ownership): Settings {
+  return {
+    filters: { ...next.filters, radius: own.radius ? next.filters.radius : base.filters.radius },
+    hubId: own.hubId ? next.hubId : base.hubId,
+  };
 }
 
 /**

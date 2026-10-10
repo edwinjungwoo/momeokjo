@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { parseSettings, resolveStart, type Settings } from "../shared/settings";
+import { noteOwnership, parseSettings, resolveStart, settingsToSave, type Ownership, type Settings } from "../shared/settings";
 import { firstTipSeen, readSettingsRaw, writeSettingsRaw } from "./deviceStore";
 
 /**
  * R25: 저장값 → 공유 파라미터 우선 적용. 사용자가 바꾸기 전에는 저장하지 않는다 (공유값이 저장값을 덮지 않게).
+ * 바꾼 뒤에도 공유 링크가 이번에만 정한 거점·반경은 사용자가 직접 바꾸지 않았으면 저장값 그대로 저장한다 (settingsToSave).
  * R43: /{거점 id} 북마크로 열면 그 거점을 저장한다 (공유 링크의 거점 경로는 저장하지 않는다 — R61 거점 선택이 없는 기기만 저장).
  * R61: 첫 접속이면 askHub가 true이고, chooseHub로 고른 거점을 저장한다 (저장값이 있으면 다시 묻지 않는다).
  * localStorage에 못 쓰면 sessionStorage에 남겨 같은 탭 새로고침에서는 다시 묻지 않는다 (web/deviceStore.ts).
@@ -15,10 +16,16 @@ export function useSettings() {
   const [settings, setSettings] = useState<Settings>(init.settings);
   const [askHub, setAskHub] = useState(init.askHub);
   const touched = useRef(false);
+  /** 이번 세션에 사용자가 직접 바꾼 거점·반경 */
+  const own = useRef<Ownership>({ hubId: false, radius: false });
 
   // 공유 파라미터는 처음 한 번만 쓴다. 새로고침하면 저장값으로 돌아가도록 주소창에서 지운다 (예전 링크의 lat/lng 포함)
   useEffect(() => {
-    if (init.replaceUrl !== null) window.history.replaceState(null, "", init.replaceUrl);
+    try {
+      if (init.replaceUrl !== null) window.history.replaceState(null, "", init.replaceUrl);
+    } catch {
+      /* 주소를 못 바꿔도 화면은 그대로 */
+    }
     if (init.saveHub === null) return;
     // 북마크 거점은 저장값의 거점만 바꾼다 (다른 파라미터는 이번에만)
     writeSettingsRaw(JSON.stringify({ ...parseSettings(readSettingsRaw()), hubId: init.saveHub }));
@@ -26,12 +33,16 @@ export function useSettings() {
 
   useEffect(() => {
     if (!touched.current) return;
-    writeSettingsRaw(JSON.stringify(settings));
-  }, [settings]);
+    writeSettingsRaw(JSON.stringify(settingsToSave(init.base, settings, own.current)));
+  }, [settings, init.base]);
 
   const update = useCallback((fn: (s: Settings) => Settings) => {
     touched.current = true;
-    setSettings(fn);
+    setSettings((prev) => {
+      const next = fn(prev);
+      own.current = noteOwnership(own.current, prev, next);
+      return next;
+    });
   }, []);
 
   /**

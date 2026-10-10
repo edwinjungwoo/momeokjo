@@ -2,6 +2,7 @@ import { StrictMode, Suspense, lazy } from "react";
 import { createRoot } from "react-dom/client";
 import { isAdminPath } from "../shared/share";
 import App from "./App";
+import { AppErrorBoundary } from "./components/AppErrorBoundary";
 import { loadKakaoMaps } from "./kakaoLoader";
 import "./styles.css";
 
@@ -31,7 +32,10 @@ createRoot(document.getElementById("root")!).render(
         <AdminPage />
       </Suspense>
     ) : (
-      <App />
+      // 그리다 던져도 흰 화면이 되지 않게 (예: 이상한 링크 — Task 56)
+      <AppErrorBoundary>
+        <App />
+      </AppErrorBoundary>
     )}
   </StrictMode>,
 );

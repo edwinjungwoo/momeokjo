@@ -2,7 +2,8 @@ import { describe, expect, it, vi } from "vitest";
 import { MAX_RADIUS, MIN_RADIUS, PREWARM_RADIUS, isValidRadius } from "../../shared/constants";
 import { DEFAULT_FILTERS } from "../../shared/recommend";
 import {
-  DEFAULT_SETTINGS, applyShareParams, needsHubPicker, parseSettings, resolveStart, showHubPicker, urlAfterHubChange,
+  DEFAULT_SETTINGS, applyShareParams, needsHubPicker, noteOwnership, parseSettings, resolveStart, settingsToSave, showHubPicker,
+  urlAfterHubChange,
 } from "../../shared/settings";
 import { isHubId } from "../../shared/hubs";
 import { UNREADY_HUB } from "../helpers/unreadyHub";
@@ -132,6 +133,43 @@ describe("settings", () => {
     expect(old.settings.hubId).toBe("ddp");
     expect(old.saveHub).toBeNull();
     expect(old.replaceUrl).toBe("/");
+  });
+
+  it("R25/R43: 공유 링크가 이번에만 바꾼 거점·반경은 받은 사람이 다른 필터(인원·정렬)를 바꿔도 저장하지 않는다 — 사용자가 바꾼 것만 저장", () => {
+    const stored = JSON.stringify({ filters: { ...DEFAULT_FILTERS, radius: 500, party: 1 }, hubId: "bongeunsa" });
+    const start = resolveStart(stored, "/pangyo", "?t=1,2&r=300");
+    expect(start.settings).toMatchObject({ hubId: "pangyo", filters: { radius: 300 } });
+    expect(start.base).toMatchObject({ hubId: "bongeunsa", filters: { radius: 500 } });
+    let own = { hubId: false, radius: false };
+    // 인원 3명 → 저장값의 거점·반경 그대로, 인원만
+    const party = { ...start.settings, filters: { ...start.settings.filters, party: 3 as const } };
+    own = noteOwnership(own, start.settings, party);
+    expect(settingsToSave(start.base, party, own)).toMatchObject({ hubId: "bongeunsa", filters: { radius: 500, party: 3 } });
+    // 반경을 바꾸면 그 반경을 저장한다 (거점은 아직 저장값)
+    const radius = { ...party, filters: { ...party.filters, radius: 400 } };
+    own = noteOwnership(own, party, radius);
+    expect(settingsToSave(start.base, radius, own)).toMatchObject({ hubId: "bongeunsa", filters: { radius: 400, party: 3 } });
+    // 거점을 바꿨다가 공유 링크 거점으로 돌아와도 손으로 고른 거점이라 저장한다
+    const ddp = { ...radius, hubId: "ddp" };
+    own = noteOwnership(own, radius, ddp);
+    const back = { ...ddp, hubId: "pangyo" };
+    own = noteOwnership(own, ddp, back);
+    expect(settingsToSave(start.base, back, own)).toMatchObject({ hubId: "pangyo", filters: { radius: 400 } });
+    // 같은 값이면 표시를 바꾸지 않는다
+    expect(noteOwnership({ hubId: false, radius: false }, party, party)).toEqual({ hubId: false, radius: false });
+  });
+
+  it("R43/R61: 저장할 기준(base)은 저장값 + 이번에 저장한 거점 (북마크 경로·거점 선택이 없는 기기의 공유 링크 거점)", () => {
+    const stored = JSON.stringify({ filters: { ...DEFAULT_FILTERS, radius: 600 }, hubId: "ddp" });
+    expect(resolveStart(stored, "/pangyo", "?r=700").base).toMatchObject({ hubId: "pangyo", filters: { radius: 600 } });
+    expect(resolveStart(null, "/naebang", "?t=1&r=300").base).toMatchObject({ hubId: "naebang", filters: { radius: DEFAULT_SETTINGS.filters.radius } });
+  });
+
+  it("R43: 주소창을 바꿀 값은 언제나 같은 사이트의 경로 — //x·/\\x 같은 경로(다른 호스트로 풀린다)는 /로 (replaceState가 던져 화면이 비지 않게)", () => {
+    expect(resolveStart(null, "//x", "?r=500").replaceUrl).toBe("/");
+    expect(resolveStart(null, "/\\x", "?r=500").replaceUrl).toBe("/");
+    expect(resolveStart(null, "/pangyo/", "?r=700").replaceUrl).toBe("/pangyo/");
+    expect(resolveStart(null, "/brand", "?r=700").replaceUrl).toBe("/brand");
   });
 
   it("R43/R25: 모르는 경로와 파라미터 없는 루트는 저장값 그대로", () => {
