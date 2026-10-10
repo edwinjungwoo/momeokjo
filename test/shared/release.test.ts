@@ -344,6 +344,14 @@ describe("infra: 롤백 전에 한 번 더 (일시 FAIL 거르기)", () => {
     });
   });
 
+  it("infra: 처음과 다시 돌린 새 FAIL이 모두 연결 실패(000)면 롤백하지 않고 manual — 운영자 쪽 네트워크가 끊긴 것일 수 있다 (좋은 배포를 되돌리지 않게)", () => {
+    expect(confirmRollback({ first: [FAIL_PLACES_000, FAIL_AUDIT_000], rerun: s([FAIL_PLACES_000, FAIL_AUDIT_000]), baseline: [], hubIds: HUBS }))
+      .toMatchObject({ action: "manual", newFails: [FAIL_PLACES_000, FAIL_AUDIT_000] });
+    // 한 번이라도 서버가 답한 실패(500)가 있으면 그대로 롤백
+    expect(confirmRollback({ first: [FAIL_PLACES_500], rerun: s([FAIL_PLACES_000]), baseline: [], hubIds: HUBS })).toMatchObject({ action: "rollback" });
+    expect(confirmRollback({ first: [FAIL_PLACES_000], rerun: s([FAIL_PLACES_500]), baseline: [], hubIds: HUBS })).toMatchObject({ action: "rollback" });
+  });
+
   it("infra: 다시 돌리니 사라졌으면 그대로 (일시 FAIL)", () => {
     expect(confirmRollback({ first: [FAIL_PLACES_500], rerun: s([]), baseline: [], hubIds: HUBS })).toMatchObject({ action: "keep" });
   });

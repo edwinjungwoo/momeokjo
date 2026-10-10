@@ -264,11 +264,15 @@ export function shouldRollback({ code, summary, fails = [], baseline = [], hubId
   return { action: "keep", reason: `새 FAIL 없음 (FAIL ${summary.fails} · WARN ${summary.warns})`, newFails: [] };
 }
 
+/** curl이 응답을 받지 못한 확인 (smoke.sh가 000으로 적는다 — DNS·연결·TLS 실패, 서버가 답한 5xx와 다르다) */
+const isConnectFail = (line) => /→\s*000\b/.test(stripAnsi(line));
+
 /**
  * 처음 스모크에서 rollback이 나왔을 때, RECHECK_MS 뒤 다시 돌린 스모크로 확정한다.
  * 다시 돌려도 남은 새 코드 FAIL(처음 것과 같은 확인 = 교집합)이 있을 때만 rollback.
  * - 다시 돌린 결과를 못 읽음 → manual
  * - 새 코드 FAIL이 있지만 처음 것과 겹치지 않음(흔들림) → manual
+ * - 처음과 다시 돌린 새 FAIL이 모두 연결 실패(000) → manual (운영자 쪽 네트워크일 수 있다)
  * - 남은 새 FAIL이 데이터 상태 신호뿐 → data
  * - 사라짐 → keep (일시 FAIL)
  * @param {{ first: string[], rerun: { code: number, summary: { requests: number, fails: number, warns: number } | null, fails: string[] }, baseline: string[], hubIds: string[] }} input
@@ -279,6 +283,10 @@ export function confirmRollback({ first, rerun, baseline, hubIds }) {
   if (v.action === "rollback") {
     const firstKeys = new Set(first.map(smokeFailKey));
     const persistent = v.newFails.filter((l) => firstKeys.has(smokeFailKey(l)));
+    // 두 번 모두 연결 실패(curl 000)뿐이면 서버가 아니라 운영자 쪽 네트워크일 수 있다 — 좋은 배포를 되돌리지 않게 사람이 본다 (Task 56)
+    if (persistent.length && [...first, ...persistent].every(isConnectFail)) {
+      return { action: "manual", reason: "새 FAIL이 모두 연결 실패(000)예요 — 이 컴퓨터의 네트워크일 수 있어 자동 롤백하지 않아요", newFails: persistent };
+    }
     if (persistent.length) return { action: "rollback", reason: `다시 돌려도 남은 새 FAIL ${persistent.length}개`, newFails: persistent };
     return { action: "manual", reason: "다시 돌리니 처음과 다른 새 FAIL이 보여요 (결과가 흔들려요)", newFails: v.newFails };
   }
@@ -609,12 +617,12 @@ export async function runRelease(opts, deps) {
     if (head !== remote) throw new Stop(`HEAD(${head.slice(0, 7)})가 origin/${branch}(${remote.slice(0, 7)})와 달라요 — 푸시(또는 pull)해서 맞춘 뒤 다시 하세요`);
     return head;
   };
-  // 기준 실행에만 SMOKE_BASELINE=1: 로컬 hubs.ts(새 코드)와 운영(이전 코드)의 ready 차이를 FAIL이 아니라 WARN으로 (smoke.sh 머리말)
+  // 기준 실행에만 SMOKE_BASELINE=1: 로컬 hubs.ts(새 코드)와 운영(이전 코드)의 ready 차이를 FAIL이 아니라 WARN으로 (smoke.sh 머리말).
+  // 스모크 변수는 늘 정해서 넘긴다 — 실행기(deploy.mjs)는 process.env 위에 더하므로 운영자 셸에 남은 SMOKE_BASELINE=1(배포 뒤도 너그러워져
+  // 롤백할 회귀를 놓침)·SMOKE_AUDIT_ALL=1(모든 거점 감사 — R67이 줄인 D1 읽기)·SMOKE_AUDIT_PICK이 새지 않게 (Task 56)
   const auditPick = smokeAuditPick(smokeHubIds, startedAt);
   const runSmoke = async ({ baseline = false } = {}) => {
-    const env = { B: PROD_URL };
-    if (baseline) env.SMOKE_BASELINE = "1";
-    if (auditPick) env.SMOKE_AUDIT_PICK = auditPick;
+    const env = { B: PROD_URL, SMOKE_BASELINE: baseline ? "1" : "0", SMOKE_AUDIT_ALL: "", SMOKE_AUDIT_PICK: auditPick ?? "" };
     if (deps.adminToken) env.ADMIN_TOKEN = deps.adminToken;
     const r = await exec("bash", ["scripts/smoke.sh"], { echo: true, env });
     return { code: r.code, summary: parseSmokeSummary(r.all), fails: parseSmokeFails(r.all) };
@@ -693,6 +701,10 @@ export async function runRelease(opts, deps) {
       if (!(await deps.confirm("위 계획대로 운영에 반영할까요? (y/N) "))) throw new Stop("취소했어요 — 운영은 바꾸지 않았어요");
     }
 
+    // 롤백 대상은 마이그레이션을 적용하기 전에 정한다 — 트래픽이 나뉘어 있으면(점진 배포 중) 스키마를 바꾸기 전에 멈추게 (Task 56)
+    const previous = await activeVersion();
+    summary.previousVersion = previous;
+
     if (pending.length) {
       state.touchedProd = true;
       const r = await exec("npx", ["wrangler", "d1", "migrations", "apply", DB_NAME, "--remote"], { echo: true });
@@ -722,10 +734,8 @@ export async function runRelease(opts, deps) {
       log(`  ok 적용·확인: ${pending.join(", ")}`);
     }
 
-    // 4. 롤백 대상 기록
+    // 4. 롤백 대상 기록 (적용 전에 읽은 값)
     log("== 4. 롤백 대상 기록");
-    const previous = await activeVersion();
-    summary.previousVersion = previous;
     log(`  지금 활성 버전(롤백 대상): ${previous}`);
     const triggers = await previousTriggers(previous);
 

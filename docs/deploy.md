@@ -40,8 +40,8 @@ npm run release -- --yes       # 묻지 않고 진행 (터미널이 아니면 --
    - SQL에 되돌릴 수 없는 문장이 있으면 거절 (`--allow-destructive`로만 허용).
    - `scripts/migrationChecks.mjs`에 등록된 객체가 **적용 전에 이미 있으면** 멈춰요 (일부만 적용된 상태 — 손으로 맞춰요. 예: 0003이 남았는데 `meta` 테이블이 있음).
    - 계획을 보여주고 확인을 받은 뒤 `wrangler d1 migrations apply momeokjo --remote`.
-   - 다시 목록을 읽어 **남은 것이 없어야** 하고, 등록된 사후 확인(0003 → `meta`·`idx_places_status_fetched_at`, 0004 → `events`·인덱스 2개, 0005 → `places.list_json` 열, 0008 → `places.interval_weeks`·`fp`·`due_after` 열과 `idx_places_status_due`)이 **모두 있어야** 해요. 하나라도 틀리면 배포 전에 멈춰요.
-4. **롤백 대상 기록** — `wrangler deployments list --json`에서 가장 최근 배포의 100% 버전. 트래픽이 나뉘어 있으면(점진 배포 중) 멈춰요. 그 버전을 배포한 커밋을 `docs/deploys.md`(버전 칸 → 커밋 칸)에서 찾아 `git show <커밋>:wrangler.jsonc`의 `crons`를 이번 배포(지금 `wrangler.jsonc`)와 비교해 알려요(Task 56) — 같으면 `ok`, 다르면 "자동 롤백하면 트리거를 손으로 되돌려야 해요", 커밋을 못 찾거나 읽지 못하면 "비교하지 못했어요". `--dry-run`도 같이 보여줘요.
+   - 다시 목록을 읽어 **남은 것이 없어야** 하고, 등록된 사후 확인(0003 → `meta`·`idx_places_status_fetched_at`, 0004 → `events`·인덱스 2개, 0005 → `places.list_json` 열, 0006 → `daily_stats`·`anon_first_seen`, 0007 → `hub_snapshots`, 0008 → `places.interval_weeks`·`fp`·`due_after` 열과 `idx_places_status_due`)이 **모두 있어야** 해요. 하나라도 틀리면 배포 전에 멈춰요.
+4. **롤백 대상 기록** — `wrangler deployments list --json`에서 가장 최근 배포의 100% 버전. 이 읽기는 3의 적용(`migrations apply`) **전에** 해요(Task 56) — 트래픽이 나뉘어 있으면(점진 배포 중) 스키마를 바꾸기 전에 멈춰요(1). 그 버전을 배포한 커밋을 `docs/deploys.md`(버전 칸 → 커밋 칸)에서 찾아 `git show <커밋>:wrangler.jsonc`의 `crons`를 이번 배포(지금 `wrangler.jsonc`)와 비교해 알려요(Task 56) — 같으면 `ok`, 다르면 "자동 롤백하면 트리거를 손으로 되돌려야 해요", 커밋을 못 찾거나 읽지 못하면 "비교하지 못했어요". `--dry-run`도 같이 보여줘요.
 5. **기준 스모크** — 배포 전에 지금 운영(이전 코드)으로 `scripts/smoke.sh`를 한 번 돌려요. 배포 뒤 결과와 비교할 기준이에요. 결과를 못 읽으면 배포하지 않아요. FAIL이 있으면 그 줄을 보여주고, 그중 **코드 수준** FAIL이 하나라도 있으면 `--accept-baseline-fails` 없이는 배포 전에 멈춰요(1). `--yes`로 도는 비대화식 실행도 마찬가지예요 — 빨간 기준 위에 배포하려면 사람이 플래그로 정해야 해요. 기준 FAIL이 **모두 데이터 상태 신호**(아래 8)면 경고로만 보여주고 플래그 없이 진행해요.
 6. **배포** — 확인 질문·기준 스모크 사이에 작업 트리가 더러워졌거나 HEAD가 바뀌지 않았는지(= origin) 다시 본 뒤 `npm run deploy` (vite build && wrangler deploy). 출력의 `Current Version ID:`로 새 버전을 읽어요(없으면 deployments list로 확인).
    - 배포 명령이 실패하면 활성 버전을 다시 보고, 그대로면 "반영 안 됨"(1), 바뀌었으면 확인 필요(3).
@@ -58,7 +58,9 @@ npm run release -- --yes       # 묻지 않고 진행 (터미널이 아니면 --
      - 준비 중 거점(R62)의 감사는 FAIL이 아니라 `info` 줄이라 여기에 들어오지 않아요.
    - 배포 전부터 있던 FAIL만 남았으면 성공("기준 FAIL n 그대로").
    - 요약 줄을 못 읽거나 FAIL 줄 수가 요약과 다르면 운영을 함부로 되돌리지 않고 확인 필요(3).
-   - 스모크를 두 번(새 FAIL이 보이면 세 번) 돌리니 요청은 약 50~75번(+ 토큰이 있으면 감사 거점 수 × 2~3)이에요.
+   - 스모크 한 번의 요청은 15번 + 거점마다 1번(지금 14곳) + 토큰이 있으면 감사(공개 거점 한 곳 + 준비 중·공개 예정 거점, R67) ≈ 30번이라, 두 번(새 FAIL이 보이면 세 번) 돌리면 약 60번(~90번)이에요.
+   - 스모크 변수(`SMOKE_BASELINE`·`SMOKE_AUDIT_ALL`·`SMOKE_AUDIT_PICK`)는 release가 실행마다 정해서 넘겨요(Task 56) — 셸에 남은 `SMOKE_BASELINE=1`이 배포 뒤 스모크를 너그럽게 만들거나 `SMOKE_AUDIT_ALL=1`이 모든 거점을 감사하지 않게.
+   - 처음과 다시 돌린 스모크의 새 FAIL이 **모두 연결 실패(`→ 000`)**면 이 컴퓨터의 네트워크가 끊긴 것일 수 있어 롤백하지 않고 확인 필요(3) + 롤백 명령이에요(Task 56). 서버가 답한 실패(5xx 등)가 한 번이라도 있으면 그대로 롤백해요.
    - R67(2026-10-10): 감사는 거점마다 D1 ~8천~1.6만 행을 읽어서, 준비 중·공개 예정 거점은 모두 보고 이미 공개된 거점은 **한 곳만** 봐요(release가 UTC 날짜로 골라 `SMOKE_AUDIT_PICK`으로 기준·배포 뒤 스모크에 같은 값을 줘요 — 비교가 맞게). 14곳을 다 보던 때 release 한 번에 ~20만 행이던 감사 읽기가 ~2만 행 안쪽이에요. 모든 거점을 보려면 `SMOKE_AUDIT_ALL=1 scripts/smoke.sh`(직접 실행).
 9. **요약·기록** — 버전(이전 → 새), 적용한 마이그레이션, 후속 작업 결과, 기준·배포 뒤 스모크, 롤백 대상, 걸린 시간. 운영을 바꿨으면(마이그레이션 적용이나 배포를 시도했으면) `docs/deploys.md`에 한 줄을 더해요. 적용이 실패한 마이그레이션은 `0005_list_json (적용 실패)`처럼 남아요.
 
@@ -210,7 +212,7 @@ npm run typecheck && npm test && npm run build
 npx wrangler secret list         # KAKAO_REST_KEY, ADMIN_TOKEN 이름만 확인
 npx wrangler d1 execute momeokjo --remote --command "SELECT 1"     # 7500이면 09:00 KST 뒤에
 npx wrangler d1 migrations list momeokjo --remote
-npx wrangler d1 execute momeokjo --remote --command "SELECT type,name FROM sqlite_master WHERE name IN ('meta','events','idx_places_status_fetched_at','idx_events_day','idx_events_type_day','idx_places_status_due')"
+npx wrangler d1 execute momeokjo --remote --command "SELECT type,name FROM sqlite_master WHERE name IN ('meta','events','idx_places_status_fetched_at','idx_events_day','idx_events_type_day','daily_stats','anon_first_seen','hub_snapshots','idx_places_status_due')"
 #   남은 마이그레이션의 객체가 이미 있으면 멈추고 손으로 맞춰요
 npx wrangler d1 migrations apply momeokjo --remote   # 완전히 성공해야 해요. 다시 list → 남은 것 없음, 위 확인 쿼리·PRAGMA table_info(places)
 npx wrangler deployments list    # 지금 100% 버전 id를 적어 둬요 (롤백 대상)

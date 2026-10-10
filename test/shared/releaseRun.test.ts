@@ -146,8 +146,9 @@ describe("infra: npm run release — 정상 흐름", () => {
       "npx wrangler secret list",
       "npx wrangler d1 execute momeokjo --remote --json --command SELECT 1",
       "npx wrangler d1 migrations list",
-      "npx wrangler d1 migrations apply momeokjo --remote",
+      // 롤백 대상은 적용 전에 정한다 (트래픽이 나뉘었으면 스키마를 바꾸기 전에 멈추게)
       "npx wrangler deployments list --json",
+      "npx wrangler d1 migrations apply momeokjo --remote",
       "bash scripts/smoke.sh", // 기준 스모크 (배포 전)
       "npm run deploy",
       "node scripts/backfill.mjs --hub bongeunsa --limit 150",
@@ -370,11 +371,13 @@ describe("infra: npm run release — 배포 전 중단", () => {
     expect((await runRelease(opts({ yes: false }), yes.deps)).code).toBe(0);
   });
 
-  it("infra: 트래픽이 나뉘어 롤백 대상을 못 정하면 배포하지 않는다", async () => {
+  it("infra: 트래픽이 나뉘어 롤백 대상을 못 정하면 배포하지 않는다 — 마이그레이션을 적용하기 전에 멈춘다 (스키마를 바꾸고 1로 끝나지 않게)", async () => {
     const split = JSON.stringify([{ created_on: "2026-10-06T00:00:00Z", versions: [{ version_id: "a", percentage: 50 }, { version_id: "b", percentage: 50 }] }]);
     const h = harness({ "npx wrangler deployments list --json": ok(split) });
     expect((await runRelease(opts(), h.deps)).code).toBe(1);
     deployedNothing(h);
+    expect(h.ran("npx wrangler d1 migrations apply")).toHaveLength(0);
+    expect(h.appended).toEqual([]);
   });
 
   it("infra: 배포 명령이 실패하고 활성 버전이 그대로면 '배포 안 됨'(1), 롤백하지 않는다", async () => {
@@ -540,7 +543,8 @@ describe("infra: npm run release — 기준 스모크와 자동 롤백", () => {
     const smokeCalls = h.ran("bash scripts/smoke.sh");
     expect(smokeCalls).toHaveLength(2);
     expect(smokeCalls[0].env.SMOKE_BASELINE).toBe("1");
-    expect(smokeCalls[1].env.SMOKE_BASELINE).toBeUndefined();
+    // 배포 뒤 스모크는 운영자 셸에 남은 SMOKE_BASELINE=1을 덮어 늘 엄격하다 (deploy.mjs는 process.env 위에 더한다)
+    expect(smokeCalls[1].env.SMOKE_BASELINE).toBe("0");
   });
 
   it("R67: 스모크 감사는 공개 거점 한 곳만 — release가 고른 거점(SMOKE_AUDIT_PICK)을 기준·배포 뒤 스모크에 같은 값으로 준다", async () => {
@@ -548,6 +552,8 @@ describe("infra: npm run release — 기준 스모크와 자동 롤백", () => {
     const res = await runRelease(opts(), h.deps);
     expect(res.code).toBe(0);
     const picks = h.ran("bash scripts/smoke.sh").map((c) => c.env.SMOKE_AUDIT_PICK);
+    // 운영자 셸에 남은 SMOKE_AUDIT_ALL=1(모든 거점 감사 — R67이 줄인 D1 읽기를 되살린다)은 덮어 끈다
+    expect(h.ran("bash scripts/smoke.sh").map((c) => c.env.SMOKE_AUDIT_ALL)).toEqual(["", ""]);
     expect(picks).toHaveLength(2);
     expect(picks[0]).toBe(picks[1]);
     expect(["bongeunsa", "ddp", "pangyo"]).toContain(picks[0]);
@@ -562,7 +568,7 @@ describe("infra: npm run release — 기준 스모크와 자동 롤백", () => {
     expect(res.code).toBe(2);
     expect(h.ran("npx wrangler rollback")).toHaveLength(1);
     // 기준·배포 뒤·다시 돌린 것 중 기준만 SMOKE_BASELINE
-    expect(h.ran("bash scripts/smoke.sh").map((c) => c.env.SMOKE_BASELINE)).toEqual(["1", undefined, undefined]);
+    expect(h.ran("bash scripts/smoke.sh").map((c) => c.env.SMOKE_BASELINE)).toEqual(["1", "0", "0"]);
   });
 
   it("R62: 준비 중 거점이 배포 뒤에 200이면(숨김이 새는 코드) 새 코드 FAIL이라 롤백한다", async () => {
