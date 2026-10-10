@@ -2,7 +2,8 @@ import { describe, expect, it } from "vitest";
 import { DETAIL_OK_TTL_MS } from "../../shared/constants";
 import {
   DEVICE_CACHE_VERSION, PLACES_CACHE_FRESH_MS, PLACES_CACHE_MAX_AGE_MS, PLACES_CACHE_MAX_CHARS, PLACES_CACHE_MAX_HUBS,
-  hubListView, mergeCachedPlaces, placesCacheEntry, placesCacheEvictions, placesDataAt, readPlacesCache, type PlacesMergeState,
+  hubListView, mergeCachedPlaces, placesCacheEntry, placesCacheEvictions, placesDataAt, readPlacesCache, unusableCachedPlaces,
+  type PlacesMergeState,
 } from "../../shared/placesCache";
 
 const NOW = 1_800_000_000_000;
@@ -57,8 +58,28 @@ describe("placesCache", () => {
     const entries = [
       { hub: "a", savedAt: 1 }, { hub: "b", savedAt: 5 }, { hub: "c", savedAt: 3 }, { hub: "d", savedAt: 4 }, { hub: "keep", savedAt: 0 },
     ];
-    expect(placesCacheEvictions(entries, "keep").sort()).toEqual(["a", "c"]);
-    expect(placesCacheEvictions([{ hub: "keep", savedAt: 1 }, { hub: "x", savedAt: 2 }], "keep")).toEqual([]);
+    expect(placesCacheEvictions(entries, "keep", 10).sort()).toEqual(["a", "c"]);
+    expect(placesCacheEvictions([{ hub: "keep", savedAt: 1 }, { hub: "x", savedAt: 2 }], "keep", 10)).toEqual([]);
+  });
+
+  it("R45/§3.1: 저장할 때 3일(PLACES_CACHE_MAX_AGE_MS) 넘은 다른 거점 저장본은 거점 수와 상관없이 지운다 (미래 시각도) — 카카오 표시 정보를 기기에 3일 넘게 남기지 않는다", () => {
+    const entries = [
+      { hub: "old", savedAt: NOW - PLACES_CACHE_MAX_AGE_MS - 1 },
+      { hub: "edge", savedAt: NOW - PLACES_CACHE_MAX_AGE_MS },
+      { hub: "future", savedAt: NOW + HOUR },
+      { hub: "keep", savedAt: NOW },
+    ];
+    expect(placesCacheEvictions(entries, "keep", NOW).sort()).toEqual(["future", "old"]);
+  });
+
+  it("R45/§3.1: 읽은 저장본이 쓸 수 없으면(3일 넘음·미래 시각·예전 판·깨짐) 지울 것으로 본다 — 없으면(undefined) 아무것도 하지 않는다", () => {
+    const entry = placesCacheEntry("ddp", '{"places":[]}', NOW)!;
+    expect(unusableCachedPlaces(entry, "ddp", NOW + PLACES_CACHE_MAX_AGE_MS)).toBe(false);
+    expect(unusableCachedPlaces(entry, "ddp", NOW + PLACES_CACHE_MAX_AGE_MS + 1)).toBe(true);
+    expect(unusableCachedPlaces(entry, "ddp", NOW - 1)).toBe(true);
+    expect(unusableCachedPlaces({ ...entry, v: DEVICE_CACHE_VERSION + 1 }, "ddp", NOW)).toBe(true);
+    expect(unusableCachedPlaces("broken", "ddp", NOW)).toBe(true);
+    expect(unusableCachedPlaces(undefined, "ddp", NOW)).toBe(false);
   });
 
   describe("mergeCachedPlaces", () => {

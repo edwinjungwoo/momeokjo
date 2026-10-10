@@ -1,4 +1,6 @@
-import { placesCacheEntry, placesCacheEvictions, readPlacesCache, usableEtag, type CachedPlacesView } from "../shared/placesCache";
+import {
+  placesCacheEntry, placesCacheEvictions, readPlacesCache, unusableCachedPlaces, usableEtag, type CachedPlacesView,
+} from "../shared/placesCache";
 
 /**
  * R45: 거점별 마지막 목록 응답을 IndexedDB에 둔다 (원문 0.6~1.0MB × 최대 3곳이라 localStorage 5MB에는 빠듯하다).
@@ -96,7 +98,10 @@ export function writeCachedEtag(hub: string, etag: string | null | undefined): v
   }
 }
 
-/** 이 거점의 쓸 수 있는 저장본 (없거나 못 읽으면 null) */
+/**
+ * 이 거점의 쓸 수 있는 저장본 (없거나 못 읽으면 null). 있는데 쓸 수 없으면(3일 넘음·예전 판 — §3.1) 그 저장본과 ETag 키를 지운다
+ * (쓰지 않는 카카오 표시 정보가 기기에 남지 않게 — 다른 거점의 지난 저장본은 saveCachedPlaces가 지운다)
+ */
 export async function readCachedPlaces(hub: string): Promise<CachedPlacesView | null> {
   let p: Promise<IDBDatabase | null> | null = null;
   let db: IDBDatabase | null = null;
@@ -105,14 +110,20 @@ export async function readCachedPlaces(hub: string): Promise<CachedPlacesView | 
     db = await p;
     if (!db) return null;
     const raw = await done(db.transaction(STORE, "readonly").objectStore(STORE).get(hub));
-    return readPlacesCache(raw, hub, Date.now());
+    const now = Date.now();
+    if (unusableCachedPlaces(raw, hub, now)) {
+      writeCachedEtag(hub, null);
+      await done(db.transaction(STORE, "readwrite").objectStore(STORE).delete(hub));
+      return null;
+    }
+    return readPlacesCache(raw, hub, now);
   } catch {
     resetDb(p, db);
     return null;
   }
 }
 
-/** 응답 원문(과 R56 ETag)을 저장하고, 오래된 거점은 지운다 (최근 3곳) */
+/** 응답 원문(과 R56 ETag)을 저장하고, 오래된 거점은 지운다 (최근 3곳, 3일 넘은 것은 모두 — §3.1) */
 export async function saveCachedPlaces(hub: string, text: string, etag?: string | null): Promise<void> {
   let p: Promise<IDBDatabase | null> | null = null;
   let db: IDBDatabase | null = null;
@@ -135,7 +146,7 @@ export async function saveCachedPlaces(hub: string, text: string, etag?: string 
         const c = cur.result;
         if (!c) {
           // 트랜잭션이 살아 있는 이 콜백 안에서 지운다
-          for (const h of placesCacheEvictions(meta, hub)) {
+          for (const h of placesCacheEvictions(meta, hub, Date.now())) {
             store.delete(h);
             writeCachedEtag(h, null);
           }

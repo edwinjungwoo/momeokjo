@@ -48,10 +48,22 @@ export function readPlacesCache(raw: unknown, hub: string, now: number): CachedP
   return { text: e.text, savedAt: e.savedAt, fresh: age <= PLACES_CACHE_FRESH_MS, ...(validEtag(e.etag) ? { etag: e.etag } : {}) };
 }
 
-/** 저장 뒤 지울 거점: 방금 저장한 거점은 남기고, 나머지는 최근 저장 순으로 MAX_HUBS개까지만 */
-export function placesCacheEvictions(entries: { hub: string; savedAt: number }[], keep: string): string[] {
+/**
+ * 읽은 값이 있는데 쓸 수 없는 저장본인가 (3일 넘음·미래 시각·예전 판·깨짐) — 지운다. §3.1: 카카오에서 온 표시 정보는
+ * 기기에 3일보다 오래 쓰지도 남기지도 않는다 (R65 이름 기억 tidyPersonal과 같다). 없으면(undefined) 지울 것도 없다
+ */
+export function unusableCachedPlaces(raw: unknown, hub: string, now: number): boolean {
+  return raw !== undefined && readPlacesCache(raw, hub, now) === null;
+}
+
+/**
+ * 저장 뒤 지울 거점: 방금 저장한 거점은 남기고, 나머지는 최근 저장 순으로 MAX_HUBS개까지만.
+ * 3일(PLACES_CACHE_MAX_AGE_MS)이 넘었거나 저장 시각이 미래인 저장본은 거점 수와 상관없이 지운다 (§3.1)
+ */
+export function placesCacheEvictions(entries: { hub: string; savedAt: number }[], keep: string, now: number): string[] {
   const others = entries.filter((e) => e.hub !== keep).sort((a, b) => b.savedAt - a.savedAt);
-  return others.slice(PLACES_CACHE_MAX_HUBS - 1).map((e) => e.hub);
+  const expired = (e: { savedAt: number }) => now - e.savedAt > PLACES_CACHE_MAX_AGE_MS || e.savedAt > now;
+  return others.filter((e, i) => i >= PLACES_CACHE_MAX_HUBS - 1 || expired(e)).map((e) => e.hub);
 }
 
 /** 화면 상태 중 저장본을 합칠 때 보는 부분 (data의 모양은 여기서 보지 않는다) */

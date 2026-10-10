@@ -138,3 +138,46 @@ describe("R45 기기 저장본 — 저장소 열기 실패", () => {
     expect(dbs[1].close).not.toHaveBeenCalled();
   });
 });
+
+describe("R45/§3.1 지난 저장본 지우기", () => {
+  it("R45/§3.1: 읽은 저장본이 3일 넘었으면 쓰지 않고 그 저장본과 ETag 키를 지운다 (쓰지 않는 카카오 표시 정보를 기기에 남기지 않는다)", async () => {
+    const DAY = 24 * 3600_000;
+    const store = new Map<string, unknown>([
+      ["ddp", { v: 1, hub: "ddp", savedAt: Date.now() - 3 * DAY - 60_000, text: '{"places":[]}', etag: '"e1"' }],
+      ["pangyo", { v: 1, hub: "pangyo", savedAt: Date.now() - 2 * DAY, text: '{"places":[]}', etag: '"e2"' }],
+    ]);
+    const etags = new Map([["mmj-places-etag:ddp", '"e1"'], ["mmj-places-etag:pangyo", '"e2"']]);
+    vi.stubGlobal("localStorage", {
+      getItem: (k: string) => etags.get(k) ?? null,
+      setItem: (k: string, v: string) => void etags.set(k, v),
+      removeItem: (k: string) => void etags.delete(k),
+    });
+    const request = (run: () => unknown) => {
+      const req: { result: unknown; onsuccess?: () => void; onerror?: () => void } = { result: undefined };
+      setTimeout(() => ((req.result = run()), req.onsuccess?.()), 0);
+      return req;
+    };
+    const db = {
+      close: vi.fn(),
+      transaction: () => ({
+        objectStore: () => ({ get: (k: string) => request(() => store.get(k)), delete: (k: string) => request(() => void store.delete(k)) }),
+      }),
+    };
+    vi.stubGlobal("indexedDB", {
+      open: () => {
+        const req: Record<string, any> = {};
+        setTimeout(() => ((req.result = db), req.onsuccess?.()), 0);
+        return req;
+      },
+    });
+    vi.resetModules();
+    const mod = await import("../../web/placesCache");
+    expect(await mod.readCachedPlaces("ddp")).toBeNull();
+    expect(store.has("ddp")).toBe(false);
+    expect(etags.has("mmj-places-etag:ddp")).toBe(false);
+    // 3일 안의 저장본은 그대로 쓴다
+    expect(await mod.readCachedPlaces("pangyo")).toMatchObject({ etag: '"e2"', fresh: false });
+    expect(store.has("pangyo")).toBe(true);
+    expect(etags.get("mmj-places-etag:pangyo")).toBe('"e2"');
+  });
+});
