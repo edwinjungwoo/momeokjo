@@ -54,5 +54,8 @@ export const GROUP_GLYPH: Record<CategoryGroup, string> = {
   etc: "🍴",
 };
 
-/** 카테고리 칩으로 노출하는 그룹 (술집은 별도 토글) */
-export const FILTER_GROUPS: CategoryGroup[] = ["korean", "chinese", "japanese", "western", "asian", "snack", "etc"];
+/** 카테고리 칩으로 노출하는 그룹 (술집은 별도 토글, 디저트는 목록에 없다). 설정 복원·이벤트 검증도 이 목록 하나를 쓴다 */
+export const FILTER_GROUPS = [
+  "korean", "chinese", "japanese", "western", "asian", "snack", "etc",
+] as const satisfies readonly Exclude<CategoryGroup, "bar" | "dessert">[];
+export type FilterGroup = (typeof FILTER_GROUPS)[number];

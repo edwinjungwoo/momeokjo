@@ -1,3 +1,4 @@
+import { FILTER_GROUPS } from "./category";
 import { isValidRadius } from "./constants";
 import { DEFAULT_HUB_ID, isPublicHubId } from "./hubs";
 import { DEFAULT_FILTERS, type Filters } from "./recommend";
@@ -9,7 +10,7 @@ export const DEFAULT_SETTINGS: Settings = { filters: DEFAULT_FILTERS, hubId: DEF
 
 // R45: 화면 번들에서 zod(gzip 약 22KB)를 빼려고 손으로 검증한다. 규칙은 예전 스키마와 같다:
 // 루트가 객체가 아니면 전체 기본값, filters가 객체가 아니면 필터 전체 기본값, 아니면 틀린 필드만 기본값 (모르는 키는 버린다)
-const GROUPS = new Set(["korean", "chinese", "japanese", "western", "asian", "snack", "etc"]);
+const GROUPS = new Set<unknown>(FILTER_GROUPS);
 const isObject = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null && !Array.isArray(v);
 const oneOf = <T>(v: unknown, allowed: readonly T[], fallback: T): T => (allowed.includes(v as T) ? (v as T) : fallback);
 const bool = (v: unknown, fallback: boolean) => (typeof v === "boolean" ? v : fallback);

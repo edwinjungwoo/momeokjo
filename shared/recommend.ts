@@ -1,6 +1,7 @@
 import { DEFAULT_RADIUS, MAX_RADIUS } from "./constants";
 import { isOpenDuring, kstParts } from "./hours";
-import type { ApiPlace, CategoryGroup } from "./types";
+import type { FilterGroup } from "./category";
+import type { ApiPlace } from "./types";
 
 export type Party = 1 | 2 | 3 | 4;
 export type PriceCap = "all" | 10000 | 15000 | 20000;
@@ -10,7 +11,8 @@ export type SortKey = "distance" | "rating" | "price";
 export type Filters = {
   radius: number;
   party: Party;
-  groups: CategoryGroup[];
+  /** 카테고리 칩으로 고른 그룹 (비면 전체) — 술집은 includeBar로 따로 */
+  groups: FilterGroup[];
   includeBar: boolean;
   priceCap: PriceCap;
   minRating: MinRating;
@@ -40,7 +42,7 @@ export function filterPlaces(places: ApiPlace[], f: Filters, now: Date): ApiPlac
     if ((p.distance ?? Infinity) > f.radius) return false;
     if (p.group === "bar") {
       if (!f.includeBar) return false;
-    } else if (f.groups.length > 0 && !f.groups.includes(p.group)) return false;
+    } else if (f.groups.length > 0 && !f.groups.some((g) => g === p.group)) return false;
     if (f.party >= 4 && p.group === "snack") return false;
     if (f.priceCap !== "all") {
       const price = p.detail?.price ?? null;
@@ -203,7 +205,7 @@ function violates(p: ApiPlace, f: Filters, step: RelaxStep): boolean {
       return f.priceCap !== "all" && (price === null || price > f.priceCap);
     }
     case "groups":
-      return f.groups.length > 0 && p.group !== "bar" && !f.groups.includes(p.group);
+      return f.groups.length > 0 && p.group !== "bar" && !f.groups.some((g) => g === p.group);
     case "radius":
       return (p.distance ?? Infinity) > f.radius;
   }

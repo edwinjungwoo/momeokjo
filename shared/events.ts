@@ -4,17 +4,15 @@ import { isValidRadius } from "./constants";
 import { isPublicHubId } from "./hubs";
 import { EVENT_TYPES, MAX_EVENTS_PER_REQUEST, UUIDISH, clampTs, type EventType } from "./eventCore";
 import { kstDayHour } from "./kst";
-import type { CategoryGroup } from "./types";
 
 export * from "./eventCore";
 
 const PLACE_ID = /^\d{1,15}$/;
-const GROUPS = FILTER_GROUPS as [CategoryGroup, ...CategoryGroup[]];
 
 export const EventPropsSchema = z.strictObject({
   radius: z.number().refine(isValidRadius).optional(),
   party: z.union([z.literal(1), z.literal(2), z.literal(3), z.literal(4)]).optional(),
-  groups: z.array(z.enum(GROUPS)).max(GROUPS.length).optional(),
+  groups: z.array(z.enum(FILTER_GROUPS)).max(FILTER_GROUPS.length).optional(),
   priceCap: z.enum(["all", "10000", "15000", "20000"]).optional(),
   minRating: z.union([z.literal(0), z.literal(3.5), z.literal(4)]).optional(),
   openOnly: z.boolean().optional(),

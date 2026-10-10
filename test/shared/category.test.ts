@@ -1,5 +1,6 @@
-import { describe, expect, it } from "vitest";
-import { GROUP_GLYPH, categoryGroup, lastLevel, secondLevel } from "../../shared/category";
+import { describe, expect, expectTypeOf, it } from "vitest";
+import { FILTER_GROUPS, GROUP_GLYPH, GROUP_LABEL, categoryGroup, lastLevel, secondLevel, type FilterGroup } from "../../shared/category";
+import { parseSettings } from "../../shared/settings";
 
 describe("category", () => {
   it.each([
@@ -36,5 +37,13 @@ describe("R33 사진 없는 자리의 카테고리 아이콘 (지도 칩과 같�
     expect(GROUP_GLYPH).toEqual({
       korean: "🍚", chinese: "🥟", japanese: "🍣", western: "🍝", asian: "🍜", snack: "🍔", bar: "🍺", dessert: "🍰", etc: "🍴",
     });
+  });
+
+  it("R5/R18: 카테고리 칩 그룹(FILTER_GROUPS)은 술집·디저트를 뺀 7개 — 타입도 그 7개뿐이고, 칩마다 라벨이 있고, 설정 복원도 이 목록만 받는다", () => {
+    expect(FILTER_GROUPS).toEqual(["korean", "chinese", "japanese", "western", "asian", "snack", "etc"]);
+    expectTypeOf<FilterGroup>().toEqualTypeOf<"korean" | "chinese" | "japanese" | "western" | "asian" | "snack" | "etc">();
+    for (const g of FILTER_GROUPS) expect(GROUP_LABEL[g], g).toBeTruthy();
+    expect(parseSettings(JSON.stringify({ filters: { groups: [...FILTER_GROUPS] } })).filters.groups).toEqual([...FILTER_GROUPS]);
+    for (const g of ["bar", "dessert"]) expect(parseSettings(JSON.stringify({ filters: { groups: [g] } })).filters.groups, g).toEqual([]);
   });
 });

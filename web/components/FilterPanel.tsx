@@ -1,9 +1,8 @@
 import type { CSSProperties } from "react";
-import { FILTER_GROUPS, GROUP_LABEL } from "../../shared/category";
+import { FILTER_GROUPS, GROUP_LABEL, type FilterGroup } from "../../shared/category";
 import { MAX_RADIUS, MIN_RADIUS, RADIUS_STEP } from "../../shared/constants";
 import { walkMinutes } from "../../shared/geo";
 import type { Filters, MinRating, Party, PriceCap } from "../../shared/recommend";
-import type { CategoryGroup } from "../../shared/types";
 import { detailSummary } from "../format";
 
 const PARTY: { v: Party; label: string }[] = [1, 2, 3, 4].map((v) => ({ v: v as Party, label: v === 4 ? "4명+" : `${v}명` }));
@@ -52,7 +51,7 @@ function Segmented<T extends string | number | null>({
 /** 항상 보이는 것: 반경, 인원, 카테고리. 나머지는 "상세 조건"에 접는다. */
 export function FilterPanel({ filters: f, onChange }: Props) {
   const set = (patch: Partial<Filters>) => onChange({ ...f, ...patch });
-  const toggleGroup = (g: CategoryGroup) =>
+  const toggleGroup = (g: FilterGroup) =>
     set({ groups: f.groups.includes(g) ? f.groups.filter((x) => x !== g) : [...f.groups, g] });
 
   return (
@@ -94,7 +93,7 @@ export function FilterPanel({ filters: f, onChange }: Props) {
           </button>
           {FILTER_GROUPS.map((g) => (
             <button key={g} type="button" className="chip" aria-pressed={f.groups.includes(g)} onClick={() => toggleGroup(g)}>
-              {GROUP_LABEL[g as Exclude<CategoryGroup, "dessert">]}
+              {GROUP_LABEL[g]}
             </button>
           ))}
         </div>
