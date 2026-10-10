@@ -653,9 +653,15 @@ export async function countUnfetched(db: D1Database, keys: string[]): Promise<nu
 export const countUnfetchedIn = (states: TilePlaceState[]) =>
   new Set(states.filter((t) => t.meta === null).map((t) => t.id)).size;
 
-/** Cron 만료 후보를 상태(ok/failed)마다 이만큼까지만 읽는다 (한 실행이 갱신하는 건 DETAIL_BATCH_SIZE곳뿐) */
-export const EXPIRED_SCAN_LIMIT = 300;
-/** 한 실행이 대상 행이 나올 때까지 읽는 쪽 수 (재설정 포함) — 상태마다 최대 3 × 300행 */
+/**
+ * Cron 만료 후보를 상태(ok/failed)마다 한 쪽에 이만큼까지만 읽는다 (한 실행이 갱신하는 건 DETAIL_BATCH_SIZE곳뿐).
+ * Task 58: 300 → 100 — 운영 상세만 실행의 읽기 ~1천 행 대부분이 이 쪽(~900행)이라 2026-10-09 오후에 읽기 몫(DETAIL_ONLY_READ_SHARE)에
+ * 닿아 멈췄다. 운영 크기 픽스처의 주간 갱신 중 실행 1,070 → 470행. 대신 한 실행은 상태마다 오래된 대상 100행 안에서 고르고(순서가 조금
+ * 거칠어질 뿐 대상은 모두 갱신된다), 재설정 뒤 대상 앞의 대상 아닌 행은 실행마다 ~300행씩 지난다(거점 밖 행 2천이면 7번째 실행 —
+ * cronReads.test.ts. 예전 900행씩 3번째 실행과 지나가는 읽기 합은 같다)
+ */
+export const EXPIRED_SCAN_LIMIT = 100;
+/** 한 실행이 대상 행이 나올 때까지 읽는 쪽 수 (재설정 포함) — 상태마다 최대 3 × 100행 */
 export const EXPIRED_RESET_PAGES = 3;
 /** 만료 후보 열 (R66 due_after·fp 포함). index: 범위를 읽을 인덱스 */
 const expiredCols = (index: string) => `SELECT p.rowid AS rid, p.id AS id, p.status AS status, p.fetched_at AS fetched_at,

@@ -160,17 +160,17 @@ describe("repo", () => {
     expect((await unfetchedStates(env.DB, [KA])).map((t) => [t.id, t.meta])).toEqual([["new", null]]);
   });
 
-  it("R11/R38: 만료 후보는 상태별로 fetched_at이 오래된 순 300개까지만 고른다", async () => {
-    const ids = Array.from({ length: 310 }, (_, i) => `k${i}`);
-    await seedMany(ids.map((id, i) => [id, START - 1 - (310 - i)]));
+  it("R11/R38: 만료 후보는 상태별로 fetched_at이 오래된 순 100개까지만 고른다 (Task 58: 300 → 100)", async () => {
+    const ids = Array.from({ length: 110 }, (_, i) => `k${i}`);
+    await seedMany(ids.map((id, i) => [id, START - 1 - (110 - i)]));
     await replaceTilePlaces(env.DB, KA, ids, NOW, false);
     await saveDetailFailure(env.DB, "f1", "http_500", NOW - DETAIL_FAIL_TTL_MS);
     await replaceTilePlaces(env.DB, KB, ["f1"], NOW, false);
     const expired = await expiredDetailStates(env.DB, [KA, KB], NOW);
     const ok = expired.filter((t) => t.meta?.status === "ok").map((t) => t.id);
     expect(ok).toHaveLength(EXPIRED_SCAN_LIMIT);
-    expect(EXPIRED_SCAN_LIMIT).toBe(300);
-    expect(ok).toEqual(ids.slice(0, 300));
+    expect(EXPIRED_SCAN_LIMIT).toBe(100);
+    expect(ok).toEqual(ids.slice(0, 100));
     expect(expired.filter((t) => t.meta?.status === "failed").map((t) => t.id)).toEqual(["f1"]);
   });
 
@@ -209,8 +209,9 @@ describe("repo", () => {
   }
 
   it("R11/R38: 거점 격자 밖 만료 행(갱신되지 않음)은 한 번 지나가면 다음 실행부터 읽지 않는다 — 격자 ID가 바뀌면 처음부터 다시", async () => {
-    await seedOutsideAndHub(400);
-    // 커서가 없거나 재설정되면 같은 실행에서 거점 행이 나올 때까지(최대 3 × 300행) 더 읽는다
+    // 한 쪽보다 많고 3쪽보다 적은 거점 밖 행 (Task 58: 쪽이 100행이라 200 — 예전 300행일 때 400)
+    await seedOutsideAndHub(2 * EXPIRED_SCAN_LIMIT);
+    // 커서가 없거나 재설정되면 같은 실행에서 거점 행이 나올 때까지(최대 3 × 100행) 더 읽는다
     expect(EXPIRED_RESET_PAGES).toBe(3);
     expect((await scan([KA])).ids).toEqual(["h1", "h2"]);
     // 그다음부터는 첫 거점 행부터 읽는다
@@ -222,8 +223,9 @@ describe("repo", () => {
     expect((await scan([KA])).ids).toEqual(["o0"]);
   });
 
-  it("R11/R38: 재설정 뒤에도 한 실행은 상태마다 3 × 300행까지만 읽고, 다음 실행이 그 자리부터 잇는다", async () => {
-    await seedOutsideAndHub(1000);
+  it("R11/R38: 재설정 뒤에도 한 실행은 상태마다 3 × 100행까지만 읽고, 다음 실행이 그 자리부터 잇는다", async () => {
+    // 3쪽보다 많은 거점 밖 행 (Task 58: 400 — 예전 300행 쪽일 때 1000)
+    await seedOutsideAndHub(EXPIRED_RESET_PAGES * EXPIRED_SCAN_LIMIT + 100);
     const first = await scan([KA]);
     expect(first.ids).toEqual([]);
     expect(first.read).toBeLessThanOrEqual(READS_PER_ROW * EXPIRED_RESET_PAGES * EXPIRED_SCAN_LIMIT + 10);
@@ -231,7 +233,7 @@ describe("repo", () => {
   });
 
   it("R11: 격자 ID가 바뀐 시각이 커서를 쓴 시각보다 이르게 기록돼도(경합) 값이 달라졌으면 처음부터 다시 훑는다", async () => {
-    await seedOutsideAndHub(400);
+    await seedOutsideAndHub(2 * EXPIRED_SCAN_LIMIT);
     await scan([KA]);
     expect((await scan([KA])).ids).toEqual(["h1", "h2"]);
     // 요청 하나가 Cron보다 먼저 시각을 잡고 늦게 격자를 기록했다 (now < 커서를 쓴 시각) — tiles_changed_at은 그래도 커진다(Task 34)
@@ -242,7 +244,7 @@ describe("repo", () => {
   });
 
   it("R11: 거점 격자 집합이 바뀌면(거점 추가 등) 커서를 처음부터 다시 쓴다", async () => {
-    await seedOutsideAndHub(400);
+    await seedOutsideAndHub(2 * EXPIRED_SCAN_LIMIT);
     await scan([KA]);
     expect((await scan([KA])).ids).toEqual(["h1", "h2"]);
     // KB가 거점 격자가 되면 커서 앞의 오래된 KB 행도 후보다
@@ -275,17 +277,18 @@ describe("repo", () => {
     expect(JSON.parse((await failedCursor())!)).toMatchObject({ from: NOW + 1000 });
   });
 
-  it("R11/R38: fetched_at이 같은 행이 한 쪽(300행)보다 많아도 커서가 (fetched_at, rowid)로 넘어가 멈추지 않는다", async () => {
+  it("R11/R38: fetched_at이 같은 행이 한 쪽(100행)보다 많아도 커서가 (fetched_at, rowid)로 넘어가 멈추지 않는다", async () => {
     const T = NOW - 10 * DETAIL_OK_TTL_MS;
-    const ties = Array.from({ length: 1000 }, (_, i) => `t${i}`);
+    // 같은 시각 행이 3쪽보다 많다 (Task 58: 400 — 예전 300행 쪽일 때 1000)
+    const ties = Array.from({ length: EXPIRED_RESET_PAGES * EXPIRED_SCAN_LIMIT + 100 }, (_, i) => `t${i}`);
     await seedMany(ties.map((id) => [id, T]));
     await replaceTilePlaces(env.DB, KB, ties, NOW, false);
     await seedMany([["h1", T]]); // 같은 시각, 더 큰 rowid
     await replaceTilePlaces(env.DB, KA, ["h1"], NOW, false);
-    expect((await scan([KA])).ids).toEqual([]); // 재설정: 3 × 300행
+    expect((await scan([KA])).ids).toEqual([]); // 재설정: 3 × 100행
     const next = await scan([KA]);
     expect(next.ids).toEqual(["h1"]);
-    // 남은 ~100행만 읽는다 (같은 시각의 앞 900행을 다시 읽지 않는다)
+    // 남은 ~100행만 읽는다 (같은 시각의 앞 300행을 다시 읽지 않는다)
     expect(next.read).toBeLessThanOrEqual(READS_PER_ROW * 110);
     expect((await scan([KA])).ids).toEqual(["h1"]);
   });

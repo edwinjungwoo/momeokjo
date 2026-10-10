@@ -11,7 +11,7 @@ import { hubOrder, runDetailCron, runScheduled, runSnapshotCron } from "../../wo
 import { hubTiles } from "../../worker/hubTiles";
 import { hubRefreshStart } from "../../worker/refreshSchedule";
 import {
-  EXPIRED_DUE_SCAN_SQL, EXPIRED_SCAN_SQL, NEAREST_UNFETCHED_SQL, TILES_FRESH_KEY, TILES_FRESH_RECHECK_MS, UNFETCHED_CHUNK_TILES, UNFETCHED_FROM_KEY,
+  EXPIRED_DUE_SCAN_SQL, EXPIRED_RESET_PAGES, EXPIRED_SCAN_LIMIT, EXPIRED_SCAN_SQL, NEAREST_UNFETCHED_SQL, TILES_FRESH_KEY, TILES_FRESH_RECHECK_MS, UNFETCHED_CHUNK_TILES, UNFETCHED_FROM_KEY,
   UNFETCHED_MAX_CHUNKS, UNFETCHED_PROBE_TILES,
   nearestUnfetchedStates, pickCronIds, tileDistance, tilePlaceStates, tileSetFingerprint, unfetchedStates,
 } from "../../worker/repo";
@@ -194,7 +194,7 @@ describe("Task 40: 운영 크기에서 Cron 한 번이 읽는 D1 행 (정상 상
     expect(o.expired === -1 || o.unfetched < o.expired, JSON.stringify(o)).toBe(true);
   });
 
-  it("R38/R63: 주간 갱신 중(미수집 없음) 본 Cron·상세만 실행은 실행마다 ≤1.5천 행 — 미수집 커서는 끝이라 묶음 질의가 없고 만료 쪽 하나", async () => {
+  it("R38/R63: 주간 갱신 중(미수집 없음) 본 Cron은 실행마다 ≤600행·상세만 실행은 ≤550행 — 미수집 커서는 끝이라 묶음 질의가 없고 만료 쪽 하나(≤350행) (Task 58: 쪽 300 → 100행으로 본 Cron 1,070 → 470행·상세만 1,032 → 432행, 만료 쪽 902 → 302행)", async () => {
     await seed("refresh");
     const now = await warmUp();
     const B = limitsFrom(env).batchSize;
@@ -203,11 +203,53 @@ describe("Task 40: 운영 크기에서 Cron 한 번이 읽는 D1 행 (정상 상
     expect(r.enriched + (r.deferred ?? 0)).toBe(B);
     expect(log.some((x) => x.sql.includes(DUETILE_SQL))).toBe(false);
     expect(log.some((x) => x.sql === NEAREST_UNFETCHED_SQL)).toBe(false);
-    expect(reads(log, isExpiredScan)).toBeLessThanOrEqual(1000);
-    expect(reads(log), `main reads ${reads(log)}`).toBeLessThanOrEqual(1500);
+    expect(reads(log, isExpiredScan)).toBeLessThanOrEqual(350);
+    expect(reads(log), `main reads ${reads(log)}`).toBeLessThanOrEqual(600);
     const d = await detailRun(now + 60_000);
     expect(d.r.enriched + (d.r.deferred ?? 0)).toBe(B);
-    expect(reads(d.log), `detail reads ${reads(d.log)}`).toBeLessThanOrEqual(1500);
+    expect(reads(d.log, isExpiredScan)).toBeLessThanOrEqual(350);
+    expect(reads(d.log), `detail reads ${reads(d.log)}`).toBeLessThanOrEqual(550);
+  });
+
+  it("R63/R38/R11: 재설정 뒤 만료 커서는 대상 앞의 거점 밖 오래된 ok 행(운영 어림 ≤ 2천 — 가게 ≈1.6만 − 거점 격자 ≈1.4만)을 실행마다 ~300행씩 지나 7번째 상세만 실행에서 대상을 찾는다 — 그동안 실행마다 ≤ 900행(측정 ~620행) (Task 58: 쪽 100행. 예전 300행 쪽은 3번째 실행·실행당 ~1.8천 행 — 지나가는 읽기 합은 ~3.6천 행으로 같다)", async () => {
+    expect(EXPIRED_SCAN_LIMIT).toBe(100);
+    expect(EXPIRED_RESET_PAGES).toBe(3);
+    await seed("refresh");
+    // 거점 밖 오래된 ok 행 (예전 warm의 ASEM 1500m 고리 — 격자 밖 칸, 공유 링크 단건 조회 — 격자 없음). Cron이 갱신하지 않아 due_after가
+    // 언제나 인덱스 맨 앞이다. 동대문 대상(ddpOld)보다 앞
+    const N_OUT = 2000;
+    const outside = Array.from({ length: N_OUT }, (_, i) => [`out${i}`, NOW - 30 * 24 * 3600_000 + i] as const);
+    for (let i = 0; i < outside.length; i += 500) {
+      await env.DB.prepare(
+        `INSERT INTO places (id, status, fetched_at, due_after, name, category_name, category_group, lat, lng)
+         SELECT json_extract(value, '$[0]'), 'ok', json_extract(value, '$[1]'), json_extract(value, '$[1]'), '가게', '음식점 > 한식', 'korean', ?, ?
+         FROM json_each(?)`,
+      ).bind(BONG.lat, BONG.lng, JSON.stringify(outside.slice(i, i + 500))).run();
+    }
+    const tiled = outside.filter((_, i) => i % 2 === 0).map(([id]) => ["1:1", id]);
+    for (let i = 0; i < tiled.length; i += 500) {
+      await env.DB.prepare("INSERT INTO tile_places (tile_key, place_id) SELECT json_extract(value, '$[0]'), json_extract(value, '$[1]') FROM json_each(?)")
+        .bind(JSON.stringify(tiled.slice(i, i + 500))).run();
+    }
+    await warmUp();
+    // 목요일 00:00 KST(정부과천청사·광화문·시청·을지로입구 갱신 시작) — ok 커서 지문이 바뀌어 처음부터 다시 읽는다 (하루 한 번 있는 재설정)
+    const thu = kst(2026, 10, 8, 0, 1);
+    const runs: { enriched: number; reads: number; expired: number }[] = [];
+    for (let i = 0; i < 10 && !runs.some((x) => x.enriched > 0); i++) {
+      const d = await detailRun(thu + i * 60_000);
+      runs.push({ enriched: d.place.calls.length, reads: reads(d.log), expired: reads(d.log, isExpiredScan) });
+    }
+    // 실행마다 새로 지나는 행: 첫 실행 100 + 99 + 99 = 298(쪽마다 마지막 행부터 포함해 잇는다), 다음부터 297 →
+    // 대상(N_OUT + 1번째 행)은 1 + ⌈(2001 − 298) / 297⌉ = 7번째 실행
+    expect(runs.map((x) => x.enriched > 0)).toEqual([false, false, false, false, false, false, true]);
+    for (const x of runs) {
+      expect(x.expired, JSON.stringify(runs)).toBeLessThanOrEqual(3 * EXPIRED_RESET_PAGES * EXPIRED_SCAN_LIMIT + 20);
+      expect(x.reads, JSON.stringify(runs)).toBeLessThanOrEqual(900);
+    }
+    // 찾은 뒤에는 커서가 첫 대상 행이라 지나간 행을 다시 읽지 않는다
+    const steady = await detailRun(thu + 10 * 60_000);
+    expect(steady.place.calls.length).toBeGreaterThan(0);
+    expect(reads(steady.log, isExpiredScan)).toBeLessThanOrEqual(3 * EXPIRED_SCAN_LIMIT + 20);
   });
 
   it("R38: 할 일이 없을 때 본 Cron은 실행마다 ≤150행, 상세만 실행은 ≤100행", async () => {

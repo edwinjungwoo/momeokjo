@@ -7,7 +7,7 @@ import { HUB_DUE_EXISTS_SQL, HUB_REFRESHED_PREFIX, hubHasDue, readHubRefreshed }
 import { CRON_INTERVAL_MS, hubOrder, pickRefreshCheck, runScheduled } from "../../worker/maintenance";
 import { dueSinceOf, hubRefreshStart as refreshStartOf, tileFreshFrom, tileRefreshStart, tileRefreshStarts } from "../../worker/refreshSchedule";
 import {
-  detailJitterMs, dueTileKeys, expiredDetailStates, getTiles, isPlaceDue, isTileDue, markTile, pickCronIds,
+  EXPIRED_RESET_PAGES, EXPIRED_SCAN_LIMIT, detailJitterMs, dueTileKeys, expiredDetailStates, getTiles, isPlaceDue, isTileDue, markTile, pickCronIds,
   replaceTilePlaces, saveDetailFailure, type DetailMeta, type TilePlaceState,
 } from "../../worker/repo";
 import { SNAPSHOT_DIRTY_PREFIX } from "../../worker/snapshotDirty";
@@ -144,8 +144,9 @@ describe("R63 Cron 만료 후보 (거점마다 다른 기준)", () => {
   });
 
   it("R63/R38: 시작 뒤에 가져온 거점 행은 커서가 지나가 다시 읽지 않고, 거점의 시작이 바뀌면(다음 갱신 요일) 처음부터 다시 읽어 새 대상을 찾는다", async () => {
-    // 봉은사 행 400개는 월요일 시작 뒤에 가져왔다(대상 아님). 동대문 행 2개는 그 뒤, 화요일 시작 전(대상)
-    const bong = Array.from({ length: 400 }, (_, i) => [`b${String(i).padStart(3, "0")}`, S_BONG + 1 + i] as [string, number]);
+    // 봉은사 행 200개(한 쪽보다 많고 3쪽보다 적다 — Task 58: 쪽 100행, 예전 300행일 때 400개)는 월요일 시작 뒤에 가져왔다(대상 아님).
+    // 동대문 행 2개는 그 뒤, 화요일 시작 전(대상)
+    const bong = Array.from({ length: 2 * EXPIRED_SCAN_LIMIT }, (_, i) => [`b${String(i).padStart(3, "0")}`, S_BONG + 1 + i] as [string, number]);
     await seedOk([...bong, ["d1", S_BONG + 1000], ["d2", S_BONG + 1001]]);
     await replaceTilePlaces(env.DB, KB, bong.map(([id]) => id), NOW, false);
     await replaceTilePlaces(env.DB, KD, ["d1", "d2"], NOW, false);
@@ -162,15 +163,16 @@ describe("R63 Cron 만료 후보 (거점마다 다른 기준)", () => {
 
 describe("R63 만료 커서 — 대상이 드문 쪽", () => {
   it("R63/R38: 재설정이 아닌 실행도 읽은 쪽에 대상이 없으면 같은 실행에서 3쪽까지 이어 읽는다 — 갱신 창이 겹쳐 대상 아닌 행이 끼어 있어도 실행마다 나아간다", async () => {
-    // 동대문 d1(대상) → 봉은사 시작 뒤에 가져온 700행(대상 아님) → 동대문 d2(대상)
-    const bong = Array.from({ length: 700 }, (_, i) => [`b${String(i).padStart(3, "0")}`, S_BONG + 1 + i] as [string, number]);
+    // 동대문 d1(대상) → 봉은사 시작 뒤에 가져온 250행(대상 아님 — 두 쪽보다 많고 세 쪽보다 적다. Task 58: 쪽 100행, 예전 300행일 때 700행) → 동대문 d2(대상)
+    expect(EXPIRED_RESET_PAGES).toBe(3);
+    const bong = Array.from({ length: 2.5 * EXPIRED_SCAN_LIMIT }, (_, i) => [`b${String(i).padStart(3, "0")}`, S_BONG + 1 + i] as [string, number]);
     await seedOk([["d1", S_BONG], ...bong, ["d2", S_BONG + 1000]]);
     await replaceTilePlaces(env.DB, KB, bong.map(([id]) => id), NOW, false);
     await replaceTilePlaces(env.DB, KD, ["d1", "d2"], NOW, false);
     const ids = async () => (await expiredDetailStates(env.DB, [KB, KD], NOW)).map((t) => t.id);
     expect(await ids()).toEqual(["d1"]); // 재설정: 첫 쪽에서 d1
     await env.DB.prepare("UPDATE places SET fetched_at = ? WHERE id = 'd1'").bind(NOW).run(); // 갱신됨
-    expect(await ids()).toEqual(["d2"]); // 다음 실행이 같은 실행 안에서 700행을 지나 d2를 찾는다
+    expect(await ids()).toEqual(["d2"]); // 다음 실행이 같은 실행 안에서 250행(3쪽째)을 지나 d2를 찾는다
   });
 });
 

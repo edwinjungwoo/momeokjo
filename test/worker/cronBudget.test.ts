@@ -8,7 +8,7 @@ import { createApp } from "../../worker/app";
 import { CRON_D1_CALL_LIMIT, CRON_D1_RESERVE, cronBatchFor, runDetailCron, runScheduled, warmOnce } from "../../worker/maintenance";
 import { D1CallBudget, meteredDb, type D1Usage } from "../../worker/d1Usage";
 import { MAX_DETAIL_BATCH_SIZE, limitsFrom } from "../../worker/config";
-import { replaceTilePlaces } from "../../worker/repo";
+import { EXPIRED_RESET_PAGES, EXPIRED_SCAN_LIMIT, replaceTilePlaces } from "../../worker/repo";
 import { callApp } from "../helpers/callApp";
 import { anonN, seedEvents, sessN } from "../helpers/events";
 import { fakeKakaoLocal, fakePlaceApi, routeFetch } from "../helpers/fakeKakao";
@@ -85,6 +85,11 @@ const midDist = (k: string) => {
 
 describe("Task 34: 본 Cron의 D1 호출 예산", () => {
   /**
+   * 대상(e*) 앞에 놓는 대상 아닌 오래된 행 — 상태마다 3쪽 중 마지막 쪽에서야 대상이 나와 만료 커서가 쪽을 다 읽는다(최악 호출 수).
+   * Task 58: 쪽 100행이라 250행 (예전 300행 쪽일 때 850행)
+   */
+  const FILLER = EXPIRED_RESET_PAGES * EXPIRED_SCAN_LIMIT - 50;
+  /**
    * 최악에 가까운 본 Cron: 보관 정리 창, 격자 dueCount칸 수집(칸마다 로컬 검색 1번 + D1 2번), 만료 커서 재설정(상태마다 3쪽),
    * 미수집은 가장 먼 칸(앞선 커서 없이 처음부터 걷는다), 저장이 모두 실패(묶음도 한 곳씩도), 오늘 세 번째 차단(강등 모드), 밀린 집계 3일
    */
@@ -94,8 +99,8 @@ describe("Task 34: 본 Cron의 D1 호출 예산", () => {
     const due = KEYS.filter((k) => k !== home && k !== far).slice(0, dueCount);
     await markFresh(KEYS.filter((k) => !due.includes(k)), NOW);
     await insertPlaces([
-      ...Array.from({ length: 850 }, (_, i) => [`ook${i}`, "ok", NOW - 10 * DETAIL_OK_TTL_MS + i] as [string, string, number]),
-      ...Array.from({ length: 850 }, (_, i) => [`ofail${i}`, "failed", NOW - 10 * DETAIL_FAIL_TTL_MS + i] as [string, string, number]),
+      ...Array.from({ length: FILLER }, (_, i) => [`ook${i}`, "ok", NOW - 10 * DETAIL_OK_TTL_MS + i] as [string, string, number]),
+      ...Array.from({ length: FILLER }, (_, i) => [`ofail${i}`, "failed", NOW - 10 * DETAIL_FAIL_TTL_MS + i] as [string, string, number]),
       // R63: 봉은사 이번 갱신 시작 전에 가져온 상세 (갱신 대상)
       ...["e1", "e2", "e3", "e4"].map((id) => [id, "ok", hubRefreshStart(HUBS[0], NOW) - 1000] as [string, string, number]),
     ]);
@@ -210,7 +215,7 @@ describe("Task 34: 본 Cron의 D1 호출 예산", () => {
     const due = KEYS.filter((k) => k !== home && k !== far).slice(0, 2);
     await markFresh(KEYS.filter((k) => !due.includes(k)), steadyNow);
     await insertPlaces([
-      ...Array.from({ length: 850 }, (_, i) => [`ook${i}`, "ok", steadyNow - 10 * DETAIL_OK_TTL_MS + i] as [string, string, number]),
+      ...Array.from({ length: FILLER }, (_, i) => [`ook${i}`, "ok", steadyNow - 10 * DETAIL_OK_TTL_MS + i] as [string, string, number]),
       ...["e1", "e2", "e3", "e4"].map((id) => [id, "ok", hubRefreshStart(HUBS[0], steadyNow) - 1000] as [string, string, number]),
     ]);
     await replaceTilePlaces(env.DB, home, ["e1", "e2", "e3", "e4"], steadyNow, false);
@@ -240,7 +245,7 @@ describe("Task 34: 본 Cron의 D1 호출 예산", () => {
     await markFresh(KEYS.filter((k) => !due.includes(k)), steadyNow);
     const ids = ["e1", "e2", "e3", "e4", "e5", "e6", "e7"];
     await insertPlaces([
-      ...Array.from({ length: 850 }, (_, i) => [`ook${i}`, "ok", steadyNow - 10 * DETAIL_OK_TTL_MS + i] as [string, string, number]),
+      ...Array.from({ length: FILLER }, (_, i) => [`ook${i}`, "ok", steadyNow - 10 * DETAIL_OK_TTL_MS + i] as [string, string, number]),
       ...ids.map((id) => [id, "ok", hubRefreshStart(HUBS[0], steadyNow) - 1000] as [string, string, number]),
     ]);
     await replaceTilePlaces(env.DB, home, ids, steadyNow, false);
