@@ -23,6 +23,21 @@ describe("settings", () => {
     expect(DEFAULT_SETTINGS).toEqual({ filters: DEFAULT_FILTERS, hubId: "bongeunsa" });
   });
 
+  it("R25: 기본값은 부를 때마다 새 객체 — 받은 설정을 고쳐도 DEFAULT_SETTINGS·DEFAULT_FILTERS는 그대로", () => {
+    const before = JSON.stringify(DEFAULT_SETTINGS);
+    for (const raw of [null, "{oops", "[]", "{}", JSON.stringify({ filters: null }), JSON.stringify({ filters: { groups: ["bar"] } })]) {
+      const s = parseSettings(raw);
+      expect(s, String(raw)).not.toBe(DEFAULT_SETTINGS);
+      expect(s.filters, String(raw)).not.toBe(DEFAULT_FILTERS);
+      expect(s.filters.groups, String(raw)).not.toBe(DEFAULT_FILTERS.groups);
+      s.filters.groups.push("korean");
+      s.filters.radius = 100;
+      s.hubId = "ddp";
+    }
+    expect(JSON.stringify(DEFAULT_SETTINGS)).toBe(before);
+    expect(DEFAULT_FILTERS.groups).toEqual([]);
+  });
+
   it("R25: 유효한 필드는 살리고 잘못된 필드만 기본값으로", () => {
     const raw = JSON.stringify({
       filters: { ...DEFAULT_FILTERS, party: 4, priceCap: 15000, radius: 99999, sort: "weird" },

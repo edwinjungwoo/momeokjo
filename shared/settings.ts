@@ -14,9 +14,13 @@ const isObject = (v: unknown): v is Record<string, unknown> => typeof v === "obj
 const oneOf = <T>(v: unknown, allowed: readonly T[], fallback: T): T => (allowed.includes(v as T) ? (v as T) : fallback);
 const bool = (v: unknown, fallback: boolean) => (typeof v === "boolean" ? v : fallback);
 
+/** 기본값의 새 사본 — 받은 쪽이 고쳐도 DEFAULT_FILTERS·DEFAULT_SETTINGS가 바뀌지 않게 */
+const defaultFilters = (): Filters => ({ ...DEFAULT_FILTERS, groups: [...DEFAULT_FILTERS.groups] });
+const defaultSettings = (): Settings => ({ filters: defaultFilters(), hubId: DEFAULT_SETTINGS.hubId });
+
 function parseFilters(v: unknown): Filters {
   const D = DEFAULT_FILTERS;
-  if (!isObject(v)) return { ...D, groups: [...D.groups] };
+  if (!isObject(v)) return defaultFilters();
   const groups = Array.isArray(v.groups) && v.groups.every((g) => GROUPS.has(g)) ? (v.groups as Filters["groups"]) : D.groups;
   return {
     radius: typeof v.radius === "number" && isValidRadius(v.radius) ? v.radius : D.radius,
@@ -31,14 +35,14 @@ function parseFilters(v: unknown): Filters {
 }
 
 export function parseSettings(raw: string | null): Settings {
-  if (!raw) return DEFAULT_SETTINGS;
+  if (!raw) return defaultSettings();
   let json: unknown;
   try {
     json = JSON.parse(raw);
   } catch {
-    return DEFAULT_SETTINGS;
+    return defaultSettings();
   }
-  if (!isObject(json)) return DEFAULT_SETTINGS;
+  if (!isObject(json)) return defaultSettings();
   return {
     filters: parseFilters(json.filters),
     // R62: 준비 중 거점은 모르는 거점처럼 기본 거점
