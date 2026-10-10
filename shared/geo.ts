@@ -9,9 +9,16 @@ export function tileKeyOf(p: LatLng): string {
   return `${Math.floor(p.lat / TILE_LAT)}:${Math.floor(p.lng / TILE_LNG)}`;
 }
 
+const rectOf = (i: number, j: number): Rect =>
+  ({ minLat: i * TILE_LAT, maxLat: (i + 1) * TILE_LAT, minLng: j * TILE_LNG, maxLng: (j + 1) * TILE_LNG });
+
+const TILE_KEY = /^(-?\d+):(-?\d+)$/;
+
+/** 격자 키("i:j", 정수 둘)의 경계. 모양이 틀린 키는 NaN 사각형 대신 오류 — 그 사각형으로 카카오를 부르지 않게 */
 export function tileRect(key: string): Rect {
-  const [i, j] = key.split(":").map(Number);
-  return { minLat: i * TILE_LAT, maxLat: (i + 1) * TILE_LAT, minLng: j * TILE_LNG, maxLng: (j + 1) * TILE_LNG };
+  const m = TILE_KEY.exec(key);
+  if (!m) throw new Error(`invalid tile key: ${JSON.stringify(key)}`);
+  return rectOf(Number(m[1]), Number(m[2]));
 }
 
 export function haversine(a: LatLng, b: LatLng): number {
@@ -37,7 +44,7 @@ export function tilesCoveringCircle(c: LatLng, radiusM: number): string[] {
   for (let i = i0; i <= i1; i++) {
     for (let j = j0; j <= j1; j++) {
       const key = `${i}:${j}`;
-      const r = tileRect(key);
+      const r = rectOf(i, j);
       const nearest = {
         lat: Math.min(Math.max(c.lat, r.minLat), r.maxLat),
         lng: Math.min(Math.max(c.lng, r.minLng), r.maxLng),

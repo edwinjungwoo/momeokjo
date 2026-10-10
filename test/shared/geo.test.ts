@@ -23,6 +23,13 @@ describe("geo", () => {
     expect(tileKeyOf(tileCenter("16672:45378"))).toBe("16672:45378");
   });
 
+  it("R1: 모양이 틀린 격자 키는 NaN 사각형 대신 오류로 알린다 (NaN 사각형으로 카카오를 부르지 않게)", () => {
+    for (const bad of ["", "1", "1:2:3", "a:b", "1.5:2", "1:", ":2", " 1:2", "1:2 ", "1e3:2", "NaN:1"]) {
+      expect(() => tileRect(bad), JSON.stringify(bad)).toThrow(/tile key/);
+    }
+    expect(tileRect("-1:-2")).toEqual({ minLat: -TILE_LAT, maxLat: 0, minLng: -2 * TILE_LNG, maxLng: -TILE_LNG });
+  });
+
   it("R1: 반경 0이면 중심이 속한 격자 하나만 덮는다", () => {
     expect(tilesCoveringCircle(ASEM, 0)).toEqual([tileKeyOf(ASEM)]);
   });
