@@ -14,15 +14,22 @@ export function loadKakaoMaps(appKey: string): Promise<any> {
   if (!appKey) return Promise.reject(new Error("VITE_KAKAO_JS_KEY가 비어 있어요"));
   if (cached) return cached;
   cached = new Promise((resolve, reject) => {
+    // 이 시도가 끝났으면(성공·실패) 늦게 온 콜백은 아무것도 하지 않는다 — 시간 초과 뒤 다시 시작한 로드(cached)를
+    // 옛 script의 늦은 실패가 지우면 다음 호출이 script를 또 붙인다
+    let settled = false;
     // 도메인 미등록, 키 오류, 광고 차단이면 load 콜백이 영영 안 올 수 있어서 10초 뒤 실패 처리한다
     const timer = window.setTimeout(() => fail(new Error("카카오맵 SDK 로드 시간 초과")), TIMEOUT_MS);
     function fail(err: Error) {
+      if (settled) return;
+      settled = true;
       window.clearTimeout(timer);
       cached = null; // 다음 시도에서 처음부터 다시 불러온다
       reject(err);
     }
     function ready() {
       window.kakao.maps.load(() => {
+        if (settled) return;
+        settled = true;
         window.clearTimeout(timer);
         resolve(window.kakao);
       });
