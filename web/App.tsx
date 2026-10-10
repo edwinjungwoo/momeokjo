@@ -156,9 +156,12 @@ export default function App() {
       });
     return () => ctrl.abort();
   }, [detailId, haveFull, refreshNames]);
-  /** 결과 카드를 펼친다. 단건이 아직 없으면 같은 렌더에서 "받는 중"으로 둔다 — 첫 화면부터 R49 전화 자리를 잡아 두게 */
+  /**
+   * 결과 카드를 펼친다. 단건이 아직 없으면 같은 렌더에서 "받는 중"으로 둔다 — 첫 화면부터 R49 전화 자리를 잡아 두게.
+   * 접거나 이미 받아 둔 카드면 "받는 중"을 지운다 — 펼친 채 접어 취소된 요청의 표시가 남아 나중에 받아 둔 카드를 받는 중으로 보이지 않게
+   */
   const expand = (id: string | null) => {
-    if (id !== null && !(id in fullDetails)) setDetailPending(id);
+    setDetailPending(id !== null && !(id in fullDetails) ? id : null);
     setFocusId(id);
   };
 
