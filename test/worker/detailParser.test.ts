@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { parseDetail } from "../../worker/detailParser";
+import parserSource from "../../worker/detailParser.ts?raw";
+import { parseDetailZod } from "../helpers/detailParserZod";
 import jungang from "../fixtures/place-detail/27531028-jungang-haejang.json";
 import haidilao from "../fixtures/place-detail/576159166-haidilao.json";
 import hadongkwan from "../fixtures/place-detail/26428654-hadongkwan.json";
@@ -132,5 +134,98 @@ describe("parseDetail", () => {
     const chicken = (await import("../fixtures/place-detail/63388502-samsung-chicken.json")).default;
     const r = parseDetail(chicken);
     expect(r.ok && r.summary.photoUrl).toBeNull();
+  });
+});
+
+/** 픽스처 12곳 (원문 그대로) */
+const FIXTURES = Object.entries(import.meta.glob("../fixtures/place-detail/*.json", { eager: true, import: "default" }))
+  .sort(([a], [b]) => (a < b ? -1 : 1))
+  .map(([, v]) => v as Record<string, unknown>);
+/** 해석이 보는 섹션 */
+const SECTIONS = ["summary", "kakaomap_review", "menu", "open_hours", "place_add_info"];
+
+/** 결정적 의사 난수 (같은 시드 = 같은 변형) */
+function rng(seed: number) {
+  let x = seed >>> 0;
+  return () => ((x = (Math.imul(x, 1664525) + 1013904223) >>> 0) / 0x1_0000_0000);
+}
+type Path = (string | number)[];
+/** 섹션 안의 모든 경로 (배열은 앞 4개 원소만 — 경로 수를 줄인다) */
+function paths(v: unknown, at: Path, out: Path[]) {
+  out.push(at);
+  if (Array.isArray(v)) v.slice(0, 4).forEach((x, i) => paths(x, [...at, i], out));
+  else if (typeof v === "object" && v !== null) for (const [k, x] of Object.entries(v)) paths(x, [...at, k], out);
+}
+const WEIRD: unknown[] = [null, undefined, "", "x", "12", 0, -1, 1.5, true, [], {}, [1], [{}], { a: 1 }];
+/** 경로 하나를 바꾼다: 지우기·이상한 값·배열에 이상한 원소 끼우기 */
+function mutate(root: Record<string, unknown>, path: Path, r: () => number) {
+  if (path.length === 0) return;
+  let parent: unknown = root;
+  for (const k of path.slice(0, -1)) {
+    parent = (parent as Record<string | number, unknown>)[k];
+    // 앞선 변형이 길을 바꿨으면 이번 변형은 건너뛴다
+    if (typeof parent !== "object" || parent === null) return;
+  }
+  const last = path[path.length - 1];
+  const obj = parent as Record<string | number, unknown>;
+  const pick = r();
+  if (pick < 0.2 && !Array.isArray(obj)) delete obj[last];
+  else if (pick < 0.3 && Array.isArray(obj[last])) (obj[last] as unknown[]).splice(Math.floor(r() * 3), 0, WEIRD[Math.floor(r() * WEIRD.length)]);
+  else obj[last] = WEIRD[Math.floor(r() * WEIRD.length)];
+}
+
+describe("parseDetail — zod 없는 해석 (Task 57)", () => {
+  it("R6: 상세 해석은 zod를 쓰지 않는다 — 새 isolate의 Cron에서 zod 스키마 검사가 상세 한 곳마다 ~0.3ms(로컬 workerd)로 해석 CPU의 절반이었다", () => {
+    expect(parserSource).not.toMatch(/from "zod"/);
+  });
+
+  it("R6: 픽스처 12곳 원문은 예전 zod 해석과 같은 값", () => {
+    expect(FIXTURES).toHaveLength(12);
+    for (const f of FIXTURES) expect(parseDetail(f)).toEqual(parseDetailZod(f));
+  });
+
+  it("R6: 섹션 안의 값을 하나·둘씩 지우거나 이상한 값(null·빈 문자열·숫자 문자열·배열·객체 등)으로 바꾼 변형 3천여 개도 예전 zod 해석과 같은 값 — 섹션은 통째로 살거나 null, 요약이 깨지면 schema", () => {
+    const r = rng(57);
+    let n = 0;
+    let failedSchema = 0;
+    let nulled = 0;
+    for (const f of FIXTURES) {
+      const all: Path[] = [];
+      for (const s of SECTIONS) if (s in f) paths(f[s], [s], all);
+      for (let k = 0; k < 260; k++) {
+        const v = structuredClone(f);
+        const times = 1 + Math.floor(r() * 2);
+        for (let t = 0; t < times; t++) mutate(v, all[Math.floor(r() * all.length)], r);
+        const want = parseDetailZod(v);
+        expect(parseDetail(v), JSON.stringify(all.length)).toEqual(want);
+        n++;
+        if (!want.ok) failedSchema++;
+        else if (want.detail.menus.length === 0 || want.detail.hours === null || want.detail.rating === null) nulled++;
+      }
+    }
+    // 변형이 실제로 여러 갈래(요약 실패·섹션 null)를 지난다
+    expect(n).toBe(12 * 260);
+    expect(failedSchema).toBeGreaterThan(50);
+    expect(nulled).toBeGreaterThan(200);
+  });
+
+  it("R6: 섹션 최상위가 이상한 값이거나 요약 필드 타입이 틀린 경우도 예전과 같다", () => {
+    const base = FIXTURES[0];
+    for (const s of SECTIONS) {
+      for (const w of WEIRD) {
+        const v = { ...base, [s]: w };
+        expect(parseDetail(v), `${s}=${JSON.stringify(w)}`).toEqual(parseDetailZod(v));
+      }
+    }
+    for (const key of ["name", "category", "point", "address", "phone_numbers", "main_photo_url"]) {
+      for (const w of WEIRD) {
+        const v = { ...base, summary: { ...(base.summary as object), [key]: w } };
+        expect(parseDetail(v), `summary.${key}=${JSON.stringify(w)}`).toEqual(parseDetailZod(v));
+      }
+    }
+    for (const w of [Number.NaN, Number.POSITIVE_INFINITY, -0]) {
+      const v = { ...base, summary: { ...(base.summary as object), point: { lat: w, lon: 127 } }, kakaomap_review: { score_set: { review_count: w, average_score: 4 } } };
+      expect(parseDetail(v), String(w)).toEqual(parseDetailZod(v));
+    }
   });
 });
