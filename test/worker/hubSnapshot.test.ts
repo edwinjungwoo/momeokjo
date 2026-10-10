@@ -179,7 +179,8 @@ describe("R56 거점 스냅샷 — 만들기와 내보내기", () => {
   it("R56: 거점 격자 중 만료됐거나 수집하지 않은 격자가 있으면 만들지 않는다 (incompleteTiles·stale은 지금 경로가 정한다)", async () => {
     await seedHub();
     const keys = tilesCoveringCircle(HUB, PREWARM_RADIUS);
-    await markTile(env.DB, keys[0], NOW - TILE_TTL_MS, 0, false);
+    // 수집 기록은 시각을 되돌리지 않는다(MAX) — 만료된 칸은 행을 직접 고쳐 만든다
+    await env.DB.prepare("UPDATE tiles SET collected_at = ? WHERE key = ?").bind(NOW - TILE_TTL_MS, keys[0]).run();
     expect(await buildHubSnapshot(env.DB, HUB, NOW)).toMatchObject({ status: "skipped", reason: "tiles" });
     await env.DB.prepare("DELETE FROM tiles WHERE key = ?").bind(keys[0]).run();
     expect(await buildHubSnapshot(env.DB, HUB, NOW)).toMatchObject({ status: "skipped", reason: "tiles" });
@@ -526,7 +527,8 @@ describe("R56 Fix wave 11 — 만들 수 없는 거점의 비용 상한", () => 
 
   it("R56: 만료 격자로 건너뛴 거점도 기다렸다 다시 보고, 그사이 다른 거점은 만든다", async () => {
     await seedHub();
-    await markTile(env.DB, tilesCoveringCircle(HUB, PREWARM_RADIUS)[0], NOW - TILE_TTL_MS, 0, false);
+    // 수집 기록은 시각을 되돌리지 않는다(MAX) — 만료된 칸은 행을 직접 고쳐 만든다
+    await env.DB.prepare("UPDATE tiles SET collected_at = ? WHERE key = ?").bind(NOW - TILE_TTL_MS, tilesCoveringCircle(HUB, PREWARM_RADIUS)[0]).run();
     const ddp = hubById("ddp");
     for (const k of tilesCoveringCircle(ddp, PREWARM_RADIUS)) await markTile(env.DB, k, NOW, 0, false);
     expect(await maintainSnapshots(env.DB, [HUB, ddp], NOW)).toMatchObject({ status: "skipped", hub: "bongeunsa", reason: "tiles" });

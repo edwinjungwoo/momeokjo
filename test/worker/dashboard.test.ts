@@ -235,8 +235,8 @@ describe("GET /api/admin/dashboard", () => {
     const keys = tilesCoveringCircle(hub, PREWARM_RADIUS);
     const start = hubRefreshStart(hub, NOW);
     const DAY = 24 * 3600_000;
-    for (const k of keys) await markTile(env.DB, k, start, 0, false);
-    await markTile(env.DB, keys[1], start - 1, 0, false); // 시작 전에 수집 → 다시 모을 칸
+    // keys[1]은 시작 전에 수집 → 다시 모을 칸 (수집 시각은 되돌릴 수 없어서 처음부터 그 시각으로)
+    for (const k of keys) await markTile(env.DB, k, k === keys[1] ? start - 1 : start, 0, false);
     await replaceTilePlaces(env.DB, keys[0], ["a", "b", "c"], start, false);
     await seedPlace(env.DB, "a", hub.lat, hub.lng, { now: start - 1 }); // 갱신 대상
     await seedPlace(env.DB, "b", hub.lat, hub.lng, { now: start + 1 });

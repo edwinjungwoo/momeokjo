@@ -128,7 +128,8 @@ describe("R44 상세 차단 시 강등 모드", () => {
     const hubs = [HUBS[0]];
     const keys = tilesCoveringCircle(hubs[0], PREWARM_RADIUS);
     for (const k of keys) await markTile(env.DB, k, NOW, 0, false);
-    await markTile(env.DB, keys[0], 0, 0, false); // 만료된 격자 하나
+    // 만료된 격자 하나 — 수집 기록은 시각을 되돌리지 않아서(MAX) 행을 직접 고친다
+    await env.DB.prepare("UPDATE tiles SET collected_at = 0 WHERE key = ?").bind(keys[0]).run();
     await seedPlace(env.DB, "1001", at(0.0005), HUB.lng, { now: NOW - DETAIL_OK_TTL_MS - DETAIL_JITTER_MS - H });
     await replaceTilePlaces(env.DB, tileKeyOf({ lat: at(0.0005), lng: HUB.lng }), ["1001", "1002"], NOW, false);
     const sqls: string[] = [];

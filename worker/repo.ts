@@ -129,8 +129,12 @@ function toRow(r: DbRow): PlaceRow {
   };
 }
 
+/**
+ * 격자 상태 기록. 수집 시각은 줄지 않는다(MAX) — 갱신 시작 전에 시작해 늦게 끝난 요청의 수집이 Cron이 막 기록한 시각을
+ * 되돌리면, tiles_fresh(Task 40)가 그 칸을 한 시간 동안 수집 대상으로 보지 않는다
+ */
 const TILE_UPSERT = `INSERT INTO tiles (key, collected_at, place_count, saturated) VALUES (?, ?, ?, ?)
-  ON CONFLICT(key) DO UPDATE SET collected_at = excluded.collected_at, place_count = excluded.place_count,
+  ON CONFLICT(key) DO UPDATE SET collected_at = MAX(tiles.collected_at, excluded.collected_at), place_count = excluded.place_count,
     saturated = excluded.saturated`;
 
 export async function markTile(db: D1Database, key: string, now: number, placeCount: number, saturated: boolean) {

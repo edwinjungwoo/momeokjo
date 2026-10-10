@@ -74,6 +74,20 @@ describe("repo", () => {
     expect(await tilesChangedAt(env.DB)).toBe(NOW + 1);
   });
 
+  it("R4/R63: 격자 수집 시각은 줄지 않는다 — 더 이른 now로 늦게 끝난 수집(갱신 시작 전에 시작한 요청)이 수집 시각을 되돌리지 않는다 (tiles_fresh가 그 칸을 한 시간 건너뛰지 않게)", async () => {
+    await replaceTilePlaces(env.DB, KA, ["1", "2"], NOW, false);
+    // ID가 그대로인 늦은 기록과 ID가 바뀐 늦은 기록 모두
+    await replaceTilePlaces(env.DB, KA, ["1", "2"], NOW - 60_000, false);
+    expect((await getTiles(env.DB, [KA])).get(KA)?.collectedAt).toBe(NOW);
+    await replaceTilePlaces(env.DB, KA, ["3"], NOW - 30_000, true);
+    expect((await getTiles(env.DB, [KA])).get(KA)).toEqual({ collectedAt: NOW, saturated: true });
+    expect((await tilePlaceStates(env.DB, [KA])).map((t) => t.id)).toEqual(["3"]);
+    await markTile(env.DB, KA, NOW - 1, 0, false);
+    expect((await getTiles(env.DB, [KA])).get(KA)?.collectedAt).toBe(NOW);
+    await markTile(env.DB, KA, NOW + 1, 0, false);
+    expect((await getTiles(env.DB, [KA])).get(KA)?.collectedAt).toBe(NOW + 1);
+  });
+
   it("R2: 격자 기록은 places 테이블에 아무것도 쓰지 않는다 (로컬 API 응답 저장 금지)", async () => {
     await replaceTilePlaces(env.DB, KA, ["1", "2"], NOW, false);
     const r = await env.DB.prepare("SELECT count(*) AS c FROM places").first<{ c: number }>();
