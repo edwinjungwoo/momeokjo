@@ -16,3 +16,4 @@ export declare function warmLine(
     truncated?: boolean; enrichError?: boolean;
   },
 ): string;
+export declare function onWarmFailure(status: number, consecutive: number): { action: "retry"; waitMs: number } | { action: "stop" };

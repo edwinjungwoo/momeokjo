@@ -1,4 +1,6 @@
 // warm.mjs·backfill.mjs가 429를 받았을 때 할 일 (R36, R38). node와 테스트(workerd) 둘 다에서 돌도록 의존성 없음
+import { on5xx } from "./backfillGuard.mjs";
+
 export const RATE_LIMIT_WAIT_MS = 30_000;
 export const RATE_LIMIT_RETRIES = 3;
 
@@ -46,4 +48,17 @@ export function nextTruncatedStreak(r, streak) {
  */
 export function warmLine(i, r) {
   return `#${i} incompleteTiles=${r.incompleteTiles} pending=${r.pending} enriched=${r.enriched} failed=${r.failed} deferred=${r.deferred ?? 0} chars=${r.chars ?? 0}${r.truncated ? " truncated" : ""}${r.enrichError ? " enrichError" : ""}`;
+}
+
+/**
+ * warm.mjs가 429가 아닌 실패 응답을 받았거나 요청이 네트워크 오류로 던졌을 때(status 0) — backfill.mjs와 같다.
+ * 4xx(401 토큰, 400 인자, 403 read_only)는 다시 해도 같아 바로 멈춘다. 5xx·네트워크 오류는 연속 SERVER_ERROR_LIMIT번까지
+ * 기다렸다 다시 한다 (CPU 초과 503 동안 외부 호출 40번짜리 warm을 거점마다 300번 두드리지 않게, 네트워크 한 번에 --all 전체가 끝나지 않게)
+ * @param {number} status 응답 상태 (네트워크 오류면 0)
+ * @param {number} consecutive 이번을 포함해 연속으로 받은 5xx·네트워크 오류 수 (1부터)
+ * @returns {{ action: "retry", waitMs: number } | { action: "stop" }}
+ */
+export function onWarmFailure(status, consecutive) {
+  if (status >= 400 && status < 500) return { action: "stop" };
+  return on5xx(consecutive);
 }

@@ -43,7 +43,21 @@ let written = 0;
 let rateLimited = 0; // 연속으로 rate_limited를 받은 횟수
 let serverErrors = 0; // 연속으로 5xx를 받은 횟수
 for (let i = 1; i <= MAX_CALLS; i++) {
-  const res = await fetch(url, { method: "POST", headers: { Authorization: `Bearer ${token}` } });
+  let res;
+  try {
+    res = await fetch(url, { method: "POST", headers: { Authorization: `Bearer ${token}` } });
+  } catch (e) {
+    // 네트워크가 잠깐 끊겨도 전체를 끝내지 않는다 — 5xx처럼 연속 몇 번만 기다렸다 다시 (Task 56)
+    serverErrors++;
+    const next = on5xx(serverErrors);
+    if (next.action === "stop") {
+      console.error(`#${i} 네트워크 오류 (${e instanceof Error ? e.message : e}) — 연속 ${SERVER_ERROR_LIMIT}번이라 멈춰요. 연결을 확인하고 다시 실행하세요.`);
+      process.exit(1);
+    }
+    console.error(`#${i} 네트워크 오류 (${e instanceof Error ? e.message : e}) — ${next.waitMs / 1000}초 기다렸다 다시 해요 (${serverErrors}/${SERVER_ERROR_LIMIT})`);
+    await wait(next.waitMs);
+    continue;
+  }
   if (res.status === 429) {
     const body = await res.text();
     const next = on429(body, rateLimited);

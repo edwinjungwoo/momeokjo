@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { on429, RATE_LIMIT_RETRIES, RATE_LIMIT_WAIT_MS } from "../../scripts/warmRetry.mjs";
+import { on429, RATE_LIMIT_RETRIES, RATE_LIMIT_WAIT_MS, onWarmFailure } from "../../scripts/warmRetry.mjs";
 
 describe("R36: warm.mjs의 429 처리", () => {
   it("R36: rate_limited(ADMIN_LIMITER)면 30초 기다렸다 다시 하고, 연속 3번까지만", () => {
@@ -53,5 +53,16 @@ describe("warm.mjs: 호출마다 한 줄", () => {
     expect(warmLine(1, { incompleteTiles: 2, pending: 0, enriched: 0, failed: 0 })).toBe(
       "#1 incompleteTiles=2 pending=0 enriched=0 failed=0 deferred=0 chars=0",
     );
+  });
+});
+
+describe("R31 warm.mjs — 429가 아닌 실패", () => {
+  it("R31: 4xx(401 토큰·400 인자·403 read_only)는 다시 해도 같아 바로 멈추고, 5xx·네트워크 오류(0)는 연속 3번까지 3초 기다렸다 다시 — CPU 초과(503) 동안 무거운 warm을 15분씩 두드리지 않게", () => {
+    for (const status of [400, 401, 403, 404]) expect(onWarmFailure(status, 1), String(status)).toEqual({ action: "stop" });
+    expect(onWarmFailure(503, 1)).toEqual({ action: "retry", waitMs: 3000 });
+    expect(onWarmFailure(500, 2)).toEqual({ action: "retry", waitMs: 3000 });
+    expect(onWarmFailure(503, 3)).toEqual({ action: "stop" });
+    expect(onWarmFailure(0, 1)).toEqual({ action: "retry", waitMs: 3000 });
+    expect(onWarmFailure(0, 3)).toEqual({ action: "stop" });
   });
 });

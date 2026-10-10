@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { areasFromArgs } from "./area.mjs";
-import { nextTruncatedStreak, on429, RATE_LIMIT_RETRIES, TRUNCATED_STOP_AFTER, warmLine } from "./warmRetry.mjs";
+import { SERVER_ERROR_LIMIT } from "./backfillGuard.mjs";
+import { nextTruncatedStreak, on429, onWarmFailure, RATE_LIMIT_RETRIES, TRUNCATED_STOP_AFTER, warmLine } from "./warmRetry.mjs";
 
 const base = process.env.MMJ_BASE ?? "https://mmj.itmz.me";
 const fromDevVars = () => {
@@ -21,11 +22,26 @@ async function warm({ label, lat, lng, radius }) {
   console.log(`== ${label} · 반경 ${radius}m`);
   let rateLimited = 0; // 연속으로 rate_limited를 받은 횟수
   let truncated = 0; // 후보 고르기가 쪽 상한에서 멈춰 아무것도 못 한 응답이 이어진 횟수 (Task 34)
+  let serverErrors = 0; // 연속으로 받은 5xx·네트워크 오류
   for (let i = 1; i <= 300; i++) {
-    const res = await fetch(`${base}/api/admin/warm?lat=${lat}&lng=${lng}&radius=${radius}`, {
-      method: "POST",
-      headers: { Authorization: `Bearer ${token}` },
-    });
+    let res;
+    try {
+      res = await fetch(`${base}/api/admin/warm?lat=${lat}&lng=${lng}&radius=${radius}`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+    } catch (e) {
+      // 네트워크가 잠깐 끊겨도 --all 전체를 끝내지 않는다 — 5xx처럼 몇 번만 기다렸다 다시
+      serverErrors++;
+      const next = onWarmFailure(0, serverErrors);
+      if (next.action === "stop") {
+        console.error(`#${i} 네트워크 오류 (${e instanceof Error ? e.message : e}) — 연속 ${SERVER_ERROR_LIMIT}번이라 멈춰요. 연결을 확인하고 다시 실행하세요.`);
+        process.exit(1);
+      }
+      console.error(`#${i} 네트워크 오류 (${e instanceof Error ? e.message : e}) — ${next.waitMs / 1000}초 기다렸다 다시 해요 (${serverErrors}/${SERVER_ERROR_LIMIT})`);
+      await wait(next.waitMs);
+      continue;
+    }
     if (res.status === 429) {
       const body = await res.text();
       const next = on429(body, rateLimited);
@@ -49,10 +65,24 @@ async function warm({ label, lat, lng, radius }) {
     }
     rateLimited = 0;
     if (!res.ok) {
-      console.error(`#${i} HTTP ${res.status} ${await res.text()}`);
-      await wait(3000);
+      // 4xx(401 토큰·400 인자·403 read_only)는 다시 해도 같다 — 멈춘다. 5xx는 연속 몇 번까지만 (backfill.mjs와 같다)
+      const server = res.status >= 500 || res.status < 400;
+      if (server) serverErrors++;
+      const next = onWarmFailure(res.status, serverErrors);
+      const text = await res.text();
+      if (next.action === "stop") {
+        console.error(
+          server
+            ? `#${i} HTTP ${res.status} ${text} — 연속 ${SERVER_ERROR_LIMIT}번 서버 오류라 멈춰요. 배포·CPU 한도(503)·D1 상태를 확인하고 다시 실행하세요.`
+            : `#${i} HTTP ${res.status} ${text} — 다시 해도 같아 멈춰요 (토큰·인자·읽기 전용을 확인하세요).`,
+        );
+        process.exit(1);
+      }
+      console.error(`#${i} HTTP ${res.status} ${text} — ${next.waitMs / 1000}초 기다렸다 다시 해요 (${serverErrors}/${SERVER_ERROR_LIMIT})`);
+      await wait(next.waitMs);
       continue;
     }
+    serverErrors = 0;
     const r = await res.json();
     // deferred·chars·truncated·enrichError(보충 저장 오류 — 원인은 Workers 로그)까지 한 줄로 (warmRetry.mjs warmLine)
     console.log(warmLine(i, r));
