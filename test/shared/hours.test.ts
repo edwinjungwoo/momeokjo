@@ -45,6 +45,20 @@ describe("parseHours", () => {
     expect(Object.keys(parseHours(daysOf(haidilao))!).sort()).toEqual(["0", "1", "2", "3", "4", "5", "6"]);
   });
 
+  const day = (start_end_time_desc: string, ...break_times_desc: string[]): RawDay => ({
+    day_of_the_week_desc: "금(10/9)", on_days: { start_end_time_desc, break_times_desc },
+  });
+
+  it("R8: 자정을 넘기는 영업 안의 새벽 휴식은 다음 날 시각으로 빼낸다 (18:00~03:00, 휴식 01:00~01:30)", () => {
+    expect(parseHours([day("18:00 ~ 03:00", "01:00 ~ 01:30")])![5]).toEqual([[1080, 1500], [1530, 1620]]);
+    // 같은 날 저녁 휴식은 그대로
+    expect(parseHours([day("18:00 ~ 03:00", "22:00 ~ 22:30")])![5]).toEqual([[1080, 1320], [1350, 1620]]);
+  });
+
+  it("R8: 낮 영업에서 영업 시작 전 휴식(잘못 적힌 값)은 다음 날로 밀려 영업 구간과 겹치지 않으므로 무시한다 — 오류로 치지 않는다", () => {
+    expect(parseHours([day("11:00 ~ 22:00", "09:00 ~ 10:00")])![5]).toEqual([[660, 1320]]);
+  });
+
   it("R8: 파싱할 수 없으면 null", () => {
     expect(parseHours(null)).toBeNull();
     expect(parseHours([])).toBeNull();
@@ -114,6 +128,19 @@ describe("isOpenDuring", () => {
     const h: Hours = { 4: "closed", 5: [[690, 1320]] };
     expect(isOpenDuring(h, kst("2026-10-09T00:30:00"))).toBe(false);
     expect(isOpenDuring(h, kst("2026-10-09T12:00:00"))).toBe(true);
+  });
+
+  it("R17: 토요일 밤부터 이어진 영업은 일요일 새벽에도 인정한다 (요일이 6 → 0으로 돈다)", () => {
+    const h: Hours = { 6: [[1080, 1620]], 0: [[690, 1320]] };
+    expect(isOpenDuring(h, kst("2026-10-11T01:00:00"))).toBe(true);
+    expect(isOpenDuring(h, kst("2026-10-11T02:40:00"))).toBe(false);
+    expect(isOpenDuring(h, kst("2026-10-11T12:00:00"))).toBe(true);
+  });
+
+  it("R17: 토요일 23:45에 일요일 00:00부터 이어지는 영업이면 끊기지 않는다 (요일이 6 → 0으로 돈다)", () => {
+    const h: Hours = { 6: [[1080, 1440]], 0: [[0, 120]] };
+    expect(isOpenDuring(h, kst("2026-10-10T23:45:00"))).toBe(true);
+    expect(isOpenDuring({ 6: [[1080, 1440]], 0: "closed" }, kst("2026-10-10T23:45:00"))).toBe(false);
   });
 
   it("R17: 오늘 요일 정보가 없으면 null", () => {

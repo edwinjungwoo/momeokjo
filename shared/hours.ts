@@ -44,6 +44,8 @@ export function parseHours(days: RawDay[] | null | undefined): Hours | null {
     for (const text of day.on_days?.break_times_desc ?? []) {
       let br = parseRange(text);
       if (!br) return null;
+      // 영업 시작 전 시각의 휴식은 자정을 넘긴 영업의 새벽 휴식으로 본다 (18:00~03:00의 01:00 휴식 → 25:00).
+      // 낮 영업이면 밀린 휴식이 영업 구간과 겹치지 않아 빼는 것이 없다 — 잘못 적힌 휴식은 무시하고 오류로 치지 않는다
       if (br[0] < main[0]) br = [br[0] + DAY_MIN, br[1] + DAY_MIN];
       const cut = br;
       segments = segments.flatMap((s) => subtract(s, cut));
