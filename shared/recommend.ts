@@ -59,18 +59,24 @@ export function filterPlaces(places: ApiPlace[], f: Filters, now: Date): ApiPlac
 
 export function sortPlaces(places: ApiPlace[], key: SortKey): ApiPlace[] {
   const dist = (p: ApiPlace) => p.distance ?? Infinity;
+  // 거리를 모르는 곳끼리(Infinity − Infinity = NaN)도 0 — 맨 뒤에서 원래 순서
+  const byDist = (a: ApiPlace, b: ApiPlace) => {
+    const da = dist(a);
+    const db = dist(b);
+    return da === db ? 0 : da - db;
+  };
   const arr = [...places];
   if (key === "rating") {
-    return arr.sort((a, b) => (b.detail?.rating ?? -1) - (a.detail?.rating ?? -1) || dist(a) - dist(b));
+    return arr.sort((a, b) => (b.detail?.rating ?? -1) - (a.detail?.rating ?? -1) || byDist(a, b));
   }
   if (key === "price") {
     return arr.sort((a, b) => {
       const pa = a.detail?.price ?? Infinity;
       const pb = b.detail?.price ?? Infinity;
-      return (pa === pb ? 0 : pa - pb) || dist(a) - dist(b);
+      return (pa === pb ? 0 : pa - pb) || byDist(a, b);
     });
   }
-  return arr.sort((a, b) => dist(a) - dist(b));
+  return arr.sort(byDist);
 }
 
 export function weightOf(p: ApiPlace, party: Party): number {

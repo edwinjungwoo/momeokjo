@@ -38,6 +38,14 @@ describe("R18 필터", () => {
     expect(ids(filterPlaces(ps, f({ openOnly: false, includeBar: true }), NOON_MON))).toEqual(["k", "b"]);
   });
 
+  it("R18: 카테고리를 고르고 술집 포함도 켜면 고른 그룹 + 술집 (술집은 카테고리 칩과 따로, 디저트는 언제나 제외)", () => {
+    const ps = [
+      apiPlace("k"), apiPlace("c", { group: "chinese" }), apiPlace("b", { group: "bar" }), apiPlace("d", { group: "dessert" }),
+    ];
+    expect(ids(filterPlaces(ps, f({ openOnly: false, groups: ["chinese"], includeBar: true }), NOON_MON))).toEqual(["c", "b"]);
+    expect(ids(filterPlaces(ps, f({ openOnly: false, groups: ["chinese"], includeBar: false }), NOON_MON))).toEqual(["c"]);
+  });
+
   it("R18: 예산 필터 — 가격 정보가 없으면 제외", () => {
     const ps = [
       apiPlace("cheap", {}, { price: 9000 }), apiPlace("mid", {}, { price: 15000 }),
@@ -77,6 +85,14 @@ describe("R20 정렬", () => {
   it("R20: 거리순", () => expect(ids(sortPlaces(ps, "distance"))).toEqual(["b", "c", "a"]));
   it("R20: 평점순 (null은 맨 뒤)", () => expect(ids(sortPlaces(ps, "rating"))).toEqual(["c", "a", "b"]));
   it("R20: 가격순 (null은 맨 뒤)", () => expect(ids(sortPlaces(ps, "price"))).toEqual(["c", "a", "b"]));
+  it("R20: 거리를 모르는 곳은 맨 뒤, 그런 곳끼리는 원래 순서 (모르는 거리끼리 빼서 NaN이 되지 않게)", () => {
+    const qs = [
+      apiPlace("x", { distance: undefined }, { rating: 4, price: 9000 }),
+      apiPlace("near", { distance: 50 }, { rating: 4, price: 9000 }),
+      apiPlace("y", { distance: undefined }, { rating: 4, price: 9000 }),
+    ];
+    for (const key of ["distance", "rating", "price"] as const) expect(ids(sortPlaces(qs, key)), key).toEqual(["near", "x", "y"]);
+  });
   it("R20: 원본 배열은 바꾸지 않는다", () => {
     sortPlaces(ps, "rating");
     expect(ids(ps)).toEqual(["a", "b", "c"]);
@@ -131,6 +147,8 @@ describe("R21′ 3곳 뽑기", () => {
     const a = w2("a"), b = w6("b", "chinese");
     expect(drawTrio([a, b], 2, none, seq(0))!.places[0].id).toBe("a");
     expect(drawTrio([a, b], 2, none, seq(0.249, 0))!.places[0].id).toBe("a");
+    // 정확히 경계(0.25 × 합 = a의 가중치)면 다음 곳 — 구간은 [0, a), [a, a + b)
+    expect(drawTrio([a, b], 2, none, seq(0.25, 0))!.places[0].id).toBe("b");
     expect(drawTrio([a, b], 2, none, seq(0.251, 0))!.places[0].id).toBe("b");
     expect(drawTrio([a, b], 2, none, seq(0.9999, 0))!.places[0].id).toBe("b");
   });
