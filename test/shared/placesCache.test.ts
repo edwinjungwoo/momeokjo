@@ -2,8 +2,8 @@ import { describe, expect, it } from "vitest";
 import { DETAIL_OK_TTL_MS } from "../../shared/constants";
 import {
   DEVICE_CACHE_VERSION, PLACES_CACHE_FRESH_MS, PLACES_CACHE_MAX_AGE_MS, PLACES_CACHE_MAX_CHARS, PLACES_CACHE_MAX_HUBS,
-  hubListView, mergeCachedPlaces, placesCacheEntry, placesCacheEvictions, placesDataAt, readPlacesCache, unusableCachedPlaces,
-  type PlacesMergeState,
+  LIST_RESUME_RELOAD_MS, hubListView, mergeCachedPlaces, placesCacheEntry, placesCacheEvictions, placesDataAt, readPlacesCache,
+  staleListAction, unusableCachedPlaces, type PlacesMergeState,
 } from "../../shared/placesCache";
 
 const NOW = 1_800_000_000_000;
@@ -148,6 +148,17 @@ describe("placesCache", () => {
       expect(hubListView(null, null, "pangyo", false)).toEqual({ shown: null, listIsHub: false, drawBlock: "가게 정보를 불러오는 중이에요" });
       expect(hubListView(null, null, "pangyo", true)).toEqual({ shown: null, listIsHub: false, drawBlock: "가게 정보를 불러오지 못했어요" });
     });
+  });
+
+  it("R45/§3.1: 오래 열어 둔 탭으로 돌아오면 — 목록이 1시간 넘었으면 새로 받고, 3일 넘었으면 버리고 받는다 (기기 저장본 규칙과 같다)", () => {
+    expect(LIST_RESUME_RELOAD_MS).toBe(HOUR);
+    expect(staleListAction(null, NOW)).toBeNull();
+    expect(staleListAction(NOW - HOUR, NOW)).toBeNull();
+    expect(staleListAction(NOW - HOUR - 1, NOW)).toBe("reload");
+    expect(staleListAction(NOW - PLACES_CACHE_MAX_AGE_MS, NOW)).toBe("reload");
+    expect(staleListAction(NOW - PLACES_CACHE_MAX_AGE_MS - 1, NOW)).toBe("drop");
+    // 기기 시계가 뒤로 갔으면 새로 받는다
+    expect(staleListAction(NOW + HOUR, NOW)).toBe("reload");
   });
 
   it("R65: 목록 정보의 시각 — 기기 저장본이면 저장 시각, 새로 받은 목록이면 받은 시각", () => {

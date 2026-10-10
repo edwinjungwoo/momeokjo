@@ -121,3 +121,18 @@ export function hubListView<D>(
   const drawBlock = listIsHub ? null : error ? "가게 정보를 불러오지 못했어요" : "가게 정보를 불러오는 중이에요";
   return { shown, listIsHub, drawBlock };
 }
+
+/** 다시 보이는 탭의 목록이 이보다 오래됐으면 새로 받는다 */
+export const LIST_RESUME_RELOAD_MS = HOUR;
+
+/**
+ * Task 56: 오래 열어 둔 탭(백그라운드·bfcache)으로 돌아왔을 때 들고 있는 목록(dataAt = 받은 때, 기기 저장본이면 저장 시각).
+ * 3일(PLACES_CACHE_MAX_AGE_MS)이 넘었으면 버리고 다시 받는다(§3.1 — 기기 저장본과 같은 규칙), 1시간이 넘었으면(또는 기기 시계가
+ * 뒤로 갔으면) 다시 받는다 (그동안은 흐리게, R29). 아니면 그대로
+ */
+export function staleListAction(dataAt: number | null, now: number): "drop" | "reload" | null {
+  if (dataAt === null) return null;
+  const age = now - dataAt;
+  if (age > PLACES_CACHE_MAX_AGE_MS) return "drop";
+  return age > LIST_RESUME_RELOAD_MS || age < 0 ? "reload" : null;
+}

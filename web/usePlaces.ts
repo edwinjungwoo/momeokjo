@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { MAX_RADIUS } from "../shared/constants";
 import type { PlacesResponse } from "../shared/types";
-import { mergeCachedPlaces, placesDataAt } from "../shared/placesCache";
+import { mergeCachedPlaces, placesDataAt, staleListAction } from "../shared/placesCache";
 import { loadPlaces } from "./api";
 import { readCachedEtag, readCachedPlaces, saveCachedPlaces } from "./placesCache";
 import { loadDelayMs, pollDelayMs, shouldPoll } from "./pollSchedule";
@@ -32,6 +32,8 @@ type State = {
  * 켜지면 그 거점을 디바운스 없이 바로 부른다.
  * R56: 첫 요청은 저장본의 ETag(작은 키, 동기)를 If-None-Match로 바로 보낸다 — 저장본 해석을 기다리지 않는다.
  * 서버 스냅샷이 같으면 304(본문 없음)라 저장본을 새 목록으로 쓴다 (web/api.ts loadPlaces).
+ * Task 56: 오래 열어 둔 탭으로 돌아오면(visibilitychange·pageshow) 목록이 1시간 넘었으면 다시 받고, 3일 넘었으면 버리고 받는다
+ * (staleListAction — 기기 저장본과 같은 §3.1 규칙).
  */
 export function usePlaces(hubId: string, enabled = true) {
   const [state, setState] = useState<State>({
@@ -96,10 +98,31 @@ export function usePlaces(hubId: string, enabled = true) {
 
   const reload = useCallback(() => setReloadKey((k) => k + 1), []);
   const { data, loading, error, polling, cache, hub: listHub } = state;
-  /** 지금 data가 기기 저장본인가 ("stale" = 24시간 넘음 → 자동 뽑기는 새 목록을 기다린다) */
-  const fromCache = cache === null ? null : cache.fresh ? "fresh" : "stale";
   /** R65: 지금 data를 받은 때 (기기 저장본이면 저장 시각) — 이름 기억 시각 */
   const dataAt = placesDataAt(cache, state.receivedAt);
+  const dataAtNow = useRef(dataAt);
+  dataAtNow.current = dataAt;
+
+  useEffect(() => {
+    const onShow = () => {
+      if (document.visibilityState !== "visible") return;
+      const action = staleListAction(dataAtNow.current, Date.now());
+      if (action === "drop") setState((s) => ({ ...s, data: null, cache: null, receivedAt: null }));
+      if (action !== null) setReloadKey((k) => k + 1);
+    };
+    // bfcache에서 되살아난 페이지만 (처음 열 때의 pageshow는 아니다)
+    const onPageShow = (e: PageTransitionEvent) => {
+      if (e.persisted) onShow();
+    };
+    document.addEventListener("visibilitychange", onShow);
+    window.addEventListener("pageshow", onPageShow);
+    return () => {
+      document.removeEventListener("visibilitychange", onShow);
+      window.removeEventListener("pageshow", onPageShow);
+    };
+  }, []);
+  /** 지금 data가 기기 저장본인가 ("stale" = 24시간 넘음 → 자동 뽑기는 새 목록을 기다린다) */
+  const fromCache = cache === null ? null : cache.fresh ? "fresh" : "stale";
   // listHub: data가 어느 거점 목록인가 — 거점을 바꾼 직후에는 이전 거점 목록이다 (화면은 hubListView로 거른다)
   return { data, listHub, loading, error, polling, fromCache, dataAt, reload } as const;
 }
