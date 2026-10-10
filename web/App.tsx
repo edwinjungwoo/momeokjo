@@ -4,6 +4,7 @@ import { haversine, walkMinutes } from "../shared/geo";
 import { DEFAULT_HUB_ID, publicHubById } from "../shared/hubs";
 import { NEAR_HUB_MOVE_M, nearestHub, type MineItem, type MineSections } from "../shared/mine";
 import { kstDay } from "../shared/kst";
+import { hubListView } from "../shared/placesCache";
 import { topPercents } from "../shared/rank";
 import { trioReasons } from "../shared/reasons";
 import type { Seen } from "../shared/seen";
@@ -82,7 +83,10 @@ export default function App() {
   const center = useMemo<LatLng>(() => ({ lat: hub.lat, lng: hub.lng }), [hub.lat, hub.lng]);
   // R61: 첫 접속 거점을 아직 안 골랐으면(질문이 떠 있거나, 거점 없는 공유 링크라 받은 시트 뒤로 미뤘거나) 기본 거점 목록을 받지 않는다.
   // 고른 뒤 그 거점을 바로 받는다
-  const { data, loading, error, polling, fromCache, dataAt, reload } = usePlaces(hub.id, !askHub);
+  const { data: received, listHub, loading, error, polling, fromCache, dataAt, reload } = usePlaces(hub.id, !askHub);
+  // R29: 거점을 바꾼 직후 이전 거점 목록은 새 목록을 받는 동안 흐리게만 보이고 뽑지 않는다(listIsHub). 새 목록을 받지 못했으면
+  // 보이지 않는다 — 처음 열 때 실패처럼 다시 시도 (Task 56)
+  const { shown: data, listIsHub, drawBlock } = hubListView(received, listHub, hub.id, error);
   const now = useNow();
   const personal = usePersonal();
   const { isExcluded, isFavorite, record, refresh: refreshNames } = personal;
@@ -351,8 +355,9 @@ export default function App() {
     if (tip.open && !auto) tip.dismiss();
     // 아직 오는 중인 공유 링크 결과가 방금 뽑은 결과를 덮어쓰지 않게 한다
     shareCtrl.current?.abort();
-    if (!data) {
-      toast.show("가게 정보를 불러오는 중이에요");
+    // 지금 거점 목록으로만 뽑는다 (이전 거점 목록은 흐리게 보일 뿐 — Task 56)
+    if (drawBlock !== null) {
+      toast.show(drawBlock);
       return;
     }
     const kind = trio?.source === "drawn" ? "redraw" : "draw";
@@ -416,8 +421,9 @@ export default function App() {
   // R45: 24시간 안의 기기 저장본이면(폴링이 끝난 응답을 저장한 것) 그걸로 바로 뽑고, 그보다 오래됐으면 새 목록을 기다린다
   // pending이 끝내 줄지 않는 거점에서 30초를 기다리지 않게, 조건 맞는 후보가 30곳 이상이거나 폴링이 5초를 넘으면 그때 뽑는다
   const autoPool = candidates.length + relax.extra.length;
-  const listSettled = hasData && !loading && !polling && fromCache !== "stale";
-  const freshPolling = hasData && polling && fromCache !== "stale";
+  // 자동 뽑기도 지금 거점 목록이 왔을 때만 (거점을 바꾼 직후의 이전 거점 목록으로 뽑지 않는다 — Task 56)
+  const listSettled = listIsHub && !loading && !polling && fromCache !== "stale";
+  const freshPolling = listIsHub && polling && fromCache !== "stale";
   const pollStart = useRef<number | null>(null);
   const [pollWaited, setPollWaited] = useState(false);
   useEffect(() => {
@@ -441,7 +447,7 @@ export default function App() {
       interacted: interacted.current,
       offDay: autoDrawOffDay(),
       today: kstDay(Date.now()),
-      hasData,
+      hasData: listIsHub,
       settled: listSettled,
       pool: autoPool,
       polling: freshPolling,
@@ -453,7 +459,7 @@ export default function App() {
     markAutoDrawn();
     onDraw({ auto: true });
     // onDraw는 매 렌더 새로 만들어지지만, 목록이 처음 준비됐을 때 한 번만 부르면 된다
-  }, [hasData, listSettled, autoPool, returning, share.placeIds, freshPolling, pollWaited, candidates.length]);
+  }, [listIsHub, listSettled, autoPool, returning, share.placeIds, freshPolling, pollWaited, candidates.length]);
 
   // 셔플 중에는 목록·핀 선택을 받지 않는다 (M2). 결과 3곳 중 하나면 그 카드를 펼친다
   const onSelect = (p: ApiPlace) => {
@@ -579,8 +585,6 @@ export default function App() {
     track("open_mine");
   };
   const closeMine = useCallback(() => setMineOpen(false), []);
-  /** 지금 거점 목록이 화면에 있는 목록인가 (거점을 바꾼 직후에는 이전 거점 목록이 남아 있다) */
-  const listIsHub = data !== null && data.center.lat === hub.lat && data.center.lng === hub.lng;
   /**
    * R65: 내 가게 줄을 누름 → 지금 목록에 있으면 닫고 그 카드를 연다(목록·핀을 누른 것과 같다).
    * 없으면 1km 안의 공개 역으로 옮기고 그 목록이 오면 연다. 가까운 역이 없으면 카카오맵 장소 페이지를 새 탭으로
@@ -640,7 +644,7 @@ export default function App() {
 
   const status = statusOf(data, polling, error, now.getTime());
   // R63/R66: 마지막 확인 날짜와 새 가게 요일 (다른 거점 목록이 남아 있는 동안은 숨긴다)
-  const note = data && data.center.lat === hub.lat && data.center.lng === hub.lng ? refreshNote(data, hub.refreshDay) : null;
+  const note = listIsHub ? refreshNote(data, hub.refreshDay) : null;
   /** 셔플 중(고르는 중 시트)이거나 결과 3곳 시트가 떠 있음 — 시트 아래 줄이 뽑기 바를 대신한다 (.has-trio) */
   const trioOpen = selected === null && (shuffle.display !== null || trioPlaces.length > 0);
   // R64: "모먹죠는 이렇게 골라요" 설명 시트. 결과 시트가 사라지면 같이 닫는다

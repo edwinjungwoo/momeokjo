@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { DETAIL_OK_TTL_MS } from "../../shared/constants";
 import {
   DEVICE_CACHE_VERSION, PLACES_CACHE_FRESH_MS, PLACES_CACHE_MAX_AGE_MS, PLACES_CACHE_MAX_CHARS, PLACES_CACHE_MAX_HUBS,
-  mergeCachedPlaces, placesCacheEntry, placesCacheEvictions, placesDataAt, readPlacesCache, type PlacesMergeState,
+  hubListView, mergeCachedPlaces, placesCacheEntry, placesCacheEvictions, placesDataAt, readPlacesCache, type PlacesMergeState,
 } from "../../shared/placesCache";
 
 const NOW = 1_800_000_000_000;
@@ -105,6 +105,27 @@ describe("placesCache", () => {
     it("R45: 다른 거점의 목록을 들고 있으면 이 거점의 저장본으로 바꾼다 (이전 거점 목록은 남기지 않는다)", () => {
       const other: S = { ...initial, data: "net-other", hub: "bongeunsa", loading: false };
       expect(mergeCachedPlaces(other, "ddp", fresh)).toMatchObject({ data: "cached", hub: "ddp" });
+    });
+  });
+
+  describe("hubListView", () => {
+    it("R29/R21′: 거점을 바꾼 직후 이전 거점 목록은 새 목록을 받는 동안 흐리게 보이지만 그 목록으로는 뽑지 않는다", () => {
+      expect(hubListView("bong-list", "bongeunsa", "pangyo", false)).toEqual({
+        shown: "bong-list", listIsHub: false, drawBlock: "가게 정보를 불러오는 중이에요",
+      });
+    });
+
+    it("R29/R14: 새 거점 목록을 받지 못했으면 이전 거점 목록을 보이지도 뽑지도 않는다 (처음 열 때 실패처럼 다시 시도)", () => {
+      expect(hubListView("bong-list", "bongeunsa", "pangyo", true)).toEqual({
+        shown: null, listIsHub: false, drawBlock: "가게 정보를 불러오지 못했어요",
+      });
+    });
+
+    it("R21′: 지금 거점 목록이면 오류(최신 정보를 못 받음)여도 보여주고 뽑는다 · 목록이 없으면 불러오는 중", () => {
+      expect(hubListView("pangyo-list", "pangyo", "pangyo", false)).toEqual({ shown: "pangyo-list", listIsHub: true, drawBlock: null });
+      expect(hubListView("pangyo-list", "pangyo", "pangyo", true)).toEqual({ shown: "pangyo-list", listIsHub: true, drawBlock: null });
+      expect(hubListView(null, null, "pangyo", false)).toEqual({ shown: null, listIsHub: false, drawBlock: "가게 정보를 불러오는 중이에요" });
+      expect(hubListView(null, null, "pangyo", true)).toEqual({ shown: null, listIsHub: false, drawBlock: "가게 정보를 불러오지 못했어요" });
     });
   });
 

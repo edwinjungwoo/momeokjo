@@ -93,3 +93,19 @@ export function mergeCachedPlaces<D, S extends PlacesMergeState<D>>(
     polling: false,
   };
 }
+
+/**
+ * Task 56: 화면(목록·지도·뽑기)에 쓸 목록. listHub = 들고 있는 목록이 어느 거점 것인가 (usePlaces).
+ * - 거점을 바꾼 직후 이전 거점 목록은 새 목록을 받는 동안만 흐리게 보인다(R29). 새 목록을 받지 못했으면(error) 보이지 않는다 —
+ *   처음 열 때 실패처럼 "다시 시도" (이전 거점 목록이 이 거점 목록처럼 남지 않게).
+ * - 뽑기(모먹죠?·R39 자동 뽑기)·내 가게 열기는 지금 거점 목록(listIsHub)으로만 한다 — 아니면 drawBlock 문구로 알린다
+ *   (이전 거점 가게를 "도보 N분"으로 뽑고 지도를 옛 동네로 옮기던 것).
+ */
+export function hubListView<D>(
+  data: D | null, listHub: string | null, hubId: string, error: boolean,
+): { shown: D | null; listIsHub: boolean; drawBlock: string | null } {
+  const listIsHub = data !== null && listHub === hubId;
+  const shown = listIsHub || !error ? data : null;
+  const drawBlock = listIsHub ? null : error ? "가게 정보를 불러오지 못했어요" : "가게 정보를 불러오는 중이에요";
+  return { shown, listIsHub, drawBlock };
+}

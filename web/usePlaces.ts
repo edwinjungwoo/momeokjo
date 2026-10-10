@@ -95,10 +95,11 @@ export function usePlaces(hubId: string, enabled = true) {
   }, [hubId, reloadKey, enabled]);
 
   const reload = useCallback(() => setReloadKey((k) => k + 1), []);
-  const { data, loading, error, polling, cache } = state;
+  const { data, loading, error, polling, cache, hub: listHub } = state;
   /** 지금 data가 기기 저장본인가 ("stale" = 24시간 넘음 → 자동 뽑기는 새 목록을 기다린다) */
   const fromCache = cache === null ? null : cache.fresh ? "fresh" : "stale";
   /** R65: 지금 data를 받은 때 (기기 저장본이면 저장 시각) — 이름 기억 시각 */
   const dataAt = placesDataAt(cache, state.receivedAt);
-  return { data, loading, error, polling, fromCache, dataAt, reload } as const;
+  // listHub: data가 어느 거점 목록인가 — 거점을 바꾼 직후에는 이전 거점 목록이다 (화면은 hubListView로 거른다)
+  return { data, listHub, loading, error, polling, fromCache, dataAt, reload } as const;
 }
