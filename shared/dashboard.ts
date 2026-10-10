@@ -299,7 +299,26 @@ export type OpsSnapshot = {
   cron: CronSummary | null;
   /** R63: 둘째 트리거의 상세만 실행(홀수 분) 마지막 요약 (격자·집계는 늘 0) */
   cronDetail?: CronSummary | null;
+  /** R66: 최근 7일(UTC 날짜, 오늘 포함, 오래된 날부터) 저장한 상세를 지난 지문과 비교한 수 (meta detail_*:{날짜}) */
+  details?: DetailDay[];
 };
+
+/** R66 하루 계수: same 지문이 같음(주기 늘림), changed 바뀜(주기 1주로), first 지난 지문 없음(새 가게·0008 뒤 첫 갱신) */
+export type DetailDay = { day: string; same: number; changed: number; first: number };
+/** R66 주기 분포: ok 가게 중 interval_weeks가 weeks인 곳 수 */
+export type IntervalCount = { weeks: number; places: number };
+
+/** R66 운영 탭 표: 다시 가져온 수 = same + changed, 바뀐 비율 = changed ÷ 다시 가져온 수 (없으면 null), 처음은 따로 + 합계 */
+export function detailRefreshSummary(days: readonly DetailDay[]) {
+  const row = (same: number, changed: number, first: number) => ({
+    refreshed: same + changed, changed, first, changedRate: ratio(changed, same + changed),
+  });
+  const sum = (k: "same" | "changed" | "first") => days.reduce((n, d) => n + d[k], 0);
+  return {
+    days: days.map((d) => ({ day: d.day, ...row(d.same, d.changed, d.first) })),
+    total: row(sum("same"), sum("changed"), sum("first")),
+  };
+}
 
 export type OpsData = DashboardBase & {
   tab: "ops";
@@ -309,6 +328,9 @@ export type OpsData = DashboardBase & {
   hubsComputedAt: number | null;
   /** 오늘(KST) 저장된 이벤트 수 (실시간 집계에서), 모르면 null */
   eventsToday: number | null;
+  /** R66 주기 분포(1·2·4주, 주기 순)와 센 시각 — 10분에 한 번만 센다. 예산 가드로 세지 않았고 캐시에도 없으면 null */
+  intervals: IntervalCount[] | null;
+  intervalsAt: number | null;
   alerts: Alert[];
 };
 

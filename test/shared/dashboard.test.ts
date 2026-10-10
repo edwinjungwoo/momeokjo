@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
-  CRON_STALE_MS, addDays, alertsOf, budgetFraction, budgetLevel, dayList, daysBetween, deltaOf, histogramMedian, isDay,
+  CRON_STALE_MS, addDays, alertsOf, budgetFraction, budgetLevel, dayList, daysBetween, deltaOf, detailRefreshSummary, histogramMedian, isDay,
   METRICS, METRIC_FAMILIES, mondayOf, overBlockAfter, weekdayOf, type HubStatus, type OpsSnapshot,
 } from "../../shared/dashboard";
 import spec from "../../docs/superpowers/specs/2026-10-05-momeokjo-design.md?raw";
@@ -102,5 +102,20 @@ describe("대시보드 순수 계산", () => {
       ["info", "rollup", "지난 날 집계를 Cron이 채우는 중이에요"],
       ["info", "hub:gangnam", "강남역 (준비 중): 미수집 40곳"],
     ]);
+  });
+});
+
+describe("R66 상세 갱신 계수 요약", () => {
+  it("R66: 다시 가져온 수 = 같음 + 바뀜, 바뀐 비율 = 바뀜 ÷ 다시 가져온 수 (없으면 null), 처음은 따로 — 7일 합계도", () => {
+    const s = detailRefreshSummary([
+      { day: "2027-01-14", same: 30, changed: 10, first: 5 },
+      { day: "2027-01-15", same: 0, changed: 0, first: 2 },
+    ]);
+    expect(s.days).toEqual([
+      { day: "2027-01-14", refreshed: 40, changed: 10, first: 5, changedRate: 0.25 },
+      { day: "2027-01-15", refreshed: 0, changed: 0, first: 2, changedRate: null },
+    ]);
+    expect(s.total).toEqual({ refreshed: 40, changed: 10, first: 7, changedRate: 0.25 });
+    expect(detailRefreshSummary([]).total).toEqual({ refreshed: 0, changed: 0, first: 0, changedRate: null });
   });
 });

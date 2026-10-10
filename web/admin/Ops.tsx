@@ -1,12 +1,13 @@
 import { useEffect, useRef, useState } from "react";
 import {
-  BUDGET_BLOCK_AT, D1_DAILY_READ_LIMIT, overBlockAfter, D1_DAILY_WRITE_LIMIT, budgetFraction, budgetLevel, type HubStatus, type OpsData,
+  BUDGET_BLOCK_AT, D1_DAILY_READ_LIMIT, overBlockAfter, D1_DAILY_WRITE_LIMIT, budgetFraction, budgetLevel, detailRefreshSummary,
+  type HubStatus, type OpsData,
 } from "../../shared/dashboard";
 import { HUBS, hubById } from "../../shared/hubs";
 import type { Api } from "./AdminPage";
 import { Meter } from "./charts";
 import { CronResult } from "./CronResult";
-import { ago, kstTime, num, pct, refreshDoneLabel, refreshStartLabel, until } from "./format";
+import { ago, kstTime, num, pct, refreshDoneLabel, refreshStartLabel, shortDay, until } from "./format";
 import { AlertStrip, HubName, hubName } from "./Overview";
 
 /** 대시보드 링크 (계정은 Cloudflare가 고르게 한다 — API 토큰 없음) */
@@ -136,6 +137,51 @@ function HubTable({ hubs, now, blocked, onRun, running }: {
         })}
       </tbody>
     </table>
+  );
+}
+
+/**
+ * R66 바뀌는 만큼만: 최근 7일(UTC) 다시 가져온 상세 중 바뀐 비율과 처음 가져온 수, 지금 주기 분포(10분마다 센다).
+ * 다시 가져온 수 = 지문이 같음 + 바뀜 (처음은 따로 — 새 가게와 0008 뒤 첫 갱신)
+ */
+function DetailRefresh({ data, now }: { data: OpsData; now: number }) {
+  const s = detailRefreshSummary(data.ops.details ?? []);
+  const iv = data.intervals;
+  const total = iv ? iv.reduce((n, x) => n + x.places, 0) : 0;
+  return (
+    <section className="card">
+      <div className="a-card-head">
+        <h2 className="sec-title">상세 갱신 (바뀌는 만큼만)</h2>
+        <span className="muted small">UTC 날짜 · 7일 바뀜 {pct(s.total.changedRate)}</span>
+      </div>
+      <table className="rtable compact">
+        <thead>
+          <tr>
+            <th>날짜</th>
+            <th className="num">다시 가져옴</th>
+            <th className="num">바뀜</th>
+            <th className="num">처음</th>
+          </tr>
+        </thead>
+        <tbody>
+          {s.days.map((d) => (
+            <tr key={d.day}>
+              <td className="name">{shortDay(d.day)}</td>
+              <td className="num" data-label="다시 가져옴">{num(d.refreshed)}</td>
+              <td className="num" data-label="바뀜">
+                {pct(d.changedRate)} <small className="muted">{num(d.changed)}곳</small>
+              </td>
+              <td className="num" data-label="처음">{num(d.first)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <p className="muted small">
+        {iv === null
+          ? "주기 분포는 예산 보호로 세지 않았어요"
+          : `주기 ${iv.map((x) => `${x.weeks}주 ${num(x.places)}곳`).join(" · ") || "없음"} (상세 있는 ${num(total)}곳, ${ago(data.intervalsAt, now)} 셈 · 10분마다)`}
+      </p>
+    </section>
   );
 }
 
@@ -337,6 +383,8 @@ export function Ops({ data, api }: { data: OpsData; api: Api }) {
           </div>
         </dl>
       </section>
+
+      <DetailRefresh data={data} now={now} />
 
       <section className="card">
         <div className="a-card-head">

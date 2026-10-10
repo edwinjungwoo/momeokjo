@@ -10,7 +10,8 @@ import { d1UsageOn, recordCronRun, recordD1Usage } from "../../worker/d1Usage";
 import { runScheduled } from "../../worker/maintenance";
 import { parseDetail } from "../../worker/detailParser";
 import { SNAPSHOT_DIRTY_PREFIX } from "../../worker/snapshotDirty";
-import { hubStatuses } from "../../worker/dashboard";
+import type { OpsData } from "../../shared/dashboard";
+import { INTERVALS_CACHE_MS, hubStatuses } from "../../worker/dashboard";
 import { hubHasDue } from "../../worker/hubRefresh";
 import { dueSinceOf, tileRefreshStarts } from "../../worker/refreshSchedule";
 import {
@@ -404,5 +405,72 @@ describe("R66 볼 때 신선하게 — 단건 조회의 stale-while-revalidate",
     // 끝나면 다시 열 수 있다 (이번에는 신선해서 부르지 않는다)
     await callApp(app, "/api/places/506");
     expect(place.calls).toHaveLength(1);
+  });
+});
+
+// ── R66 관리 화면 운영 탭 ─────────────────────────────
+
+describe("R66 관리 화면 운영 탭 — 최근 7일 계수와 주기 분포", () => {
+  const AUTH = { Authorization: "Bearer test-admin-token" };
+  const memCache = () => {
+    const store = new Map<string, Response>();
+    return {
+      async match(req: Request) {
+        return store.get(req.url)?.clone();
+      },
+      async put(req: Request, res: Response) {
+        store.set(req.url, res.clone());
+      },
+    };
+  };
+  const INTERVAL_SQL = /GROUP BY interval_weeks/;
+
+  it("R66: 운영 탭은 최근 7일(UTC, 오늘 포함, 오래된 날부터) 같음·바뀜·처음 계수를 meta에서 읽는다 (같은 meta 질의 하나)", async () => {
+    const day = utcDay(T);
+    await recordD1Usage(env.DB, { read: 1, written: 1, details: { same: 30, changed: 10, first: 5 } }, T);
+    await recordD1Usage(env.DB, { read: 1, written: 1, details: { same: 7, changed: 0, first: 0 } }, T - 2 * DAY);
+    await recordD1Usage(env.DB, { read: 1, written: 1, details: { same: 99, changed: 99, first: 99 } }, T - 7 * DAY); // 8일 전은 빼고
+    const app = createApp({ fetcher: fakePlaceApi({}).fetcher, now: () => T, sleep: async () => {}, rateLimit: async () => true });
+    const d = await (await callApp(app, "/api/admin/dashboard?tab=ops", { headers: AUTH })).json<OpsData>();
+    expect(d.ops.details).toHaveLength(7);
+    expect(d.ops.details![6]).toEqual({ day, same: 30, changed: 10, first: 5 });
+    expect(d.ops.details![4]).toEqual({ day: utcDay(T - 2 * DAY), same: 7, changed: 0, first: 0 });
+    expect(d.ops.details![0]).toEqual({ day: utcDay(T - 6 * DAY), same: 0, changed: 0, first: 0 });
+  });
+
+  it("R66/R38: 주기 분포(ok 가게를 interval_weeks로 GROUP BY — 가게 수만큼 읽는다)는 10분에 한 번만 센다 — 자동 새로 보기·fresh=1에도 캐시를 쓴다", async () => {
+    await seedDue([["a", T, T, 1], ["b", T, T, 1], ["c", T, T + WEEK_MS, 2], ["d", T, T + 3 * WEEK_MS, 4]]);
+    await saveDetailFailure(env.DB, "f", "http_500", T);
+    expect(INTERVALS_CACHE_MS).toBe(10 * 60_000);
+    let now = T;
+    const app = createApp({ fetcher: fakePlaceApi({}).fetcher, now: () => now, sleep: async () => {}, rateLimit: async () => true, cache: memCache() });
+    const call = async (q = "tab=ops") => {
+      const { db, log } = recordingDb(env.DB);
+      const d = await (await callApp(app, `/api/admin/dashboard?${q}`, { headers: AUTH }, { ...env, DB: db })).json<OpsData>();
+      return { d, counted: log.some((x) => INTERVAL_SQL.test(x.sql)) };
+    };
+    const first = await call();
+    expect(first.counted).toBe(true);
+    expect(first.d.intervals).toEqual([{ weeks: 1, places: 2 }, { weeks: 2, places: 1 }, { weeks: 4, places: 1 }]);
+    expect(first.d.intervalsAt).toBe(T);
+    now = T + 61_000; // 응답 캐시(60초)는 지났다
+    expect((await call()).counted).toBe(false);
+    const fresh = await call("tab=ops&fresh=1");
+    expect(fresh.counted).toBe(false);
+    expect(fresh.d.intervalsAt).toBe(T);
+    now = T + INTERVALS_CACHE_MS + 1;
+    const later = await call();
+    expect(later.counted).toBe(true);
+    expect(later.d.intervalsAt).toBe(now);
+  });
+
+  it("R66/R38: 오늘 읽기가 소프트 한도의 절반을 넘었고 캐시에 없으면 주기 분포를 세지 않는다 (null)", async () => {
+    await env.DB.prepare("INSERT INTO meta VALUES (?, '1500000')").bind(`d1_read:${utcDay(T)}`).run();
+    const { db, log } = recordingDb(env.DB);
+    const app = createApp({ fetcher: fakePlaceApi({}).fetcher, now: () => T, sleep: async () => {}, rateLimit: async () => true });
+    const d = await (await callApp(app, "/api/admin/dashboard?tab=ops", { headers: AUTH }, { ...env, DB: db })).json<OpsData>();
+    expect(d.intervals).toBeNull();
+    expect(d.intervalsAt).toBeNull();
+    expect(log.some((x) => INTERVAL_SQL.test(x.sql))).toBe(false);
   });
 });

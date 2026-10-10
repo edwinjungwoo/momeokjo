@@ -379,7 +379,7 @@ describe("GET /api/admin/dashboard", () => {
     expect(d.kpis.sessions.value).toBe(4);
   });
 
-  it("R59/R63: 응답 형식이 바뀌어 캐시 판을 3으로 올렸다 (R63 거점 표의 주간 갱신 필드)", () => {
-    expect(dashboardCacheKey({ tab: "ops", from: TODAY, to: TODAY, hub: "all", compare: true })).toContain("&v=3");
+  it("R59/R63/R66: 응답 형식이 바뀌어 캐시 판을 4로 올렸다 (R63 거점 표의 주간 갱신 필드 → R66 운영 탭 상세 계수·주기 분포)", () => {
+    expect(dashboardCacheKey({ tab: "ops", from: TODAY, to: TODAY, hub: "all", compare: true })).toContain("&v=4");
   });
 });

@@ -2,14 +2,15 @@ import { PREWARM_RADIUS } from "../shared/constants";
 import {
   COHORT_METRICS, LIVE_MAX_DAYS, METRICS, RETENTION_DAYS, TOP_PLACES_SHOWN, addDays, alertsOf, dayList, mondayOf, ratio,
   weekdayOf, type BehaviorData, type Cohort, type CronSummary, type DashboardBase, type DashboardRange, type DashboardTab,
-  type DaySource, type HubStatus, type Kpi, type Metrics, type OpsData, type OpsSnapshot, type OverviewData, type TopPlace,
+  type DaySource, type DetailDay, type HubStatus, type IntervalCount, type Kpi, type Metrics, type OpsData, type OpsSnapshot,
+  type OverviewData, type TopPlace,
 } from "../shared/dashboard";
 import { tilesCoveringCircle } from "../shared/geo";
 import { HUBS, hubById } from "../shared/hubs";
 import { HUB_REFRESHED_PREFIX, parseHubRefreshed } from "./hubRefresh";
 import { hubRefreshStart, tileFreshFrom } from "./refreshSchedule";
 import { kstDay, utcDay } from "../shared/kst";
-import { CRON_DETAIL_LAST_KEY, CRON_LAST_KEY } from "./d1Usage";
+import { CRON_DETAIL_LAST_KEY, CRON_LAST_KEY, DETAIL_KINDS, detailCounterKey } from "./d1Usage";
 import { usableListJsonSql } from "./present";
 import { COLLECT_SINCE_KEYS, ROLLUP_THROUGH_KEY, liveDayMetrics, type LivePart, type MetricRow } from "./rollup";
 
@@ -34,8 +35,8 @@ export type DashboardDeps = {
 };
 export type DashboardQuery = { tab: DashboardTab; from: string; to: string; hub: string; compare: boolean };
 
-/** 응답 형식이 바뀌면 올린다 */
-export const DASHBOARD_CACHE_VERSION = "3";
+/** 응답 형식이 바뀌면 올린다 (4: R66 운영 탭 상세 계수·주기 분포) */
+export const DASHBOARD_CACHE_VERSION = "4";
 export const DASHBOARD_CACHE_MS = 60_000;
 /**
  * 실시간 집계(그날 events를 이벤트당 수 행씩 읽는다)는 탭·거점이 함께 쓰고 5분 둔다 — 자동 새로고침(60초)이 매번 다시 세지 않게.
@@ -45,12 +46,17 @@ export const LIVE_CACHE_MS = 5 * 60_000;
 export const LIVE_BUDGET_SHARE = 0.5;
 /** 거점별 데이터 상태(격자·가게 수천 행)는 천천히 바뀐다 */
 export const HUB_STATUS_CACHE_MS = 15 * 60_000;
+/** R66 주기 분포(ok 가게 전부를 GROUP BY — 가게 수만큼 읽는다)는 10분에 한 번만 센다 (fresh=1이어도 — 자동 새로 보기마다 세지 않게) */
+export const INTERVALS_CACHE_MS = 10 * 60_000;
+/** R66 운영 탭 계수를 보여 주는 날 수 (UTC, 오늘 포함) */
+export const DETAIL_DAYS = 7;
 const EXPIRES = "x-mmj-expires";
 
 export const dashboardCacheKey = (q: DashboardQuery) =>
   `https://cache.mmj/admin/dashboard?tab=${q.tab}&from=${q.from}&to=${q.to}&hub=${encodeURIComponent(q.hub)}&compare=${q.compare ? 1 : 0}&v=${DASHBOARD_CACHE_VERSION}`;
 const liveKey = (day: string, part: LivePart) => `https://cache.mmj/admin/live?day=${day}&part=${part}&v=${DASHBOARD_CACHE_VERSION}`;
 const HUBS_KEY = `https://cache.mmj/admin/hubs?v=${DASHBOARD_CACHE_VERSION}`;
+const INTERVALS_KEY = `https://cache.mmj/admin/intervals?v=${DASHBOARD_CACHE_VERSION}`;
 
 /** 엣지 캐시에 둔 JSON (만료 시각은 헤더로 직접 본다). 없거나 지났으면 null */
 export async function cachedJson<T>(cache: JsonCache | undefined, key: string, now: number): Promise<T | null> {
@@ -77,11 +83,14 @@ type MetaState = { ops: OpsSnapshot; rollupThrough: string | null; collectSince:
 
 async function readState(deps: DashboardDeps): Promise<MetaState> {
   const day = utcDay(deps.now);
+  // R66: 최근 7일(UTC) 상세 계수 키도 같은 질의로 (오래된 날부터)
+  const detailDays = Array.from({ length: DETAIL_DAYS }, (_, i) => utcDay(deps.now - (DETAIL_DAYS - 1 - i) * 86_400_000));
   const keys = [
     `d1_read:${day}`, `d1_written:${day}`, "place_blocked_until", "detail_mode", `block_count:${kstDay(deps.now)}`, CRON_LAST_KEY, CRON_DETAIL_LAST_KEY,
     ROLLUP_THROUGH_KEY,
     COLLECT_SINCE_KEYS.relaxed,
     COLLECT_SINCE_KEYS.confirmRank,
+    ...detailDays.flatMap((d) => DETAIL_KINDS.map((k) => detailCounterKey(k, d))),
   ];
   const r = await deps.db
     .prepare(`SELECT key, value FROM meta WHERE key IN (${keys.map(() => "?").join(", ")})`)
@@ -110,6 +119,9 @@ async function readState(deps: DashboardDeps): Promise<MetaState> {
   };
   cron = summaryOf(CRON_LAST_KEY);
   const cronDetail = summaryOf(CRON_DETAIL_LAST_KEY);
+  const details: DetailDay[] = detailDays.map((d) => ({
+    day: d, same: num(detailCounterKey("same", d)), changed: num(detailCounterKey("changed", d)), first: num(detailCounterKey("first", d)),
+  }));
   const nextUtcMidnight = Date.parse(`${day}T00:00:00Z`) + 86_400_000;
   return {
     ops: {
@@ -120,6 +132,7 @@ async function readState(deps: DashboardDeps): Promise<MetaState> {
       kakao: { blockedUntil: num("place_blocked_until"), frozen, blocksToday: num(keys[4]) },
       cron,
       cronDetail,
+      details,
     },
     rollupThrough: get(ROLLUP_THROUGH_KEY) ?? null,
     collectSince: { relaxed: get(COLLECT_SINCE_KEYS.relaxed) ?? null, confirmRank: get(COLLECT_SINCE_KEYS.confirmRank) ?? null },
@@ -270,6 +283,23 @@ async function cachedHubStatuses(deps: DashboardDeps, allowed: boolean): Promise
   if (!allowed) return { hubs: null, at: null };
   const v = { hubs: await hubStatuses(deps.db, deps.now), at: deps.now };
   putJson(deps, HUBS_KEY, JSON.stringify(v), deps.now, HUB_STATUS_CACHE_MS);
+  return v;
+}
+
+/** R66 주기 분포: ok 가게를 interval_weeks로 센다 (가게 수만큼 읽는다 — INTERVALS_CACHE_MS 캐시) */
+export const INTERVALS_SQL = "SELECT interval_weeks AS weeks, count(*) AS places FROM places WHERE status = 'ok' GROUP BY interval_weeks ORDER BY interval_weeks";
+
+/**
+ * R66 주기 분포: 캐시에 있으면 그것(fresh여도 — 10분에 한 번만 센다), 없으면 센다 — 단 오늘 읽기가 실시간 가드(LIVE_BUDGET_SHARE)를
+ * 넘었으면 세지 않는다(null)
+ */
+async function cachedIntervals(deps: DashboardDeps, allowed: boolean): Promise<{ intervals: IntervalCount[] | null; at: number | null }> {
+  const hit = await cachedJson<{ intervals: IntervalCount[]; at: number }>(deps.cache, INTERVALS_KEY, deps.now);
+  if (hit) return hit;
+  if (!allowed) return { intervals: null, at: null };
+  const r = await deps.db.prepare(INTERVALS_SQL).all<{ weeks: number; places: number }>();
+  const v = { intervals: r.results.map((x) => ({ weeks: Number(x.weeks), places: Number(x.places) })), at: deps.now };
+  putJson(deps, INTERVALS_KEY, JSON.stringify(v), deps.now, INTERVALS_CACHE_MS);
   return v;
 }
 
@@ -567,12 +597,13 @@ async function behavior(deps: DashboardDeps, q: DashboardQuery, state: MetaState
 async function ops(deps: DashboardDeps, q: DashboardQuery, state: MetaState): Promise<OpsData> {
   const today = kstDay(deps.now);
   const liveAllowed = liveAllowedBy(state, deps);
-  const [hubs, count] = await Promise.all([
+  const [hubs, count, intervals] = await Promise.all([
     cachedHubStatuses(deps, liveAllowed),
     // 오늘 이벤트 수는 idx_events_day 색인만 센다 (실시간 집계보다 훨씬 싸다)
     liveAllowed
       ? deps.db.prepare("SELECT count(*) AS n FROM events WHERE day = ?").bind(today).first<{ n: number }>()
       : Promise.resolve(null),
+    cachedIntervals(deps, liveAllowed),
   ]);
   const rangeDays = dayList(q.from, q.to);
   const sources = sourcesFor(rangeDays, today, state.rollupThrough, liveAllowed);
@@ -583,6 +614,8 @@ async function ops(deps: DashboardDeps, q: DashboardQuery, state: MetaState): Pr
     hubs: hubs.hubs,
     hubsComputedAt: hubs.at,
     eventsToday: count ? Number(count.n) : null,
+    intervals: intervals.intervals,
+    intervalsAt: intervals.at,
     alerts: alertsOf(state.ops, hubs.hubs, deps.now, { through: state.rollupThrough, yesterday: addDays(today, -1) }, hubName, isUnreadyHub),
   };
 }
