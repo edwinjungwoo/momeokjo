@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import { runRelease, smokeAuditPick, type ReleaseOpts, type RunResult } from "../../scripts/release.mjs";
 import sql0003 from "../../migrations/0003_meta.sql?raw";
 import sql0005 from "../../migrations/0005_list_json.sql?raw";
+import SMOKE_ALL_DOWN from "../fixtures/smoke-all-down.txt?raw";
 import {
   D1_LIMIT_ERROR,
   D1_SELECT_1,
@@ -616,6 +617,16 @@ describe("infra: npm run release — 기준 스모크와 자동 롤백", () => {
     const failed = harness({ ...smokes([], [FAIL_PLACES_500]), "git show": fail("fatal: invalid object name") });
     expect((await runRelease(opts(), failed.deps)).code).toBe(3);
     expect(failed.output()).toContain("Cron 트리거를 비교하지 못했어요");
+  });
+
+  it("infra: 배포 뒤 이 컴퓨터의 네트워크가 끊기면(실제 스모크 출력, 두 번 모두 → 000) 좋은 배포를 되돌리지 않고 확인 필요 3 + 롤백 명령", async () => {
+    const h = harness({ "bash scripts/smoke.sh": [ok(smokeOutput(0)), fail("", 1, SMOKE_ALL_DOWN), fail("", 1, SMOKE_ALL_DOWN)] });
+    const res = await runRelease(opts(), h.deps);
+    expect(res.code).toBe(3);
+    expect(h.ran("npx wrangler rollback")).toHaveLength(0);
+    expect(h.ran("bash scripts/smoke.sh")).toHaveLength(3);
+    expect(res.summary.result).toContain("연결 실패(000)");
+    expect(h.output()).toContain(`npx wrangler rollback ${PREV_VERSION}`);
   });
 
   it("infra: 기준에 없던 코드 수준 FAIL이 새로 생기면 기록한 버전으로 비대화식 롤백(--message, --yes), 종료 코드 2", async () => {

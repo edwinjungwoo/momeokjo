@@ -1,0 +1,40 @@
+모먹죠 스모크 → http://127.0.0.1:9
+== 정적 파일
+  FAIL  / → 000 또는 제목이 다름
+  info  / cache-control: 
+  FAIL  /og.png → 000 ()
+  FAIL  /robots.txt → 000 또는 Disallow 줄이 없음
+  FAIL  /pangyo → 000
+  FAIL  /admin → 000
+  info  /admin X-Robots-Tag 없음 (robots.txt·메타 태그로 막음, 실패 아님)
+  info  / → 000 — /assets 확인은 건너뜀 (위 / 줄이 FAIL)
+== 목록 (공개 거점마다 1번, 준비 중 거점은 숨김 확인)
+  FAIL  bongeunsa 1000m → 000
+  FAIL  ddp 500m → 000
+  FAIL  pangyo 500m → 000
+  FAIL  naebang 500m → 000
+  FAIL  gwacheon 500m → 000
+  FAIL  gangnam 500m → 000
+  FAIL  yeouido 500m → 000
+  FAIL  gwanghwamun 500m → 000
+  FAIL  yeoksam 500m → 000
+  FAIL  seonjeongneung 500m → 000
+  FAIL  seolleung 500m → 000
+  FAIL  samseong 500m → 000
+  FAIL  cityhall 500m → 000
+  FAIL  euljiro1ga 500m → 000
+== 입력 검증 (외부 호출이 일어나지 않는 요청만)
+  FAIL  반경 99 → 000 (기대 400)
+  FAIL  반경 1001 → 000 (기대 400)
+  FAIL  반경 525 (50m 단위 아님) → 000 (기대 400)
+  FAIL  모르는 거점 → 000 (기대 400)
+  FAIL  16자리 id → 000 (기대 404)
+== 이벤트 (정상 이벤트는 보내지 않음)
+  FAIL  틀린 본문 → 000 
+  FAIL  8KB 넘는 본문 → 000 
+== 관리자
+  FAIL  통계 토큰 없이 → 000 (기대 401)
+  FAIL  통계 틀린 토큰 → 000 (기대 401)
+  info  ADMIN_TOKEN이 없어 감사(Q1·Q2)는 건너뜀
+
+요청 28번 · FAIL 28 · WARN 0

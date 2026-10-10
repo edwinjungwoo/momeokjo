@@ -78,10 +78,11 @@ echo "모먹죠 스모크 → $B"
 echo "== 정적 파일"
 req index "$B/"
 code=$CODE
-if [ "$code" = 200 ] && grep -q "<title>모먹죠 - 점심 고?</title>" "$tmp/index.body"; then ok "/ 200, 제목 '모먹죠 - 점심 고?'"; else bad "/ → $code 또는 제목이 다름"; fi
-grep -q "점심 ㄱ" "$tmp/index.body" && bad "/ 에 예전 문구 '점심 ㄱ'이 남아 있음"
+index_code=$CODE
+if [ "$code" = 200 ] && grep -q "<title>모먹죠 - 점심 고?</title>" "$tmp/index.body" 2>/dev/null; then ok "/ 200, 제목 '모먹죠 - 점심 고?'"; else bad "/ → $code 또는 제목이 다름"; fi
+grep -q "점심 ㄱ" "$tmp/index.body" 2>/dev/null && bad "/ 에 예전 문구 '점심 ㄱ'이 남아 있음"
 info "/ cache-control: $(hdr index cache-control)"
-asset=$(grep -oE '/assets/[A-Za-z0-9._-]+\.js' "$tmp/index.body" | head -1)
+asset=$(grep -oE '/assets/[A-Za-z0-9._-]+\.js' "$tmp/index.body" 2>/dev/null | head -1)
 
 req og "$B/og.png"
 code=$CODE
@@ -104,7 +105,11 @@ if [ "$code" = 200 ]; then ok "/admin 200"; else bad "/admin → $code"; fi
 robots_tag=$(hdr admin x-robots-tag)
 if [ -n "$robots_tag" ]; then info "/admin X-Robots-Tag: $robots_tag"; else info "/admin X-Robots-Tag 없음 (robots.txt·메타 태그로 막음, 실패 아님)"; fi
 
-if [ -n "$asset" ]; then
+# /가 200이 아니면 /assets 확인은 하지 않는다 — 위 / 줄이 이미 FAIL이고, 네트워크가 통째로 끊겼을 때 FAIL 줄이 모두 "→ 000"이어야
+# release가 운영자 쪽 네트워크로 보고 자동 롤백하지 않는다 (scripts/release.mjs confirmRollback)
+if [ "$index_code" != 200 ]; then
+  info "/ → $index_code — /assets 확인은 건너뜀 (위 / 줄이 FAIL)"
+elif [ -n "$asset" ]; then
   req asset "$B$asset"
   code=$CODE
   cc=$(hdr asset cache-control)

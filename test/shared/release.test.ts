@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { MIGRATION_CHECKS, objectState } from "../../scripts/migrationChecks.mjs";
+import SMOKE_ALL_DOWN from "../fixtures/smoke-all-down.txt?raw";
 import {
   classifySmokeFails,
   configuredCrons,
@@ -350,6 +351,18 @@ describe("infra: 롤백 전에 한 번 더 (일시 FAIL 거르기)", () => {
     // 한 번이라도 서버가 답한 실패(500)가 있으면 그대로 롤백
     expect(confirmRollback({ first: [FAIL_PLACES_500], rerun: s([FAIL_PLACES_000]), baseline: [], hubIds: HUBS })).toMatchObject({ action: "rollback" });
     expect(confirmRollback({ first: [FAIL_PLACES_000], rerun: s([FAIL_PLACES_500]), baseline: [], hubIds: HUBS })).toMatchObject({ action: "rollback" });
+  });
+
+  it("infra: 운영자 네트워크가 통째로 끊긴 실제 스모크 출력(B=http://127.0.0.1:9)은 FAIL이 모두 → 000이라 자동 롤백하지 않는다 (manual)", () => {
+    const summary = parseSmokeSummary(SMOKE_ALL_DOWN);
+    const fails = parseSmokeFails(SMOKE_ALL_DOWN);
+    expect(summary?.fails).toBe(fails.length);
+    expect(fails.length).toBeGreaterThan(20);
+    expect(fails.filter((l) => !/→ 000\b/.test(l))).toEqual([]);
+    // 처음 스모크는 다시 돌려 보기(rollback 후보)로 가고, 다시 돌려도 같으면 manual
+    const first = shouldRollback({ code: 1, summary, fails, baseline: [], hubIds: HUBS });
+    expect(first.action).toBe("rollback");
+    expect(confirmRollback({ first: first.newFails, rerun: { code: 1, summary, fails }, baseline: [], hubIds: HUBS })).toMatchObject({ action: "manual" });
   });
 
   it("infra: 다시 돌리니 사라졌으면 그대로 (일시 FAIL)", () => {
