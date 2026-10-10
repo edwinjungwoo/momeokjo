@@ -455,7 +455,7 @@ describe("R56 거점 스냅샷 — Cron", () => {
     expect(await maintainSnapshots(env.DB, hubs, t + 5)).toEqual({ status: "renewed", hub: "bongeunsa" });
   });
 
-  it("R56/R63: 스냅샷 Cron은 따로 돈다 — 본 Cron(MAIN_CRON)은 수집·보충만, 둘째 트리거(SECOND_CRON)의 2·7·12·…분은 외부 호출 없이 한 거점만 만든다", async () => {
+  it("R56/R63: 스냅샷 Cron은 따로 돈다 — 본 Cron(MAIN_CRON)은 수집·보충만, 둘째 트리거(SECOND_CRON)의 7·17·…분은 외부 호출 없이 한 거점만 만든다", async () => {
     expect(wranglerConfig).toContain(`"${MAIN_CRON}"`);
     expect(wranglerConfig).toContain(`"${SECOND_CRON}"`);
     for (const h of HUBS) for (const k of tilesCoveringCircle(h, PREWARM_RADIUS)) await markTile(env.DB, k, NOW, 0, false);
@@ -508,10 +508,43 @@ describe("R56 거점 스냅샷 — Cron", () => {
     expect((await snapshotRow("ddp"))!.built_at).toBe(NOW + 1);
   });
 
-  it("R56: 수용량 — 스냅샷 실행(둘째 트리거의 2·7·12·…분, 시간당 12번) × 쓰는 시간(2시간)이 공개 거점 수보다 25% 넘게 넉넉하다", () => {
-    const perHour = Array.from({ length: 60 }, (_, m) => secondCronJob(Date.UTC(2026, 9, 7, 1, m))).filter((j) => j === "snapshot").length;
-    expect(perHour).toBe(12);
-    expect(PUBLIC_HUBS.length * 1.25).toBeLessThanOrEqual((perHour * SNAPSHOT_MAX_AGE_MS) / 3_600_000);
+  it("R56: 수용량 — 새로 하기는 시간당 12번(:x2·:x7) × 쓰는 시간(2시간)이 공개 거점 수보다 25% 넘게 넉넉하고, 무거운 만들기는 :x7 시간당 6번까지(안정성 — 예전 상한)", () => {
+    const jobs = Array.from({ length: 60 }, (_, m) => secondCronJob(Date.UTC(2026, 9, 7, 1, m)));
+    const full = jobs.filter((j) => j === "snapshot").length;
+    const renew = full + jobs.filter((j) => j === "renew").length;
+    expect(full).toBe(6);
+    expect(renew).toBe(12);
+    expect(PUBLIC_HUBS.length * 1.25).toBeLessThanOrEqual((renew * SNAPSHOT_MAX_AGE_MS) / 3_600_000);
+    // 무거운 만들기 하루 144번 — 안전망(거점마다 하루 1번)은 그 10% 안
+    expect(PUBLIC_HUBS.length).toBeLessThanOrEqual(full * 24 * 0.1);
+  });
+
+  it("R56: 새로 하기만 하는 실행(:x2)은 깨끗하고 만료가 가까운 스냅샷만 새로 한다 — 없는·더러운·안전망이 지난 스냅샷은 만들지 않고 :x7에 맡긴다", async () => {
+    // 없는 스냅샷: 만들지 않는다
+    await freshAll();
+    expect(await maintainSnapshots(env.DB, hubs, NOW, { renewOnly: true })).toEqual({ status: "idle" });
+    expect(await env.DB.prepare("SELECT count(*) AS c FROM hub_snapshots").first<{ c: number }>()).toEqual({ c: 0 });
+    for (let i = 0; i < hubs.length; i++) await maintainSnapshots(env.DB, hubs, NOW + i);
+    const t = NOW + SNAPSHOT_MAX_AGE_MS - SNAPSHOT_REFRESH_BEFORE_MS + 5;
+    // 더러운 스냅샷(봉은사)은 건너뛰고 다음으로 오래된 깨끗한 것(동대문)을 새로 한다
+    await env.DB.batch([markHubsDirtyStmt(env.DB, ["bongeunsa"], NOW + 10)]);
+    expect(await maintainSnapshots(env.DB, hubs, t, { renewOnly: true })).toEqual({ status: "renewed", hub: "ddp" });
+    // 안전망이 지난 것(판교)도 건너뛴다 — 남은 것이 없으면 idle
+    await env.DB.prepare("UPDATE meta SET value = '1' WHERE key = ?").bind(SNAPSHOT_FULL_PREFIX + "pangyo").run();
+    expect(await maintainSnapshots(env.DB, hubs, t + 1, { renewOnly: true })).toEqual({ status: "idle" });
+    expect((await snapshotRow("pangyo"))!.built_at).toBe(NOW + 2);
+    // :x7(기본)은 더러운 것·안전망이 지난 것을 다시 만든다
+    expect(await maintainSnapshots(env.DB, hubs, t + 2)).toMatchObject({ status: "built", hub: "bongeunsa" });
+    expect(await maintainSnapshots(env.DB, hubs, t + 3)).toMatchObject({ status: "built", hub: "pangyo" });
+  });
+
+  it("R56: 새로 하기만 하는 실행은 첫 후보가 지금 새로 할 수 없으면(만료 격자) 다음 후보를 본다 (많아야 3곳)", async () => {
+    await freshAll();
+    for (let i = 0; i < hubs.length; i++) await maintainSnapshots(env.DB, hubs, NOW + i);
+    const t = NOW + SNAPSHOT_MAX_AGE_MS - SNAPSHOT_REFRESH_BEFORE_MS + 5;
+    await env.DB.prepare("DELETE FROM tiles WHERE key = ?").bind(tileKeyOf(HUB)).run();
+    expect(await maintainSnapshots(env.DB, hubs, t, { renewOnly: true })).toEqual({ status: "renewed", hub: "ddp" });
+    expect((await snapshotRow("bongeunsa"))!.built_at).toBe(NOW);
   });
 
   it("R56: 안전망 — 마지막으로 다시 만든 지 24시간이 지난 스냅샷은 깨끗해도 새로 하지 않고 다시 만든다 (표시를 빠뜨린 변화가 있어도 하루 안에 바로잡힌다)", async () => {
@@ -540,7 +573,7 @@ describe("R56 거점 스냅샷 — Cron", () => {
     expect(await maintainSnapshots(env.DB, hubs, t2 + 2)).toMatchObject({ status: "built", hub: "pangyo" });
   });
 
-  it("R56: 26시간 동안 깨끗한 공개 거점은 끊기지 않고, 무거운 다시 만들기는 거점마다 처음 한 번 + 하루 한 번(안전망)뿐이다", async () => {
+  it("R56: 28시간 동안 깨끗한 공개 거점은 끊기지 않고, 무거운 다시 만들기는 :x7에서만 거점마다 처음 한 번 + 하루 한 번(안전망)뿐이다", async () => {
     // 토요일 01:00 KST — 월요일 00:00까지 갱신 요일 시작이 없어 격자가 만료되지 않는다
     const start = Date.UTC(2027, 0, 15, 16, 0);
     const keys = [...new Set(PUBLIC_HUBS.flatMap((h) => tilesCoveringCircle(h, PREWARM_RADIUS)))];
@@ -552,13 +585,21 @@ describe("R56 거점 스냅샷 — Cron", () => {
         .bind(HUB_SNAPSHOT_VERSION, t - SNAPSHOT_MAX_AGE_MS, t).first<{ c: number }>())!.c;
     const built = new Map<string, number>();
     let minValid = Infinity;
-    for (let m = 0; m < 26 * 60; m++) {
+    // 처음 만들기가 ~140분에 걸쳐 퍼지므로 마지막 거점의 안전망(24시간 뒤)까지 보려고 28시간
+    for (let m = 0; m < 28 * 60; m++) {
       const t = start + m * 60_000;
-      if (secondCronJob(t) !== "snapshot") continue;
-      const r = await runSnapshotCron(env, { now: t });
-      if (r.status === "built") built.set(r.hub, (built.get(r.hub) ?? 0) + 1);
-      expect(r.status === "skipped", JSON.stringify(r)).toBe(false);
-      if (m >= 2 * 60) minValid = Math.min(minValid, await valid(t));
+      const job = secondCronJob(t);
+      if (job !== "snapshot" && job !== "renew") continue;
+      const run = await runCron(SECOND_CRON, env, { fetcher: fakeKakaoLocal([]).fetcher, now: t, scheduledTime: t });
+      const r = run.cron === "snapshot" ? run.result : null;
+      if (r?.status === "built") {
+        // 무거운 만들기는 :x7만
+        expect(job, String(m)).toBe("snapshot");
+        built.set(r.hub, (built.get(r.hub) ?? 0) + 1);
+      }
+      expect(r?.status === "skipped", JSON.stringify(r)).toBe(false);
+      // 처음 14곳을 :x7(시간당 6번)로 만드는 데 ~140분
+      if (m >= 150) minValid = Math.min(minValid, await valid(t));
     }
     expect(minValid).toBe(PUBLIC_HUBS.length);
     expect([...built.values()].every((n) => n === 2)).toBe(true);
@@ -578,9 +619,11 @@ describe("R56 거점 스냅샷 — Cron", () => {
     const counts: number[] = [];
     for (let m = 0; m < 6 * 60; m++) {
       const t = start + m * 60_000;
-      if (secondCronJob(t) !== "snapshot") continue;
-      await runSnapshotCron(env, { now: t });
-      if (m >= 2 * 60) counts.push(await valid(t));
+      const job = secondCronJob(t);
+      if (job !== "snapshot" && job !== "renew") continue;
+      await runSnapshotCron(env, { now: t, renewOnly: job === "renew" });
+      // 처음 14곳을 :x7(시간당 6번)로 만드는 데 ~140분
+      if (m >= 150) counts.push(await valid(t));
     }
     expect(Math.min(...counts)).toBe(PUBLIC_HUBS.length);
   });

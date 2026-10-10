@@ -41,7 +41,7 @@ const metaValue = async (key: string) =>
   (await env.DB.prepare("SELECT value FROM meta WHERE key = ?").bind(key).first<{ value: string }>())?.value ?? null;
 
 describe("R63 둘째 트리거 (홀수 분) — 스냅샷·쉼·상세만 보충", () => {
-  it("R63/R56: 둘째 트리거는 매 분(* * * * *)이고 UTC 분으로 나눈다 — 2·7·12·…·57은 스냅샷(Task 56 시간당 12번), 5의 배수는 쉼(본 Cron 분), 나머지 홀수 분은 상세만, 나머지 짝수 분은 DETAIL_ONLY_EXTRA가 \"1\"일 때만 상세만(아니면 쉼)", () => {
+  it("R63/R56: 둘째 트리거는 매 분(* * * * *)이고 UTC 분으로 나눈다 — 7·17·…·57은 스냅샷(만들기·새로 하기, 시간당 6번), 2·12·…·52는 스냅샷 새로 하기만(Task 56, 시간당 6번), 5의 배수는 쉼(본 Cron 분), 나머지 홀수 분은 상세만, 나머지 짝수 분은 DETAIL_ONLY_EXTRA가 \"1\"일 때만 상세만(아니면 쉼)", () => {
     expect(SECOND_CRON).toBe("* * * * *");
     expect(wranglerConfig).toContain(`"${MAIN_CRON}"`);
     expect(wranglerConfig).toContain(`"${SECOND_CRON}"`);
@@ -56,27 +56,30 @@ describe("R63 둘째 트리거 (홀수 분) — 스냅샷·쉼·상세만 보충
       return jobs;
     };
     const fives = Array.from({ length: 12 }, (_, i) => i * 5);
-    const snapshots = [2, 7, 12, 17, 22, 27, 32, 37, 42, 47, 52, 57];
+    const snapshots = [7, 17, 27, 37, 47, 57];
+    const renews = [2, 12, 22, 32, 42, 52];
     const odd = Array.from({ length: 30 }, (_, i) => 2 * i + 1).filter((m) => m % 5 !== 0 && m % 10 !== 7);
     const even = Array.from({ length: 30 }, (_, i) => 2 * i).filter((m) => m % 5 !== 0 && m % 10 !== 2);
     expect(odd).toHaveLength(18);
     expect(even).toHaveLength(18);
 
-    // 부스트 켬: 스냅샷 12 · 쉼 12(본 Cron 분) · 상세만 36 (홀수 18 + 짝수 18)
+    // 부스트 켬: 스냅샷 6 + 새로 하기만 6 · 쉼 12(본 Cron 분) · 상세만 36 (홀수 18 + 짝수 18)
     const on = table(true);
     expect(on.get("snapshot")).toEqual(snapshots);
+    expect(on.get("renew")).toEqual(renews);
     expect(on.get("skip")).toEqual(fives);
     expect(on.get("detail")).toEqual([...odd, ...even].sort((a, b) => a - b));
     expect(on.get("detail")).toHaveLength(36);
     // 부스트 끔: 예전(1-59/2)과 같은 홀수 분 18번만, 짝수 분은 쉼
     const off = table(false);
     expect(off.get("snapshot")).toEqual(snapshots);
+    expect(off.get("renew")).toEqual(renews);
     expect(off.get("detail")).toEqual(odd);
     expect(off.get("skip")).toEqual([...fives, ...even].sort((a, b) => a - b));
     // 기본값은 끔
     for (let m = 0; m < 60; m++) expect(secondCronJob(at(m)), String(m)).toBe(secondCronJob(at(m), false));
     // 본 Cron 분(5의 배수)과 상세만·스냅샷 실행은 같은 분을 쓰지 않는다
-    for (const m of [...on.get("detail")!, ...on.get("snapshot")!]) expect(m % 5, String(m)).not.toBe(0);
+    for (const m of [...on.get("detail")!, ...on.get("snapshot")!, ...on.get("renew")!]) expect(m % 5, String(m)).not.toBe(0);
   });
 
   it("R63: DETAIL_ONLY_EXTRA는 wrangler.jsonc vars에서 지금 \"0\"(부스트 끔 — 2026-10-08 CPU 한도)이고, 정확히 \"1\"일 때만 켠다", () => {
@@ -94,6 +97,8 @@ describe("R63 둘째 트리거 (홀수 분) — 스냅샷·쉼·상세만 보충
     const off = { ...env, DETAIL_ONLY_EXTRA: "0" } as unknown as Env;
     const on = { ...env, DETAIL_ONLY_EXTRA: "1" } as unknown as Env;
     expect((await runCron(SECOND_CRON, env, { ...opts, now: at(7), scheduledTime: at(7) })).cron).toBe("snapshot");
+    // :x2는 새로 하기만 — 스냅샷이 하나도 없어도 만들지 않는다 (무거운 만들기는 :x7만, 시간당 6번)
+    expect(await runCron(SECOND_CRON, env, { ...opts, now: at(12), scheduledTime: at(12) })).toEqual({ cron: "snapshot", result: { status: "idle" } });
     expect(await runCron(SECOND_CRON, env, { ...opts, now: at(15), scheduledTime: at(15) })).toEqual({ cron: "idle" });
     expect((await runCron(SECOND_CRON, env, { ...opts, now: at(3) + 2000, scheduledTime: at(3) })).cron).toBe("detail");
     expect((await runCron(SECOND_CRON, off, { ...opts, now: at(13) + 2000, scheduledTime: at(13) })).cron).toBe("detail");

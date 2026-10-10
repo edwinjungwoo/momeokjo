@@ -192,9 +192,9 @@ const RENEW = `UPDATE hub_snapshots SET built_at = ?5
  */
 async function renewHubSnapshot(
   db: D1Database, hub: Hub, row: { built_at: number; source_at: number }, now: number,
-): Promise<boolean> {
-  if (gateEndsWithinMaxAge(await detailGate(db), now)) return false;
-  if (await hubTilesDue(db, hub, now)) return false;
+): Promise<RenewResult> {
+  if (gateEndsWithinMaxAge(await detailGate(db), now)) return "gate";
+  if (await hubTilesDue(db, hub, now)) return "tiles";
   const r = await db
     .prepare(RENEW)
     .bind(
@@ -202,8 +202,13 @@ async function renewHubSnapshot(
       now - SNAPSHOT_FULL_REBUILD_MS,
     )
     .run();
-  return Number(r.meta?.changes) > 0;
+  return Number(r.meta?.changes) > 0 ? "renewed" : "raced";
 }
+/** gate: 쿨다운·frozen이 쓰는 동안 안에 끝남(모든 거점에 같다), tiles: 만료 격자, raced: 표시·행이 바뀌었거나 안전망이 지남 */
+type RenewResult = "renewed" | "gate" | "tiles" | "raced";
+
+/** 새로 하기만 하는 실행(:x2)이 한 번에 해 보는 후보 수 (만료 격자로 못 하는 거점 뒤의 거점도 새로 하게) */
+const RENEW_ONLY_TRIES = 3;
 
 /** 읽은 스냅샷. body가 null이면 If-None-Match와 ETag가 같아서 본문 열을 받지 않았다 (304) */
 export type Snapshot = { etag: string; builtAt: number; notModified: boolean; body: Uint8Array | null };
@@ -294,8 +299,13 @@ export type SnapshotRun = SnapshotBuild | { status: "idle" } | { status: "renewe
  * pending·tiles·oversize면 그 사유의 기다림과 attempts 0으로 다시 쓴다. 쓸 수 있는 스냅샷이 있는 거점은 그 만료 5분 전 너머로 기다리지 않는다.
  * 처음에 넘겨받은 거점 목록(hubs)에 없는 거점과 SNAPSHOT_MAX_AGE_MS가 지난(또는 미래 시각) 행을 지운다.
  * 할 일이 없으면 idle (스냅샷 메타 ≤ 거점 수 행 + 표시 ≤ 2 × 거점 수 행만 읽는다).
+ * renewOnly(둘째 트리거의 :x2 — Task 56 Fix 2): 무거운 만들기는 하지 않는다. 깨끗하고 만료가 가까운 쓸 수 있는 스냅샷 중
+ * 안전망(마지막으로 다시 만든 지 24시간)이 지나지 않은 것을 오래된 순으로 많아야 RENEW_ONLY_TRIES곳 새로 해 보고, 없으면 idle.
+ * 없는·판이 다른·더러운·안전망이 지난 스냅샷은 :x7(만들기, 시간당 6번 — 예전 상한)에 맡긴다.
  */
-export async function maintainSnapshots(db: D1Database, hubs: Hub[], now: number): Promise<SnapshotRun> {
+export async function maintainSnapshots(
+  db: D1Database, hubs: Hub[], now: number, opts: { renewOnly?: boolean } = {},
+): Promise<SnapshotRun> {
   await db
     .prepare("DELETE FROM hub_snapshots WHERE built_at <= ? OR built_at > ? OR hub NOT IN (SELECT value FROM json_each(?))")
     .bind(now - SNAPSHOT_MAX_AGE_MS, now, JSON.stringify(hubs.map((h) => h.id)))
@@ -311,6 +321,7 @@ export async function maintainSnapshots(db: D1Database, hubs: Hub[], now: number
     .bind(...hubs.map((h) => SNAPSHOT_DIRTY_PREFIX + h.id), ...hubs.map((h) => SNAPSHOT_SKIP_PREFIX + h.id))
     .all<{ key: string; value: string }>();
   const metaNum = (key: string) => Number(stamps.results.find((x) => x.key === key)?.value ?? 0) || 0;
+  if (opts.renewOnly) return renewOnly(db, hubs, now, metas.results, stamps.results, metaNum);
   let pick: { hub: Hub; rank: number; builtAt: number } | null = null;
   for (const hub of hubs) {
     const m = metas.results.find((x) => x.hub === hub.id);
@@ -335,7 +346,7 @@ export async function maintainSnapshots(db: D1Database, hubs: Hub[], now: number
   // 쓸 수 있는 스냅샷이 있으면 그 만료 SNAPSHOT_SKIP_EXPIRY_MARGIN_MS 전 너머로는 기다리지 않는다 (스냅샷이 끊기지 않게)
   const valid = metas.results.find((x) => x.hub === hubId && x.version === HUB_SNAPSHOT_VERSION && x.built_at <= now);
   const hadSkip = stamps.results.some((x) => x.key === skipKey);
-  if (valid && valid.source_at === metaNum(SNAPSHOT_DIRTY_PREFIX + hubId) && (await renewHubSnapshot(db, pick.hub, valid, now))) {
+  if (valid && valid.source_at === metaNum(SNAPSHOT_DIRTY_PREFIX + hubId) && (await renewHubSnapshot(db, pick.hub, valid, now)) === "renewed") {
     if (hadSkip) await db.prepare("DELETE FROM meta WHERE key = ?").bind(skipKey).run();
     return { status: "renewed", hub: hubId };
   }
@@ -352,4 +363,45 @@ export async function maintainSnapshots(db: D1Database, hubs: Hub[], now: number
     await db.prepare("DELETE FROM meta WHERE key = ?").bind(skipKey).run();
   }
   return r;
+}
+
+/**
+ * :x2 새로 하기만 (maintainSnapshots renewOnly): 후보 = 건너뜀 표시로 기다리는 중이 아니고, 지금 판의 쓸 수 있는 스냅샷이
+ * 깨끗하고(표시 = source_at) 만료 SNAPSHOT_REFRESH_BEFORE_MS 전이 된 거점. 후보가 있을 때만 그 거점들의 다시 만든 시각을 한 번 읽어
+ * 안전망이 지나지 않은 것만 오래된 순으로 해 본다 (할 일 없는 실행의 읽기는 그대로)
+ */
+async function renewOnly(
+  db: D1Database, hubs: Hub[], now: number,
+  metas: { hub: string; version: number; built_at: number; source_at: number }[],
+  stamps: { key: string; value: string }[],
+  metaNum: (key: string) => number,
+): Promise<SnapshotRun> {
+  const candidates = hubs
+    .flatMap((hub) => {
+      const skip = parseSkip(stamps.find((x) => x.key === SNAPSHOT_SKIP_PREFIX + hub.id)?.value);
+      if (skip && skip.until > now) return [];
+      const m = metas.find((x) => x.hub === hub.id && x.version === HUB_SNAPSHOT_VERSION && x.built_at <= now);
+      if (!m || m.source_at !== metaNum(SNAPSHOT_DIRTY_PREFIX + hub.id)) return [];
+      return now - m.built_at >= SNAPSHOT_MAX_AGE_MS - SNAPSHOT_REFRESH_BEFORE_MS ? [{ hub, row: m }] : [];
+    })
+    .sort((a, b) => a.row.built_at - b.row.built_at);
+  if (candidates.length === 0) return { status: "idle" };
+  const marks = candidates.map(() => "?").join(",");
+  const full = await db
+    .prepare(`SELECT key, value FROM meta WHERE key IN (${marks})`)
+    .bind(...candidates.map((c) => SNAPSHOT_FULL_PREFIX + c.hub.id))
+    .all<{ key: string; value: string }>();
+  const fullAt = (hub: string) => Number(full.results.find((x) => x.key === SNAPSHOT_FULL_PREFIX + hub)?.value ?? 0) || 0;
+  const fresh = candidates.filter((c) => now - fullAt(c.hub.id) < SNAPSHOT_FULL_REBUILD_MS).slice(0, RENEW_ONLY_TRIES);
+  for (const c of fresh) {
+    const r = await renewHubSnapshot(db, c.hub, c.row, now);
+    if (r === "renewed") {
+      const skipKey = SNAPSHOT_SKIP_PREFIX + c.hub.id;
+      if (stamps.some((x) => x.key === skipKey)) await db.prepare("DELETE FROM meta WHERE key = ?").bind(skipKey).run();
+      return { status: "renewed", hub: c.hub.id };
+    }
+    // 쿨다운·frozen은 모든 거점에 같다 — 다른 후보도 새로 할 수 없다
+    if (r === "gate") break;
+  }
+  return { status: "idle" };
 }

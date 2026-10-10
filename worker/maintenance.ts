@@ -239,18 +239,19 @@ export async function runScheduled(
 export const MAIN_CRON = "*/5 * * * *";
 export const SECOND_CRON = "* * * * *";
 
-export type SecondCronJob = "snapshot" | "skip" | "detail";
+export type SecondCronJob = "snapshot" | "renew" | "skip" | "detail";
 /**
- * 둘째 트리거의 예정 시각(UTC 분)으로 할 일: 2·7·12·…·57분(10으로 나눈 나머지 2·7)은 R56 스냅샷(시간당 12번), 5의 배수(0·5·…·55)는
- * 쉼 — 본 Cron이 도는 분이라 겹치지 않게, 나머지 홀수 분(시간당 18번)은 R63 상세만 보충, 나머지 짝수 분(시간당 18번)은 extra
- * (DETAIL_ONLY_EXTRA "1", 채우기 부스트)일 때만 상세만 보충이고 아니면 쉼.
- * 스냅샷 시간당 12번(Task 56, 예전 6번): 한 번에 한 거점이고 스냅샷은 2시간 쓰므로 동시에 쓸 수 있는 스냅샷은 많아야 24개 —
- * 공개 거점 14곳이 6번 × 2시간 = 12개에 막혀 늘 두 곳 넘게 지금 경로(미스마다 수천 행·CPU 22~53ms)로 답했다. 깨끗한 스냅샷은
- * 다시 만들지 않고 시각만 새로 해서(maintainSnapshots) 실행이 늘어도 무거운 만들기는 늘지 않는다
+ * 둘째 트리거의 예정 시각(UTC 분)으로 할 일: 7·17·…·57분은 R56 스냅샷(만들기·새로 하기, 시간당 6번), 2·12·…·52분은 R56 스냅샷
+ * 새로 하기만(시간당 6번), 5의 배수(0·5·…·55)는 쉼 — 본 Cron이 도는 분이라 겹치지 않게, 나머지 홀수 분(시간당 18번)은 R63 상세만
+ * 보충, 나머지 짝수 분(시간당 18번)은 extra(DETAIL_ONLY_EXTRA "1", 채우기 부스트)일 때만 상세만 보충이고 아니면 쉼.
+ * Task 56: 한 번에 한 거점이고 스냅샷은 2시간 쓰므로 동시에 쓸 수 있는 스냅샷은 (새로 할 수 있는 실행 수 × 2)개 — 6번이면 12개라
+ * 공개 거점 14곳에 모자랐다. 깨끗한 스냅샷은 다시 만들지 않고 시각만 새로 하므로(가벼움) 새로 하기는 :x2·:x7 시간당 12번(24개)으로
+ * 늘리고, 무거운 만들기(CPU ~40ms)는 안정성을 위해 :x7 시간당 6번(예전 상한) 그대로 둔다 — 안전망(24시간) 다시 만들기도 :x7만
  */
 export function secondCronJob(scheduledTime: number, extra = false): SecondCronJob {
   const m = new Date(scheduledTime).getUTCMinutes();
-  if (m % 10 === 7 || m % 10 === 2) return "snapshot";
+  if (m % 10 === 7) return "snapshot";
+  if (m % 10 === 2) return "renew";
   if (m % 5 === 0) return "skip";
   if (m % 2 === 1) return "detail";
   return extra ? "detail" : "skip";
@@ -264,12 +265,15 @@ export type SnapshotCronResult = SnapshotRun | { status: "read_budget" };
  * R38: 오늘 읽기가 소프트 한도를 넘었으면 만들지 않는다 (스냅샷이 없으면 미스는 지금 경로로 답한다).
  * R62: 공개 거점만 만든다 (준비 중 거점은 목록 API가 400이라 읽을 일이 없고, 남은 행은 maintainSnapshots가 지운다).
  */
-export async function runSnapshotCron(env: Env, opts: { now: number; hubs?: Hub[] }): Promise<SnapshotCronResult> {
+export async function runSnapshotCron(
+  env: Env, opts: { now: number; hubs?: Hub[]; renewOnly?: boolean },
+): Promise<SnapshotCronResult> {
   const usage: D1Usage = { read: 0, written: 0 };
   const db = meteredDb(env.DB, usage);
   try {
     if (await overReadBudget(db, env, opts.now)) return { status: "read_budget" };
-    return await maintainSnapshots(db, hubOrder(opts.hubs ?? PUBLIC_HUBS, opts.now), opts.now);
+    // renewOnly(:x2): 새로 하기만 — 무거운 만들기는 :x7만 (Task 56 Fix 2)
+    return await maintainSnapshots(db, hubOrder(opts.hubs ?? PUBLIC_HUBS, opts.now), opts.now, { renewOnly: opts.renewOnly });
   } finally {
     await recordD1Usage(env.DB, usage, opts.now).catch((e) => console.error("d1 usage record failed", e));
   }
@@ -293,6 +297,7 @@ export async function runCron(
   if (cron === SECOND_CRON) {
     const job = secondCronJob(opts.scheduledTime ?? opts.now, detailOnlyExtraFrom(env));
     if (job === "snapshot") return { cron: "snapshot", result: await runSnapshotCron(env, opts) };
+    if (job === "renew") return { cron: "snapshot", result: await runSnapshotCron(env, { ...opts, renewOnly: true }) };
     if (job === "skip") return { cron: "idle" };
     return { cron: "detail", result: await runDetailCron(env, opts) };
   }
@@ -319,7 +324,8 @@ export type DetailCronResult = {
 };
 
 /**
- * R63 상세만 실행 (둘째 트리거의 홀수 분 시간당 18번, 채우기 부스트 동안은 짝수 분까지 42번 — 주간 갱신·새 거점 채우기 처리량을 늘린다).
+ * R63 상세만 실행 (둘째 트리거의 홀수 분 시간당 18번, 채우기 부스트 동안은 짝수 분까지 36번 — 주간 갱신·새 거점 채우기 처리량을 늘린다.
+ * Task 56 전에는 42번 — 짝수 분 6번을 스냅샷 새로 하기가 쓴다).
  * 본 Cron과 같은 순서로: 읽기 예산(R38) → 쿨다운·frozen(R10·R44) → 만료 후보 + 미수집 앞선 커서(같은 커서) → 유효 배치 →
  * pickCronIds → enrichDetails. 격자 수집·집계·스냅샷·보관 정리·완료 기록은 하지 않는다(본 Cron 몫).
  * 실행 하나의 D1 호출 예산도 본 Cron과 같다(끝의 기록 몫을 남긴다). 끝에 사용량과 cron_detail_last를 한 문장으로 쓴다.
