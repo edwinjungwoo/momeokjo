@@ -346,6 +346,8 @@ button.cell:hover, button.cell:focus-visible { outline: 2px solid var(--text); o
 .rtable td.act-cell { width: 1%; }
 .action-row { display: flex; gap: 6px; justify-content: flex-end; }
 .rtable small { font-weight: 400; }
+/* R66 상세 갱신 카드: 표 아래 주기 분포 한 줄 */
+.rtable + .table-note { margin-top: 12px; }
 .warn-text { color: var(--crit); font-weight: 700; }
 
 /* 운영 */
@@ -448,6 +450,15 @@ button.cell:hover, button.cell:focus-visible { outline: 2px solid var(--text); o
   .rtable td.act-cell { width: auto; padding-top: 8px; }
   .action-row { justify-content: flex-start; }
   .rtable.compact td.name { padding-bottom: 2px; }
+  /* R66 상세 갱신 표: 짧은 숫자 네 칸이라 폰에서도 표 그대로 (날마다 네 줄로 쌓으면 7일이 28줄) */
+  .rtable.keep { display: table; }
+  .rtable.keep thead { display: table-header-group; }
+  .rtable.keep tbody { display: table-row-group; }
+  .rtable.keep tr { display: table-row; padding: 0; }
+  .rtable.keep th, .rtable.keep td { display: table-cell; padding: 8px 4px; border-bottom: 1px solid var(--grid); white-space: nowrap; }
+  .rtable.keep tr:last-child td { border-bottom: 0; }
+  .rtable.keep td.name { padding-bottom: 8px; font-size: 13px; }
+  .rtable.keep td[data-label]::before { content: none; }
   .heat-row { gap: 2px; grid-template-columns: 16px repeat(24, minmax(0, 1fr)); }
   .heat { gap: 2px; }
   .cell { border-radius: 2px; }

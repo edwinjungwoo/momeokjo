@@ -154,7 +154,7 @@ function DetailRefresh({ data, now }: { data: OpsData; now: number }) {
         <h2 className="sec-title">상세 갱신 (바뀌는 만큼만)</h2>
         <span className="muted small">UTC 날짜 · 7일 바뀜 {pct(s.total.changedRate)}</span>
       </div>
-      <table className="rtable compact">
+      <table className="rtable compact keep">
         <thead>
           <tr>
             <th>날짜</th>
@@ -176,7 +176,7 @@ function DetailRefresh({ data, now }: { data: OpsData; now: number }) {
           ))}
         </tbody>
       </table>
-      <p className="muted small">
+      <p className="muted small table-note">
         {iv === null
           ? "주기 분포는 예산 보호로 세지 않았어요"
           : `주기 ${iv.map((x) => `${x.weeks}주 ${num(x.places)}곳`).join(" · ") || "없음"} (상세 있는 ${num(total)}곳, ${ago(data.intervalsAt, now)} 셈 · 10분마다)`}
