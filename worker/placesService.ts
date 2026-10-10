@@ -208,7 +208,8 @@ const showRefreshing = new Set<string>();
  * R66 볼 때 신선하게 (stale-while-revalidate): 저장된 ok 가게를 열었는데 상세가 SHOW_REFRESH_AFTER_MS(7일)보다 오래됐으면
  * 응답은 저장된 그대로 주고, 응답 뒤(waitUntil)에 그 한 곳만 다시 가져온다. R52 읽기 전용이면 하지 않는다.
  * 뒤 작업: R10 쿨다운·R44 frozen이면 그만, R15 요청 제한, 외부 호출 예산 Budget(3)(상세 한 곳 — 재시도 포함), 저장은 Cron과 같다
- * (스냅샷 표시 R56 같은 batch, 실패는 실패 기록, 403·429는 쿨다운) — 다만 주기는 지문과 상관없이 1주(사람들이 여는 가게는 매주 본다).
+ * (스냅샷 표시 R56 같은 batch, 실패는 거점 격자의 가게만 실패 기록 — 격자 밖 예전 행은 그대로, 403·429는 쿨다운) — 다만 주기는
+ * 지문과 상관없이 1주(사람들이 여는 가게는 매주 본다).
  */
 function refreshOnShow(deps: ServiceDeps, row: PlaceRow): void {
   const id = row.place.id;
@@ -227,7 +228,8 @@ async function refreshShown(deps: ServiceDeps, id: string, prevFp: string | null
   if (!(await deps.rateLimit())) return;
   const r = await fetchPlaceDetail(deps.fetcher, id, { budget: new Budget(3), sleep: deps.sleep });
   if (!r.ok) {
-    if (r.reason !== "budget") await saveDetailFailure(deps.db, id, r.reason, deps.now);
+    // 단건 조회와 같은 기준 (Fix 2): 실패는 거점 격자에 있는 가게만 기록한다 — 격자 밖에 예전부터 저장된 행은 ok 그대로 둔다
+    if (r.reason !== "budget" && (await isInTiles(deps.db, id, hubTileKeys()))) await saveDetailFailure(deps.db, id, r.reason, deps.now);
     if (BLOCK_SIGNALS.has(r.reason)) await recordPlaceBlock(deps.db, deps.now);
     return;
   }

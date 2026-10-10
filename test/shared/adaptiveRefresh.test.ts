@@ -3,6 +3,7 @@ import {
   INTERVAL_WEEKS, MAX_INTERVAL_WEEKS, SHOW_REFRESH_AFTER_MS, WEEK_MS, detailFingerprint, dueAfterOf, fpKind, idHash, refreshGapWeeks,
   weekIndex,
 } from "../../shared/adaptiveRefresh";
+import { refreshStart } from "../../shared/refresh";
 import type { PlaceDetail, PlaceSummary } from "../../shared/types";
 
 const summary = (o: Partial<PlaceSummary> = {}): PlaceSummary => ({
@@ -59,6 +60,12 @@ describe("R66 표시 정보 지문 (fp)", () => {
     expect(detailFingerprint(summary(), detail({ tags: ["혼밥", "주차"] }))).toBe(a);
   });
 
+  it("R66 Fix 2: 강점·태그는 순서만 바뀌면 같은 지문이다 (메뉴는 화면 순서라 순서도 본다)", () => {
+    const a = detailFingerprint(summary(), detail({ strengths: ["맛", "친절", "가성비"], tags: ["혼밥", "단체석"] }));
+    expect(detailFingerprint(summary(), detail({ strengths: ["가성비", "맛", "친절"], tags: ["단체석", "혼밥"] }))).toBe(a);
+    expect(detailFingerprint(summary(), detail({ strengths: ["맛", "친절"], tags: ["혼밥", "단체석"] }))).not.toBe(a);
+  });
+
   it("R66: 이전 지문과 비교 — 없으면 first, 같으면 same, 다르면 changed", () => {
     expect(fpKind(null, "abcd1234")).toBe("first");
     expect(fpKind(undefined, "abcd1234")).toBe("first");
@@ -91,7 +98,7 @@ describe("R66 Fix 1 — 주기 2·4주 가게를 id 위상으로 흩는다", () 
         expect((weekIndex(T) + g) % n).toBe(idHash(id) % n);
       }
     }
-    expect(weekIndex(T)).toBe(Math.floor(T / WEEK_MS));
+    expect(weekIndex(T)).toBe(Math.floor((T + 9 * 3600_000 - 4 * 24 * 3600_000) / WEEK_MS));
     expect(idHash("a")).toBe(idHash("a"));
     expect(idHash("a")).not.toBe(idHash("b"));
   });
@@ -105,6 +112,42 @@ describe("R66 Fix 1 — 주기 2·4주 가게를 id 위상으로 흩는다", () 
       }
       expect(byWeek.size, String(n)).toBe(n);
       for (const [w, c] of byWeek) expect(Math.abs(c / IDS.length - 1 / n), `${n} @${w}`).toBeLessThan(0.03);
+    }
+  });
+
+  it("R66 Fix 2: 주는 월요일 00:00 KST에 바뀐다 (일요일 23:59 KST는 앞 주, 목요일은 경계가 아니다)", () => {
+    const kst = (y: number, mo: number, d: number, h = 0, mi = 0) => Date.UTC(y, mo - 1, d, h - 9, mi);
+    expect(new Date(kst(2026, 10, 12) + 9 * 3600_000).getUTCDay()).toBe(1); // 2026-10-12는 월요일
+    expect(weekIndex(kst(2026, 10, 12))).toBe(weekIndex(kst(2026, 10, 11, 23, 59)) + 1);
+    expect(weekIndex(kst(2026, 10, 12) - 1)).toBe(weekIndex(kst(2026, 10, 5)));
+    expect(weekIndex(kst(2026, 10, 18, 23, 59))).toBe(weekIndex(kst(2026, 10, 12)));
+    expect(weekIndex(kst(2026, 10, 15))).toBe(weekIndex(kst(2026, 10, 14, 23, 59))); // 목 00:00 KST
+    expect(weekIndex(kst(2026, 10, 15, 9))).toBe(weekIndex(kst(2026, 10, 15, 8, 59))); // 목 09:00 KST (UTC 목 00:00)
+  });
+
+  it("R66 Fix 2: 목요일 갱신 거점에서 시작 뒤 0~40시간 안에 다시 가져오면 여러 주가 지나도 간격이 정확히 주기다 (짧아지지 않는다)", () => {
+    const thu = Date.UTC(2026, 9, 7, 15); // 2026-10-08 00:00 KST 목요일
+    expect(refreshStart(4, thu)).toBe(thu);
+    const H40 = 40 * 3600_000;
+    for (const id of IDS.slice(0, 500)) {
+      for (const n of [2, 4]) {
+        // k번째 주의 갱신 시작 + 가게·주마다 다른 0~40시간에 가져온다. 다음 갱신 = due_after보다 늦은 첫 시작의 주
+        const fetchAt = (k: number) => thu + k * WEEK_MS + (idHash(`${id}:${k}`) % (H40 + 1));
+        let k = 0;
+        const weeks = [k];
+        for (let i = 0; i < 8; i++) {
+          const t = fetchAt(k);
+          const due = dueAfterOf(t, refreshGapWeeks(id, t, n));
+          let next = k + 1;
+          while (!(due < thu + next * WEEK_MS)) next += 1;
+          k = next;
+          weeks.push(k);
+        }
+        const gaps = weeks.slice(1).map((w, i) => w - weeks[i]);
+        expect(gaps[0], `${id} n=${n}`).toBeGreaterThanOrEqual(1);
+        expect(gaps[0], `${id} n=${n}`).toBeLessThanOrEqual(n);
+        expect(gaps.slice(1), `${id} n=${n}`).toEqual(Array(gaps.length - 1).fill(n));
+      }
     }
   });
 

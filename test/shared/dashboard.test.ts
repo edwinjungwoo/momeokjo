@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
-  CRON_STALE_MS, addDays, alertsOf, budgetFraction, budgetLevel, dayList, daysBetween, deltaOf, detailRefreshSummary, histogramMedian, isDay,
+  CRON_STALE_MS, addDays, alertsOf, budgetFraction, budgetLevel, dayList, daysBetween, deltaOf, detailRefreshSummary, histogramMedian, intervalsOf, isDay,
   METRICS, METRIC_FAMILIES, mondayOf, overBlockAfter, weekdayOf, type HubStatus, type OpsSnapshot,
 } from "../../shared/dashboard";
 import spec from "../../docs/superpowers/specs/2026-10-05-momeokjo-design.md?raw";
@@ -117,5 +117,17 @@ describe("R66 상세 갱신 계수 요약", () => {
     ]);
     expect(s.total).toEqual({ refreshed: 40, changed: 10, first: 7, changedRate: 0.25 });
     expect(detailRefreshSummary([]).total).toEqual({ refreshed: 0, changed: 0, first: 0, changedRate: null });
+  });
+});
+
+describe("R66 주기 분포 합치기", () => {
+  it("R66 Fix 2: 거점마다의 몫(ownIntervals)을 더하고 0곳인 주기는 빼고 주기 순 — 거점 상태가 없으면 null, 예전 캐시(필드 없음)는 0", () => {
+    const h = (own?: { weeks: number; places: number }[]) => ({ ownIntervals: own }) as unknown as HubStatus;
+    expect(intervalsOf(null)).toBeNull();
+    expect(intervalsOf([
+      h([{ weeks: 1, places: 3 }, { weeks: 2, places: 0 }, { weeks: 4, places: 1 }]),
+      h([{ weeks: 4, places: 2 }, { weeks: 1, places: 1 }, { weeks: 2, places: 0 }]),
+      h(undefined),
+    ])).toEqual([{ weeks: 1, places: 4 }, { weeks: 4, places: 3 }]);
   });
 });

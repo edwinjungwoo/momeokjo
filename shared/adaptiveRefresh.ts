@@ -1,4 +1,5 @@
 import { groupFriendly, soloFriendly } from "./friendly";
+import { DAY_MS, KST_OFFSET_MS } from "./kst";
 import type { Interval, PlaceDetail, PlaceSummary } from "./types";
 
 /**
@@ -29,8 +30,11 @@ export function idHash(id: string): number {
   return (h ^ (h >>> 16)) >>> 0;
 }
 
-/** epoch 주 번호 (1970-01-01부터 7일씩 — 기준은 아무 고정값이면 된다) */
-export const weekIndex = (t: number): number => Math.floor(t / WEEK_MS);
+/**
+ * 주 번호 — 월요일 00:00 KST에 바뀐다 (1970-01-05 월요일 00:00 KST가 0주의 시작: epoch는 목요일이라 KST로 옮기고 4일을 뺀다).
+ * 거점 갱신 시작(요일 00:00 KST, 일요일 없음)과 그 뒤 하루이틀 안의 보충이 같은 주에 들어가서, 밀려도 간격이 짧아지지 않는다(Fix 2)
+ */
+export const weekIndex = (t: number): number => Math.floor((t + KST_OFFSET_MS - 4 * DAY_MS) / WEEK_MS);
 
 /**
  * R66 Fix 1 (위상 흩기): 주기 n(1·2·4)으로 저장할 때 다음 갱신까지의 간격(주). 같은 때 2·4주가 된 가게들이 한 주에 몰려 돌아오지
@@ -56,8 +60,8 @@ function hoursKey(hours: PlaceDetail["hours"]): unknown {
 
 /**
  * 화면에 보이는 상세의 지문 (리뷰 수·사진은 뺀다 — 리뷰 수만 바뀐 것은 바뀐 것으로 치지 않는다): 이름, 카테고리, 평점(0.1 단위),
- * 대표 가격, 영업시간, 메뉴(이름·가격, 순서대로), 전화, 예약 가능, 강점, 혼밥·단체 판단(태그는 응답에 싣지 않고 이 판단만 보인다).
- * 정해진 순서의 JSON 배열을 FNV-1a 32비트로 — 8자리 16진수
+ * 대표 가격, 영업시간, 메뉴(이름·가격, 순서대로 — 화면 순서), 전화, 예약 가능, 강점(정렬 — 순서만 바뀐 것은 같음), 혼밥·단체 판단
+ * (태그는 응답에 싣지 않고 이 판단만 보인다 — 순서와 상관없다). 정해진 순서의 JSON 배열을 FNV-1a 32비트로 — 8자리 16진수
  */
 export function detailFingerprint(s: Pick<PlaceSummary, "name" | "categoryName" | "phone">, d: PlaceDetail): string {
   const canonical = JSON.stringify([
@@ -69,7 +73,7 @@ export function detailFingerprint(s: Pick<PlaceSummary, "name" | "categoryName" 
     d.menus.map((m) => [m.name, m.price]),
     s.phone,
     d.bookable,
-    d.strengths,
+    [...d.strengths].sort(),
     soloFriendly(s.categoryName, d.tags),
     groupFriendly(d.tags),
   ]);

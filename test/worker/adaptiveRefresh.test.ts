@@ -11,7 +11,7 @@ import { runScheduled } from "../../worker/maintenance";
 import { parseDetail } from "../../worker/detailParser";
 import { SNAPSHOT_DIRTY_PREFIX } from "../../worker/snapshotDirty";
 import type { OpsData } from "../../shared/dashboard";
-import { INTERVALS_CACHE_MS, hubStatuses } from "../../worker/dashboard";
+import { hubStatuses } from "../../worker/dashboard";
 import { hubHasDue } from "../../worker/hubRefresh";
 import { dueSinceOf, tileRefreshStarts } from "../../worker/refreshSchedule";
 import {
@@ -412,6 +412,17 @@ describe("R66 볼 때 신선하게 — 단건 조회의 stale-while-revalidate",
     expect((await env.DB.prepare("SELECT value FROM meta WHERE key = 'place_blocked_until'").first<{ value: string }>())?.value).toBe(String(T + 30 * 60_000));
   });
 
+  it("R66 Fix 2/R13: 거점 격자 밖에 저장된 가게는 다시 가져오기가 실패해도 실패로 기록하지 않는다 — 예전 ok 행 그대로 (단건 조회와 같은 기준)", async () => {
+    await saveDetail(env.DB, "508", makeSummary(BONG.lat, BONG.lng, { name: "예전이름" }), sampleDetail(), STALE);
+    await replaceTilePlaces(env.DB, "1:1", ["508"], STALE, false); // 어느 거점의 격자도 아니다
+    const before = await adaptive("508");
+    const { app, place } = appWith({ "508": 404 });
+    expect((await callApp(app, "/api/places/508")).status).toBe(200);
+    expect(place.calls.map((c) => c.id)).toEqual(["508"]);
+    expect((await placeById(env.DB, "508"))!.meta).toMatchObject({ status: "ok", fetchedAt: STALE, reason: null });
+    expect(await adaptive("508")).toEqual(before);
+  });
+
   it("R66: 같은 isolate에서 같은 가게를 동시에 여러 번 열어도 다시 가져오기는 한 번 (상세 API 한 번)", async () => {
     await seedShown("506", STALE);
     let release!: () => void;
@@ -466,30 +477,36 @@ describe("R66 관리 화면 운영 탭 — 최근 7일 계수와 주기 분포",
     expect(d.ops.details![0]).toEqual({ day: utcDay(T - 6 * DAY), same: 0, changed: 0, first: 0 });
   });
 
-  it("R66/R38: 주기 분포(ok 가게를 interval_weeks로 GROUP BY — 가게 수만큼 읽는다)는 10분에 한 번만 센다 — 자동 새로 보기·fresh=1에도 캐시를 쓴다", async () => {
-    await seedDue([["a", T, T, 1], ["b", T, T, 1], ["c", T, T + WEEK_MS, 2], ["d", T, T + 3 * WEEK_MS, 4]]);
+  it("R66 Fix 2: 주기 분포는 거점 상태 집계(HUB_PLACES_SQL) 안에서 센다 — 따로 places를 훑지 않고, 거점 격자 가게를 격자 주인 거점으로 한 번씩(겹치는 거점에 두 번 세지 않음), 거점 상태 캐시(15분)를 같이 쓴다", async () => {
+    // KB는 여러 거점이 덮는 칸이다 (겹침) — a·b 주기 1, c 주기 2. d(주기 4)는 동대문 칸. z는 거점 격자 밖(세지 않음), f는 실패
+    expect(HUBS.filter((h) => tilesCoveringCircle(h, 1000).includes(KB)).length).toBeGreaterThan(1);
+    const KD = tileKeyOf(hubById("ddp"));
+    await seedDue([["a", T, T, 1], ["b", T, T, 1], ["c", T, T + WEEK_MS, 2], ["d", T, T + 3 * WEEK_MS, 4], ["z", T, T, 1]]);
+    await replaceTilePlaces(env.DB, KB, ["a", "b", "c", "f"], T, false);
+    await replaceTilePlaces(env.DB, KD, ["d"], T, false);
+    await replaceTilePlaces(env.DB, "1:1", ["z"], T, false);
     await saveDetailFailure(env.DB, "f", "http_500", T);
-    expect(INTERVALS_CACHE_MS).toBe(10 * 60_000);
     let now = T;
     const app = createApp({ fetcher: fakePlaceApi({}).fetcher, now: () => now, sleep: async () => {}, rateLimit: async () => true, cache: memCache() });
     const call = async (q = "tab=ops") => {
       const { db, log } = recordingDb(env.DB);
       const d = await (await callApp(app, `/api/admin/dashboard?${q}`, { headers: AUTH }, { ...env, DB: db })).json<OpsData>();
-      return { d, counted: log.some((x) => INTERVAL_SQL.test(x.sql)) };
+      return { d, log };
     };
     const first = await call();
-    expect(first.counted).toBe(true);
     expect(first.d.intervals).toEqual([{ weeks: 1, places: 2 }, { weeks: 2, places: 1 }, { weeks: 4, places: 1 }]);
     expect(first.d.intervalsAt).toBe(T);
-    now = T + 61_000; // 응답 캐시(60초)는 지났다
-    expect((await call()).counted).toBe(false);
-    const fresh = await call("tab=ops&fresh=1");
-    expect(fresh.counted).toBe(false);
-    expect(fresh.d.intervalsAt).toBe(T);
-    now = T + INTERVALS_CACHE_MS + 1;
-    const later = await call();
-    expect(later.counted).toBe(true);
-    expect(later.d.intervalsAt).toBe(now);
+    expect(first.d.hubsComputedAt).toBe(T);
+    // 거점마다 세면 겹친 칸의 가게가 여러 번 나온다 — 분포는 한 번씩
+    expect(first.d.hubs!.reduce((n, h) => n + h.ok, 0)).toBeGreaterThan(4);
+    expect(first.log.some((x) => INTERVAL_SQL.test(x.sql))).toBe(false);
+    expect(first.log.filter((x) => /\bplaces\b/.test(x.sql) && /tile_places/.test(x.sql))).toHaveLength(1);
+    // 거점 상태 캐시(15분) 안에서는 다시 세지 않는다 (응답 캐시 60초가 지나도)
+    now = T + 61_000;
+    const again = await call();
+    expect(again.log.some((x) => x.sql.includes("tile_places"))).toBe(false);
+    expect(again.d.intervals).toEqual(first.d.intervals);
+    expect(again.d.intervalsAt).toBe(T);
   });
 
   it("R66/R38: 오늘 읽기가 소프트 한도의 절반을 넘었고 캐시에 없으면 주기 분포를 세지 않는다 (null)", async () => {
@@ -499,6 +516,6 @@ describe("R66 관리 화면 운영 탭 — 최근 7일 계수와 주기 분포",
     const d = await (await callApp(app, "/api/admin/dashboard?tab=ops", { headers: AUTH }, { ...env, DB: db })).json<OpsData>();
     expect(d.intervals).toBeNull();
     expect(d.intervalsAt).toBeNull();
-    expect(log.some((x) => INTERVAL_SQL.test(x.sql))).toBe(false);
+    expect(log.some((x) => INTERVAL_SQL.test(x.sql) || x.sql.includes("tile_places"))).toBe(false);
   });
 });

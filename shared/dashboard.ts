@@ -264,8 +264,13 @@ export type HubStatus = {
   /** R63 마지막 완료 시각과 그때 끝낸 갱신의 시작 (없으면 null) — refreshedStart가 refreshStart와 같으면 이번 갱신을 끝냈다 */
   refreshedAt: number | null;
   refreshedStart: number | null;
-  /** R63 남은 갱신: 이번 시작 전에 가져온 ok 상세 수 (미수집은 pending, 실패는 failed로 따로) */
+  /** R63 남은 갱신: due_after(R66)가 이번 시작 전인 ok 상세 수 (미수집은 pending, 실패는 failed로 따로) */
   due: number;
+  /**
+   * R66 주기 분포 몫: 이 거점이 주인인 칸(HUBS 순서로 처음 덮는 거점)의 ok 가게를 주기(1·2·4주)로 센 것 — 모든 거점을 더하면
+   * 거점 격자 가게마다 한 번 (intervalsOf). 예전 캐시 값에는 없다
+   */
+  ownIntervals?: IntervalCount[];
 };
 export type CronSummary = {
   at: number;
@@ -308,6 +313,14 @@ export type DetailDay = { day: string; same: number; changed: number; first: num
 /** R66 주기 분포: ok 가게 중 interval_weeks가 weeks인 곳 수 */
 export type IntervalCount = { weeks: number; places: number };
 
+/** R66 주기 분포: 거점마다의 몫(ownIntervals)을 더한다 — 0곳인 주기는 빼고 주기 순. 거점 상태를 세지 않았으면 null */
+export function intervalsOf(hubs: readonly HubStatus[] | null): IntervalCount[] | null {
+  if (!hubs) return null;
+  const sum = new Map<number, number>();
+  for (const h of hubs) for (const x of h.ownIntervals ?? []) sum.set(x.weeks, (sum.get(x.weeks) ?? 0) + x.places);
+  return [...sum].filter(([, n]) => n > 0).sort((a, b) => a[0] - b[0]).map(([weeks, places]) => ({ weeks, places }));
+}
+
 /** R66 운영 탭 표: 다시 가져온 수 = same + changed, 바뀐 비율 = changed ÷ 다시 가져온 수 (없으면 null), 처음은 따로 + 합계 */
 export function detailRefreshSummary(days: readonly DetailDay[]) {
   const row = (same: number, changed: number, first: number) => ({
@@ -328,7 +341,7 @@ export type OpsData = DashboardBase & {
   hubsComputedAt: number | null;
   /** 오늘(KST) 저장된 이벤트 수 (실시간 집계에서), 모르면 null */
   eventsToday: number | null;
-  /** R66 주기 분포(1·2·4주, 주기 순)와 센 시각 — 10분에 한 번만 센다. 예산 가드로 세지 않았고 캐시에도 없으면 null */
+  /** R66 주기 분포(1·2·4주, 주기 순 — 거점 격자 가게마다 한 번)와 센 시각 = 거점 상태(15분 캐시)와 같이. 세지 않았으면 null */
   intervals: IntervalCount[] | null;
   intervalsAt: number | null;
   alerts: Alert[];

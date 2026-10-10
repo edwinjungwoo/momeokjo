@@ -2,8 +2,8 @@ import { PREWARM_RADIUS } from "../shared/constants";
 import {
   COHORT_METRICS, LIVE_MAX_DAYS, METRICS, RETENTION_DAYS, TOP_PLACES_SHOWN, addDays, alertsOf, dayList, mondayOf, ratio,
   weekdayOf, type BehaviorData, type Cohort, type CronSummary, type DashboardBase, type DashboardRange, type DashboardTab,
-  type DaySource, type DetailDay, type HubStatus, type IntervalCount, type Kpi, type Metrics, type OpsData, type OpsSnapshot,
-  type OverviewData, type TopPlace,
+  type DaySource, type DetailDay, type HubStatus, type Kpi, type Metrics, type OpsData, type OpsSnapshot,
+  type OverviewData, type TopPlace, intervalsOf,
 } from "../shared/dashboard";
 import { tilesCoveringCircle } from "../shared/geo";
 import { HUBS, hubById } from "../shared/hubs";
@@ -46,8 +46,6 @@ export const LIVE_CACHE_MS = 5 * 60_000;
 export const LIVE_BUDGET_SHARE = 0.5;
 /** 거점별 데이터 상태(격자·가게 수천 행)는 천천히 바뀐다 */
 export const HUB_STATUS_CACHE_MS = 15 * 60_000;
-/** R66 주기 분포(ok 가게 전부를 GROUP BY — 가게 수만큼 읽는다)는 10분에 한 번만 센다 (fresh=1이어도 — 자동 새로 보기마다 세지 않게) */
-export const INTERVALS_CACHE_MS = 10 * 60_000;
 /** R66 운영 탭 계수를 보여 주는 날 수 (UTC, 오늘 포함) */
 export const DETAIL_DAYS = 7;
 const EXPIRES = "x-mmj-expires";
@@ -56,7 +54,6 @@ export const dashboardCacheKey = (q: DashboardQuery) =>
   `https://cache.mmj/admin/dashboard?tab=${q.tab}&from=${q.from}&to=${q.to}&hub=${encodeURIComponent(q.hub)}&compare=${q.compare ? 1 : 0}&v=${DASHBOARD_CACHE_VERSION}`;
 const liveKey = (day: string, part: LivePart) => `https://cache.mmj/admin/live?day=${day}&part=${part}&v=${DASHBOARD_CACHE_VERSION}`;
 const HUBS_KEY = `https://cache.mmj/admin/hubs?v=${DASHBOARD_CACHE_VERSION}`;
-const INTERVALS_KEY = `https://cache.mmj/admin/intervals?v=${DASHBOARD_CACHE_VERSION}`;
 
 /** 엣지 캐시에 둔 JSON (만료 시각은 헤더로 직접 본다). 없거나 지났으면 null */
 export async function cachedJson<T>(cache: JsonCache | undefined, key: string, now: number): Promise<T | null> {
@@ -221,11 +218,17 @@ const metricOf = (store: Store, day: string, hub: string, m: string) => store.ge
 
 // ── 거점별 데이터 상태 ─────────────────────────────
 
-/** ?1: [hub, key, 격자 기준(R63 tileFreshFrom), 거점 갱신 시작] */
+/** ?1: [hub, key, 격자 기준(R63 tileFreshFrom), 거점 갱신 시작, 이 거점이 그 칸의 주인이면 1 (R66 주기 분포 — HUBS 순서로 처음 덮는 거점)] */
 const HUB_TILES = `WITH k AS (SELECT json_extract(value, '$[0]') AS hub, json_extract(value, '$[1]') AS key,
-  json_extract(value, '$[2]') AS fresh_from, json_extract(value, '$[3]') AS start FROM json_each(?1))`;
-const HUB_PLACES_SQL = `${HUB_TILES},
-tp AS MATERIALIZED (SELECT DISTINCT k.hub AS hub, k.start AS start, t.place_id AS id FROM k JOIN tile_places t ON t.tile_key = k.key)
+  json_extract(value, '$[2]') AS fresh_from, json_extract(value, '$[3]') AS start, json_extract(value, '$[4]') AS own FROM json_each(?1))`;
+/**
+ * 거점마다 가게 상태. tp = (거점, 가게)마다 한 행 — own은 그 가게가 이 거점이 주인인 칸에 있는가.
+ * R66 주기 분포(own1·own2·own4): 주인 칸의 ok 가게만 세서 거점들을 더하면 거점 격자 가게마다 한 번이다(겹치는 거점에 두 번 세지 않는다 —
+ * 한 가게가 주인이 다른 두 칸에 기록된 드문 경우만 두 번). 따로 places를 훑지 않는다 (Fix 2)
+ */
+export const HUB_PLACES_SQL = `${HUB_TILES},
+tp AS MATERIALIZED (SELECT k.hub AS hub, max(k.start) AS start, t.place_id AS id, max(k.own) AS own FROM k JOIN tile_places t ON t.tile_key = k.key
+  GROUP BY k.hub, t.place_id)
 SELECT tp.hub AS hub, count(*) AS places,
   count(CASE WHEN p.status = 'ok' AND COALESCE(p.due_after, p.fetched_at) < tp.start THEN 1 END) AS due,
   count(CASE WHEN p.status = 'ok' THEN 1 END) AS ok,
@@ -233,7 +236,10 @@ SELECT tp.hub AS hub, count(*) AS places,
   count(CASE WHEN p.id IS NULL THEN 1 END) AS pending,
   count(CASE WHEN p.name IS NOT NULL AND p.lat IS NOT NULL AND p.lng IS NOT NULL THEN 1 END) AS visible,
   count(CASE WHEN p.name IS NOT NULL AND p.lat IS NOT NULL AND p.lng IS NOT NULL AND ${usableListJsonSql("p.list_json")} THEN 1 END) AS listReady,
-  min(CASE WHEN p.status = 'ok' THEN p.fetched_at END) AS oldestOkAt
+  min(CASE WHEN p.status = 'ok' THEN p.fetched_at END) AS oldestOkAt,
+  count(CASE WHEN tp.own = 1 AND p.status = 'ok' AND p.interval_weeks = 1 THEN 1 END) AS own1,
+  count(CASE WHEN tp.own = 1 AND p.status = 'ok' AND p.interval_weeks = 2 THEN 1 END) AS own2,
+  count(CASE WHEN tp.own = 1 AND p.status = 'ok' AND p.interval_weeks = 4 THEN 1 END) AS own4
 FROM tp LEFT JOIN places p ON p.id = tp.id GROUP BY tp.hub`;
 const HUB_TILES_SQL = `${HUB_TILES}
 SELECT k.hub AS hub, count(*) AS tiles,
@@ -248,8 +254,12 @@ FROM k LEFT JOIN tiles t ON t.key = k.key GROUP BY k.hub`;
  * 시작 전인 ok — R66, NULL이면 fetched_at)
  */
 export async function hubStatuses(db: D1Database, now: number): Promise<HubStatus[]> {
+  // R66: 칸의 주인 = HUBS 순서로 그 칸을 처음 덮는 거점 (주기 분포를 거점 격자 가게마다 한 번 세려고)
+  const owner = new Map<string, string>();
+  for (const h of HUBS) for (const k of tilesCoveringCircle(h, PREWARM_RADIUS)) if (!owner.has(k)) owner.set(k, h.id);
   const pairs = JSON.stringify(
-    HUBS.flatMap((h) => tilesCoveringCircle(h, PREWARM_RADIUS).map((k) => [h.id, k, tileFreshFrom(k, now), hubRefreshStart(h, now)])),
+    HUBS.flatMap((h) =>
+      tilesCoveringCircle(h, PREWARM_RADIUS).map((k) => [h.id, k, tileFreshFrom(k, now), hubRefreshStart(h, now), owner.get(k) === h.id ? 1 : 0])),
   );
   const [places, tiles, done] = await db.batch<Record<string, number | string | null>>([
     db.prepare(HUB_PLACES_SQL).bind(pairs),
@@ -270,6 +280,7 @@ export async function hubStatuses(db: D1Database, now: number): Promise<HubStatu
       tiles: num(t.tiles), incompleteTiles: num(t.incompleteTiles), saturatedTiles: num(t.saturatedTiles), lastTileAt: orNull(t.lastTileAt),
       refreshDay: h.refreshDay, refreshStart: hubRefreshStart(h, now), refreshedAt: r?.at ?? null, refreshedStart: r?.start ?? null,
       due: num(p.due),
+      ownIntervals: [1, 2, 4].map((weeks) => ({ weeks, places: num(p[`own${weeks}`]) })),
     };
   });
 }
@@ -283,23 +294,6 @@ async function cachedHubStatuses(deps: DashboardDeps, allowed: boolean): Promise
   if (!allowed) return { hubs: null, at: null };
   const v = { hubs: await hubStatuses(deps.db, deps.now), at: deps.now };
   putJson(deps, HUBS_KEY, JSON.stringify(v), deps.now, HUB_STATUS_CACHE_MS);
-  return v;
-}
-
-/** R66 주기 분포: ok 가게를 interval_weeks로 센다 (가게 수만큼 읽는다 — INTERVALS_CACHE_MS 캐시) */
-export const INTERVALS_SQL = "SELECT interval_weeks AS weeks, count(*) AS places FROM places WHERE status = 'ok' GROUP BY interval_weeks ORDER BY interval_weeks";
-
-/**
- * R66 주기 분포: 캐시에 있으면 그것(fresh여도 — 10분에 한 번만 센다), 없으면 센다 — 단 오늘 읽기가 실시간 가드(LIVE_BUDGET_SHARE)를
- * 넘었으면 세지 않는다(null)
- */
-async function cachedIntervals(deps: DashboardDeps, allowed: boolean): Promise<{ intervals: IntervalCount[] | null; at: number | null }> {
-  const hit = await cachedJson<{ intervals: IntervalCount[]; at: number }>(deps.cache, INTERVALS_KEY, deps.now);
-  if (hit) return hit;
-  if (!allowed) return { intervals: null, at: null };
-  const r = await deps.db.prepare(INTERVALS_SQL).all<{ weeks: number; places: number }>();
-  const v = { intervals: r.results.map((x) => ({ weeks: Number(x.weeks), places: Number(x.places) })), at: deps.now };
-  putJson(deps, INTERVALS_KEY, JSON.stringify(v), deps.now, INTERVALS_CACHE_MS);
   return v;
 }
 
@@ -597,13 +591,12 @@ async function behavior(deps: DashboardDeps, q: DashboardQuery, state: MetaState
 async function ops(deps: DashboardDeps, q: DashboardQuery, state: MetaState): Promise<OpsData> {
   const today = kstDay(deps.now);
   const liveAllowed = liveAllowedBy(state, deps);
-  const [hubs, count, intervals] = await Promise.all([
+  const [hubs, count] = await Promise.all([
     cachedHubStatuses(deps, liveAllowed),
     // 오늘 이벤트 수는 idx_events_day 색인만 센다 (실시간 집계보다 훨씬 싸다)
     liveAllowed
       ? deps.db.prepare("SELECT count(*) AS n FROM events WHERE day = ?").bind(today).first<{ n: number }>()
       : Promise.resolve(null),
-    cachedIntervals(deps, liveAllowed),
   ]);
   const rangeDays = dayList(q.from, q.to);
   const sources = sourcesFor(rangeDays, today, state.rollupThrough, liveAllowed);
@@ -614,8 +607,9 @@ async function ops(deps: DashboardDeps, q: DashboardQuery, state: MetaState): Pr
     hubs: hubs.hubs,
     hubsComputedAt: hubs.at,
     eventsToday: count ? Number(count.n) : null,
-    intervals: intervals.intervals,
-    intervalsAt: intervals.at,
+    // R66 주기 분포는 거점 상태 집계에서 (같은 캐시·같은 예산 가드)
+    intervals: intervalsOf(hubs.hubs),
+    intervalsAt: hubs.at,
     alerts: alertsOf(state.ops, hubs.hubs, deps.now, { through: state.rollupThrough, yesterday: addDays(today, -1) }, hubName, isUnreadyHub),
   };
 }

@@ -38,6 +38,7 @@ const emptyStatus = (hub: string): HubStatus => ({
   hub, places: Number.NaN, ok: Number.NaN, failed: 0, pending: Number.NaN, visible: Number.NaN, listReady: Number.NaN,
   tiles: Number.NaN, incompleteTiles: Number.NaN, saturatedTiles: 0, oldestOkAt: null, lastTileAt: null,
   refreshDay: hubById(hub).refreshDay, refreshStart: Number.NaN, refreshedAt: null, refreshedStart: null, due: Number.NaN,
+  ownIntervals: [],
 });
 
 const days = (ms: number | null, now: number) => (ms === null ? "–" : `${Math.max(0, Math.floor((now - ms) / 86_400_000))}일`);
@@ -141,7 +142,7 @@ function HubTable({ hubs, now, blocked, onRun, running }: {
 }
 
 /**
- * R66 바뀌는 만큼만: 최근 7일(UTC) 다시 가져온 상세 중 바뀐 비율과 처음 가져온 수, 지금 주기 분포(10분마다 센다).
+ * R66 바뀌는 만큼만: 최근 7일(UTC) 다시 가져온 상세 중 바뀐 비율과 처음 가져온 수, 지금 주기 분포(거점 상태와 같이 15분마다 센다).
  * 다시 가져온 수 = 지문이 같음 + 바뀜 (처음은 따로 — 새 가게와 0008 뒤 첫 갱신)
  */
 function DetailRefresh({ data, now }: { data: OpsData; now: number }) {
@@ -179,7 +180,7 @@ function DetailRefresh({ data, now }: { data: OpsData; now: number }) {
       <p className="muted small table-note">
         {iv === null
           ? "주기 분포는 예산 보호로 세지 않았어요"
-          : `주기 ${iv.map((x) => `${x.weeks}주 ${num(x.places)}곳`).join(" · ") || "없음"} (상세 있는 ${num(total)}곳, ${ago(data.intervalsAt, now)} 셈 · 10분마다)`}
+          : `주기 ${iv.map((x) => `${x.weeks}주 ${num(x.places)}곳`).join(" · ") || "없음"} (거점 격자의 상세 있는 ${num(total)}곳, ${ago(data.intervalsAt, now)} 셈 · 15분마다)`}
       </p>
     </section>
   );
