@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { PlacesResponse } from "../../shared/types";
-import { fetchPlaces, loadPlaces } from "../../web/api";
+import { RESPONSE_TIMEOUT_MS, fetchPlace, fetchPlaces, fetchWithTimeout, isNotFound, loadPlaces } from "../../web/api";
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -77,5 +77,46 @@ describe("R56 다시 열 때 — 저장본 해석을 기다리지 않고 요청"
     const r = await loadPlaces("ddp", 1000, undefined, null, async () => ((asked = true), copy));
     expect(r).toMatchObject({ text: body, fromCopy: false, etag: null });
     expect(asked).toBe(false);
+  });
+});
+
+describe("R29/R65 느리거나 끊긴 연결", () => {
+  /** 응답하지 않는 연결 (사내 Wi-Fi 로그인 화면, 끊긴 LTE): signal이 끊어야만 끝난다 */
+  const hang = () =>
+    vi.stubGlobal("fetch", (_: RequestInfo | URL, init?: RequestInit) =>
+      new Promise<Response>((_, reject) => init?.signal?.addEventListener("abort", () => reject(init.signal!.reason))));
+
+  it("R29: 응답(헤더)이 시간 안에 오지 않으면 끊고 실패 — 화면은 오류와 다시 시도로 간다 (기본 15초)", async () => {
+    hang();
+    expect(RESPONSE_TIMEOUT_MS).toBe(15_000);
+    await expect(fetchWithTimeout("/api/places?hub=ddp&radius=1000", {}, 20)).rejects.toMatchObject({ name: "TimeoutError" });
+  });
+
+  it("R29: 부른 쪽이 멈추면(거점 바꿈) 그대로 멈추고, 응답이 오면 시간 초과는 풀린다 (느린 본문 받기는 끊지 않는다)", async () => {
+    hang();
+    const ctrl = new AbortController();
+    const p = fetchWithTimeout("/x", { signal: ctrl.signal }, 10_000);
+    ctrl.abort();
+    await expect(p).rejects.toBeDefined();
+    let seen: AbortSignal | undefined;
+    vi.stubGlobal("fetch", async (_: RequestInfo | URL, init?: RequestInit) => {
+      seen = init?.signal ?? undefined;
+      return new Response("{}");
+    });
+    await fetchWithTimeout("/x", {}, 20);
+    await new Promise((r) => setTimeout(r, 40));
+    expect(seen?.aborted).toBe(false);
+  });
+
+  it("R65: 단건이 없음(404)일 때만 '못 찾음' — 오프라인·429·5xx는 다음에 다시 부른다", async () => {
+    stubFetch(() => new Response("x", { status: 404 }));
+    const missing = await fetchPlace("123").catch((e) => e);
+    expect(isNotFound(missing)).toBe(true);
+    stubFetch(() => new Response("x", { status: 429 }));
+    expect(isNotFound(await fetchPlace("123").catch((e) => e))).toBe(false);
+    vi.stubGlobal("fetch", async () => {
+      throw new TypeError("Failed to fetch");
+    });
+    expect(isNotFound(await fetchPlace("123").catch((e) => e))).toBe(false);
   });
 });

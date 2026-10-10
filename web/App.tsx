@@ -16,7 +16,7 @@ import { excludeToastText, restoreToastText, shareConfirmText, shareText, toPart
 import { createTapGate } from "../shared/tapGate";
 import type { ApiDetail, ApiPlace, LatLng } from "../shared/types";
 import { filterProps, setTrackingHub, startTracking, track, trackFilters } from "./analytics";
-import { fetchPlace } from "./api";
+import { fetchPlace, isNotFound } from "./api";
 import { RESOLVE_CONCURRENCY, failedNames, forEachLimited } from "./mineResolve";
 import { trackHubPicked } from "./onboarding";
 import { autoDrawOffDay, autoDrawnThisSession, markAutoDrawn, turnOffAutoDraw, useInteracted } from "./autoDraw";
@@ -569,7 +569,8 @@ export default function App() {
       try {
         refreshNames([await fetchPlace(id, ctrl.signal)]);
       } catch (e) {
-        if (!ctrl.signal.aborted) failedNames.add(id);
+        // 없는 곳(404)만 이번 세션 동안 다시 부르지 않는다 — 오프라인·429·시간 초과는 다음에 시트를 열 때 다시
+        if (!ctrl.signal.aborted && isNotFound(e)) failedNames.add(id);
         throw e;
       } finally {
         if (!ctrl.signal.aborted) settle(id);

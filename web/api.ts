@@ -1,5 +1,35 @@
 import type { ApiPlace, PlacesResponse } from "../shared/types";
 
+/** 응답(헤더)이 이만큼 안 오면 끊는다 — 막힌 연결(사내 Wi-Fi 로그인 화면, 끊긴 LTE)에서 "찾고 있어요"·"메뉴를 불러오는 중"이 끝없이 돌지 않게 */
+export const RESPONSE_TIMEOUT_MS = 15_000;
+
+/** 응답 상태가 실패인 요청 (status로 없음(404)과 일시 실패를 가린다) */
+export class HttpError extends Error {
+  constructor(readonly status: number, what: string) {
+    super(`${what} ${status}`);
+    this.name = "HttpError";
+  }
+}
+/** R65: 서버가 "없음"이라고 답했다 (오프라인·429·5xx·시간 초과는 아니다 — 다음에 다시 부른다) */
+export const isNotFound = (e: unknown): boolean => e instanceof HttpError && e.status === 404;
+
+/**
+ * fetch + 응답(헤더) 시간 초과 (timeoutMs). 부른 쪽 signal로도 멈춘다 — AbortSignal.any 없이(오래된 iOS Safari).
+ * 응답이 오면 시간 초과는 풀린다 (느린 연결에서 본문을 받는 중에는 끊지 않는다). 시간 초과는 TimeoutError로 실패
+ */
+export async function fetchWithTimeout(url: string, init: RequestInit, timeoutMs = RESPONSE_TIMEOUT_MS): Promise<Response> {
+  const ctrl = new AbortController();
+  const outer = init.signal;
+  if (outer?.aborted) ctrl.abort(outer.reason);
+  else outer?.addEventListener("abort", () => ctrl.abort(outer.reason), { once: true });
+  const timer = setTimeout(() => ctrl.abort(new DOMException("응답이 오지 않아요", "TimeoutError")), timeoutMs);
+  try {
+    return await fetch(url, { ...init, signal: ctrl.signal });
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 export type PlacesFetch =
   | { notModified: true }
   | { notModified: false; data: PlacesResponse; text: string; etag: string | null };
@@ -13,9 +43,9 @@ export async function fetchPlaces(
   hubId: string, radius: number, signal?: AbortSignal, etag?: string | null,
 ): Promise<PlacesFetch> {
   const q = new URLSearchParams({ hub: hubId, radius: String(radius) });
-  const res = await fetch(`/api/places?${q}`, { signal, ...(etag ? { headers: { "if-none-match": etag } } : {}) });
+  const res = await fetchWithTimeout(`/api/places?${q}`, { signal, ...(etag ? { headers: { "if-none-match": etag } } : {}) });
   if (res.status === 304 && etag) return { notModified: true };
-  if (!res.ok) throw new Error(`places ${res.status}`);
+  if (!res.ok) throw new HttpError(res.status, "places");
   const text = await res.text();
   return { notModified: false, data: JSON.parse(text) as PlacesResponse, text, etag: res.headers.get("etag") };
 }
@@ -41,7 +71,7 @@ export async function loadPlaces(
 
 /** R13: 단일 가게. distance/walkMinutes가 없고 detail이 null일 수 있다 */
 export async function fetchPlace(id: string, signal?: AbortSignal): Promise<ApiPlace> {
-  const res = await fetch(`/api/places/${encodeURIComponent(id)}`, { signal });
-  if (!res.ok) throw new Error(`place ${res.status}`);
+  const res = await fetchWithTimeout(`/api/places/${encodeURIComponent(id)}`, { signal });
+  if (!res.ok) throw new HttpError(res.status, "place");
   return res.json();
 }
