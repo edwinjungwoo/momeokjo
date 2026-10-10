@@ -139,6 +139,9 @@ export function cronBatchFor(left: number, batchSize: number): number {
   return b;
 }
 
+/** Task 57: 결과에 싣는 이번 실행의 D1 행 수 (meteredDb가 모은 값) */
+const rowsOf = (usage: D1Usage) => ({ rowsRead: usage.read, rowsWritten: usage.written });
+
 // Cron 주기: wrangler.jsonc의 5분 간격 스케줄과 맞춘다
 export const CRON_INTERVAL_MS = 5 * 60_000;
 
@@ -160,6 +163,9 @@ export type CronResult = {
   chars?: number;
   /** Task 34: 이번 실행의 D1 호출 수 (끝의 사용량 기록 1번은 빼고) */
   d1Calls?: number;
+  /** Task 57: 이번 실행이 읽고 쓴 D1 행 수 (끝의 사용량 기록 문장은 빼고 — Workers 로그의 cron maintain 줄에서 실행당 D1을 본다) */
+  rowsRead?: number;
+  rowsWritten?: number;
   /** Task 34: D1 호출 예산 때문에 건너뛴 단계 */
   d1Skipped?: string[];
   /** Task 34: 보충 중 저장 오류가 있었다 (로그에 원인, 센 수는 그대로) */
@@ -210,6 +216,8 @@ export async function runScheduled(
     result.d1Calls = calls.used;
     return result;
   } finally {
+    // Task 57: 이번 실행의 D1 행 수를 결과(로그 줄)에 싣는다 — 끝의 기록 문장 전 값 (d1Calls와 같은 기준)
+    if (result) Object.assign(result, rowsOf(usage));
     // R38 사용량 + R59 마지막 실행 요약을 한 문장으로 (관리 화면 운영 탭의 "마지막 Cron")
     const r = result;
     const summary = {
@@ -314,6 +322,9 @@ export type DetailCronResult = {
   calls: number;
   batch?: number;
   d1Calls?: number;
+  /** Task 57: 이번 실행이 읽고 쓴 D1 행 수 (끝의 기록 문장은 빼고, 건너뛴 실행도 — Workers 로그의 cron detail 줄) */
+  rowsRead?: number;
+  rowsWritten?: number;
   d1Skipped?: string[];
   enrichError?: true;
   /**
@@ -374,6 +385,7 @@ export async function runDetailCron(
     finished = true;
     return result;
   } finally {
+    Object.assign(result, rowsOf(usage));
     // 일찍 돌려준 건너뜀도 끝난 것이다 (skipped가 있으면 return 전에 정했다). 던졌으면 본 Cron처럼 skipped: "error"
     const failed = !finished && result.skipped === undefined;
     const summary = {

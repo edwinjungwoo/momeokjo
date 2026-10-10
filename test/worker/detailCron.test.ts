@@ -13,6 +13,7 @@ import {
 import { getMeta, placeById, replaceTilePlaces } from "../../worker/repo";
 import { doc, fakeKakaoLocal, fakePlaceApi, routeFetch } from "../helpers/fakeKakao";
 import { placeJson } from "../helpers/places";
+import { recordingDb, type Executed } from "../helpers/recordDb";
 import wranglerConfig from "../../wrangler.jsonc?raw";
 
 /** 2026-10-07 수요일 10:00 KST = 01:00 UTC — 분 단위는 아래에서 고른다 */
@@ -130,6 +131,42 @@ describe("R63 둘째 트리거 (홀수 분) — 스냅샷·쉼·상세만 보충
     expect(JSON.parse((await metaValue(CRON_DETAIL_LAST_KEY))!)).toMatchObject({ at: at(3), enriched: 3, failed: 0, calls: 3 });
     expect(Number(await metaValue(`d1_read:${utcDay(at(3))}`))).toBeGreaterThan(0);
     expect(await metaValue("cron_last")).toBeNull();
+  });
+
+  it("R38: 상세만 실행·본 Cron의 결과(Workers 로그의 cron detail·cron maintain 줄)에 이번 실행이 읽고 쓴 D1 행 수(rowsRead·rowsWritten)를 싣는다 — 끝의 사용량 기록 문장은 빼고, 건너뛴 실행도 (Task 57)", async () => {
+    await markFresh(ALL_KEYS, BASE);
+    await seedOk([["old1", S_BONG - 1], ["old2", S_BONG - 2]]);
+    await replaceTilePlaces(env.DB, KB, ["old1", "old2", "new1"], BASE, false);
+    const place = fakePlaceApi({ old1: json("o1"), old2: json("o2"), new1: json("n1") });
+    const rows = (log: Executed[], lastKey: string) => {
+      // 끝의 기록(사용량 + 마지막 실행 요약) 한 문장은 결과를 만든 뒤에 쓴다
+      expect(log[log.length - 1].sql).toContain(lastKey);
+      const body = log.slice(0, -1);
+      return { rowsRead: body.reduce((n, x) => n + x.read, 0), rowsWritten: body.reduce((n, x) => n + x.written, 0) };
+    };
+    {
+      const { db, log } = recordingDb(env.DB);
+      const r = await runDetailCron({ ...env, DB: db }, { fetcher: place.fetcher, now: at(3), sleep: async () => {} });
+      expect(r.enriched).toBe(3);
+      expect(r).toMatchObject(rows(log, CRON_DETAIL_LAST_KEY));
+      expect(r.rowsRead).toBeGreaterThan(0);
+      expect(r.rowsWritten).toBeGreaterThan(0);
+    }
+    {
+      const { db, log } = recordingDb(env.DB);
+      const r = await runScheduled({ ...env, DB: db }, { fetcher: place.fetcher, now: at(5), sleep: async () => {} });
+      expect(r).toMatchObject(rows(log, "cron_last"));
+      expect(r.rowsRead).toBeGreaterThan(0);
+    }
+    {
+      // 쿨다운으로 건너뛴 실행도 읽은 행(오늘 사용량·쿨다운)을 싣는다
+      await env.DB.prepare("INSERT INTO meta (key, value) VALUES ('place_blocked_until', ?)").bind(String(at(60))).run();
+      const { db, log } = recordingDb(env.DB);
+      const r = await runDetailCron({ ...env, DB: db }, { fetcher: place.fetcher, now: at(7), sleep: async () => {} });
+      expect(r.skipped).toBe("paused");
+      expect(r).toMatchObject(rows(log, CRON_DETAIL_LAST_KEY));
+      expect(r.rowsRead).toBeGreaterThan(0);
+    }
   });
 
   it("R38/R44/R52: 상세만 실행은 읽기 예산을 넘었거나 쿨다운·frozen이면 상세를 부르지 않고, 읽기 전용(개발 서버)이면 아무것도 하지 않는다", async () => {
