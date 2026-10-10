@@ -1,7 +1,15 @@
 import { describe, expect, it } from "vitest";
 import type { PlacesResponse } from "../../shared/types";
-import { MENU_PREVIEW, RATING_HIGH, callFirst, menuPreview, ratingTone, refreshNote, rowSubLine, telHref } from "../../web/format";
+import { DEFAULT_FILTERS, type Filters } from "../../shared/recommend";
+import {
+  MENU_PREVIEW, RATING_HIGH, callFirst, detailSummary, menuPreview, openState, priceText, ratingTone, refreshNote, rowSubLine, statusOf,
+  telHref, todayHoursText, walkText, won,
+} from "../../web/format";
+import { relaxOptions } from "../../web/components/EmptyState";
 import { apiPlace } from "../helpers/apiPlace";
+
+const kst = (iso: string) => new Date(`${iso}+09:00`);
+const DAY = 24 * 3600_000;
 
 describe("R49 4명+면 전화 먼저", () => {
   it("R49: 전화번호를 tel: 링크로 — 숫자와 +만 남기고, 숫자가 없으면 null", () => {
@@ -86,5 +94,108 @@ describe("R34/R28 목록 행 둘째 줄 — 375·360px에서 알약이 잘리지
 
   it("R34: 곧 닫거나 닫힌 줄은 그 알림이 먼저라 알약을 빼고 카테고리를 보인다 (한 줄에 셋을 넣지 않는다)", () => {
     expect(rowSubLine({ top: 5, closed: true, category: "한식" })).toEqual({ pill: null, category: "한식" });
+  });
+});
+
+describe("R7/R26 가격·도보 글자", () => {
+  it("R7: 원은 천 단위 쉼표, 대표 가격은 \"N원대\" (없으면 null)", () => {
+    expect(won(12000)).toBe("12,000원");
+    expect(won(0)).toBe("0원");
+    expect(priceText(apiPlace("1", {}, { price: 9500 }))).toBe("9,500원대");
+    expect(priceText(apiPlace("1", {}, { price: null }))).toBeNull();
+    expect(priceText(apiPlace("1", {}, null))).toBeNull();
+  });
+
+  it("R26: 도보 분이 있으면 \"도보 N분\", 모르면 null", () => {
+    expect(walkText(apiPlace("1", { walkMinutes: 7 }))).toBe("도보 7분");
+    expect(walkText(apiPlace("1", { walkMinutes: undefined }))).toBeNull();
+  });
+});
+
+describe("R17 영업 상태 글자", () => {
+  const p = apiPlace("1", {}, { hours: { 1: [[660, 1320]] } });
+
+  it("R17: 영업 중 / 30분 안에 닫힘(곧 마감, 강조) / 지금 닫힘(강조) / 정보 없음", () => {
+    expect(openState(p, kst("2026-10-05T12:00:00"))).toEqual({ text: "영업 중", closed: false, kind: "open" });
+    expect(openState(p, kst("2026-10-05T21:45:00"))).toEqual({ text: "곧 마감", closed: true, kind: "closing" });
+    expect(openState(p, kst("2026-10-05T22:30:00"))).toEqual({ text: "지금 닫힘", closed: true, kind: "closed" });
+    expect(openState(p, kst("2026-10-05T10:00:00"))).toEqual({ text: "지금 닫힘", closed: true, kind: "closed" });
+    expect(openState(apiPlace("2", {}, { hours: null }), kst("2026-10-05T12:00:00"))).toEqual({
+      text: "영업 정보 없음", closed: false, kind: "unknown",
+    });
+  });
+
+  it("R22: 펼친 카드의 오늘 영업시간 — 구간이 여럿이면 쉼표로, 자정 넘김은 다음 날 시각으로, 휴무, 정보 없으면 null", () => {
+    const mon = kst("2026-10-05T12:00:00");
+    expect(todayHoursText(apiPlace("1", {}, { hours: { 1: [[660, 900], [1020, 1320]] } }), mon)).toBe("오늘 11:00~15:00, 17:00~22:00");
+    expect(todayHoursText(apiPlace("1", {}, { hours: { 1: [[1080, 1620]] } }), mon)).toBe("오늘 18:00~03:00");
+    expect(todayHoursText(apiPlace("1", {}, { hours: { 1: "closed" } }), mon)).toBe("오늘 휴무");
+    expect(todayHoursText(apiPlace("1", {}, { hours: { 1: [] } }), mon)).toBeNull();
+    expect(todayHoursText(apiPlace("1", {}, { hours: { 2: [[660, 1320]] } }), mon)).toBeNull();
+    expect(todayHoursText(apiPlace("1", {}, null), mon)).toBeNull();
+  });
+});
+
+describe("R18 상세 조건 접힘 한 줄", () => {
+  it("R18: 기본값은 \"예산 전체 · 평점 무관 · 영업 중만\", 바꾸면 그 값으로 (꺼진 영업 중·술집은 빼고)", () => {
+    expect(detailSummary(DEFAULT_FILTERS)).toBe("예산 전체 · 평점 무관 · 영업 중만");
+    const f: Filters = { ...DEFAULT_FILTERS, priceCap: 15000, minRating: 3.5, openOnly: false, includeBar: true };
+    expect(detailSummary(f)).toBe("1.5만 이하 · 평점 3.5+ · 술집 포함");
+    expect(detailSummary({ ...DEFAULT_FILTERS, priceCap: 10000, minRating: 4 })).toBe("1만 이하 · 평점 4.0+ · 영업 중만");
+  });
+});
+
+describe("R29/R44 목록 위 상태 한 줄", () => {
+  const NOW = Date.UTC(2026, 9, 5, 3);
+  const base = {
+    center: { lat: 37.5, lng: 127 }, radius: 1000, places: [], pending: 0, incompleteTiles: 0, stale: false, detailsPaused: false,
+    detailsFrozenSince: null, detailsNewestAt: NOW - DAY, refreshedAt: null, refreshDay: 1,
+  } as PlacesResponse;
+
+  it("R29: 목록이 없으면 null(스켈레톤·오류 화면이 대신), 다 찬 최신 목록이면 null", () => {
+    expect(statusOf(null, false, false, NOW)).toBeNull();
+    expect(statusOf(base, false, false, NOW)).toBeNull();
+  });
+
+  it("R29: 오류 → 오래됨(stale) → 격자 수집 중 → 평점 불러오는 중 순서로 하나만", () => {
+    const all = { ...base, stale: true, incompleteTiles: 2, pending: 3 };
+    expect(statusOf(all, true, true, NOW)).toEqual({ text: "최신 정보를 불러오지 못했어요", tone: "warn", busy: false });
+    expect(statusOf(all, true, false, NOW)).toEqual({ text: "정보가 오래됐을 수 있어요", tone: "warn", busy: false });
+    const collecting = { ...base, incompleteTiles: 2, pending: 3 };
+    expect(statusOf(collecting, true, false, NOW)).toEqual({ text: "주변 가게를 더 찾는 중이에요", tone: "info", busy: true });
+    expect(statusOf(collecting, false, false, NOW)).toEqual({ text: "주변 가게를 다 찾지 못했어요", tone: "warn", busy: false });
+    const pending = { ...base, pending: 3 };
+    expect(statusOf(pending, true, false, NOW)).toEqual({ text: "평점 정보 불러오는 중 (3곳)", tone: "info", busy: true });
+    expect(statusOf(pending, false, false, NOW)).toEqual({ text: "3곳은 아직 정보를 못 불러왔어요", tone: "info", busy: false });
+  });
+
+  it("R44: 가장 최근 상세가 8일보다 오래됐으면 기준 시점을, frozen이면 pending보다 먼저 알린다 (예전 저장본에 필드가 없어도 된다)", () => {
+    expect(statusOf({ ...base, detailsNewestAt: NOW - 10 * DAY }, false, false, NOW)).toEqual({
+      text: "평점·메뉴는 10일 전 기준이에요", tone: "info", busy: false,
+    });
+    const frozen = { ...base, pending: 3, detailsFrozenSince: NOW - DAY, detailsNewestAt: NOW - 2 * DAY };
+    expect(statusOf(frozen, true, false, NOW)).toEqual({ text: "평점·메뉴는 2일 전 기준이에요", tone: "info", busy: false });
+    const { detailsFrozenSince: _f, detailsNewestAt: _n, ...old } = base;
+    expect(statusOf(old as PlacesResponse, false, false, NOW)).toBeNull();
+  });
+});
+
+describe("R21 후보가 없을 때 풀기 버튼", () => {
+  it("R21: 켜져 있는 제약만 버튼으로 (영업 중 → 평점 → 예산 → 카테고리 → 반경 +300m), 누르면 그 제약만 푼다", () => {
+    expect(relaxOptions(DEFAULT_FILTERS).map((o) => o.label)).toEqual(["영업 중만 해제", "반경 +300m"]);
+    const tight: Filters = { ...DEFAULT_FILTERS, minRating: 4, priceCap: 10000, groups: ["korean"], radius: 900 };
+    const opts = relaxOptions(tight);
+    expect(opts.map((o) => o.label)).toEqual(["영업 중만 해제", "평점 무관", "예산 전체", "카테고리 전체", "반경 +300m"]);
+    const by = (label: string) => opts.find((o) => o.label === label)!.apply(tight);
+    expect(by("영업 중만 해제")).toEqual({ ...tight, openOnly: false });
+    expect(by("평점 무관")).toEqual({ ...tight, minRating: 0 });
+    expect(by("예산 전체")).toEqual({ ...tight, priceCap: "all" });
+    expect(by("카테고리 전체")).toEqual({ ...tight, groups: [] });
+    // 반경은 1000m에서 멈춘다
+    expect(by("반경 +300m")).toEqual({ ...tight, radius: 1000 });
+  });
+
+  it("R21: 반경이 이미 1000m이고 다른 제약이 모두 꺼져 있으면 버튼이 없다 (다른 거점을 권한다)", () => {
+    expect(relaxOptions({ ...DEFAULT_FILTERS, openOnly: false, radius: 1000 })).toEqual([]);
   });
 });
