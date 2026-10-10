@@ -1,6 +1,6 @@
 # 모먹죠 (mmj.itmz.me)
 
-거점(역) 근처 점심 추천 — 봉은사역·동대문역사문화공원역·판교역·내방역·정부과천청사역. Cloudflare Worker 하나(Hono API + React SPA, `@cloudflare/vite-plugin`) + D1 + Cron(5분). 설계는 `docs/superpowers/specs/2026-10-05-momeokjo-design.md`.
+거점(역) 근처 점심 추천 — 공개 거점 14곳(봉은사역·삼성역·강남역·판교역·여의도역·광화문역 등, 목록은 `shared/hubs.ts`). Cloudflare Worker 하나(Hono API + React SPA, `@cloudflare/vite-plugin`) + D1 + Cron 트리거 둘(본 Cron `*/5` 수집·보충·집계, 둘째 `* * * * *` 스냅샷·상세만 보충). 설계는 `docs/superpowers/specs/2026-10-05-momeokjo-design.md`, 배포는 `docs/deploy.md`.
 
 ## 개발
 
@@ -9,8 +9,11 @@ npm install
 npm run dev        # vite dev, http://localhost:5173
 npm test           # Vitest + workerd, 격리된 로컬 D1 (운영 D1에 붙지 않는다)
 npm run typecheck
-npm run build      # dist/ (배포는 npm run deploy)
+npm run build      # dist/
+npm run release    # 운영 배포 — 마이그레이션 적용·확인 → 기준 스모크 → 배포 → 스모크 → 회귀면 자동 롤백 (docs/deploy.md)
 ```
+
+배포는 언제나 `npm run release`로 해요. `npm run deploy`(`vite build && wrangler deploy`)만 돌리면 마이그레이션·스모크·롤백을 건너뛰어요(2026-10-05 사고 뒤에 만든 안전장치).
 
 비밀값은 git에 없다: `KAKAO_REST_KEY`·`ADMIN_TOKEN`은 `.dev.vars`, `VITE_KAKAO_JS_KEY`는 `.env.local`.
 
