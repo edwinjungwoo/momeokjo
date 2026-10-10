@@ -28,29 +28,33 @@ export async function readHubRefreshed(db: D1Database, hubId: string): Promise<H
   return parseHubRefreshed(r?.value);
 }
 
+/** 읽어 둔 meta에서 tiles_changed_at(만료·미수집 커서)과 거점들의 완료 기록 (readCronMeta와 같은 해석) */
+export function cronMetaFrom(
+  meta: ReadonlyMap<string, string>, hubIds: readonly string[],
+): { changedAt: number; refreshed: Map<string, HubRefreshed> } {
+  const v = Number(meta.get(TILES_CHANGED_KEY) ?? 0);
+  const refreshed = new Map<string, HubRefreshed>();
+  for (const id of hubIds) {
+    const r = parseHubRefreshed(meta.get(HUB_REFRESHED_PREFIX + id));
+    if (r) refreshed.set(id, r);
+  }
+  return { changedAt: Number.isFinite(v) ? v : 0, refreshed };
+}
+
 /**
  * 본 Cron이 실행마다 한 번 읽는 meta: tiles_changed_at(만료·미수집 커서)과 거점들의 완료 기록을 한 질의로
- * (Task 34 D1 호출 예산 — 예전 tilesChangedAt 한 번과 같은 호출 수)
+ * (Task 34 D1 호출 예산 — 예전 tilesChangedAt 한 번과 같은 호출 수). extraKeys: 같은 질의로 더 읽을 키 (Task 57 — 쿨다운·커서·집계,
+ * 돌려주는 meta에 읽은 키가 다 있다)
  */
 export async function readCronMeta(
-  db: D1Database, hubIds: readonly string[],
-): Promise<{ changedAt: number; refreshed: Map<string, HubRefreshed> }> {
+  db: D1Database, hubIds: readonly string[], extraKeys: readonly string[] = [],
+): Promise<{ changedAt: number; refreshed: Map<string, HubRefreshed>; meta: Map<string, string> }> {
   const r = await db
     .prepare("SELECT key, value FROM meta WHERE key IN (SELECT value FROM json_each(?))")
-    .bind(JSON.stringify([TILES_CHANGED_KEY, ...hubIds.map((id) => HUB_REFRESHED_PREFIX + id)]))
+    .bind(JSON.stringify([TILES_CHANGED_KEY, ...hubIds.map((id) => HUB_REFRESHED_PREFIX + id), ...extraKeys]))
     .all<{ key: string; value: string }>();
-  const refreshed = new Map<string, HubRefreshed>();
-  let changedAt = 0;
-  for (const x of r.results) {
-    if (x.key === TILES_CHANGED_KEY) {
-      const v = Number(x.value);
-      changedAt = Number.isFinite(v) ? v : 0;
-    } else {
-      const v = parseHubRefreshed(x.value);
-      if (v) refreshed.set(x.key.slice(HUB_REFRESHED_PREFIX.length), v);
-    }
-  }
-  return { changedAt, refreshed };
+  const meta = new Map(r.results.map((x) => [x.key, x.value] as const));
+  return { ...cronMetaFrom(meta, hubIds), meta };
 }
 
 /**

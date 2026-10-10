@@ -499,9 +499,12 @@ export type UnfetchedPick = { states: TilePlaceState[]; cleared: boolean };
  * 같으면 묶음 질의 없이 cleared다 — 그래서 Cron은 따로 "미수집 확인 끝" 표시를 두지 않는다 (tiles_changed_at은 바뀔 때마다 커진다).
  * opts.changedAt: 호출하는 쪽이 한 번 읽은 tiles_changed_at (다시 읽지 않는다). opts.maxQueries: 이번에 쓸 D1 호출 수 상한
  * (커서 읽기·쓰기 포함 — 3보다 적으면 읽지 않는다. 묶음·쪽을 다 못 읽으면 다음 실행이 커서부터 이어 읽는다).
+ * opts.meta: 같은 실행에서 미리 읽은 meta (Task 57 — Cron은 실행의 meta를 한 번에 읽는다). 있으면 커서(와 changedAt이 없으면
+ * tiles_changed_at)를 여기서 보고 다시 읽지 않는다 — 없는 키는 값이 없는 것. 호출 수 상한 계산은 그대로다(커서 읽기 몫을 남긴다)
  */
 export async function nearestUnfetchedStates(
-  db: D1Database, keys: string[], centers: LatLng[], limit: number, opts: { changedAt?: number; maxQueries?: number } = {},
+  db: D1Database, keys: string[], centers: LatLng[], limit: number,
+  opts: { changedAt?: number; maxQueries?: number; meta?: ReadonlyMap<string, string> } = {},
 ): Promise<UnfetchedPick> {
   const want = Math.max(0, Math.floor(limit));
   if (want === 0) return { states: [], cleared: false };
@@ -512,11 +515,16 @@ export async function nearestUnfetchedStates(
   const walkQueries = maxQueries - 2;
   const groups = rankGroups(keys, centers);
   const fingerprint = frontierFingerprint(keys, centers);
-  const m = await db
-    .prepare("SELECT key, value FROM meta WHERE key IN (?, ?)")
-    .bind(UNFETCHED_FROM_KEY, opts.changedAt === undefined ? TILES_CHANGED_KEY : UNFETCHED_FROM_KEY)
-    .all<{ key: string; value: string }>();
-  const get = (k: string) => m.results.find((x) => x.key === k)?.value;
+  const prefetched = opts.meta;
+  const get = prefetched
+    ? (k: string) => prefetched.get(k)
+    : await (async () => {
+      const m = await db
+        .prepare("SELECT key, value FROM meta WHERE key IN (?, ?)")
+        .bind(UNFETCHED_FROM_KEY, opts.changedAt === undefined ? TILES_CHANGED_KEY : UNFETCHED_FROM_KEY)
+        .all<{ key: string; value: string }>();
+      return (k: string) => m.results.find((x) => x.key === k)?.value;
+    })();
   const changedNum = opts.changedAt ?? Number(get(TILES_CHANGED_KEY) ?? 0);
   const changedAt = Number.isFinite(changedNum) ? changedNum : 0;
   const cursor = parseFrontier(get(UNFETCHED_FROM_KEY));
@@ -674,6 +682,8 @@ ${expiredCols("idx_places_status_due")}
   WHERE p.status = ?1 AND p.due_after > COALESCE(?2, -1) AND p.due_after <= ?4
 ORDER BY due_after, rid LIMIT ?5`;
 const EXPIRED_FROM_PREFIX = "expired_from:";
+/** 만료 후보 커서의 meta 키 (ok·실패) — Cron은 실행의 meta 한 번 읽기에 넣는다 (Task 57) */
+export const EXPIRED_CURSOR_KEYS: readonly string[] = [`${EXPIRED_FROM_PREFIX}ok`, `${EXPIRED_FROM_PREFIX}failed`];
 /**
  * from·rid: 다음 실행이 읽기 시작할 위치 (R66 ok 커서는 due_after — NULL이면 NULL 구간). changedAt·keys: 커서를 쓸 때 본
  * tiles_changed_at과 거점 격자 집합 지문 (ok 커서의 지문에는 R63 칸마다의 갱신 시작도 들어간다 — 시작이 바뀌면 처음부터 다시 읽는다)
@@ -736,6 +746,8 @@ export async function expiredDetailStates(
   db: D1Database, keys: string[], now: number, observedChangedAt?: number,
   /** Task 40: "failed"면 실패 행만 읽는다 (ok 커서는 읽지도 쓰지도 않는다 — 미수집이 배치를 다 채운 실행) */
   only?: "failed",
+  /** Task 57: 같은 실행에서 미리 읽은 meta (EXPIRED_CURSOR_KEYS를 넣어 읽은 것 — 없는 키는 커서 없음). 있으면 커서를 다시 읽지 않는다 */
+  prefetched?: ReadonlyMap<string, string>,
 ): Promise<TilePlaceState[]> {
   const unique = [...new Set(keys)];
   if (unique.length === 0) return [];
@@ -759,15 +771,20 @@ export async function expiredDetailStates(
       pos: (x: ExpiredRow): ScanPos => ({ from: x.fetched_at, rid: x.rid }), due: () => true,
     },
   ].filter((x) => only === undefined || x.status === only);
-  const saved = await db
-    .prepare(`SELECT key, value FROM meta WHERE key IN (${marks(statuses.length)})`)
-    .bind(...statuses.map((x) => EXPIRED_FROM_PREFIX + x.status))
-    .all<{ key: string; value: string }>();
+  const savedOf = prefetched
+    ? (k: string) => prefetched.get(k)
+    : await (async () => {
+      const saved = await db
+        .prepare(`SELECT key, value FROM meta WHERE key IN (${marks(statuses.length)})`)
+        .bind(...statuses.map((x) => EXPIRED_FROM_PREFIX + x.status))
+        .all<{ key: string; value: string }>();
+      return (k: string) => saved.results.find((x) => x.key === k)?.value;
+    })();
   const out: TilePlaceState[] = [];
   const writes: D1PreparedStatement[] = [];
   for (const { status, sql, before, fingerprint, pos: posOf, due } of statuses) {
     const key = EXPIRED_FROM_PREFIX + status;
-    const cursor = parseCursor(saved.results.find((x) => x.key === key)?.value);
+    const cursor = parseCursor(savedOf(key));
     const reset = cursor === null || cursor.changedAt !== changedAt || cursor.keys !== fingerprint;
     // 처음부터: ok는 NULL 구간부터(R66), 실패는 0부터 — 실패 행은 언제나 fetched_at이 있다
     let pos: ScanPos = reset ? { from: status === "ok" ? null : 0, rid: 0 } : { from: cursor.from, rid: cursor.rid };
@@ -871,7 +888,7 @@ export async function listRowsInBox(db: D1Database, box: Rect, inTiles: Readonly
 /** Cron이 한 번에 채우는 list_json 수 (쓰기 ≤ 200행/실행) */
 export const LIST_BACKFILL_LIMIT = 200;
 /** 판마다 커서가 따로다 — LIST_JSON_VERSION을 올리면 Cron이 places를 처음부터 다시 훑어 새 판으로 쓴다 */
-const LIST_BACKFILL_KEY = `list_json_backfill:v${LIST_JSON_VERSION}`;
+export const LIST_BACKFILL_KEY = `list_json_backfill:v${LIST_JSON_VERSION}`;
 const LIST_BACKFILL_DONE = "done";
 
 /**
@@ -880,11 +897,14 @@ const LIST_BACKFILL_DONE = "done";
  * 커서(meta list_json_backfill:v{판} = 마지막 rowid)로 이어 읽어서 실행마다 places를 처음부터 훑지 않고,
  * 끝까지 읽으면 "done"을 남겨 그 뒤로는 meta 1행만 읽는다 (새 행은 saveDetail이 처음부터 지금 판으로 쓴다).
  * 그 사이 상세가 다시 저장된 행은 건드리지 않는다 (fetched_at이 같고 아직 지금 판이 아닐 때만 쓴다).
+ * prefetched: 같은 실행에서 미리 읽은 meta (LIST_BACKFILL_KEY를 넣어 읽은 것 — Task 57, 본 Cron 시작의 한 번 읽기). 있으면 커서를 다시 읽지 않는다
  */
-export async function backfillListJson(db: D1Database): Promise<number> {
-  const cur = await db.prepare("SELECT value FROM meta WHERE key = ?").bind(LIST_BACKFILL_KEY).first<{ value: string }>();
-  if (cur?.value === LIST_BACKFILL_DONE) return 0;
-  const after = Number(cur?.value ?? 0) || 0;
+export async function backfillListJson(db: D1Database, prefetched?: ReadonlyMap<string, string>): Promise<number> {
+  const value = prefetched
+    ? prefetched.get(LIST_BACKFILL_KEY)
+    : (await db.prepare("SELECT value FROM meta WHERE key = ?").bind(LIST_BACKFILL_KEY).first<{ value: string }>())?.value;
+  if (value === LIST_BACKFILL_DONE) return 0;
+  const after = Number(value ?? 0) || 0;
   const r = await db
     .prepare("SELECT rowid AS rid, * FROM places WHERE rowid > ? ORDER BY rowid LIMIT ?")
     .bind(after, LIST_BACKFILL_LIMIT)
@@ -1115,15 +1135,22 @@ function parseFrozen(raw: string | undefined): DetailGate["frozen"] {
   }
 }
 
+/** R10 쿨다운·R44 강등 모드의 meta 키 (Cron은 실행 시작의 meta 한 번 읽기에 넣는다 — Task 57) */
+export const DETAIL_GATE_KEYS: readonly string[] = [BLOCKED_KEY, DETAIL_MODE_KEY];
+
+/** 읽어 둔 meta(키 → 값, 없는 키는 undefined)에서 쿨다운·강등 모드 (detailGate와 같은 해석) */
+export function detailGateFrom(get: (key: string) => string | undefined): DetailGate {
+  const blocked = Number(get(BLOCKED_KEY) ?? 0);
+  return { blockedUntil: Number.isFinite(blocked) ? blocked : 0, frozen: parseFrozen(get(DETAIL_MODE_KEY)) };
+}
+
 /** R10 쿨다운과 R44 강등 모드를 한 번에 읽는다 (meta 2행) */
 export async function detailGate(db: D1Database): Promise<DetailGate> {
   const r = await db
     .prepare("SELECT key, value FROM meta WHERE key IN (?, ?)")
     .bind(BLOCKED_KEY, DETAIL_MODE_KEY)
     .all<{ key: string; value: string }>();
-  const get = (k: string) => r.results.find((x) => x.key === k)?.value;
-  const blocked = Number(get(BLOCKED_KEY) ?? 0);
-  return { blockedUntil: Number.isFinite(blocked) ? blocked : 0, frozen: parseFrozen(get(DETAIL_MODE_KEY)) };
+  return detailGateFrom((k) => r.results.find((x) => x.key === k)?.value);
 }
 
 /** 지금 frozen이면 시작 시각, 아니면 null (24시간 뒤 자동 해제) */

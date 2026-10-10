@@ -8,7 +8,7 @@ import { fetchPlaceDetail } from "./kakaoPlace";
 import { mapLimit } from "./pool";
 import {
   detailGate, detailsAllowed, nearestDetailStates, pickDetailIds, recordPlaceBlock, saveDetail, saveDetailFailure, saveDetails,
-  type DetailSave, type DetailScope, type TilePlaceState,
+  type DetailGate, type DetailSave, type DetailScope, type TilePlaceState,
 } from "./repo";
 
 /** 동시에 부르는 상세 수 */
@@ -35,6 +35,11 @@ export type EnrichDeps = {
   charBudget?: number;
   /** Task 34: 실행의 D1 호출 예산. 새 상세는 저장·차단 기록 몫이 남았을 때만 시작하고, 한 곳씩 다시 저장은 그만큼 남았을 때만 */
   d1?: { has(n: number): boolean };
+  /**
+   * Task 57: 같은 실행에서 방금(후보를 고르기 전) 읽은 쿨다운·강등 모드 — 있으면 다시 읽지 않는다 (Cron은 실행의 meta를 한 번에 읽는다).
+   * 그 사이(후보 질의 몇 번) 다른 실행이 막 차단을 기록했으면 이번 배치는 부르지만, 403·429를 받으면 새 상세를 시작하지 않고 기록한다(blocked)
+   */
+  gate?: DetailGate;
 };
 
 /** 새 상세를 시작하려면 남아 있어야 하는 D1 호출: 마지막 묶음 저장 1 + 차단 기록(최악 3) */
@@ -70,7 +75,7 @@ export async function enrichDetails(
   const result: EnrichResult = { enriched: 0, failed: 0, deferred: 0, chars: 0, truncated: false };
   if (deps.budget.left <= 0) return result;
   // R10 쿨다운·R44 강등 모드면 후보도 고르지 않는다
-  if (!detailsAllowed(await detailGate(deps.db), deps.now)) return result;
+  if (!detailsAllowed(deps.gate ?? (await detailGate(deps.db)), deps.now)) return result;
   const scope = deps.scope ?? "due";
   let ids: string[];
   // R66: id → 지난 지문 (후보를 읽은 질의에 있다 — 상세 행이 없거나 지문이 없으면 null = 처음)

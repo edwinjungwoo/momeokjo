@@ -288,6 +288,14 @@ export type RollupOpts = {
   readSoftCap?: number;
   /** UTC 하루 최대 집계 날 수 (기본 ROLLUP_MAX_DAYS_PER_UTC_DAY, 테스트용) */
   maxDaysPerUtcDay?: number;
+  /** Task 57: 같은 실행에서 미리 읽은 meta (rollupMetaKeys(now)를 넣어 읽은 것 — 없는 키는 값 없음). 있으면 다시 읽지 않는다 */
+  prefetched?: ReadonlyMap<string, string>;
+};
+
+/** runRollups가 처음에 보는 meta 키: 집계 끝 날, 실패 기록, 오늘(UTC) 집계한 날 수, 오늘(UTC) 읽기 행 수 */
+export const rollupMetaKeys = (now: number): string[] => {
+  const utc = utcDay(now);
+  return [ROLLUP_THROUGH_KEY, ROLLUP_FAILED_KEY, `${ROLLUP_DAYS_PREFIX}${utc}`, `d1_read:${utc}`];
 };
 
 /**
@@ -301,13 +309,17 @@ export async function runRollups(db: D1Database, now: number, opts: RollupOpts =
   const last = lastRollableDay(now);
   const oldest = kstDay(now - EVENT_RETENTION_DAYS * DAY_MS);
   const utc = utcDay(now);
-  const countKey = `${ROLLUP_DAYS_PREFIX}${utc}`;
-  const readKey = `d1_read:${utc}`;
-  const r = await db
-    .prepare("SELECT key, value FROM meta WHERE key IN (?, ?, ?, ?)")
-    .bind(ROLLUP_THROUGH_KEY, ROLLUP_FAILED_KEY, countKey, readKey)
-    .all<{ key: string; value: string }>();
-  const get = (k: string) => r.results.find((x) => x.key === k)?.value;
+  const [, , countKey, readKey] = rollupMetaKeys(now);
+  const prefetched = opts.prefetched;
+  const get = prefetched
+    ? (k: string) => prefetched.get(k)
+    : await (async () => {
+      const r = await db
+        .prepare("SELECT key, value FROM meta WHERE key IN (?, ?, ?, ?)")
+        .bind(...rollupMetaKeys(now))
+        .all<{ key: string; value: string }>();
+      return (k: string) => r.results.find((x) => x.key === k)?.value;
+    })();
   const through = get(ROLLUP_THROUGH_KEY) ?? null;
   if (through !== null && through >= last) return 0;
   if ((Number(get(readKey)) || 0) >= (opts.readSoftCap ?? DEFAULT_READ_SOFT_CAP) * ROLLUP_BUDGET_SHARE) return 0;

@@ -219,6 +219,23 @@ describe("Task 40: 운영 크기에서 Cron 한 번이 읽는 D1 행 (정상 상
     expect(reads(d.log), `detail reads ${reads(d.log)}`).toBeLessThanOrEqual(100);
   });
 
+  it.each(["backlog", "refresh", "idle"] as const)(
+    "R38/R10/R63: %s — 상세만 실행은 meta를 한 번만 읽고(오늘 읽기·쿨다운·frozen·tiles_changed_at·미수집·만료 커서) 보충은 쿨다운을 다시 읽지 않는다 — D1 호출 ≤ 8번(전 11~13번). 본 Cron은 시작(오늘 읽기·격자 확인 표시·백필 커서)과 격자 수집 뒤(쿨다운·완료 기록·커서·집계) 두 번 — ≤ 8번(전 13~14번) (Task 57)",
+    async (s) => {
+      await seed(s);
+      const now = await warmUp(s === "backlog" ? NOW + MIN5 : NOW);
+      const metaReads = (log: Executed[]) => log.filter((x) => /^SELECT (key, )?value FROM meta\b/.test(x.sql)).length;
+      const m = await mainRun(now);
+      expect(m.r.d1Skipped).toBeUndefined();
+      expect(metaReads(m.log), JSON.stringify(m.log.map((x) => x.sql.slice(0, 60)))).toBe(2);
+      expect(m.r.d1Calls).toBeLessThanOrEqual(8);
+      const d = await detailRun(now + 60_000);
+      expect(metaReads(d.log), JSON.stringify(d.log.map((x) => x.sql.slice(0, 60)))).toBe(1);
+      expect(d.r.d1Calls).toBeLessThanOrEqual(8);
+      if (s !== "idle") expect(d.r.enriched + (d.r.deferred ?? 0)).toBe(limitsFrom(env).batchSize);
+    },
+  );
+
   it("R38/R56: 할 일이 없는 스냅샷 Cron은 ≤100행 (스냅샷 메타·표시만)", async () => {
     await seed("idle");
     await env.DB.batch(PUBLIC_HUBS.map((h) =>

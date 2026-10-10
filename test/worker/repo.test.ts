@@ -13,7 +13,7 @@ import {
   EXPIRED_RESET_PAGES, EXPIRED_SCAN_LIMIT, EXPIRED_SCAN_SQL, LIST_BACKFILL_LIMIT, backfillListJson,
   DETAIL_PICK_FIRST_PAGE, DETAIL_PICK_GROWTH, DETAIL_PICK_MAX_PAGES, NEAREST_DUE_SQL, NEAREST_UNFETCHED_SQL,
   UNFETCHED_CHUNK_TILES, UNFETCHED_FROM_KEY, UNFETCHED_MAX_CHUNKS, dueTileKeys, nearestDetailIds, nearestUnfetchedStates,
-  pickDetailIds, saveDetails, type DetailSave,
+  pickDetailIds, saveDetails, type DetailSave, EXPIRED_CURSOR_KEYS, LIST_BACKFILL_KEY,
 } from "../../worker/repo";
 import { parseDetail } from "../../worker/detailParser";
 import { readList, placesPayload } from "../../worker/placesService";
@@ -708,6 +708,47 @@ describe("Task 34: 보충 후보를 SQL에서 가까운 순으로 고르기", ()
     const fourth = await run();
     expect(fourth.r).toEqual({ states: [], cleared: true });
     expect(fourth.queries).toBe(0);
+  });
+
+  it("R11/R38: 같은 실행에서 미리 읽은 meta를 넘기면(Task 57 — Cron의 meta 한 번 읽기) 미수집·만료 커서와 list_json 백필 커서를 다시 읽지 않고, 고르는 후보·쓰는 커서는 읽었을 때와 같다", async () => {
+    const byDist = [...KEYS].sort((a, b) => tileDist(a) - tileDist(b));
+    await seedFrontier(KEYS, { u1: byDist[byDist.length - 1], u2: byDist[byDist.length - 2] });
+    await saveDetailFailure(env.DB, "f1", "http_500", NOW - DETAIL_FAIL_TTL_MS - 1);
+    await replaceTilePlaces(env.DB, KEYS[0], ["f1", ...(await tilePlaceStates(env.DB, [KEYS[0]])).map((t) => t.id)], NOW, false);
+    const META_KEYS = [UNFETCHED_FROM_KEY, ...EXPIRED_CURSOR_KEYS, LIST_BACKFILL_KEY];
+    const metaRows = async () =>
+      (await env.DB.prepare("SELECT key, value FROM meta WHERE key IN (SELECT value FROM json_each(?)) ORDER BY key")
+        .bind(JSON.stringify(META_KEYS)).all<{ key: string; value: string }>()).results;
+    const restore = async (rows: { key: string; value: string }[]) => {
+      await env.DB.prepare("DELETE FROM meta WHERE key IN (SELECT value FROM json_each(?))").bind(JSON.stringify(META_KEYS)).run();
+      for (const x of rows) await env.DB.prepare("INSERT INTO meta (key, value) VALUES (?, ?)").bind(x.key, x.value).run();
+    };
+    const metaSelects = (log: { sql: string }[]) => log.filter((x) => /^SELECT (key, )?value FROM meta\b/.test(x.sql)).length;
+    const changedAt = await tilesChangedAt(env.DB);
+    // 커서가 없을 때(처음)와 있을 때(이어 읽기) 모두
+    for (let round = 0; round < 3; round++) {
+      const before = await metaRows();
+      const plain = recordingDb(env.DB);
+      const want = {
+        unfetched: await nearestUnfetchedStates(plain.db, KEYS, [ASEM], 4, { changedAt }),
+        expired: await expiredDetailStates(plain.db, KEYS, NOW, changedAt),
+        filled: await backfillListJson(plain.db),
+      };
+      const after = await metaRows();
+      await restore(before);
+      const pre = new Map(before.map((x) => [x.key, x.value] as const));
+      const fast = recordingDb(env.DB);
+      const got = {
+        unfetched: await nearestUnfetchedStates(fast.db, KEYS, [ASEM], 4, { changedAt, meta: pre }),
+        expired: await expiredDetailStates(fast.db, KEYS, NOW, changedAt, undefined, pre),
+        filled: await backfillListJson(fast.db, pre),
+      };
+      expect(got).toEqual(want);
+      expect(await metaRows()).toEqual(after);
+      expect(metaSelects(plain.log)).toBe(3);
+      expect(metaSelects(fast.log)).toBe(0);
+      expect(fast.log.length).toBe(plain.log.length - 3);
+    }
   });
 
   it("R11/R4: 커서를 쓴 뒤 같은 now로 격자 ID가 또 들어와도 커서를 버린다 (tiles_changed_at이 같은 값으로 머물지 않는다)", async () => {

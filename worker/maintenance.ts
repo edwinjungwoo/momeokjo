@@ -5,22 +5,22 @@ import type { LatLng } from "../shared/types";
 import { Budget } from "./budget";
 import { detailOnlyExtraFrom, limitsFrom } from "./config";
 import {
-  CRON_DETAIL_LAST_KEY, D1CallBudget, d1UsageOn, meteredDb, newTally, overReadBudget, readSoftCap, readTodayAndMeta, recordCronRun,
+  CRON_DETAIL_LAST_KEY, D1CallBudget, meteredDb, newTally, overReadBudget, readSoftCap, readTodayAndMeta, recordCronRun,
   recordD1Usage, type D1Usage, type DetailTally,
 } from "./d1Usage";
-import { utcDay } from "../shared/kst";
 import { enrichCallReserve, enrichDetails } from "./detailEnricher";
 import { isRetentionWindow, pruneOldEvents } from "./events";
-import { pruneRollups, runRollups } from "./rollup";
+import { pruneRollups, rollupMetaKeys, runRollups } from "./rollup";
 import type { FetchFn } from "./fetchFn";
 import { maintainSnapshots, type SnapshotRun } from "./hubSnapshot";
 import { isReadOnly } from "./readOnly";
-import { hubHasDue, readCronMeta, recordHubRefreshed } from "./hubRefresh";
+import { cronMetaFrom, hubHasDue, readCronMeta, recordHubRefreshed } from "./hubRefresh";
 import { hubRefreshStart } from "./refreshSchedule";
 import {
-  backfillListJson, countNeedingDetail, detailGate, detailsAllowed, EXPIRED_RESET_PAGES, expiredDetailStates, markTilesFresh,
-  nearestUnfetchedStates, pickCronIds, TILES_FRESH_KEY, tilesFreshFingerprint, tilesKnownFresh, UNFETCHED_MAX_QUERIES,
-  type TilePlaceState,
+  backfillListJson, countNeedingDetail, DETAIL_GATE_KEYS, detailGate, detailGateFrom, detailsAllowed, EXPIRED_CURSOR_KEYS,
+  EXPIRED_RESET_PAGES, expiredDetailStates, LIST_BACKFILL_KEY, markTilesFresh, nearestUnfetchedStates, pickCronIds, TILES_CHANGED_KEY,
+  TILES_FRESH_KEY, tilesFreshFingerprint, tilesKnownFresh, UNFETCHED_FROM_KEY, UNFETCHED_MAX_QUERIES,
+  type DetailGate, type TilePlaceState,
 } from "./repo";
 import { collectTiles } from "./tileCollector";
 
@@ -202,14 +202,16 @@ export async function runScheduled(
   // Task 34: 실행 하나의 D1 호출 예산 (끝의 recordCronRun 몫은 남긴다)
   const calls = new D1CallBudget(usage, CRON_D1_CALL_LIMIT - CRON_D1_RESERVE);
   let result: CronResult | null = null;
+  // Task 57: 격자 수집 뒤 한 번 읽은 meta (집계 키 포함) — 집계가 다시 읽지 않는다
+  const run: { meta?: ReadonlyMap<string, string> } = {};
   try {
-    result = await maintain(env, db, { ...opts, calls, tally: usage.details });
+    result = await maintain(env, db, { ...opts, calls, tally: usage.details }, run);
     // R59: 밀린 일별 집계 (따라잡았으면 meta 한 문장, 4키). 읽기 예산을 넘은 날은 건너뛴다(R59 30% 가드는 runRollups 안). 실패해도 수집 결과는 그대로 둔다
     // Task 34: D1 호출이 모자라면 다음 실행으로 미룬다
     if (!result.skipped && !calls.has(ROLLUP_D1_CALLS)) (result.d1Skipped ??= []).push("rollup");
     result.rolled = result.skipped || !calls.has(ROLLUP_D1_CALLS)
       ? 0
-      : await runRollups(db, opts.now, { readSoftCap: readSoftCap(env) }).catch((e) => {
+      : await runRollups(db, opts.now, { readSoftCap: readSoftCap(env), prefetched: run.meta }).catch((e) => {
           console.error("rollup failed", e);
           return 0;
         });
@@ -312,6 +314,11 @@ export async function runCron(
   return { cron: "maintain", result: await runScheduled(env, opts) };
 }
 
+/** 커서 단계(만료·미수집)가 쓰는 meta 키 — 실행의 meta 한 번 읽기에 넣는다 (Task 57) */
+const CURSOR_META_KEYS: readonly string[] = [UNFETCHED_FROM_KEY, ...EXPIRED_CURSOR_KEYS];
+/** Task 57: 상세만 실행이 시작에 한 번 읽는 meta (오늘 읽기 행 수는 readTodayAndMeta가 더한다) */
+const DETAIL_RUN_META_KEYS: readonly string[] = [...DETAIL_GATE_KEYS, TILES_CHANGED_KEY, ...CURSOR_META_KEYS];
+
 /** R63 상세만 실행의 결과 (마지막 요약 cron_detail_last에도 같은 값) */
 export type DetailCronResult = {
   enriched: number;
@@ -356,7 +363,9 @@ export async function runDetailCron(
     // R38 읽기 예산 + R63 몫: 오늘 읽기를 한 번 읽어 소프트 한도면 read_budget, 소프트 한도 × DETAIL_ONLY_READ_SHARE면 read_share
     // (본 Cron·스냅샷이 쓸 몫을 남기고 상세만 실행이 먼저 비켜선다)
     const { budgetSize, batchSize: configured, detailCharBudget, detailOnlyReadShare } = limitsFrom(env);
-    const today = (await d1UsageOn(db, utcDay(opts.now))).read;
+    // Task 57: 오늘 읽기·쿨다운·강등 모드·tiles_changed_at·두 커서를 meta 한 질의로 (예전 5번 — 보충의 쿨다운 다시 읽기 포함)
+    const start = await readTodayAndMeta(db, opts.now, DETAIL_RUN_META_KEYS);
+    const today = start.read;
     const cap = readSoftCap(env);
     if (today >= cap) {
       result.skipped = "read_budget";
@@ -371,14 +380,15 @@ export async function runDetailCron(
     const keys = [...new Set(hubs.flatMap((h) => tilesCoveringCircle(h, PREWARM_RADIUS)))];
     const batchSize = cronBatchFor(calls.left, configured);
     result.batch = batchSize;
-    if (!detailsAllowed(await detailGate(db), opts.now)) {
+    const gate = detailGateFrom((k) => start.meta.get(k));
+    if (!detailsAllowed(gate, opts.now)) {
       result.skipped = "paused";
       return result;
     }
-    const { changedAt } = await readCronMeta(db, []);
+    const { changedAt } = cronMetaFrom(start.meta, []);
     await refreshDetails(db, {
       fetcher: opts.fetcher, now: opts.now, sleep: opts.sleep, hubs, keys, calls, budget, batchSize, changedAt,
-      charBudget: detailCharBudget, tally: usage.details,
+      charBudget: detailCharBudget, tally: usage.details, meta: start.meta, gate,
     }, result);
     result.calls = budgetSize - budget.left;
     result.d1Calls = calls.used;
@@ -407,6 +417,8 @@ async function refreshDetails(
   ctx: {
     fetcher: FetchFn; now: number; sleep?: (ms: number) => Promise<void>; hubs: Hub[]; keys: string[]; calls: D1CallBudget;
     budget: Budget; batchSize: number; changedAt: number; charBudget: number; tally?: DetailTally;
+    /** Task 57: 이 실행이 이미 읽은 meta(CURSOR_META_KEYS 포함)와 쿨다운 — 커서·쿨다운을 다시 읽지 않는다 */
+    meta: ReadonlyMap<string, string>; gate: DetailGate;
   },
   out: {
     enriched: number; failed: number; deferred?: number; chars?: number; enrichError?: true; d1Skipped?: string[];
@@ -418,11 +430,11 @@ async function refreshDetails(
   const candidates: TilePlaceState[] = [];
   if (batchSize <= 0) return candidates;
   // 유효 배치가 0이면 고를 것도 없으니 만료 후보도 읽지 않는다 (Task 34 리뷰)
-  const readExpired = (only?: "failed") => expiredDetailStates(db, ctx.keys, ctx.now, ctx.changedAt, only);
+  const readExpired = (only?: "failed") => expiredDetailStates(db, ctx.keys, ctx.now, ctx.changedAt, only, ctx.meta);
   // Task 34: 미수집은 앞선 커서부터 거점에 가까운 순 batchSize곳만 (만료 후보와 합쳐 고르는 결과는 전부 읽은 것과 같다).
   // 커서가 끝이고 tiles_changed_at·지문이 같으면 묶음 질의 없이 끝난다 (따로 "다 채움" 표시를 두지 않는다)
   const readUnfetched = async (maxQueries: number) =>
-    (await nearestUnfetchedStates(db, ctx.keys, ctx.hubs, batchSize, { changedAt: ctx.changedAt, maxQueries })).states;
+    (await nearestUnfetchedStates(db, ctx.keys, ctx.hubs, batchSize, { changedAt: ctx.changedAt, maxQueries, meta: ctx.meta })).states;
   if (calls.has(EXPIRED_D1_CALLS + UNFETCHED_MAX_QUERIES + tail)) {
     // Task 40: 두 단계 모두 최악 몫이 남는 보통 실행은 미수집을 먼저 읽는다. 미수집이 배치를 다 채웠으면 ok 만료 후보는 고를 자리가 없다
     // (pickCronIds는 미수집이 먼저) — 실패 재시도 자리(R9)를 위해 실패 행만 읽고, ok 커서는 그대로 둔다 (고르는 ID는 둘 다 읽은 것과 같다)
@@ -446,7 +458,7 @@ async function pickAndEnrich(
   db: D1Database,
   ctx: {
     fetcher: FetchFn; now: number; sleep?: (ms: number) => Promise<void>; hubs: Hub[]; calls: D1CallBudget;
-    budget: Budget; batchSize: number; charBudget: number; tally?: DetailTally;
+    budget: Budget; batchSize: number; charBudget: number; tally?: DetailTally; gate: DetailGate;
   },
   candidates: TilePlaceState[],
   out: { enriched: number; failed: number; deferred?: number; chars?: number; enrichError?: true },
@@ -458,7 +470,7 @@ async function pickAndEnrich(
   const e = await enrichDetails(
     {
       db, fetcher: ctx.fetcher, budget: ctx.budget, now: ctx.now, batchSize, sleep: ctx.sleep, ids, charBudget: ctx.charBudget,
-      d1: calls,
+      d1: calls, gate: ctx.gate,
       // R66: 고른 id의 지난 지문은 후보 상태에 있다 (같음·바뀜·처음 계수 — 실행 끝의 recordCronRun 한 문장에 더한다)
       candidates, tally: ctx.tally,
     },
@@ -480,6 +492,8 @@ async function pickAndEnrich(
 async function maintain(
   env: Env, db: D1Database,
   opts: { fetcher: FetchFn; now: number; sleep?: (ms: number) => Promise<void>; hubs?: Hub[]; calls: D1CallBudget; tally?: DetailTally },
+  /** Task 57: 격자 수집 뒤 읽은 meta를 부르는 쪽(집계)에 넘긴다 */
+  run: { meta?: ReadonlyMap<string, string> },
 ): Promise<CronResult> {
   const { budgetSize, batchSize: configured, detailCharBudget } = limitsFrom(env);
   const calls = opts.calls;
@@ -491,8 +505,8 @@ async function maintain(
     await pruneOldEvents(db, opts.now).catch((e) => console.error("event prune failed", e));
     await pruneRollups(db, opts.now).catch((e) => console.error("rollup prune failed", e));
   }
-  // R38 읽기 예산과 Task 40 격자 확인 표시(tiles_fresh)를 한 질의로 읽는다
-  const start = await readTodayAndMeta(db, opts.now, [TILES_FRESH_KEY]);
+  // R38 읽기 예산과 Task 40 격자 확인 표시(tiles_fresh)를 한 질의로 읽는다 (Task 57: list_json 백필 커서도)
+  const start = await readTodayAndMeta(db, opts.now, [TILES_FRESH_KEY, LIST_BACKFILL_KEY]);
   if (start.read >= readSoftCap(env)) {
     return {
       order: hubs.map((h) => h.id), tiles: { total: keys.length, collected: 0, incomplete: 0 }, enriched: 0, failed: 0,
@@ -526,7 +540,7 @@ async function maintain(
     batch: batchSize,
   };
   // R12: 목록 원소 조각이 없는 예전 행을 실행마다 최대 200행 채운다 (외부 호출 없음, 다 채우면 meta 1행만 읽는다)
-  result.listJsonFilled = await backfillListJson(db).catch((e) => {
+  result.listJsonFilled = await backfillListJson(db, start.meta).catch((e) => {
     console.error("list_json backfill failed", e);
     return 0;
   });
@@ -535,14 +549,17 @@ async function maintain(
     result.calls = budgetSize - budget.left;
     return result;
   };
-  if (budget.left <= 0 || !detailsAllowed(await detailGate(db), opts.now)) return spent();
-
-  // tiles_changed_at은 한 번만 읽어 두 커서(만료·미수집)에 넘긴다 — 이 값을 본 뒤의 격자 변화는 다음 실행이 알아본다.
-  // R63 거점 완료 기록도 같은 질의로 읽는다 (D1 호출 수는 그대로)
-  const { changedAt, refreshed } = await readCronMeta(db, hubs.map((h) => h.id));
+  // tiles_changed_at은 격자 수집 뒤 한 번만 읽어 두 커서(만료·미수집)에 넘긴다 — 이 값을 본 뒤의 격자 변화는 다음 실행이 알아본다.
+  // R63 거점 완료 기록도 같은 질의로 읽는다. Task 57: 쿨다운·강등 모드(격자 수집 뒤 — 수집하는 동안 다른 실행이 기록했을 수 있다)·
+  // 두 커서·집계 키도 같은 질의로 (예전 5번 — 보충의 쿨다운 다시 읽기 포함)
+  const cron = await readCronMeta(db, hubs.map((h) => h.id), [...DETAIL_GATE_KEYS, ...CURSOR_META_KEYS, ...rollupMetaKeys(opts.now)]);
+  run.meta = cron.meta;
+  const gate = detailGateFrom((k) => cron.meta.get(k));
+  if (budget.left <= 0 || !detailsAllowed(gate, opts.now)) return spent();
+  const { changedAt, refreshed } = cron;
   const candidates = await refreshDetails(db, {
     fetcher: opts.fetcher, now: opts.now, sleep: opts.sleep, hubs, keys, calls, budget, batchSize, changedAt,
-    charBudget: detailCharBudget, tally: opts.tally,
+    charBudget: detailCharBudget, tally: opts.tally, meta: cron.meta, gate,
   }, result);
   if (batchSize > 0) {
     const done = await completeHubRefresh(db, hubs, opts.now, refreshed, {

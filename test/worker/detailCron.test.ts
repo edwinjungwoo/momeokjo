@@ -232,14 +232,12 @@ describe("R63 둘째 트리거 (홀수 분) — 스냅샷·쉼·상세만 보충
     await markFresh(ALL_KEYS, BASE);
     const broken = { ...env, DETAIL_BATCH_SIZE: "4" } as unknown as Env;
     const db = env.DB;
-    // 쿨다운 읽기(detail_mode·place_blocked_until)에서 던지는 D1
+    // 쿨다운 읽기(detail_mode·place_blocked_until — Task 57 뒤에는 실행 시작의 meta 한 번 읽기)에서 던지는 D1. 끝의 기록(INSERT)은 그대로
     const throwing = new Proxy(db, {
       get(t, k) {
         if (k !== "prepare") return Reflect.get(t, k);
         return (sql: string) => {
-          if (sql.includes("place_blocked_until") || /key IN \(\?, \?\)/.test(sql) && sql.includes("SELECT key, value FROM meta")) {
-            throw new Error("boom");
-          }
+          if (sql.startsWith("SELECT key, value FROM meta")) throw new Error("boom");
           return t.prepare(sql);
         };
       },
