@@ -636,7 +636,7 @@ export default function App() {
   }, [settled, empty, filters]);
 
   const status = statusOf(data, polling, error, now.getTime());
-  // R63: 마지막 업데이트 날짜와 갱신 요일 (다른 거점 목록이 남아 있는 동안은 숨긴다)
+  // R63/R66: 마지막 확인 날짜와 새 가게 요일 (다른 거점 목록이 남아 있는 동안은 숨긴다)
   const note = data && data.center.lat === hub.lat && data.center.lng === hub.lng ? refreshNote(data, hub.refreshDay) : null;
   /** 셔플 중(고르는 중 시트)이거나 결과 3곳 시트가 떠 있음 — 시트 아래 줄이 뽑기 바를 대신한다 (.has-trio) */
   const trioOpen = selected === null && (shuffle.display !== null || trioPlaces.length > 0);

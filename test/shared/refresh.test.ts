@@ -41,11 +41,11 @@ describe("R63 거점별 주 1회 갱신 요일", () => {
     }
   });
 
-  it("R63: 화면 문구 — 완료한 적이 있으면 그 날짜(KST)와 요일, 없으면 요일만", () => {
+  it("R63/R66: 화면 문구 — 완료한 적이 있으면 그 날짜(KST)에 확인 · 새 가게는 매주 그 요일, 없으면 새 가게 요일만 (가게마다 갱신 주기가 달라 \"매주 업데이트\"라고 하지 않는다)", () => {
     expect(REFRESH_DAY_NAMES).toEqual(["일", "월", "화", "수", "목", "금", "토"]);
-    expect(refreshNoteText(kst(2026, 10, 5, 13, 20), 1)).toBe("가게 정보 10월 5일(월) 업데이트 · 매주 월요일");
+    expect(refreshNoteText(kst(2026, 10, 5, 13, 20), 1)).toBe("가게 정보 10월 5일(월) 확인 · 새 가게는 매주 월요일");
     // 완료가 다음 날로 넘어가면 그 날짜 그대로 (KST 자정 직후)
-    expect(refreshNoteText(kst(2026, 10, 7, 0, 5), 2)).toBe("가게 정보 10월 7일(수) 업데이트 · 매주 화요일");
-    expect(refreshNoteText(null, 6)).toBe("매주 토요일 업데이트");
+    expect(refreshNoteText(kst(2026, 10, 7, 0, 5), 2)).toBe("가게 정보 10월 7일(수) 확인 · 새 가게는 매주 화요일");
+    expect(refreshNoteText(null, 6)).toBe("새 가게는 매주 토요일 확인해요");
   });
 });
