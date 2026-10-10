@@ -1,4 +1,4 @@
-import { markSeen, parseSeen, pruneSeen, type Seen } from "../shared/seen";
+import { markSeen, mergeSeen, parseSeen, pruneSeen, type Seen } from "../shared/seen";
 
 const KEY = "mmj:seen:v1";
 
@@ -21,10 +21,22 @@ function current(): Seen {
  */
 export const seenSnapshot = (): Seen => current();
 
-/** R46: 결과(직접·자동 뽑기, 공유받은 후보)와 목록·핀에서 연 카드로 보여준 곳을 기억한다. 저장 실패는 조용히 넘긴다 */
+/**
+ * R46: 결과(직접·자동 뽑기, 공유받은 후보)와 목록·핀에서 연 카드로 보여준 곳을 기억한다. 저장 실패는 조용히 넘긴다.
+ * 쓸 때마다 저장본을 다시 읽어 합친다 — 다른 탭이 그사이 기억한 곳을 덮어 지우지 않게. 그때 읽지 못하면 쓰지 않는다
+ * (이번 세션 기억만으로 저장된 기억을 덮지 않게 — 이번 세션 메모리에는 남는다)
+ */
 export function recordSeen(ids: readonly string[]): void {
   if (ids.length === 0) return;
-  memory = markSeen(current(), ids, Date.now());
+  const now = Date.now();
+  memory = markSeen(current(), ids, now);
+  let stored: Seen;
+  try {
+    stored = parseSeen(localStorage.getItem(KEY));
+  } catch {
+    return;
+  }
+  memory = mergeSeen(memory, stored, now);
   try {
     localStorage.setItem(KEY, JSON.stringify(memory));
   } catch {

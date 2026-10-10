@@ -10,9 +10,14 @@ export const MAX_SEEN = 500;
 
 const PLACE_ID = /^\d{1,15}$/;
 
-/** 30일 지난 곳을 버리고 최근에 본 500곳만 남긴다. 미래 시각(시계 어긋남)은 방금 본 것으로 보고 남긴다 */
+/**
+ * 30일 지난 곳을 버리고 최근에 본 500곳만 남긴다. 미래 시각(시계 어긋남)은 지금 본 것으로 낮춘다 —
+ * 그대로 두면 영영 잊히지 않고 500곳 자르기에서도 늘 가장 최근으로 남는다
+ */
 export function pruneSeen(s: Seen, now: number): Seen {
-  const live = Object.entries(s).filter(([, at]) => now - at <= SEEN_TTL_MS);
+  const live = Object.entries(s)
+    .map(([id, at]): [string, number] => [id, Math.min(at, now)])
+    .filter(([, at]) => now - at <= SEEN_TTL_MS);
   if (live.length > MAX_SEEN) live.sort((a, b) => b[1] - a[1]).splice(MAX_SEEN);
   return Object.fromEntries(live);
 }
@@ -22,6 +27,13 @@ export function markSeen(s: Seen, ids: readonly string[], now: number): Seen {
   if (ids.length === 0) return s;
   const next: Record<string, number> = { ...s };
   for (const id of ids) next[id] = now;
+  return pruneSeen(next, now);
+}
+
+/** 두 기억(이 탭의 것과 다른 탭이 저장한 것)을 합친다 — 곳마다 더 늦게 본 시각 (원래 객체는 바꾸지 않는다) */
+export function mergeSeen(a: Seen, b: Seen, now: number): Seen {
+  const next: Record<string, number> = { ...a };
+  for (const [id, at] of Object.entries(b)) if (!(id in next) || at > next[id]) next[id] = at;
   return pruneSeen(next, now);
 }
 
