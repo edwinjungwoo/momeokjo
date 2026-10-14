@@ -71,7 +71,7 @@ export const HUB_DUE_EXISTS_SQL = `SELECT EXISTS (
 ) AS due`;
 
 /** 거점 격자, 칸 중심이 거점에서 먼 순 (같으면 키순) */
-function farthestFirst(hub: Hub): string[] {
+export function farthestFirst(hub: Hub): string[] {
   const d = (k: string) => {
     const r = tileRect(k);
     return haversine(hub, { lat: (r.minLat + r.maxLat) / 2, lng: (r.minLng + r.maxLng) / 2 });

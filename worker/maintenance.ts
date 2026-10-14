@@ -24,7 +24,8 @@ import {
 } from "./repo";
 import { collectTiles } from "./tileCollector";
 import { hubTiles } from "./hubTiles";
-import { ensurePublicHubs } from "./publicHubs";
+import { candidateMetaKeys, ensurePublicHubs, notePublicHubs } from "./publicHubs";
+import { PUBLISH_CHECK_D1_CALLS, pickPublishCheck, runPublishCheck } from "./hubPublish";
 
 export type WarmDeps = {
   db: D1Database;
@@ -184,6 +185,8 @@ export type CronResult = {
   rolled?: number;
   /** R63: 이번 실행이 갱신 완료를 기록한 거점 */
   refreshed?: string;
+  /** R68: 이번 실행의 공개 확인 (확인할 후보가 있었을 때만) — 결과, 또는 읽기 몫(read_share)으로 건너뜀 */
+  publish?: { hub: string; pass: boolean; reason: string | null } | { hub: string; skipped: "read_share" };
 };
 
 /**
@@ -556,28 +559,61 @@ async function maintain(
   // tiles_changed_at은 격자 수집 뒤 한 번만 읽어 두 커서(만료·미수집)에 넘긴다 — 이 값을 본 뒤의 격자 변화는 다음 실행이 알아본다.
   // R63 거점 완료 기록도 같은 질의로 읽는다. Task 57: 쿨다운·강등 모드(격자 수집 뒤 — 수집하는 동안 다른 실행이 기록했을 수 있다)·
   // 두 커서·집계 키도 같은 질의로 (예전 5번 — 보충의 쿨다운 다시 읽기 포함)
-  const cron = await readCronMeta(db, hubs.map((h) => h.id), [...DETAIL_GATE_KEYS, ...CURSOR_META_KEYS, ...rollupMetaKeys(opts.now)]);
+  // R68: 공개 후보의 공개 기록·확인 결과도 같은 질의로 (후보가 없으면 키가 없다)
+  const cron = await readCronMeta(
+    db, hubs.map((h) => h.id), [...DETAIL_GATE_KEYS, ...CURSOR_META_KEYS, ...rollupMetaKeys(opts.now), ...candidateMetaKeys()],
+  );
   run.meta = cron.meta;
+  // R68: 방금 읽은 공개 기록으로 이 격리 공간의 공개 목록도 새로 한다 (D1 호출 없음)
+  notePublicHubs(cron.meta, opts.now);
   const gate = detailGateFrom((k) => cron.meta.get(k));
-  if (budget.left <= 0 || !detailsAllowed(gate, opts.now)) return spent();
-  const { changedAt, refreshed } = cron;
-  const candidates = await refreshDetails(db, {
-    fetcher: opts.fetcher, now: opts.now, sleep: opts.sleep, hubs, keys, calls, budget, batchSize, changedAt,
-    charBudget: detailCharBudget, tally: opts.tally, meta: cron.meta, gate,
-  }, result);
-  if (batchSize > 0) {
-    const done = await completeHubRefresh(db, hubs, opts.now, refreshed, {
-      pendingTiles: new Set([...tiles.incomplete, ...tiles.failed]),
-      // 완료 확인 질의(HUB_DUE_EXISTS_SQL)와 같은 기준 — 미수집·ok 후보만. 실패 행은 완료를 막지 않는다
-      candidateTiles: new Set(candidates.filter((c) => c.meta === null || c.meta.status === "ok").map((c) => c.tileKey)),
-      canCheck: () => calls.has(REFRESH_CHECK_D1_CALLS + ROLLUP_D1_CALLS),
-    }).catch((e) => {
-      console.error("hub refresh check failed", e);
+  if (budget.left > 0 && detailsAllowed(gate, opts.now)) await refreshAndComplete(gate);
+  await publishCheck();
+  return spent();
+
+  /** 상세 보충(만료·미수집) + R63 거점 갱신 완료 확인 — 쿨다운·frozen이면 하지 않는다 */
+  async function refreshAndComplete(gate: DetailGate) {
+    const { changedAt, refreshed } = cron;
+    const candidates = await refreshDetails(db, {
+      fetcher: opts.fetcher, now: opts.now, sleep: opts.sleep, hubs, keys, calls, budget, batchSize, changedAt,
+      charBudget: detailCharBudget, tally: opts.tally, meta: cron.meta, gate,
+    }, result);
+    if (batchSize > 0) {
+      const done = await completeHubRefresh(db, hubs, opts.now, refreshed, {
+        pendingTiles: new Set([...tiles.incomplete, ...tiles.failed]),
+        // 완료 확인 질의(HUB_DUE_EXISTS_SQL)와 같은 기준 — 미수집·ok 후보만. 실패 행은 완료를 막지 않는다
+        candidateTiles: new Set(candidates.filter((c) => c.meta === null || c.meta.status === "ok").map((c) => c.tileKey)),
+        canCheck: () => calls.has(REFRESH_CHECK_D1_CALLS + ROLLUP_D1_CALLS),
+      }).catch((e) => {
+        console.error("hub refresh check failed", e);
+        return null;
+      });
+      if (done) result.refreshed = done;
+    }
+  }
+
+  /**
+   * R68: 공개 후보 하나의 공개 확인 (실행마다 많아야 한 후보, 후보마다 많아야 한 시간에 한 번 — worker/hubPublish.ts).
+   * 쿨다운·frozen이어도 돈다(카카오를 부르지 않는다). 오늘 읽기가 소프트 한도 × DETAIL_ONLY_READ_SHARE에 닿았으면 건너뛰고(공개는 급하지 않다 —
+   * 확인 결과를 쓰지 않아 다음 실행이 다시 본다), 남은 D1 호출이 확인 최악 + 집계 몫보다 적으면 다음 실행으로 미룬다
+   */
+  async function publishCheck() {
+    const hub = pickPublishCheck(hubs, cron.meta, opts.now);
+    if (!hub) return;
+    if (start.read >= readSoftCap(env) * limitsFrom(env).detailOnlyReadShare) {
+      result.publish = { hub: hub.id, skipped: "read_share" };
+      return;
+    }
+    if (!calls.has(PUBLISH_CHECK_D1_CALLS + ROLLUP_D1_CALLS)) {
+      (result.d1Skipped ??= []).push("publish");
+      return;
+    }
+    const r = await runPublishCheck(db, hub, opts.now).catch((e) => {
+      console.error("hub publish check failed", hub.id, e);
       return null;
     });
-    if (done) result.refreshed = done;
+    if (r) result.publish = { hub: hub.id, pass: r.pass, reason: r.reason };
   }
-  return spent();
 }
 
 /**
