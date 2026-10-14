@@ -2,7 +2,7 @@ import { PREWARM_RADIUS } from "../shared/constants";
 import {
   COHORT_METRICS, LIVE_MAX_DAYS, METRICS, RETENTION_DAYS, TOP_PLACES_SHOWN, addDays, alertsOf, dayList, mondayOf, ratio,
   weekdayOf, type BehaviorData, type Cohort, type CronSummary, type DashboardBase, type DashboardRange, type DashboardTab,
-  type DaySource, type DetailDay, type HubStatus, type Kpi, type Metrics, type OpsData, type OpsSnapshot,
+  type CandidateStatus, type DaySource, type DetailDay, type HubStatus, type Kpi, type Metrics, type OpsData, type OpsSnapshot,
   type OverviewData, type TopPlace, intervalsOf,
 } from "../shared/dashboard";
 import { tilesCoveringCircle } from "../shared/geo";
@@ -12,6 +12,9 @@ import { hubRefreshStart, tileFreshFrom } from "./refreshSchedule";
 import { kstDay, utcDay } from "../shared/kst";
 import { CRON_DETAIL_LAST_KEY, CRON_LAST_KEY, DETAIL_KINDS, detailCounterKey } from "./d1Usage";
 import { usableListJsonSql } from "./present";
+import {
+  HUB_PUBLIC_CHECK_PREFIX, HUB_PUBLIC_PREFIX, candidateHubs, candidateMetaKeys, parsePublishCheck, parsePublishRecord,
+} from "./publicHubs";
 import { COLLECT_SINCE_KEYS, ROLLUP_THROUGH_KEY, liveDayMetrics, type LivePart, type MetricRow } from "./rollup";
 
 /**
@@ -76,7 +79,11 @@ export function putJson(deps: Pick<DashboardDeps, "cache" | "defer">, key: strin
 
 // ── meta ─────────────────────────────
 
-type MetaState = { ops: OpsSnapshot; rollupThrough: string | null; collectSince: BehaviorData["collectSince"] };
+type MetaState = {
+  ops: OpsSnapshot; rollupThrough: string | null; collectSince: BehaviorData["collectSince"];
+  /** R68: 공개 후보의 공개 상태·마지막 확인 (같은 meta 질의로) */
+  candidates: CandidateStatus[];
+};
 
 async function readState(deps: DashboardDeps): Promise<MetaState> {
   const day = utcDay(deps.now);
@@ -88,6 +95,8 @@ async function readState(deps: DashboardDeps): Promise<MetaState> {
     COLLECT_SINCE_KEYS.relaxed,
     COLLECT_SINCE_KEYS.confirmRank,
     ...detailDays.flatMap((d) => DETAIL_KINDS.map((k) => detailCounterKey(k, d))),
+    // R68: 공개 후보마다 공개 기록·확인 결과 (후보가 없으면 키가 없다)
+    ...candidateMetaKeys(),
   ];
   const r = await deps.db
     .prepare(`SELECT key, value FROM meta WHERE key IN (${keys.map(() => "?").join(", ")})`)
@@ -133,8 +142,25 @@ async function readState(deps: DashboardDeps): Promise<MetaState> {
     },
     rollupThrough: get(ROLLUP_THROUGH_KEY) ?? null,
     collectSince: { relaxed: get(COLLECT_SINCE_KEYS.relaxed) ?? null, confirmRank: get(COLLECT_SINCE_KEYS.confirmRank) ?? null },
+    candidates: candidateHubs().map((h) => {
+      const rec = parsePublishRecord(get(HUB_PUBLIC_PREFIX + h.id));
+      const chk = parsePublishCheck(get(HUB_PUBLIC_CHECK_PREFIX + h.id));
+      return {
+        hub: h.id, state: rec?.state ?? null, by: rec?.by ?? null, at: rec?.at ?? null,
+        check: chk
+          ? {
+              at: chk.at, pass: chk.pass, reason: chk.reason ?? null,
+              ...(typeof chk.audit?.places === "number" ? { places: chk.audit.places } : {}),
+              ...(typeof chk.audit?.coverage === "number" ? { coverage: chk.audit.coverage } : {}),
+            }
+          : null,
+      };
+    }),
   };
 }
+
+/** R62·R68: 아직 공개되지 않은 후보 (모르는 id는 아님) — 이상 신호에서 "(준비 중)"으로 표시하고 뒤로 보낸다 */
+const unreadyOf = (state: MetaState) => (id: string) => state.candidates.some((c) => c.hub === id && c.state !== "public");
 
 const liveAllowedBy = (state: MetaState, deps: DashboardDeps) => state.ops.budget.read < deps.readSoftCap * LIVE_BUDGET_SHARE;
 
@@ -303,8 +329,6 @@ const KPI_METRICS = ["users", "new_users", "sessions", "decided", "draw_manual",
 const HOUR_METRICS = Array.from({ length: 24 }, (_, h) => `sessions_h${String(h).padStart(2, "0")}`);
 const SPARK_DAYS = 14;
 const hubName = (id: string) => (HUBS.some((h) => h.id === id) ? hubById(id).name : id);
-/** R62: 준비 중 거점 (모르는 id는 아님) — 이상 신호에서 "(준비 중)"으로 표시하고 뒤로 보낸다 */
-const isUnreadyHub = (id: string) => HUBS.some((h) => h.id === id && !h.ready);
 
 type CompareDays = { cur: string[]; prev: string[]; excludesToday: boolean };
 
@@ -456,7 +480,7 @@ async function overview(deps: DashboardDeps, q: DashboardQuery, state: MetaState
     })),
     heatmap,
     hubs: hubRows,
-    alerts: alertsOf(state.ops, hubs.hubs, deps.now, { through: state.rollupThrough, yesterday: addDays(today, -1) }, hubName, isUnreadyHub),
+    alerts: alertsOf(state.ops, hubs.hubs, deps.now, { through: state.rollupThrough, yesterday: addDays(today, -1) }, hubName, unreadyOf(state)),
   };
 }
 
@@ -604,13 +628,14 @@ async function ops(deps: DashboardDeps, q: DashboardQuery, state: MetaState): Pr
     ...base(q, deps.now, state.rollupThrough, sources, rangeDays),
     tab: "ops",
     ops: state.ops,
+    candidates: state.candidates,
     hubs: hubs.hubs,
     hubsComputedAt: hubs.at,
     eventsToday: count ? Number(count.n) : null,
     // R66 주기 분포는 거점 상태 집계에서 (같은 캐시·같은 예산 가드)
     intervals: intervalsOf(hubs.hubs),
     intervalsAt: hubs.at,
-    alerts: alertsOf(state.ops, hubs.hubs, deps.now, { through: state.rollupThrough, yesterday: addDays(today, -1) }, hubName, isUnreadyHub),
+    alerts: alertsOf(state.ops, hubs.hubs, deps.now, { through: state.rollupThrough, yesterday: addDays(today, -1) }, hubName, unreadyOf(state)),
   };
 }
 

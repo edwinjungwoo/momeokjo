@@ -333,8 +333,22 @@ export function detailRefreshSummary(days: readonly DetailDay[]) {
   };
 }
 
+/**
+ * R68 공개 후보(ready: false)마다 공개 상태와 본 Cron의 마지막 공개 확인. state: public(공개)·hidden(관리자가 공개 취소)·null(공개 전),
+ * by·at: 누가·언제. check.reason: 막힌 첫 조건 — tiles(모으지 않은 격자)·saturated(포화)·missing(상세 미수집)·coverage(상세 95 % 미만)
+ */
+export type CandidateStatus = {
+  hub: string;
+  state: "public" | "hidden" | null;
+  by: "auto" | "admin" | null;
+  at: number | null;
+  check: { at: number; pass: boolean; reason: string | null; places?: number; coverage?: number } | null;
+};
+
 export type OpsData = DashboardBase & {
   tab: "ops";
+  /** R68: 공개 후보 (없으면 빈 목록) */
+  candidates: CandidateStatus[];
   ops: OpsSnapshot;
   /** 거점별 데이터 상태 (오늘 읽기가 소프트 한도의 절반을 넘었고 캐시에도 없으면 null — 계산하지 않았다) */
   hubs: HubStatus[] | null;

@@ -126,3 +126,20 @@ describe("R68 관리자 지금 공개·공개 취소", () => {
     expect((await places()).status).toBe(400);
   });
 });
+
+describe("R68 관리 화면 운영 탭 — 공개 후보", () => {
+  it("R68: 운영 탭은 후보마다 공개 상태(누가·언제)와 마지막 확인 결과를 싣고, 공개된 후보는 이상 신호에서 '(준비 중)'이 아니다", async () => {
+    const ops = async () =>
+      (await (await callApp(setup(), "/api/admin/dashboard?tab=ops&fresh=1", { headers: AUTH })).json<any>());
+    const before = await ops();
+    expect(before.candidates).toEqual([{ hub: ID, state: null, by: null, at: null, check: null }]);
+    await env.DB.prepare("INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)")
+      .bind(`hub_public_check:${ID}`, JSON.stringify({ at: NOW - 60_000, pass: false, reason: "coverage", audit: { places: 22, ok: 20, coverage: 0.9091 } }))
+      .run();
+    await publishRow("public", "auto");
+    const after = await ops();
+    expect(after.candidates).toEqual([
+      { hub: ID, state: "public", by: "auto", at: NOW, check: { at: NOW - 60_000, pass: false, reason: "coverage", places: 22, coverage: 0.9091 } },
+    ]);
+  });
+});
