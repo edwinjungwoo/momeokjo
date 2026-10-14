@@ -473,6 +473,20 @@ const ROLLBACK_CAVEATS = [
  * @param {import("./release.d.mts").ReleaseDeps} deps
  */
 /**
+ * R68: release가 보는 공개 거점 — ready ∪ 운영 GET /api/hubs가 공개라고 한 후보(ready: false). 배포 없이 Cron·관리자가 공개한 후보도
+ * 스모크가 목록을 보는 공개 거점이라 "모든 거점 0곳" 판단·감사 고르기(R67)에 넣는다. 응답이 없거나(R68 전 운영·네트워크) 모양이 틀리면 ready만.
+ * 순서는 hubs.ts 순서
+ * @param {{ id: string, ready: boolean }[]} hubs
+ * @param {unknown} body
+ * @returns {string[]}
+ */
+export function runtimePublicHubIds(hubs, body) {
+  const list = body && typeof body === "object" && Array.isArray(body.hubs) ? body.hubs : null;
+  const ids = list && list.every((h) => h && typeof h.id === "string") ? new Set(list.map((h) => h.id)) : new Set();
+  return hubs.filter((h) => h.ready || ids.has(h.id)).map((h) => h.id);
+}
+
+/**
  * R67: 스모크 감사(거점마다 D1 ~8천~1.6만 행)는 공개 거점 중 한 곳만 본다 — UTC 날짜로 돌려 고른다.
  * 한 release의 기준·배포 뒤 스모크는 같은 거점을 봐야 FAIL을 비교할 수 있어서 release가 한 번 골라 넘긴다
  */

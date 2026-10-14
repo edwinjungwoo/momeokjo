@@ -27,6 +27,7 @@ import {
   sameCrons,
   smokeFailKey,
   triggersDeployCommand,
+  runtimePublicHubIds,
 } from "../../scripts/release.mjs";
 import {
   D1_LIMIT_ERROR,
@@ -606,5 +607,28 @@ describe("infra: 배포 기록", () => {
     expect(
       deployLogLine({ at: Date.UTC(2026, 9, 6, 0, 24), version: null, commit: "3a4cc93", migrations: ["0005_list_json.sql"], migrationsNote: "적용 실패", result: "배포 전 중단", previous: null }),
     ).toBe("| 2026-10-06 09:24 | - | 3a4cc93 | 0005_list_json (적용 실패) | 배포 전 중단 | - |");
+  });
+});
+
+describe("R68 런타임 공개 거점 — release·스모크", () => {
+  const hubs = [
+    { id: "bongeunsa", ready: true },
+    { id: "ddp", ready: true },
+    { id: "guro", ready: false },
+    { id: "gasan", ready: false },
+  ];
+  it("R68: release의 공개 거점 = ready ∪ 운영 /api/hubs가 공개라고 한 후보 (hubs.ts 순서) — 응답이 없거나 틀리면 ready만", () => {
+    expect(runtimePublicHubIds(hubs, { hubs: [{ id: "bongeunsa" }, { id: "gasan" }, { id: "atlantis" }] })).toEqual(["bongeunsa", "ddp", "gasan"]);
+    for (const bad of [null, undefined, {}, { hubs: "x" }, { hubs: [{ id: 3 }] }]) expect(runtimePublicHubIds(hubs, bad)).toEqual(["bongeunsa", "ddp"]);
+  });
+
+  it("R68: smoke.sh는 /api/hubs로 운영의 공개 목록을 읽어 공개된 후보를 공개 거점으로 확인한다 (목록·감사 고르기 전에) — 배포 뒤에는 200이어야, 기준 실행(이전 코드)은 info", () => {
+    expect(smokeSh).toMatch(/req hubsapi "\$B\/api\/hubs"/);
+    expect(smokeSh.indexOf('req hubsapi')).toBeLessThan(smokeSh.indexOf('echo "== 목록'));
+    expect(smokeSh).toMatch(/hubs\[\$i\]="\$id \$lat \$lng true"/);
+    expect(smokeSh).toMatch(/elif \$baseline; then\n\s+info "\/api\/hubs → \$CODE/);
+    expect(smokeSh).toMatch(/else\n\s+bad "\/api\/hubs → \$CODE/);
+    // ready 거점이 운영 목록에 없으면 FAIL (공개 목록 회귀)
+    expect(smokeSh).toMatch(/bad "\/api\/hubs에 ready 거점 \$id가 없음"/);
   });
 });

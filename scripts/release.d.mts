@@ -28,7 +28,7 @@ export type ReleaseDeps = {
   adminToken: string | undefined;
   /** 모든 거점 id (마이그레이션 훅의 거점별 백필 — R62 준비 중 거점 포함) */
   hubIds: string[];
-  /** R62: 스모크가 목록을 보는 공개 거점 id ("모든 거점 0곳" 판단). hubIds의 부분집합 */
+  /** R62·R68: 스모크가 목록을 보는 공개 거점 id ("모든 거점 0곳" 판단·감사 고르기) — ready ∪ 운영이 공개한 후보 (runtimePublicHubIds). hubIds의 부분집합 */
   publicHubIds: string[];
 };
 export type SmokeSummary = { requests: number; fails: number; warns: number };
@@ -117,6 +117,8 @@ export declare function deployLogLine(entry: {
   previous: string | null;
 }): string;
 export declare function runRelease(opts: ReleaseOpts, deps: ReleaseDeps): Promise<{ code: number; summary: ReleaseSummary }>;
+/** R68: ready ∪ 운영 /api/hubs가 공개라고 한 후보 (hubs.ts 순서). 응답이 없거나 틀리면 ready만 */
+export declare function runtimePublicHubIds(hubs: { id: string; ready: boolean }[], body: unknown): string[];
 export function smokeAuditPick(publicHubIds: string[], now: number): string | undefined;
 /** wrangler.jsonc의 triggers.crons (주석 줄은 보지 않는다). 못 찾으면 [] */
 export declare function configuredCrons(text: string | undefined): string[];

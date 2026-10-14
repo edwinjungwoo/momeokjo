@@ -10,7 +10,7 @@
 #   ready인 거점이 운영에서 400이면 "공개 예정" WARN, ready가 아닌 거점이 운영에서 200이면 "숨김 예정" WARN으로만 알린다
 #   (거점을 공개·숨길 때 --accept-baseline-fails 없이 배포되게). 배포 뒤 스모크는 이 값 없이 돌아 같은 줄이 FAIL이다 → 롤백
 #
-# 요청 수: 기본 15번 + 거점마다 1번 (+ ADMIN_TOKEN이 있으면 감사: 공개 거점 한 곳 + 준비 중·공개 예정 거점 — R67, SMOKE_AUDIT_ALL=1이면 모든 거점). 읽기 경로에는 IP 제한이 없지만, 목록 요청이 카카오 수집을
+# 요청 수: 기본 16번(R68 /api/hubs 포함) + 거점마다 1번 (+ ADMIN_TOKEN이 있으면 감사: 공개 거점 한 곳 + 준비 중·공개 예정 거점 — R67, SMOKE_AUDIT_ALL=1이면 모든 거점). 읽기 경로에는 IP 제한이 없지만, 목록 요청이 카카오 수집을
 #   새로 부르면 그 수집은 IP당 분당 10회 제한(RATE_LIMITER)과 카카오 쿼터를 쓴다. 관리자 요청(인증 실패 2번 +
 #   감사)은 관리자 전용 admin:<IP> 제한(ADMIN_LIMITER, 분당 120회)을 쓴다. 그래서 요청을 아낀다
 #   - 목록은 공개 거점마다 한 번만: 봉은사역은 화면과 같은 1000m(R42), 나머지는 500m. 준비 중 거점은 400 확인 한 번(외부 호출 없음)
@@ -74,6 +74,33 @@ if [ ${#hubs[@]} -eq 0 ]; then
 fi
 
 echo "모먹죠 스모크 → $B"
+
+# R68: 운영의 런타임 공개 목록 — 공개 후보(ready: false)라도 Cron·관리자가 배포 없이 공개했으면 공개 거점으로 확인한다
+#   (목록 200·감사 FAIL 대상·R67 감사 고르기). 아직 공개되지 않은 후보만 R62처럼 400 확인. 요청 1번
+echo "== 공개 거점 (R68 /api/hubs)"
+req hubsapi "$B/api/hubs"
+published=""
+if [ "$CODE" = 200 ] && jq -e '.hubs | type == "array"' "$tmp/hubsapi.body" >/dev/null 2>&1; then
+  published=" $(jq -r '[.hubs[].id] | join(" ")' "$tmp/hubsapi.body") "
+  ok "/api/hubs 200, 공개 거점 $(jq '.hubs | length' "$tmp/hubsapi.body")곳"
+  for h in "${hubs[@]}"; do
+    read -r id _ _ ready <<<"$h"
+    [ "$ready" = true ] && [[ "$published" != *" $id "* ]] || continue
+    # 기준 실행: 이번 배포가 ready로 바꾸는 거점은 운영(이전 코드)에 아직 없다
+    if $baseline; then warn "공개 예정 $id: 운영 /api/hubs에는 아직 없음"; else bad "/api/hubs에 ready 거점 $id가 없음"; fi
+  done
+  for i in "${!hubs[@]}"; do
+    read -r id lat lng ready <<<"${hubs[$i]}"
+    if [ "$ready" != true ] && [[ "$published" == *" $id "* ]]; then
+      hubs[$i]="$id $lat $lng true"
+      info "공개 후보 $id: 운영이 공개함 — 공개 거점으로 확인"
+    fi
+  done
+elif $baseline; then
+  info "/api/hubs → $CODE — 운영이 아직 R68 전 코드라 hubs.ts의 ready로 확인"
+else
+  bad "/api/hubs → $CODE"
+fi
 
 echo "== 정적 파일"
 req index "$B/"

@@ -8,8 +8,8 @@ import { appendFileSync, mkdirSync, readFileSync, writeFileSync } from "node:fs"
 import { dirname } from "node:path";
 import { createInterface } from "node:readline/promises";
 import { fileURLToPath } from "node:url";
-import { HUBS, READY_HUBS } from "../shared/hubs.ts";
-import { parseReleaseArgs, runRelease } from "./release.mjs";
+import { HUBS } from "../shared/hubs.ts";
+import { PROD_URL, parseReleaseArgs, runRelease, runtimePublicHubIds } from "./release.mjs";
 
 process.chdir(fileURLToPath(new URL("..", import.meta.url)));
 
@@ -56,6 +56,11 @@ async function confirm(question) {
   }
 }
 
+// R68: 운영의 런타임 공개 목록 (Cron·관리자가 배포 없이 공개한 후보 포함). 못 읽으면(R68 전 운영·네트워크) ready만
+const prodHubs = await fetch(`${PROD_URL}/api/hubs`, { signal: AbortSignal.timeout(10_000) })
+  .then((r) => (r.ok ? r.json() : null))
+  .catch(() => null);
+
 const { code } = await runRelease(parsed.opts, {
   run,
   readFile,
@@ -71,6 +76,6 @@ const { code } = await runRelease(parsed.opts, {
   isTTY: Boolean(process.stdin.isTTY && process.stdout.isTTY),
   adminToken,
   hubIds: HUBS.map((h) => h.id),
-  publicHubIds: READY_HUBS.map((h) => h.id),
+  publicHubIds: runtimePublicHubIds(HUBS, prodHubs),
 });
 process.exit(code);
