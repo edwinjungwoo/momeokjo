@@ -1,6 +1,6 @@
 import { PREWARM_RADIUS } from "../shared/constants";
 import { tilesCoveringCircle } from "../shared/geo";
-import { HUBS, PUBLIC_HUBS, type Hub } from "../shared/hubs";
+import { HUBS, publicHubs, type Hub } from "../shared/hubs";
 import type { LatLng } from "../shared/types";
 import { Budget } from "./budget";
 import { detailOnlyExtraFrom, limitsFrom } from "./config";
@@ -284,7 +284,7 @@ export async function runSnapshotCron(
   try {
     if (await overReadBudget(db, env, opts.now)) return { status: "read_budget" };
     // renewOnly(:x2): 새로 하기만 — 무거운 만들기는 :x7만 (Task 56 Fix 2)
-    return await maintainSnapshots(db, hubOrder(opts.hubs ?? PUBLIC_HUBS, opts.now), opts.now, { renewOnly: opts.renewOnly });
+    return await maintainSnapshots(db, hubOrder(opts.hubs ?? [...publicHubs()], opts.now), opts.now, { renewOnly: opts.renewOnly });
   } finally {
     await recordD1Usage(env.DB, usage, opts.now).catch((e) => console.error("d1 usage record failed", e));
   }

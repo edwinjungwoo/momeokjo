@@ -11,7 +11,7 @@ export const UNREADY_HUB: Hub = { id: "testready", name: "준비중시험역", l
  * 테스트 파일 맨 위에서:
  * `vi.mock("../../shared/hubs", async (orig) => (await import("../helpers/unreadyHub")).withUnreadyHub(orig));`
  * 진짜 모듈의 HUBS 끝에 UNREADY_HUB를 더한다 — isHubId·hubById·배경 작업(Cron·관리자)은 이 거점을 알고,
- * PUBLIC_HUBS는 모듈을 읽을 때 ready만 걸러 둔 목록이라 그대로 빠진다. 모듈은 테스트 파일마다 따로라 다른 파일로 새지 않는다.
+ * READY_HUBS는 모듈을 읽을 때 ready만 걸러 둔 목록이라 그대로 빠지고, 공개 거점(publicHubs())에는 setPublishedHubIds로 알려 줄 때만 들어간다. 모듈은 테스트 파일마다 따로라 다른 파일로 새지 않는다.
  */
 export async function withUnreadyHub<T extends { HUBS: Hub[] }>(importOriginal: () => Promise<T>): Promise<T> {
   const mod = await importOriginal();

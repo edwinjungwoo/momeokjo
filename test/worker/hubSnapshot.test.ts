@@ -4,7 +4,7 @@ import {
   DETAIL_FREEZE_MS, LIST_JSON_VERSION, MAX_RADIUS, PLACE_BLOCK_COOLDOWN_MS, PREWARM_RADIUS, TILE_TTL_MS,
 } from "../../shared/constants";
 import { tileKeyOf, tilesCoveringCircle } from "../../shared/geo";
-import { HUBS, PUBLIC_HUBS, hubById, type Hub } from "../../shared/hubs";
+import { HUBS, READY_HUBS, hubById, type Hub } from "../../shared/hubs";
 import { utcDay } from "../../shared/kst";
 import { PLACES_CACHE_MS, PLACES_CACHE_VERSION, createApp, placesCacheKey } from "../../worker/app";
 import {
@@ -514,9 +514,9 @@ describe("R56 거점 스냅샷 — Cron", () => {
     const renew = full + jobs.filter((j) => j === "renew").length;
     expect(full).toBe(6);
     expect(renew).toBe(12);
-    expect(PUBLIC_HUBS.length * 1.25).toBeLessThanOrEqual((renew * SNAPSHOT_MAX_AGE_MS) / 3_600_000);
+    expect(READY_HUBS.length * 1.25).toBeLessThanOrEqual((renew * SNAPSHOT_MAX_AGE_MS) / 3_600_000);
     // 무거운 만들기 하루 144번 — 안전망(거점마다 하루 1번)은 그 10% 안
-    expect(PUBLIC_HUBS.length).toBeLessThanOrEqual(full * 24 * 0.1);
+    expect(READY_HUBS.length).toBeLessThanOrEqual(full * 24 * 0.1);
   });
 
   it("R56: 새로 하기만 하는 실행(:x2)은 깨끗하고 만료가 가까운 스냅샷만 새로 한다 — 없는·더러운·안전망이 지난 스냅샷은 만들지 않고 :x7에 맡긴다", async () => {
@@ -576,7 +576,7 @@ describe("R56 거점 스냅샷 — Cron", () => {
   it("R56: 28시간 동안 깨끗한 공개 거점은 끊기지 않고, 무거운 다시 만들기는 :x7에서만 거점마다 처음 한 번 + 하루 한 번(안전망)뿐이다", async () => {
     // 토요일 01:00 KST — 월요일 00:00까지 갱신 요일 시작이 없어 격자가 만료되지 않는다
     const start = Date.UTC(2027, 0, 15, 16, 0);
-    const keys = [...new Set(PUBLIC_HUBS.flatMap((h) => tilesCoveringCircle(h, PREWARM_RADIUS)))];
+    const keys = [...new Set(READY_HUBS.flatMap((h) => tilesCoveringCircle(h, PREWARM_RADIUS)))];
     await env.DB.prepare(
       "INSERT OR REPLACE INTO tiles (key, collected_at, place_count, saturated) SELECT value, ?, 0, 0 FROM json_each(?)",
     ).bind(start, JSON.stringify(keys)).run();
@@ -601,13 +601,13 @@ describe("R56 거점 스냅샷 — Cron", () => {
       // 처음 14곳을 :x7(시간당 6번)로 만드는 데 ~140분
       if (m >= 150) minValid = Math.min(minValid, await valid(t));
     }
-    expect(minValid).toBe(PUBLIC_HUBS.length);
+    expect(minValid).toBe(READY_HUBS.length);
     expect([...built.values()].every((n) => n === 2)).toBe(true);
-    expect(built.size).toBe(PUBLIC_HUBS.length);
+    expect(built.size).toBe(READY_HUBS.length);
   });
 
   it("R56: 공개 거점이 모두 깨끗하면 스냅샷 Cron만으로 모든 공개 거점의 스냅샷이 끊기지 않고 유지된다 (6시간)", async () => {
-    const keys = [...new Set(PUBLIC_HUBS.flatMap((h) => tilesCoveringCircle(h, PREWARM_RADIUS)))];
+    const keys = [...new Set(READY_HUBS.flatMap((h) => tilesCoveringCircle(h, PREWARM_RADIUS)))];
     await env.DB.prepare(
       "INSERT OR REPLACE INTO tiles (key, collected_at, place_count, saturated) SELECT value, ?, 0, 0 FROM json_each(?)",
     ).bind(NOW, JSON.stringify(keys)).run();
@@ -625,7 +625,7 @@ describe("R56 거점 스냅샷 — Cron", () => {
       // 처음 14곳을 :x7(시간당 6번)로 만드는 데 ~140분
       if (m >= 150) counts.push(await valid(t));
     }
-    expect(Math.min(...counts)).toBe(PUBLIC_HUBS.length);
+    expect(Math.min(...counts)).toBe(READY_HUBS.length);
   });
 
   it("R38/R56: 스냅샷 Cron은 자기 D1 사용량을 따로 기록하고, 읽기 예산을 넘은 날에는 만들지 않는다", async () => {

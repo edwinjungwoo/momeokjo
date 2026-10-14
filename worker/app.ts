@@ -3,7 +3,7 @@ import { z } from "zod";
 import { MAX_RADIUS, MIN_RADIUS, PREWARM_RADIUS, isValidRadius } from "../shared/constants";
 import { MAX_EVENT_BODY_BYTES, parseEventBatch } from "../shared/events";
 import { tilesCoveringCircle } from "../shared/geo";
-import { HUBS, PUBLIC_HUBS, isHubId, isPublicHubId } from "../shared/hubs";
+import { HUBS, isCandidateHubId, isHubId, isPublicHubId, publicHubs, publishedHubIds } from "../shared/hubs";
 import { DASHBOARD_MAX_DAYS, addDays, daysBetween, isDay } from "../shared/dashboard";
 import { kstDay, utcDay } from "../shared/kst";
 import type { PlacesResponse } from "../shared/types";
@@ -246,7 +246,7 @@ export function createApp(deps: AppDeps) {
     c.header("Cache-Control", "no-store");
     const q = PlacesQuery.safeParse(c.req.query());
     if (!q.success) return c.json({ error: "invalid_params" }, 400);
-    const hub = PUBLIC_HUBS.find((h) => h.id === q.data.hub)!;
+    const hub = publicHubs().find((h) => h.id === q.data.hub)!;
     // 거점이 몇 개뿐이라 같은 요청이 반복된다. 응답을 잠깐 캐시해서 D1 읽기와 CPU를 아낀다 (placesCacheTtl).
     // R42: 어떤 반경이 와도 1000m 하나만 계산·캐시한다 (거점당 키 하나)
     const key = new Request(placesCacheKey(hub.id));

@@ -2,7 +2,7 @@ import { env } from "cloudflare:test";
 import { describe, expect, it } from "vitest";
 import { DETAIL_FAIL_TTL_MS, LIST_JSON_VERSION, PREWARM_RADIUS } from "../../shared/constants";
 import { haversine, tileRect, tilesCoveringCircle } from "../../shared/geo";
-import { HUBS, PUBLIC_HUBS, hubById } from "../../shared/hubs";
+import { HUBS, READY_HUBS, hubById } from "../../shared/hubs";
 import type { FetchFn } from "../../worker/fetchFn";
 import { limitsFrom } from "../../worker/config";
 import { HUB_SNAPSHOT_VERSION } from "../../worker/hubSnapshot";
@@ -130,7 +130,7 @@ describe("Task 40: 운영 크기에서 Cron 한 번이 읽는 D1 행 (정상 상
   it("R38/R11: 운영 크기 픽스처 — 거점 14곳(모두 공개), 격자 669칸(겹친 칸은 한 번), 가게 ≈1.2만 곳", async () => {
     const n = await seed("idle");
     expect(HUBS).toHaveLength(14);
-    expect(PUBLIC_HUBS).toHaveLength(14);
+    expect(READY_HUBS).toHaveLength(14);
     expect(KEYS).toHaveLength(669);
     expect(WALK_RUNS).toBe(4);
     expect(n.ids).toBe(669 * PER_TILE);
@@ -304,7 +304,7 @@ describe("Task 40: 운영 크기에서 Cron 한 번이 읽는 D1 행 (정상 상
 
   it("R38/R56: 할 일이 없는 스냅샷 Cron은 ≤100행 (스냅샷 메타·표시만)", async () => {
     await seed("idle");
-    await env.DB.batch(PUBLIC_HUBS.map((h) =>
+    await env.DB.batch(READY_HUBS.map((h) =>
       env.DB.prepare(
         "INSERT INTO hub_snapshots (hub, version, built_at, source_at, encoding, etag, body) VALUES (?, ?, ?, 0, 'gzip', ?, 'x')",
       ).bind(h.id, HUB_SNAPSHOT_VERSION, NOW - 10 * 60_000, `"e-${h.id}"`)));

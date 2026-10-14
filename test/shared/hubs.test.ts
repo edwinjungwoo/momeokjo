@@ -1,7 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { PREWARM_RADIUS } from "../../shared/constants";
 import { tilesCoveringCircle } from "../../shared/geo";
-import { DEFAULT_HUB_ID, HUBS, PUBLIC_HUBS, hubById, isHubId, isPublicHubId, publicHubById } from "../../shared/hubs";
+import {
+  DEFAULT_HUB_ID, HUBS, READY_HUBS, hasCandidateHubs, hubById, isCandidateHubId, isHubId, isPublicHubId, publicHubById, publicHubs,
+  publishedHubIds, setPublishedHubIds,
+} from "../../shared/hubs";
 import { UNREADY_HUB } from "../helpers/unreadyHub";
 
 describe("hubs", () => {
@@ -34,17 +37,19 @@ describe("hubs", () => {
   });
 
   it("R62: 공개 거점은 ready인 거점 — 강남역·여의도역·광화문역은 2026-10-08, 역삼역·선정릉역·선릉역·삼성역은 2026-10-09, 시청역·을지로입구역은 2026-10-10에 감사를 마치고 공개해 지금은 14곳 모두 공개", () => {
-    expect(PUBLIC_HUBS.map((h) => h.id)).toEqual(["bongeunsa", "ddp", "pangyo", "naebang", "gwacheon", "gangnam", "yeouido", "gwanghwamun", "yeoksam", "seonjeongneung", "seolleung", "samseong", "cityhall", "euljiro1ga"]);
+    expect(READY_HUBS.map((h) => h.id)).toEqual(["bongeunsa", "ddp", "pangyo", "naebang", "gwacheon", "gangnam", "yeouido", "gwanghwamun", "yeoksam", "seonjeongneung", "seolleung", "samseong", "cityhall", "euljiro1ga"]);
     expect(HUBS.filter((h) => !h.ready)).toEqual([]);
     // 기본 거점은 언제나 공개 거점이어야 한다 (저장값·링크가 틀리면 여기로 간다)
-    expect(PUBLIC_HUBS.some((h) => h.id === DEFAULT_HUB_ID)).toBe(true);
+    expect(READY_HUBS.some((h) => h.id === DEFAULT_HUB_ID)).toBe(true);
+    // R68: 런타임 공개 목록을 모르면 ready뿐
+    expect(publicHubs()).toEqual(READY_HUBS);
   });
 
   it("R62: 화면용 검증(isPublicHubId·publicHubById)은 준비 중 거점을 모르는 거점처럼, 배경 작업용(isHubId·hubById)은 모든 거점", () => {
-    // 운영 준비 중 거점은 공개되면 바뀌므로 테스트 전용 준비 중 거점을 HUBS에 잠깐 더해 본다 (PUBLIC_HUBS는 읽을 때 ready만 걸러 둔 목록)
+    // 운영 준비 중 거점은 공개되면 바뀌므로 테스트 전용 준비 중 거점을 HUBS에 잠깐 더해 본다
     HUBS.push(UNREADY_HUB);
     try {
-      expect(PUBLIC_HUBS).not.toContain(UNREADY_HUB);
+      expect(publicHubs()).not.toContain(UNREADY_HUB);
       expect(isPublicHubId("ddp")).toBe(true);
       expect(isPublicHubId("gangnam")).toBe(true);
       for (const id of [UNREADY_HUB.id, "atlantis", null, undefined, ""]) expect(isPublicHubId(id), String(id)).toBe(false);
@@ -57,6 +62,30 @@ describe("hubs", () => {
       HUBS.splice(HUBS.indexOf(UNREADY_HUB), 1);
     }
     expect(isHubId(UNREADY_HUB.id)).toBe(false);
+  });
+
+  it("R68: 공개 후보(ready: false)는 런타임에 공개로 알려 주면(setPublishedHubIds) 공개 거점 — 모르는 id·ready 거점은 버리고, 빈 목록이면 다시 숨김", () => {
+    expect(hasCandidateHubs()).toBe(false);
+    HUBS.push(UNREADY_HUB);
+    try {
+      expect(hasCandidateHubs()).toBe(true);
+      expect(isCandidateHubId(UNREADY_HUB.id)).toBe(true);
+      for (const id of ["ddp", "atlantis", null, undefined]) expect(isCandidateHubId(id), String(id)).toBe(false);
+      setPublishedHubIds([UNREADY_HUB.id, "atlantis", "ddp"]);
+      expect(publishedHubIds()).toEqual([UNREADY_HUB.id]);
+      expect(isPublicHubId(UNREADY_HUB.id)).toBe(true);
+      expect(publicHubById(UNREADY_HUB.id)).toBe(UNREADY_HUB);
+      // HUBS 순서 (후보는 끝에 더한 줄)
+      expect(publicHubs().map((h) => h.id)).toEqual([...READY_HUBS.map((h) => h.id), UNREADY_HUB.id]);
+      expect(isPublicHubId("atlantis")).toBe(false);
+      setPublishedHubIds([]);
+      expect(isPublicHubId(UNREADY_HUB.id)).toBe(false);
+      expect(publicHubById(UNREADY_HUB.id).id).toBe(DEFAULT_HUB_ID);
+      expect(publicHubs()).toEqual(READY_HUBS);
+    } finally {
+      setPublishedHubIds([]);
+      HUBS.splice(HUBS.indexOf(UNREADY_HUB), 1);
+    }
   });
 
   it("R24/R43: 거점 id는 URL 경로에 그대로 쓰는 소문자 영숫자(·하이픈)이고 서로 다르다", () => {

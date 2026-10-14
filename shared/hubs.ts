@@ -1,8 +1,11 @@
 /**
  * R24 거점("Pin"). 거점을 늘리려면 이 배열에 한 줄만 더하면 된다.
- * R62: 새 거점은 `ready: false`(준비 중)로 더한다 — Cron 수집·보충, 관리자 warm·backfill·audit, 관리 화면은 모든 거점(HUBS)을,
- * 화면(거점 메뉴·첫 접속 질문·짧은 링크·공유 링크·설정 검증), 공개 목록 API, 이벤트 검증, 스냅샷은 공개 거점(PUBLIC_HUBS)만 쓴다.
- * 공개 순서: 수집 → 감사 Q1·Q2 통과 → `ready: true` 한 줄 → release (docs/deploy.md).
+ * R62·R68: 새 거점은 `ready: false`(공개 후보)로 더한다 — Cron 수집·보충, 관리자 warm·backfill·audit, 관리 화면은 모든 거점(HUBS)을,
+ * 화면(거점 메뉴·첫 접속 질문·짧은 링크·공유 링크·설정 검증), 공개 목록 API, 이벤트 검증, 스냅샷은 공개 거점(publicHubs())만 쓴다.
+ * R68: 공개 거점 = `ready: true`(언제나 공개) ∪ 시스템이 공개로 기록한 후보(D1 meta `hub_public:{id}`). 본 Cron이 감사(Q1·Q2)를 통과한
+ * 후보를 스스로 공개하고(worker/hubPublish.ts), 관리 화면에서 손으로 공개·공개 취소도 한다 — 배포가 필요 없다. 서버는 meta를 읽어
+ * (worker/publicHubs.ts, 격리 공간마다 5분 캐시), 화면은 GET /api/hubs를 읽어(web/publicHubs.ts) setPublishedHubIds로 알려 준다.
+ * 모르는 동안(첫 읽기 전·실패)은 ready만 공개다.
  * scripts/smoke.sh가 이 파일의 거점 줄을 sed로 읽는다 — 한 줄에 `id, name, lat, lng, ready, refreshDay` 순서를 지킨다.
  * R63: `refreshDay`는 그 거점 가게 정보를 다시 가져오는 요일(KST, 0=일 ~ 6=토)이다. 그날 00:00 KST부터 그 시각 전에 가져온
  * 가게가 갱신 대상이 되고(다 못 하면 다음 날로 이어진다), 격자 재수집도 같은 시작에 맞춘다 (worker/refreshSchedule.ts).
@@ -34,26 +37,51 @@ export const HUBS: Hub[] = [
   { id: "euljiro1ga", name: "을지로입구역", lat: 37.566036, lng: 126.982195, ready: true, refreshDay: 4 },
 ];
 
-/** R62: 사용자에게 보이는 거점 (ready만) */
-export const PUBLIC_HUBS: Hub[] = HUBS.filter((h) => h.ready);
+/** R62·R68: 언제나 공개인 거점 (ready: true) — 런타임 공개 목록을 모를 때(첫 읽기 전·실패)의 공개 거점 */
+export const READY_HUBS: Hub[] = HUBS.filter((h) => h.ready);
 
-/** 기본 거점 — 공개 거점이어야 한다 (테스트로 고정) */
+/** 기본 거점 — 언제나 공개(ready)여야 한다 (테스트로 고정) */
 export const DEFAULT_HUB_ID = "bongeunsa";
 
-/** 모든 거점(준비 중 포함)의 id인가 — 배경 작업·관리자용 */
+/** 모든 거점(공개 후보 포함)의 id인가 — 배경 작업·관리자용 */
 export const isHubId = (id: string | null | undefined): id is string => HUBS.some((h) => h.id === id);
 
-/** R62: 공개 거점의 id인가 — 화면·공개 API·이벤트용 (준비 중 거점은 모르는 거점처럼 false) */
-export const isPublicHubId = (id: string | null | undefined): id is string => PUBLIC_HUBS.some((h) => h.id === id);
+/** R68: 공개 후보(`ready: false`)의 id인가 — 공개됐는지는 따로 (isPublicHubId) */
+export const isCandidateHubId = (id: string | null | undefined): id is string => HUBS.some((h) => h.id === id && !h.ready);
 
-const defaultHub = (): Hub => PUBLIC_HUBS.find((h) => h.id === DEFAULT_HUB_ID) ?? PUBLIC_HUBS[0];
+/** R68: 공개 후보가 하나라도 있나 — 없으면 공개 거점은 언제나 ready뿐이라 런타임 목록을 읽을 필요가 없다 */
+export const hasCandidateHubs = (): boolean => HUBS.some((h) => !h.ready);
 
-/** 모든 거점(준비 중 포함)에서 찾는다. 모르는 id나 빈 값이면 기본 거점 — 배경 작업·관리자용 */
+// R68: 런타임에 공개로 알려진 후보 id와 그것으로 만든 공개 거점 목록 (서버는 격리 공간, 화면은 탭마다 하나)
+let published: ReadonlySet<string> = new Set();
+let view: readonly Hub[] = READY_HUBS;
+
+/**
+ * R68: 공개된 후보 id를 알려 준다 (전부 바꾼다). 후보가 아닌 id(모르는 id·ready 거점)는 버린다.
+ * 서버(worker/publicHubs.ts)는 meta에서, 화면(web/publicHubs.ts)은 GET /api/hubs에서 읽어 부른다
+ */
+export function setPublishedHubIds(ids: Iterable<string>): void {
+  published = new Set([...ids].filter((id) => isCandidateHubId(id)));
+  view = HUBS.filter((h) => h.ready || published.has(h.id));
+}
+
+/** R68: 지금 공개로 알려진 후보 id (HUBS 순서) */
+export const publishedHubIds = (): string[] => HUBS.filter((h) => !h.ready && published.has(h.id)).map((h) => h.id);
+
+/** R62·R68: 사용자에게 보이는 거점 — ready ∪ 공개된 후보 (HUBS 순서) */
+export const publicHubs = (): readonly Hub[] => view;
+
+/** R62·R68: 공개 거점의 id인가 — 화면·공개 API·이벤트용 (공개 전 후보는 모르는 거점처럼 false) */
+export const isPublicHubId = (id: string | null | undefined): id is string => view.some((h) => h.id === id);
+
+const defaultHub = (): Hub => READY_HUBS.find((h) => h.id === DEFAULT_HUB_ID) ?? READY_HUBS[0];
+
+/** 모든 거점(공개 후보 포함)에서 찾는다. 모르는 id나 빈 값이면 기본 거점 — 배경 작업·관리자용 */
 export function hubById(id: string | null | undefined): Hub {
   return HUBS.find((h) => h.id === id) ?? defaultHub();
 }
 
-/** R62: 공개 거점에서 찾는다. 준비 중·모르는 id나 빈 값이면 기본 거점 — 화면용 */
+/** R62·R68: 공개 거점에서 찾는다. 공개 전 후보·모르는 id나 빈 값이면 기본 거점 — 화면용 */
 export function publicHubById(id: string | null | undefined): Hub {
-  return PUBLIC_HUBS.find((h) => h.id === id) ?? defaultHub();
+  return view.find((h) => h.id === id) ?? defaultHub();
 }

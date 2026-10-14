@@ -1,4 +1,4 @@
-import { PUBLIC_HUBS, type Hub } from "../shared/hubs";
+import { publicHubs, type Hub } from "../shared/hubs";
 
 /** 역 고르기 화면의 호선 배지 — 색은 서울 지하철 노선도 색. 화면에서만 쓴다 (서버·스모크가 읽는 shared/hubs.ts는 그대로) */
 export type Line = { label: string; name: string; color: string };
@@ -33,7 +33,7 @@ export const HUB_LINES: Record<string, string[]> = {
   euljiro1ga: ["2"],
 };
 
-/** 역 고르기 목록 (헤더 메뉴·첫 접속 질문): 공개 거점을 가나다순으로 */
-export const pickerHubs = (): Hub[] => [...PUBLIC_HUBS].sort((a, b) => a.name.localeCompare(b.name, "ko"));
+/** 역 고르기 목록 (헤더 메뉴·첫 접속 질문): 공개 거점(R68 런타임 — 공개된 후보 포함)을 가나다순으로 */
+export const pickerHubs = (): Hub[] => [...publicHubs()].sort((a, b) => a.name.localeCompare(b.name, "ko"));
 
 export const hubLines = (id: string): Line[] => (HUB_LINES[id] ?? []).flatMap((l) => (LINES[l] ? [LINES[l]] : []));

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { HUBS, PUBLIC_HUBS } from "../../shared/hubs";
+import { HUBS, publicHubs } from "../../shared/hubs";
 import { HUB_LINES, LINES, pickerHubs } from "../../web/hubLines";
 
 describe("역 고르기 — 호선 배지·가나다순", () => {
@@ -40,6 +40,6 @@ describe("역 고르기 — 호선 배지·가나다순", () => {
   it("고르기 목록은 공개 거점을 가나다순으로", () => {
     const names = pickerHubs().map((h) => h.name);
     expect(names).toEqual(["강남역", "광화문역", "내방역", "동대문역사문화공원역", "봉은사역", "삼성역", "선릉역", "선정릉역", "시청역", "여의도역", "역삼역", "을지로입구역", "정부과천청사역", "판교역"]);
-    expect(pickerHubs()).toHaveLength(PUBLIC_HUBS.length);
+    expect(pickerHubs()).toHaveLength(publicHubs().length);
   });
 });

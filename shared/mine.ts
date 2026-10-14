@@ -1,6 +1,6 @@
 import { lastLevel } from "./category";
 import { haversine } from "./geo";
-import { PUBLIC_HUBS, type Hub } from "./hubs";
+import { publicHubs, type Hub } from "./hubs";
 import { PREFERENCE_KINDS, SIGNAL_TTL_MS, freshSnapshot, type PersonalState } from "./personal";
 import type { LatLng } from "./types";
 
@@ -29,7 +29,7 @@ export type LivePlace = { name: string; category: string; lat: number; lng: numb
 export function nearestHub(p: LatLng, maxM: number): Hub | null {
   let best: Hub | null = null;
   let bestM = Infinity;
-  for (const h of PUBLIC_HUBS) {
+  for (const h of publicHubs()) {
     const m = haversine(p, h);
     if (m <= maxM && m < bestM) {
       best = h;
