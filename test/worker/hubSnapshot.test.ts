@@ -9,7 +9,7 @@ import { utcDay } from "../../shared/kst";
 import { PLACES_CACHE_MS, PLACES_CACHE_VERSION, createApp, placesCacheKey } from "../../worker/app";
 import {
   HUB_SNAPSHOT_VERSION, SNAPSHOT_DIRTY_REBUILD_MS, SNAPSHOT_EDGE_CACHE_MS, SNAPSHOT_FULL_PREFIX, SNAPSHOT_FULL_REBUILD_MS,
-  SNAPSHOT_MAX_AGE_MS, SNAPSHOT_REFRESH_BEFORE_MS, SNAPSHOT_SKIP_BACKOFF_MS, SNAPSHOT_SKIP_MAX_BACKOFF_MS, SNAPSHOT_SKIP_PREFIX, acceptsGzip, skipBackoffMs, buildHubSnapshot, etagMatches, maintainSnapshots, readHubSnapshot, snapshotEdgeTtlMs,
+  SNAPSHOT_MAX_AGE_MS, SNAPSHOT_PAUSED_MIN_LIFE_MS, SNAPSHOT_STALE_BOUND_MS, hubTilesRefreshStart, SNAPSHOT_REFRESH_BEFORE_MS, SNAPSHOT_SKIP_BACKOFF_MS, SNAPSHOT_SKIP_MAX_BACKOFF_MS, SNAPSHOT_SKIP_PREFIX, acceptsGzip, skipBackoffMs, buildHubSnapshot, etagMatches, maintainSnapshots, readHubSnapshot, snapshotEdgeTtlMs,
 } from "../../worker/hubSnapshot";
 import { hubsOfTile } from "../../worker/hubTiles";
 import { MAIN_CRON, SECOND_CRON, runCron, runSnapshotCron, secondCronJob } from "../../worker/maintenance";
@@ -17,7 +17,7 @@ import { markTile, recordPlaceBlock, replaceTilePlaces, saveDetail, saveDetailFa
 import { SNAPSHOT_DIRTY_PREFIX, markHubsDirtyStmt } from "../../worker/snapshotDirty";
 import { callApp } from "../helpers/callApp";
 import { recordHubRefreshed } from "../../worker/hubRefresh";
-import { hubRefreshStart } from "../../worker/refreshSchedule";
+import { hubRefreshStart, tileFreshFrom } from "../../worker/refreshSchedule";
 import { recordingDb } from "../helpers/recordDb";
 import { doc, fakeKakaoLocal, fakePlaceApi, routeFetch } from "../helpers/fakeKakao";
 import { makeSummary, markOuterTilesFresh, placeJson, sampleDetail } from "../helpers/places";
@@ -141,7 +141,7 @@ describe("R56 거점 스냅샷 — 만들기와 내보내기", () => {
   it("R56: gzip은 풀면 원래 본문으로 돌아온다 (왕복)", async () => {
     const live = await seedHub();
     await buildHubSnapshot(env.DB, HUB, NOW);
-    const snap = await readHubSnapshot(env.DB, "bongeunsa", NOW, undefined);
+    const snap = await readHubSnapshot(env.DB, HUB, NOW, undefined);
     expect(snap?.body).toBeInstanceOf(Uint8Array);
     expect(await gunzip(new Response(snap!.body))).toBe(live);
   });
@@ -162,9 +162,9 @@ describe("R56 거점 스냅샷 — 만들기와 내보내기", () => {
   it("R56: 만든 지 SNAPSHOT_MAX_AGE_MS가 지나면 쓰지 않는다 (미래 시각도)", async () => {
     await seedHub();
     await buildHubSnapshot(env.DB, HUB, NOW);
-    expect(await readHubSnapshot(env.DB, "bongeunsa", NOW + SNAPSHOT_MAX_AGE_MS - 1, undefined)).not.toBeNull();
-    expect(await readHubSnapshot(env.DB, "bongeunsa", NOW + SNAPSHOT_MAX_AGE_MS, undefined)).toBeNull();
-    expect(await readHubSnapshot(env.DB, "bongeunsa", NOW - 1, undefined)).toBeNull();
+    expect(await readHubSnapshot(env.DB, HUB, NOW + SNAPSHOT_MAX_AGE_MS - 1, undefined)).not.toBeNull();
+    expect(await readHubSnapshot(env.DB, HUB, NOW + SNAPSHOT_MAX_AGE_MS, undefined)).toBeNull();
+    expect(await readHubSnapshot(env.DB, HUB, NOW - 1, undefined)).toBeNull();
     const { app } = makeApp(() => NOW + SNAPSHOT_MAX_AGE_MS);
     expect((await callApp(app, Q, { headers: GZIP })).headers.get("x-mmj-source")).toBe("live");
   });
@@ -205,9 +205,18 @@ describe("R56 거점 스냅샷 — 만들기와 내보내기", () => {
     const res = await callApp(app, Q, { headers: GZIP });
     expect(res.headers.get("x-mmj-source")).toBe("snapshot");
     expect(await gunzip(res)).toBe(live);
-    // 해제가 쓰는 동안 안에 오면 만들지 않는다
+    // Task 60: 해제가 쓰는 동안(6시간) 안에 와도 SNAPSHOT_PAUSED_MIN_LIFE_MS 뒤면 만든다 — 해제 때까지만 쓴다(그 뒤로는 본문의 detailsPaused가 틀리다)
+    const until = NOW + SNAPSHOT_PAUSED_MIN_LIFE_MS + 60_000;
+    expect(until).toBeLessThan(NOW + SNAPSHOT_MAX_AGE_MS);
+    await env.DB.prepare("UPDATE meta SET value = ? WHERE key = 'detail_mode'").bind(JSON.stringify({ ...frozen, until })).run();
+    expect(await buildHubSnapshot(env.DB, HUB, NOW)).toMatchObject({ status: "built" });
+    expect(await readHubSnapshot(env.DB, HUB, until - 1, undefined)).toMatchObject({ validUntil: until });
+    expect(await readHubSnapshot(env.DB, HUB, until, undefined)).toBeNull();
+    // 엣지에도 해제 너머로 두지 않는다
+    expect(snapshotEdgeTtlMs(until, until - 120_000)).toBe(120_000);
+    // 해제가 SNAPSHOT_PAUSED_MIN_LIFE_MS 안에 오면 만들지 않는다 (만들어도 곧 못 쓴다)
     await env.DB.prepare("UPDATE meta SET value = ? WHERE key = 'detail_mode'")
-      .bind(JSON.stringify({ ...frozen, until: NOW + SNAPSHOT_MAX_AGE_MS - 1 })).run();
+      .bind(JSON.stringify({ ...frozen, until: NOW + SNAPSHOT_PAUSED_MIN_LIFE_MS - 1 })).run();
     expect(await buildHubSnapshot(env.DB, HUB, NOW)).toMatchObject({ status: "skipped", reason: "paused" });
   });
 
@@ -272,7 +281,7 @@ describe("R56 거점 스냅샷 — ETag와 304", () => {
     expect(miss.status).toBe(304);
     expect(miss.headers.get("x-mmj-source")).toBe("snapshot");
     expect(await miss.text()).toBe("");
-    const meta = await readHubSnapshot(env.DB, "bongeunsa", NOW, etag);
+    const meta = await readHubSnapshot(env.DB, HUB, NOW, etag);
     expect(meta).toMatchObject({ notModified: true, body: null });
     // 다른 ETag면 본문
     const other = await callApp(app, Q, { headers: { ...GZIP, "if-none-match": 'W/"1-bongeunsa-0000000000000000"' } });
@@ -337,9 +346,9 @@ describe("R56 거점 스냅샷 — 엣지 캐시", () => {
     await cache.delete(new Request(placesCacheKey("bongeunsa")));
 
     expect(SNAPSHOT_EDGE_CACHE_MS).toBe(600_000);
-    expect(snapshotEdgeTtlMs(NOW, NOW)).toBe(SNAPSHOT_EDGE_CACHE_MS);
-    expect(snapshotEdgeTtlMs(NOW, NOW + SNAPSHOT_MAX_AGE_MS - 120_000)).toBe(120_000);
-    expect(snapshotEdgeTtlMs(NOW, NOW + SNAPSHOT_MAX_AGE_MS - 10)).toBe(1000);
+    expect(snapshotEdgeTtlMs(NOW + SNAPSHOT_MAX_AGE_MS, NOW)).toBe(SNAPSHOT_EDGE_CACHE_MS);
+    expect(snapshotEdgeTtlMs(NOW + SNAPSHOT_MAX_AGE_MS, NOW + SNAPSHOT_MAX_AGE_MS - 120_000)).toBe(120_000);
+    expect(snapshotEdgeTtlMs(NOW + SNAPSHOT_MAX_AGE_MS, NOW + SNAPSHOT_MAX_AGE_MS - 10)).toBe(1000);
   });
 
   it("R56: 지금 경로 응답의 엣지 캐시 시간은 그대로 (다 찬 응답 60초)", async () => {
@@ -388,7 +397,7 @@ describe("R56 거점 스냅샷 — 더러움 표시와 무효화", () => {
     expect(await stamp("bongeunsa")).toBe(s2);
   });
 
-  it("R56: 격자에 ID가 새로 들어오면 그 격자를 덮는 거점 스냅샷을 지우고(pending이 생긴다) 표시를 올린다. 빠지기만 하면 표시만", async () => {
+  it("R56: 격자에 ID가 새로 들어오면 그 격자를 덮는 거점 스냅샷을 지우고(pending이 생긴다) 표시를 올린다. 빠지기만 하면 표시와 남은 쓰는 시간을 2시간으로 (Task 60)", async () => {
     await seedHub();
     await buildHubSnapshot(env.DB, HUB, NOW);
     const key = tileKeyOf({ lat: at(0.0005), lng: HUB.lng }); // 1001이 있는 칸
@@ -401,6 +410,14 @@ describe("R56 거점 스냅샷 — 더러움 표시와 무효화", () => {
     await replaceTilePlaces(env.DB, key, ids.slice(1), NOW + 1, false);
     expect(await snapshotRow("bongeunsa")).not.toBeNull();
     expect(await stamp("bongeunsa")).toBeGreaterThan(s);
+    // 없어진 가게가 예전 상한(2시간)보다 오래 보이지 않는다 — 6시간 쓰는 스냅샷이어도
+    expect(SNAPSHOT_STALE_BOUND_MS).toBe(2 * 3_600_000);
+    expect(await readHubSnapshot(env.DB, HUB, NOW + 1 + SNAPSHOT_STALE_BOUND_MS - 1, undefined)).not.toBeNull();
+    expect(await readHubSnapshot(env.DB, HUB, NOW + 1 + SNAPSHOT_STALE_BOUND_MS, undefined)).toBeNull();
+    // 이미 더 짧으면 그대로 (늘리지 않는다)
+    await env.DB.prepare("UPDATE hub_snapshots SET built_at = ?").bind(NOW - SNAPSHOT_MAX_AGE_MS + 60_000).run();
+    await replaceTilePlaces(env.DB, key, ids.slice(2), NOW + 1, false);
+    expect((await snapshotRow("bongeunsa"))!.built_at).toBe(NOW - SNAPSHOT_MAX_AGE_MS + 60_000);
     // 새 ID
     await replaceTilePlaces(env.DB, key, [...ids, "7777"], NOW + 2, false);
     expect(await snapshotRow("bongeunsa")).toBeNull();
@@ -483,38 +500,84 @@ describe("R56 거점 스냅샷 — Cron", () => {
     expect(await maintainSnapshots(rec.db, hubs, t)).toEqual({ status: "renewed", hub: "bongeunsa" });
     // 본문·ETag·표시는 그대로, 만든 시각만 지금 — 원래 만료(NOW + 2시간) 뒤에도 쓴다
     expect(await snapshotRow("bongeunsa")).toEqual({ ...before, built_at: t });
-    expect(await readHubSnapshot(env.DB, "bongeunsa", NOW + SNAPSHOT_MAX_AGE_MS + 60_000, undefined)).toMatchObject({ etag: before!.etag });
+    expect(await readHubSnapshot(env.DB, HUB, NOW + SNAPSHOT_MAX_AGE_MS + 60_000, undefined)).toMatchObject({ etag: before!.etag });
     // 무거운 읽기(격자-장소·목록)가 없다 — 메타·게이트·격자 상태·갱신 한 문장
     expect(rec.log.some((x) => /tile_places|list_json/.test(x.sql))).toBe(false);
     expect(rec.log.reduce((n, x) => n + x.read, 0)).toBeLessThan(200);
     // 더러운 스냅샷은 다시 만든다 (본문이 바뀌었을 수 있다)
     await env.DB.batch([markHubsDirtyStmt(env.DB, ["ddp"], t)]);
-    expect(await maintainSnapshots(env.DB, hubs, NOW + SNAPSHOT_DIRTY_REBUILD_MS + 60_000 + SNAPSHOT_MAX_AGE_MS / 2))
-      .toMatchObject({ status: "built", hub: "ddp" });
+    expect(await maintainSnapshots(env.DB, hubs, t + 60_000)).toMatchObject({ status: "built", hub: "ddp" });
   });
 
-  it("R56: 새로 하기 전에 지금 만들 수 있는지 다시 본다 — 만료 격자가 있거나 쿨다운·frozen이 쓰는 동안 안에 끝나면 새로 하지 않는다(만들기 경로가 건너뜀)", async () => {
+  it("R56: 새로 하기 전에 만료 격자를 다시 본다 — 있으면 새로 하지 않고 그 거점은 기다리게 한 뒤 다음 후보를 본다 (Task 60)", async () => {
     await freshAll();
     for (let i = 0; i < hubs.length; i++) await maintainSnapshots(env.DB, hubs, NOW + i);
     const t = NOW + SNAPSHOT_MAX_AGE_MS - SNAPSHOT_REFRESH_BEFORE_MS + 5;
     // 만료 격자 (거점 갱신 요일에 격자가 만료됐다 — 다시 모으기 전)
     await env.DB.prepare("DELETE FROM tiles WHERE key = ?").bind(tileKeyOf(HUB)).run();
-    expect(await maintainSnapshots(env.DB, hubs, t)).toMatchObject({ status: "skipped", hub: "bongeunsa", reason: "tiles" });
+    expect(await maintainSnapshots(env.DB, hubs, t)).toEqual({ status: "renewed", hub: "ddp" });
     expect((await snapshotRow("bongeunsa"))!.built_at).toBe(NOW);
-    // frozen이 새로 한 스냅샷이 쓰일 동안 안에 끝난다 (본문의 detailsPaused·detailsFrozenSince가 틀린 채로 남지 않게)
-    const frozen = { mode: "frozen", since: NOW - 1000, until: t + SNAPSHOT_MAX_AGE_MS - 1 };
-    await env.DB.prepare("INSERT INTO meta (key, value) VALUES ('detail_mode', ?)").bind(JSON.stringify(frozen)).run();
-    expect(await maintainSnapshots(env.DB, hubs, t + 1)).toMatchObject({ status: "skipped", hub: "ddp", reason: "paused" });
-    expect((await snapshotRow("ddp"))!.built_at).toBe(NOW + 1);
+    const skip = JSON.parse((await env.DB.prepare("SELECT value FROM meta WHERE key = ?").bind(SNAPSHOT_SKIP_PREFIX + "bongeunsa").first<{ value: string }>())!.value);
+    expect(skip).toEqual({ until: NOW + SNAPSHOT_MAX_AGE_MS - 5 * 60_000, attempts: 0 });
   });
 
-  it("R56: 수용량 — 새로 하기는 시간당 12번(:x2·:x7) × 쓰는 시간(2시간)이 공개 거점 수보다 25% 넘게 넉넉하고, 무거운 만들기는 :x7 시간당 6번까지(안정성 — 예전 상한)", () => {
+  it("R56/R63: 거점 격자의 갱신 시작(격자 만료) 전에 만든 스냅샷은 시작 + 2시간까지만 쓰고, 다시 모은 뒤 표시가 그대로면 새로 해서 이어 쓴다 (Task 60)", async () => {
+    // 봉은사는 월요일 — 일요일 23:00 KST에 만들고 월요일 00:00 KST에 격자가 만료된다
+    const monday = Date.UTC(2027, 0, 17, 15, 0);
+    expect(hubTilesRefreshStart(HUB, monday)).toBe(monday);
+    expect(hubTilesRefreshStart(HUB, monday - 1)).toBeLessThan(monday);
+    // 격자 기준(tileFreshFrom = 칸을 덮는 거점들의 가장 늦은 시작)의 거점 단위와 같다 — 격자를 나눠 쓰는 다른 요일 거점도 본다
+    let shared = 0;
+    for (const h of HUBS) {
+      for (let d = 0; d < 7; d++) {
+        const now = monday + d * 86_400_000 + 3_600_000;
+        const want = Math.max(...tilesCoveringCircle(h, MAX_RADIUS).map((k) => tileFreshFrom(k, now)));
+        expect(hubTilesRefreshStart(h, now), `${h.id} ${d}`).toBe(want);
+        if (want !== hubRefreshStart(h, now)) shared++;
+      }
+    }
+    expect(shared).toBeGreaterThan(0);
+    const built = monday - 3_600_000;
+    await env.DB.prepare(
+      "INSERT OR REPLACE INTO tiles (key, collected_at, place_count, saturated) SELECT value, ?, 0, 0 FROM json_each(?)",
+    ).bind(built, JSON.stringify(tilesCoveringCircle(HUB, PREWARM_RADIUS))).run();
+    expect(await buildHubSnapshot(env.DB, HUB, built)).toMatchObject({ status: "built" });
+    expect(await readHubSnapshot(env.DB, HUB, monday + SNAPSHOT_STALE_BOUND_MS - 1, undefined)).toMatchObject({
+      validUntil: monday + SNAPSHOT_STALE_BOUND_MS,
+    });
+    expect(await readHubSnapshot(env.DB, HUB, monday + SNAPSHOT_STALE_BOUND_MS, undefined)).toBeNull();
+    // 격자를 다시 모으기 전에는 새로 하지 않는다 (:x2) — 시작 전에 만든 것은 만료가 멀어도 새로 할 때다
+    const t = monday + 10 * 60_000;
+    expect(await maintainSnapshots(env.DB, [HUB], t, { renewOnly: true })).toEqual({ status: "idle" });
+    await env.DB.prepare("UPDATE tiles SET collected_at = ?").bind(t + 1).run();
+    expect(await maintainSnapshots(env.DB, [HUB], t + 2, { renewOnly: true })).toEqual({ status: "renewed", hub: "bongeunsa" });
+    expect(await readHubSnapshot(env.DB, HUB, monday + SNAPSHOT_STALE_BOUND_MS, undefined)).toMatchObject({ validUntil: t + 2 + SNAPSHOT_MAX_AGE_MS });
+  });
+
+  it("R56/R44: 쿨다운·frozen 동안 만든 스냅샷은 새로 해도 그 끝까지만 쓰고, 끝나면 Cron이 지운다 (새로 하기로 되살리지 않는다 — Task 60)", async () => {
+    await freshAll();
+    const until = NOW + 4 * 3_600_000;
+    const frozen = { mode: "frozen", since: NOW - 1000, until };
+    await env.DB.prepare("INSERT INTO meta (key, value) VALUES ('detail_mode', ?)").bind(JSON.stringify(frozen)).run();
+    for (let i = 0; i < hubs.length; i++) expect(await maintainSnapshots(env.DB, hubs, NOW + i)).toMatchObject({ status: "built" });
+    expect(await readHubSnapshot(env.DB, HUB, until - 1, undefined)).toMatchObject({ validUntil: until });
+    expect(await readHubSnapshot(env.DB, HUB, until, undefined)).toBeNull();
+    // 해제 뒤 첫 실행이 frozen 동안 만든 행을 모두 지우고 다시 만든다
+    expect(await maintainSnapshots(env.DB, hubs, until)).toMatchObject({ status: "built", hub: "bongeunsa" });
+    expect(await env.DB.prepare("SELECT hub FROM hub_snapshots").all()).toMatchObject({ results: [{ hub: "bongeunsa" }] });
+    expect((await callApp(makeApp(() => until + 1).app, Q, { headers: GZIP })).headers.get("x-mmj-source")).toBe("snapshot");
+  });
+
+  it("R56: 수용량 — 무거운 만들기는 :x7 시간당 6번까지(안정성 — 예전 상한)이고, 그 6번 × 쓰는 시간(6시간)이 공개 거점 수의 두 배 이상이라 모든 거점이 늘 더러워도 끊기지 않는다 (Task 60)", () => {
     const jobs = Array.from({ length: 60 }, (_, m) => secondCronJob(Date.UTC(2026, 9, 7, 1, m)));
     const full = jobs.filter((j) => j === "snapshot").length;
     const renew = full + jobs.filter((j) => j === "renew").length;
     expect(full).toBe(6);
     expect(renew).toBe(12);
+    expect(SNAPSHOT_MAX_AGE_MS).toBe(6 * 3_600_000);
     expect(READY_HUBS.length * 1.25).toBeLessThanOrEqual((renew * SNAPSHOT_MAX_AGE_MS) / 3_600_000);
+    // Task 60: 예전(2시간)은 6 × 2 = 12 < 14 — 늘 더러운 갱신 요일에 2곳 넘게 지금 경로로 답했다
+    expect((full * SNAPSHOT_MAX_AGE_MS) / 3_600_000).toBeGreaterThanOrEqual(2 * READY_HUBS.length);
     // 무거운 만들기 하루 144번 — 안전망(거점마다 하루 1번)은 그 10% 안
     expect(READY_HUBS.length).toBeLessThanOrEqual(full * 24 * 0.1);
   });
@@ -628,6 +691,45 @@ describe("R56 거점 스냅샷 — Cron", () => {
     expect(Math.min(...counts)).toBe(READY_HUBS.length);
   });
 
+  it("R56: 수용량 시뮬레이션 — 모든 공개 거점이 매시간 더러워지는 갱신 요일과 격자 재수집 아침(월 00:00 KST)에도 14곳 모두 스냅샷으로 답한다 (무거운 만들기는 :x7, 실행마다 하나)", async () => {
+    // 일요일 18:00 KST → 화요일 00:00 KST (30시간). 월요일 00:00 KST에 월요일 거점(과 격자를 나눠 쓰는 거점)의 격자가 만료되고 00:40에 다시 모은다
+    const start = Date.UTC(2027, 0, 17, 9, 0);
+    const monday = Date.UTC(2027, 0, 17, 15, 0);
+    expect(hubRefreshStart(HUB, monday)).toBe(monday);
+    const keys = [...new Set(READY_HUBS.flatMap((h) => tilesCoveringCircle(h, PREWARM_RADIUS)))];
+    const collect = (t: number) =>
+      env.DB.prepare("INSERT OR REPLACE INTO tiles (key, collected_at, place_count, saturated) SELECT value, ?, 0, 0 FROM json_each(?)")
+        .bind(t, JSON.stringify(keys)).run();
+    await collect(start);
+    const servable = async (t: number) => {
+      let n = 0;
+      for (const h of READY_HUBS) if (await readHubSnapshot(env.DB, h, t, undefined)) n++;
+      return n;
+    };
+    const coverage: { m: number; n: number }[] = [];
+    let builds = 0;
+    for (let m = 0; m < 30 * 60; m++) {
+      const t = start + m * 60_000;
+      // 갱신 요일처럼 매시간 모든 거점의 표시가 오른다 (상세 갱신이 목록을 바꾼다)
+      if (m % 60 === 30) await env.DB.batch([markHubsDirtyStmt(env.DB, READY_HUBS.map((h) => h.id), t)]);
+      if (t === monday + 40 * 60_000) await collect(t);
+      const job = secondCronJob(t);
+      if (job === "snapshot" || job === "renew") {
+        const r = await runSnapshotCron(env, { now: t, renewOnly: job === "renew" });
+        if (r.status === "built") {
+          expect(job, String(m)).toBe("snapshot");
+          builds++;
+        }
+      }
+      // 처음 14곳을 :x7(시간당 6번)로 만드는 데 ~140분
+      if (m >= 150 && m % 5 === 4) coverage.push({ m, n: await servable(t) });
+    }
+    const min = Math.min(...coverage.map((c) => c.n));
+    expect(min, JSON.stringify(coverage.filter((c) => c.n < READY_HUBS.length).slice(0, 20))).toBe(READY_HUBS.length);
+    // 무거운 만들기는 시간당 6번(:x7)을 넘지 않는다
+    expect(builds).toBeLessThanOrEqual(30 * 6);
+  });
+
   it("R38/R56: 스냅샷 Cron은 자기 D1 사용량을 따로 기록하고, 읽기 예산을 넘은 날에는 만들지 않는다", async () => {
     for (const h of HUBS) for (const k of tilesCoveringCircle(h, PREWARM_RADIUS)) await markTile(env.DB, k, NOW, 0, false);
     const read = async () =>
@@ -685,9 +787,11 @@ describe("R56 Fix wave 11 — 만들 수 없는 거점의 비용 상한", () => 
     await env.DB.prepare("UPDATE tiles SET collected_at = ? WHERE key = ?").bind(NOW - TILE_TTL_MS, tilesCoveringCircle(HUB, PREWARM_RADIUS)[0]).run();
     const ddp = hubById("ddp");
     for (const k of tilesCoveringCircle(ddp, PREWARM_RADIUS)) await markTile(env.DB, k, NOW, 0, false);
-    expect(await maintainSnapshots(env.DB, [HUB, ddp], NOW)).toMatchObject({ status: "skipped", hub: "bongeunsa", reason: "tiles" });
-    expect(await maintainSnapshots(env.DB, [HUB, ddp], NOW + 1)).toMatchObject({ status: "built", hub: "ddp" });
-    expect(await maintainSnapshots(env.DB, [HUB, ddp], NOW + 2)).toEqual({ status: "idle" });
+    // Task 60: 같은 실행이 만료 격자 거점을 기다리게 하고 다음 후보를 만든다
+    expect(await maintainSnapshots(env.DB, [HUB, ddp], NOW)).toMatchObject({ status: "built", hub: "ddp" });
+    expect(await env.DB.prepare("SELECT value FROM meta WHERE key = ?").bind(SNAPSHOT_SKIP_PREFIX + "bongeunsa").first()).not.toBeNull();
+    expect(await maintainSnapshots(env.DB, [HUB, ddp], NOW + 1)).toEqual({ status: "idle" });
+    expect(await maintainSnapshots(env.DB, [HUB, ddp], NOW + SNAPSHOT_SKIP_BACKOFF_MS)).toMatchObject({ status: "skipped", hub: "bongeunsa", reason: "tiles" });
   });
 
   it("R56: 시작 표시를 남기고 만든다 — 끝나지 못한 시도(CPU 초과 등)는 SNAPSHOT_SKIP_BACKOFF_MS 동안 다시 하지 않고, 끝나면 표시를 지운다", async () => {
@@ -820,12 +924,12 @@ describe("R56 Fix wave 11 — 만들 수 없는 거점의 비용 상한", () => 
         };
       },
     } as unknown as D1Database;
-    expect(await readHubSnapshot(spy, "bongeunsa", NOW + SNAPSHOT_MAX_AGE_MS, undefined)).toBeNull();
-    expect(await readHubSnapshot(spy, "bongeunsa", NOW - 1, undefined)).toBeNull();
+    expect(await readHubSnapshot(spy, HUB, NOW + SNAPSHOT_MAX_AGE_MS, undefined)).toBeNull();
+    expect(await readHubSnapshot(spy, HUB, NOW - 1, undefined)).toBeNull();
     await env.DB.prepare("UPDATE hub_snapshots SET version = version + 1").run();
-    expect(await readHubSnapshot(spy, "bongeunsa", NOW, undefined)).toBeNull();
+    expect(await readHubSnapshot(spy, HUB, NOW, undefined)).toBeNull();
     await env.DB.prepare("UPDATE hub_snapshots SET version = ?, encoding = 'br'").bind(HUB_SNAPSHOT_VERSION).run();
-    expect(await readHubSnapshot(spy, "bongeunsa", NOW, undefined)).toBeNull();
+    expect(await readHubSnapshot(spy, HUB, NOW, undefined)).toBeNull();
     expect(got).toEqual([null, null, null, null]);
   });
 

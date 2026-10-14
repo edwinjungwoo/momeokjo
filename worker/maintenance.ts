@@ -261,7 +261,9 @@ export type SecondCronJob = "snapshot" | "renew" | "skip" | "detail";
  * 보충, 나머지 짝수 분(시간당 18번)은 extra(DETAIL_ONLY_EXTRA "1", 채우기 부스트)일 때만 상세만 보충이고 아니면 쉼.
  * Task 56: 한 번에 한 거점이고 스냅샷은 2시간 쓰므로 동시에 쓸 수 있는 스냅샷은 (새로 할 수 있는 실행 수 × 2)개 — 6번이면 12개라
  * 공개 거점 14곳에 모자랐다. 깨끗한 스냅샷은 다시 만들지 않고 시각만 새로 하므로(가벼움) 새로 하기는 :x2·:x7 시간당 12번(24개)으로
- * 늘리고, 무거운 만들기(CPU ~40ms)는 안정성을 위해 :x7 시간당 6번(예전 상한) 그대로 둔다 — 안전망(24시간) 다시 만들기도 :x7만
+ * 늘리고, 무거운 만들기(CPU ~40ms)는 안정성을 위해 :x7 시간당 6번(예전 상한) 그대로 둔다 — 안전망(24시간) 다시 만들기도 :x7만.
+ * Task 60: 갱신 요일처럼 모든 거점이 늘 더러우면 새로 하기를 못 해서 다시 12개였다 — 스냅샷을 6시간 쓰게 해서(6번 × 6시간 = 36 ≥ 14 × 2)
+ * 만들기 횟수·CPU는 그대로 14곳을 덮는다 (worker/hubSnapshot.ts snapshotValidUntil)
  */
 export function secondCronJob(scheduledTime: number, extra = false): SecondCronJob {
   const m = new Date(scheduledTime).getUTCMinutes();

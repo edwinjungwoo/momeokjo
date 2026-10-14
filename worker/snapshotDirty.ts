@@ -11,6 +11,29 @@ import type { LatLng } from "../shared/types";
  */
 export const SNAPSHOT_DIRTY_PREFIX = "snapshot_dirty:";
 
+const MIN = 60_000;
+/**
+ * 만든(새로 한) 지 이만큼 지난 스냅샷은 쓰지 않는다 (Task 60: 2시간 → 6시간 — :x7 만들기 시간당 6번 × 6시간 = 36 ≥ 공개 14곳 × 2).
+ * 이 시간 안에서도 아래 SNAPSHOT_STALE_BOUND_MS가 목록 구성(가게가 있고 없음)의 늦음을 예전 상한으로 묶는다 (worker/hubSnapshot.ts)
+ */
+export const SNAPSHOT_MAX_AGE_MS = 360 * MIN;
+/**
+ * 목록 구성이 바뀌었을 수 있는 스냅샷을 더 쓰는 최대 시간 = 예전 SNAPSHOT_MAX_AGE_MS(2시간). 격자에서 가게가 빠지면
+ * (capSnapshotsLifeStmt) 남은 쓰는 시간을 이만큼으로 줄이고, 갱신 요일 시작(격자 만료) 전에 만든 스냅샷은 그 시작 + 이만큼까지만 쓴다
+ */
+export const SNAPSHOT_STALE_BOUND_MS = 120 * MIN;
+
+/**
+ * 거점들의 스냅샷이 쓰일 남은 시간을 SNAPSHOT_STALE_BOUND_MS로 줄인다 (built_at을 그만큼 앞당긴다 — 더 짧으면 그대로).
+ * 격자에서 가게가 빠지기만 했을 때(없어진·닫은 가게) — 표시도 함께 올라서 다시 만들 대상이 되고, 그사이 없어진 가게가
+ * 예전(2시간)보다 오래 보이지 않는다
+ */
+export function capSnapshotsLifeStmt(db: D1Database, hubIds: readonly string[], now: number): D1PreparedStatement {
+  return db
+    .prepare("UPDATE hub_snapshots SET built_at = MIN(built_at, ?) WHERE hub IN (SELECT value FROM json_each(?))")
+    .bind(now - SNAPSHOT_MAX_AGE_MS + SNAPSHOT_STALE_BOUND_MS, JSON.stringify(hubIds));
+}
+
 /** 표시를 올린다: 지금 시각 또는 이전 값 + 1 중 큰 값 (같은 ms에 두 번 바뀌어도 값이 달라진다) */
 const BUMP = `ON CONFLICT(key) DO UPDATE SET value = MAX(CAST(meta.value AS INTEGER) + 1, CAST(excluded.value AS INTEGER))`;
 

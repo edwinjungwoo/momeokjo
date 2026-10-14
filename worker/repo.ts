@@ -11,7 +11,9 @@ import { HUBS, type Hub } from "../shared/hubs";
 import { hubsOfTile } from "./hubTiles";
 import { listItemJson, storedListJson, usableListJson, usableListJsonSql } from "./present";
 import { dueSinceOf, okDueBefore, okDueBeforeOf, refreshStartsIndex, tileFreshFrom, tileRefreshStart } from "./refreshSchedule";
-import { deleteSnapshotsStmt, markHubsDirtyStmt, markPlaceHubsDirtyStmt, markPlacesHubsDirtyStmt } from "./snapshotDirty";
+import {
+  capSnapshotsLifeStmt, deleteSnapshotsStmt, markHubsDirtyStmt, markPlaceHubsDirtyStmt, markPlacesHubsDirtyStmt,
+} from "./snapshotDirty";
 
 /**
  * 상세 상태. R66: dueAfter·fp는 후보를 읽는 길(격자-장소 상태·만료 후보·가까운 순)에서만 싣는다 — dueAfter가 null·없음이면
@@ -179,6 +181,8 @@ export async function replaceTilePlaces(
     const hubs = hubsOfTile(key);
     if (hubs.length > 0) {
       if (added.length > 0) stmts.push(deleteSnapshotsStmt(db, hubs));
+      // Task 60: 빠지기만 하면 스냅샷은 두되 남은 쓰는 시간을 예전 상한(2시간)으로 줄인다 — 없어진 가게가 6시간 보이지 않게
+      else stmts.push(capSnapshotsLifeStmt(db, hubs, now));
       stmts.push(markHubsDirtyStmt(db, hubs, now));
     }
   }

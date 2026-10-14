@@ -301,12 +301,12 @@ export function createApp(deps: AppDeps) {
       });
     }
     // R56: 엣지 미스는 먼저 Cron이 만든 거점 스냅샷 한 행으로 답한다 (없거나 오래됐거나 판이 다르면 아래 지금 경로)
-    const snap = await readHubSnapshot(c.var.db, hub.id, now(), ifNoneMatch);
+    const snap = await readHubSnapshot(c.var.db, hub, now(), ifNoneMatch);
     if (snap?.notModified) return notModifiedResponse(snap.etag, "snapshot");
     if (snap?.body) {
       if (deps.cache) {
         // 다른 요청들이 10분(SNAPSHOT_EDGE_CACHE_MS) 동안 D1 없이 같은 바이트를 받는다 — 다시 만든 스냅샷은 늦어도 그 뒤에 보인다
-        const ttl = snapshotEdgeTtlMs(snap.builtAt, now()) / 1000;
+        const ttl = snapshotEdgeTtlMs(snap.validUntil, now()) / 1000;
         const stored = new Response(snap.body.slice(), {
           headers: {
             "content-type": "application/octet-stream",

@@ -308,6 +308,9 @@ describe("Task 40: 운영 크기에서 Cron 한 번이 읽는 D1 행 (정상 상
       env.DB.prepare(
         "INSERT INTO hub_snapshots (hub, version, built_at, source_at, encoding, etag, body) VALUES (?, ?, ?, 0, 'gzip', ?, 'x')",
       ).bind(h.id, HUB_SNAPSHOT_VERSION, NOW - 10 * 60_000, `"e-${h.id}"`)));
+    // 다시 만든 시각(안전망 기록 — Task 56부터 만들 때 같이 쓴다). 없으면 안전망이 지나서 다시 만든다 (Task 60: 그때 바로 고른다)
+    await env.DB.batch(READY_HUBS.map((h) =>
+      env.DB.prepare("INSERT INTO meta (key, value) VALUES (?, ?)").bind(`snapshot_full:${h.id}`, String(NOW - 10 * 60_000))));
     const { db, log } = recordingDb(env.DB);
     expect(await runSnapshotCron({ ...env, DB: db }, { now: NOW })).toEqual({ status: "idle" });
     expect(reads(log), `snapshot reads ${reads(log)}`).toBeLessThanOrEqual(100);
