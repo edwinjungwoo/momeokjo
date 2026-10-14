@@ -3,7 +3,7 @@ import { z } from "zod";
 import { MAX_RADIUS, MIN_RADIUS, PREWARM_RADIUS, isValidRadius } from "../shared/constants";
 import { MAX_EVENT_BODY_BYTES, parseEventBatch } from "../shared/events";
 import { tilesCoveringCircle } from "../shared/geo";
-import { HUBS, isCandidateHubId, isHubId, isPublicHubId, publicHubs, publishedHubIds } from "../shared/hubs";
+import { HUBS, isCandidateHubId, isHubId, isPublicHubId, publicHubs } from "../shared/hubs";
 import { DASHBOARD_MAX_DAYS, addDays, daysBetween, isDay } from "../shared/dashboard";
 import { kstDay, utcDay } from "../shared/kst";
 import type { PlacesResponse } from "../shared/types";
@@ -23,18 +23,36 @@ import { hubTileKeys } from "./hubTiles";
 import { CRON_D1_CALL_LIMIT, CRON_D1_RESERVE, warmOnce } from "./maintenance";
 import { getPlace, getPlaces, type ServiceDeps } from "./placesService";
 import { placesBody, type PlacesMeta } from "./present";
+import { ensurePublicHubs, writePublishRecord } from "./publicHubs";
 import { isReadOnly } from "./readOnly";
 import { ADMIN_BACKFILL_DEFAULT, ADMIN_BACKFILL_MAX, backfillListJsonIn } from "./repo";
 
 /**
  * R12: 공개 목록 API는 거점 id와 50m 단위 반경만 받는다 (좌표는 서버가 shared/hubs.ts에서 찾는다).
  * R42: 반경은 검증만 하고, 서버는 언제나 거점의 1000m 목록을 계산·캐시한다 (화면이 거리로 거른다)
- * R62: 공개 거점만 — 준비 중 거점은 모르는 거점처럼 400 (덜 모은 목록을 API로도 볼 수 없게)
+ * R62: 공개 거점만 — 준비 중 거점은 모르는 거점처럼 400 (덜 모은 목록을 API로도 볼 수 없게).
+ * R68: 공개 거점은 런타임 목록 — 검증 전에 ensurePublicHubs로 이 격리 공간의 목록을 새로 한다 (5분 캐시, 따뜻하면 D1 호출 없음)
  */
 export const PlacesQuery = z.object({
   hub: z.string().refine(isPublicHubId),
   radius: z.coerce.number().refine(isValidRadius),
 });
+
+/** R68: 관리자 지금 공개·공개 취소 — 공개 후보(ready: false)만 */
+export const PublishQuery = z.object({ hub: z.string().refine(isCandidateHubId) });
+
+/** R68: GET /api/hubs 브라우저 캐시 (초). 서버 격리 공간 캐시(5분)와 합쳐 공개·숨김은 늦어도 ~6분 뒤 화면에 보인다 */
+export const HUBS_BROWSER_CACHE_S = 60;
+
+/** 짧은 문자열 지문 (FNV-1a 32비트, 16진수) — /api/hubs ETag */
+function fnv1a(text: string): string {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < text.length; i++) {
+    h ^= text.charCodeAt(i);
+    h = Math.imul(h, 0x01000193) >>> 0;
+  }
+  return h.toString(16);
+}
 
 /** 관리용(warm/audit)만 임의 좌표를 받는다 */
 export const AreaQuery = z.object({
@@ -242,8 +260,24 @@ export function createApp(deps: AppDeps) {
 
   app.get("/api/health", (c) => c.json({ ok: true }));
 
+  /**
+   * R68: 화면이 배포 없이 공개 거점을 알게 하는 작은 목록 — 공개 거점(ready ∪ 공개된 후보)만 {id, name, lat, lng, refreshDay}.
+   * 서버는 격리 공간 캐시(ensurePublicHubs)로 답해 따뜻하면 D1을 읽지 않는다. 엣지 캐시(Cache API)는 두지 않는다 — Worker는 어차피 돌고,
+   * 아끼는 것은 격리 공간마다 5분에 한 번인 meta 읽기뿐이라 캐시 조회 비용과 비슷하다. 브라우저는 60초 두고, 그 뒤에는 ETag로 304.
+   * 화면은 컴파일된 후보가 있을 때만 부른다 (web/publicHubs.ts — 지금 운영은 후보가 없어 요청이 늘지 않는다)
+   */
+  app.get("/api/hubs", async (c) => {
+    await ensurePublicHubs(c.var.db, now());
+    const body = JSON.stringify({ hubs: publicHubs().map(({ id, name, lat, lng, refreshDay }) => ({ id, name, lat, lng, refreshDay })) });
+    const etag = `"h-${fnv1a(body)}"`;
+    const headers = { etag, "cache-control": `public, max-age=${HUBS_BROWSER_CACHE_S}` };
+    if (etagMatches(c.req.header("if-none-match"), etag)) return c.body(null, 304, headers);
+    return c.body(body, 200, { ...headers, "content-type": "application/json" });
+  });
+
   app.get("/api/places", async (c) => {
     c.header("Cache-Control", "no-store");
+    await ensurePublicHubs(c.var.db, now());
     const q = PlacesQuery.safeParse(c.req.query());
     if (!q.success) return c.json({ error: "invalid_params" }, 400);
     const hub = publicHubs().find((h) => h.id === q.data.hub)!;
@@ -354,6 +388,8 @@ export function createApp(deps: AppDeps) {
     } catch {
       return c.json({ error: "invalid_body" }, 400);
     }
+    // R68: 이벤트의 거점 검증도 런타임 공개 목록 (따뜻하면 D1 호출 없음, 실패해도 던지지 않는다)
+    await ensurePublicHubs(c.env.DB, now());
     const batch = parseEventBatch(json, now());
     if (!batch) return c.json({ error: "invalid_body" }, 400);
     c.header("x-mmj-dropped", String(batch.dropped));
@@ -429,6 +465,22 @@ export function createApp(deps: AppDeps) {
     const r = await backfillListJsonIn(db, keys, q.data.limit);
     return c.json({ ...r, rowsRead: usage.read, rowsWritten: usage.written });
   });
+
+  /**
+   * R68 관리 화면 "지금 공개"·"공개 취소": 후보의 공개 기록(by admin)을 쓴다. 공개 취소는 기록을 지우지 않고 숨김(state hidden)으로
+   * 남긴다 — 지우면 감사를 통과한 후보를 본 Cron이 한 시간 안에 다시 공개한다. 이 격리 공간은 바로, 다른 곳은 늦어도 5분 뒤
+   */
+  for (const [path, state] of [["/api/admin/hubs/publish", "public"], ["/api/admin/hubs/unpublish", "hidden"]] as const) {
+    app.post(path, async (c) => {
+      const refused = readOnlyRefusal(c);
+      if (refused) return refused;
+      const q = PublishQuery.safeParse(c.req.query());
+      if (!q.success) return c.json({ error: "invalid_params" }, 400);
+      await writePublishRecord(c.var.db, q.data.hub, { state, at: now(), by: "admin" }, now());
+      console.log(`hub ${state === "public" ? "published" : "unpublished"} ${q.data.hub} (admin)`);
+      return c.json({ hub: q.data.hub, state, publicHubIds: publicHubs().map((h) => h.id) });
+    });
+  }
 
   app.get("/api/admin/stats", async (c) => {
     c.header("Cache-Control", "no-store");

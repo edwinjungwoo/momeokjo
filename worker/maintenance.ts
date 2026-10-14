@@ -24,6 +24,7 @@ import {
 } from "./repo";
 import { collectTiles } from "./tileCollector";
 import { hubTiles } from "./hubTiles";
+import { ensurePublicHubs } from "./publicHubs";
 
 export type WarmDeps = {
   db: D1Database;
@@ -283,6 +284,8 @@ export async function runSnapshotCron(
   const db = meteredDb(env.DB, usage);
   try {
     if (await overReadBudget(db, env, opts.now)) return { status: "read_budget" };
+    // R68: 공개 거점은 런타임 목록 (새로 공개된 후보도 만들고, 공개를 취소한 후보의 행은 maintainSnapshots가 지운다)
+    if (!opts.hubs) await ensurePublicHubs(db, opts.now);
     // renewOnly(:x2): 새로 하기만 — 무거운 만들기는 :x7만 (Task 56 Fix 2)
     return await maintainSnapshots(db, hubOrder(opts.hubs ?? [...publicHubs()], opts.now), opts.now, { renewOnly: opts.renewOnly });
   } finally {

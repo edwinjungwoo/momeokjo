@@ -105,3 +105,24 @@ export function resetPublicHubsCache(): void {
   inflight = null;
   setPublishedHubIds([]);
 }
+
+const META_SET = "INSERT INTO meta (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value";
+
+/**
+ * R68: 후보의 공개 기록을 쓰고(본 Cron 자동 공개·관리자 공개·취소), 같은 batch로 후보들의 공개 기록을 다시 읽어 이 격리 공간의 목록을
+ * 바로 바꾼다 (D1 호출 1번). extra: 같은 batch로 함께 쓸 문장 (본 Cron의 확인 결과). 다른 격리 공간은 늦어도 PUBLIC_HUBS_TTL_MS 뒤에 본다
+ */
+export async function writePublishRecord(
+  db: D1Database, hubId: string, record: PublishRecord, now: number, extra: D1PreparedStatement[] = [],
+): Promise<void> {
+  const rs = await db.batch<{ key: string; value: string }>([
+    db.prepare(META_SET).bind(HUB_PUBLIC_PREFIX + hubId, JSON.stringify(record)),
+    ...extra,
+    metaKeysStmt(db, publishKeys()),
+  ]);
+  notePublicHubs(new Map(rs[rs.length - 1].results.map((x) => [x.key, x.value] as const)), now);
+}
+
+/** R68: 공개 확인 결과를 쓰는 문장 (본 Cron) */
+export const publishCheckStmt = (db: D1Database, hubId: string, check: PublishCheck): D1PreparedStatement =>
+  db.prepare(META_SET).bind(HUB_PUBLIC_CHECK_PREFIX + hubId, JSON.stringify(check));
