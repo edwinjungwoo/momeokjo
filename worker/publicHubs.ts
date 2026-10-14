@@ -64,9 +64,8 @@ export const candidateMetaKeys = (): string[] => candidateHubs().flatMap((h) => 
 export const publishedFromMeta = (meta: ReadonlyMap<string, string>): string[] =>
   candidateHubs().filter((h) => parsePublishRecord(meta.get(HUB_PUBLIC_PREFIX + h.id))?.state === "public").map((h) => h.id);
 
-// 격리 공간(isolate) 하나의 캐시: 마지막으로 읽은 시각과 진행 중인 읽기
+// 격리 공간(isolate) 하나의 캐시: 마지막으로 읽은 시각만 (진행 중인 읽기는 요청끼리 나눠 쓰지 않는다 — Fix 1)
 let loadedAt = Number.NEGATIVE_INFINITY;
-let inflight: Promise<void> | null = null;
 
 /**
  * R68: 이미 읽은 meta(본 Cron의 한 번 읽기, 관리자 공개·취소)로 런타임 공개 목록을 바꾸고 캐시를 새로 한 것으로 친다 (D1 호출 없음)
@@ -79,30 +78,26 @@ export function notePublicHubs(meta: ReadonlyMap<string, string>, now: number): 
 /**
  * R68: 런타임 공개 목록(ready ∪ 공개된 후보)을 이 격리 공간에 알려 둔다 — shared/hubs.ts의 isPublicHubId·publicHubs가 그 값을 쓴다.
  * TTL(5분) 안이면 아무것도 하지 않는다 (목록·이벤트의 뜨거운 경로에 D1 호출이 늘지 않는다). 지나면 후보의 공개 기록을 meta 한 질의로
- * 읽는다(후보마다 기본 키 1행) — 동시에 식은 요청들은 읽기 하나를 나눠 쓴다. 후보가 없으면(지금 운영) 읽지 않는다.
+ * 읽는다(후보마다 기본 키 1행). 진행 중인 읽기를 다른 요청과 나눠 쓰지 않는다 — 다른 요청의 I/O를 기다리면 그 요청이 취소됐을 때
+ * 끝나지 않는 약속에 걸려 이 격리 공간의 모든 요청이 멈출 수 있다(Workers는 요청 사이 약속을 풀지 않는다). TTL이 지난 순간 동시에 온
+ * 요청들은 저마다 한 행짜리 읽기를 한다. 후보가 없으면(지금 운영) 읽지 않는다.
  * 실패하면 알던 목록을 두고 PUBLIC_HUBS_RETRY_MS 뒤에 다시 읽는다 (던지지 않는다 — 목록·이벤트를 막지 않게)
  */
 export async function ensurePublicHubs(db: D1Database, now: number): Promise<void> {
   if (!hasCandidateHubs()) return;
   if (now >= loadedAt && now - loadedAt < PUBLIC_HUBS_TTL_MS) return;
-  inflight ??= (async () => {
-    try {
-      const r = await metaKeysStmt(db, publishKeys()).all<{ key: string; value: string }>();
-      notePublicHubs(new Map(r.results.map((x) => [x.key, x.value] as const)), now);
-    } catch (e) {
-      console.error("public hubs read failed", e);
-      loadedAt = now - PUBLIC_HUBS_TTL_MS + PUBLIC_HUBS_RETRY_MS;
-    }
-  })().finally(() => {
-    inflight = null;
-  });
-  await inflight;
+  try {
+    const r = await metaKeysStmt(db, publishKeys()).all<{ key: string; value: string }>();
+    notePublicHubs(new Map(r.results.map((x) => [x.key, x.value] as const)), now);
+  } catch (e) {
+    console.error("public hubs read failed", e);
+    loadedAt = now - PUBLIC_HUBS_TTL_MS + PUBLIC_HUBS_RETRY_MS;
+  }
 }
 
 /** 테스트용: 캐시를 비우고 런타임 공개 목록을 ready만으로 되돌린다 */
 export function resetPublicHubsCache(): void {
   loadedAt = Number.NEGATIVE_INFINITY;
-  inflight = null;
   setPublishedHubIds([]);
 }
 
@@ -115,8 +110,10 @@ const META_SET = "INSERT INTO meta (key, value) VALUES (?, ?) ON CONFLICT(key) D
 export async function writePublishRecord(
   db: D1Database, hubId: string, record: PublishRecord, now: number, extra: D1PreparedStatement[] = [],
 ): Promise<void> {
+  // 자동 공개는 기록이 없을 때만 쓴다 — 본 Cron이 meta를 읽은 뒤 관리자가 막 공개를 취소했으면(hidden) 덮지 않는다 (Fix 1 · M1)
+  const sql = record.by === "auto" ? "INSERT INTO meta (key, value) VALUES (?, ?) ON CONFLICT(key) DO NOTHING" : META_SET;
   const rs = await db.batch<{ key: string; value: string }>([
-    db.prepare(META_SET).bind(HUB_PUBLIC_PREFIX + hubId, JSON.stringify(record)),
+    db.prepare(sql).bind(HUB_PUBLIC_PREFIX + hubId, JSON.stringify(record)),
     ...extra,
     metaKeysStmt(db, publishKeys()),
   ]);

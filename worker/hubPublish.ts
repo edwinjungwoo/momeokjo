@@ -1,4 +1,4 @@
-import { isCandidateHubId, type Hub } from "../shared/hubs";
+import { isCandidateHubId, isPublicHubId, type Hub } from "../shared/hubs";
 import { auditDetail, auditHasMissing, auditPassOf, auditTiles } from "./audit";
 import { farthestFirst } from "./hubRefresh";
 import { hubTiles } from "./hubTiles";
@@ -65,6 +65,7 @@ export async function runPublishCheck(db: D1Database, hub: Hub, now: number): Pr
   await writePublishRecord(db, hub.id, { state: "public", at: now, by: "auto", audit: result.audit as AuditSummary }, now, [
     publishCheckStmt(db, hub.id, result),
   ]);
-  console.log(`hub published ${hub.id}`);
+  // 그사이 관리자가 공개를 취소했으면(숨김 기록) 자동 공개는 아무것도 쓰지 않았다 (writePublishRecord)
+  if (isPublicHubId(hub.id)) console.log(`hub published ${hub.id}`);
   return result;
 }

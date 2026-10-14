@@ -73,6 +73,18 @@ describe("R68 본 Cron 공개 확인", () => {
     log.mockRestore();
   });
 
+  it("R68: 확인하는 사이 관리자가 공개를 취소했으면(숨김 기록) 자동 공개가 그 기록을 덮지 않는다", async () => {
+    await seedPassing();
+    await env.DB.prepare("INSERT INTO meta (key, value) VALUES (?, ?)")
+      .bind(HUB_PUBLIC_PREFIX + ID, JSON.stringify({ state: "hidden", at: NOW - 1, by: "admin" })).run();
+    const log = vi.spyOn(console, "log").mockImplementation(() => {});
+    expect(await runPublishCheck(env.DB, H, NOW)).toMatchObject({ pass: true });
+    expect(await record()).toMatchObject({ state: "hidden", by: "admin" });
+    expect(isPublicHubId(ID)).toBe(false);
+    expect(log).not.toHaveBeenCalledWith(`hub published ${ID}`);
+    log.mockRestore();
+  });
+
   it.each([
     ["tiles", { skipKey: "first" }],
     ["saturated", { saturatedKey: "first" }],

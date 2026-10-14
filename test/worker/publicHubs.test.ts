@@ -53,10 +53,14 @@ describe("R68 런타임 공개 거점 — 서버 캐시", () => {
     expect(isPublicHubId(UNREADY_HUB.id)).toBe(false);
   });
 
-  it("R68: 동시에 식은 요청들은 읽기 하나를 나눠 쓴다", async () => {
+  it("R68: 요청끼리 읽기를 나눠 쓰지 않는다 — 앞 요청의 읽기가 끝나지 않아도(취소된 요청) 다음 요청은 제 읽기로 끝난다", async () => {
+    const hung = { prepare: () => ({ bind: () => ({ all: () => new Promise(() => {}) }) }) } as unknown as D1Database;
+    void ensurePublicHubs(hung, NOW);
+    await setRecord({ state: "public", at: NOW, by: "auto" });
     const c = countingDb(env.DB);
-    await Promise.all([ensurePublicHubs(c.db, NOW), ensurePublicHubs(c.db, NOW), ensurePublicHubs(c.db, NOW)]);
+    await ensurePublicHubs(c.db, NOW);
     expect(c.calls()).toBe(1);
+    expect(isPublicHubId(UNREADY_HUB.id)).toBe(true);
   });
 
   it("R68: 읽기가 실패하면 알던 목록을 그대로 두고 30초 뒤에 다시 읽는다 (던지지 않는다)", async () => {
