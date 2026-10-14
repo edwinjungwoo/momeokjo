@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import {
   BUDGET_BLOCK_AT, D1_DAILY_READ_LIMIT, overBlockAfter, D1_DAILY_WRITE_LIMIT, budgetFraction, budgetLevel, detailRefreshSummary,
-  type HubStatus, type OpsData,
+  type CandidateStatus, type HubStatus, type OpsData,
 } from "../../shared/dashboard";
 import { HUBS, hubById } from "../../shared/hubs";
 import type { Api } from "./AdminPage";
@@ -9,6 +9,7 @@ import { Meter } from "./charts";
 import { CronResult } from "./CronResult";
 import { ago, kstTime, num, pct, refreshDoneLabel, refreshStartLabel, shortDay, until } from "./format";
 import { AlertStrip, HubName, hubName } from "./Overview";
+import { applyPublicHubIds } from "../publicHubs";
 
 /** 대시보드 링크 (계정은 Cloudflare가 고르게 한다 — API 토큰 없음) */
 const CF_LINKS = [
@@ -40,6 +41,81 @@ const emptyStatus = (hub: string): HubStatus => ({
   refreshDay: hubById(hub).refreshDay, refreshStart: Number.NaN, refreshedAt: null, refreshedStart: null, due: Number.NaN,
   ownIntervals: [],
 });
+
+/** R68 공개 확인이 막힌 조건 */
+const REASON_LABEL: Record<string, string> = {
+  tiles: "모으지 않은 격자가 있어요",
+  saturated: "포화 격자가 있어요",
+  missing: "상세를 아직 다 못 가져왔어요",
+  coverage: "상세 커버리지가 95% 미만이에요",
+};
+const BY_LABEL = { auto: "자동", admin: "관리자" } as const;
+type PublishAction = { hub: string; action: "publish" | "unpublish" };
+
+/**
+ * R68 공개 후보: 공개 상태(누가·언제)와 본 Cron의 마지막 공개 확인(시각·결과), "지금 공개"·"공개 취소" (확인 창을 거친다).
+ * 공개 취소는 숨김 기록이라 본 Cron이 다시 자동 공개하지 않는다 — 다시 열려면 "지금 공개"
+ */
+export function Candidates({ list, now, busy, onAsk }: { list: CandidateStatus[]; now: number; busy: boolean; onAsk: (a: PublishAction) => void }) {
+  if (list.length === 0) return null;
+  return (
+    <section className="card">
+      <div className="a-card-head">
+        <h2 className="sec-title">공개 후보</h2>
+        <span className="muted small">감사를 통과하면 Cron이 스스로 공개해요 (후보마다 한 시간에 한 번 확인)</span>
+      </div>
+      <table className="rtable compact">
+        <thead>
+          <tr>
+            <th>거점</th>
+            <th>상태</th>
+            <th>마지막 확인</th>
+            <th>조작</th>
+          </tr>
+        </thead>
+        <tbody>
+          {list.map((c) => (
+            <tr key={c.hub}>
+              <td className="name">{hubName(c.hub)}</td>
+              <td data-label="상태">
+                {c.state === "public" ? (
+                  <span className="pill lv-ok">공개 · {BY_LABEL[c.by ?? "auto"]}</span>
+                ) : c.state === "hidden" ? (
+                  <span className="pill lv-warn">공개 취소함</span>
+                ) : (
+                  <span className="pill">공개 전</span>
+                )}
+                {c.at !== null && <small className="muted">{ago(c.at, now)}</small>}
+              </td>
+              <td data-label="마지막 확인">
+                {c.check ? (
+                  <span>
+                    {ago(c.check.at, now)} · {c.check.pass ? "통과" : (REASON_LABEL[c.check.reason ?? ""] ?? "통과 못 함")}
+                    {c.check.coverage !== undefined && <small className="muted"> (상세 {pct(c.check.coverage)})</small>}
+                  </span>
+                ) : (
+                  <span className="muted">아직 없음</span>
+                )}
+              </td>
+              <td className="act-cell">
+                <div className="action-row">
+                  <button
+                    type="button"
+                    className="btn btn-sm"
+                    disabled={busy}
+                    onClick={() => onAsk({ hub: c.hub, action: c.state === "public" ? "unpublish" : "publish" })}
+                  >
+                    {c.state === "public" ? "공개 취소" : "지금 공개"}
+                  </button>
+                </div>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </section>
+  );
+}
 
 const days = (ms: number | null, now: number) => (ms === null ? "–" : `${Math.max(0, Math.floor((now - ms) / 86_400_000))}일`);
 
@@ -190,6 +266,9 @@ export function Ops({ data, api }: { data: OpsData; api: Api }) {
   const [now, setNow] = useState(Date.now());
   const [ask, setAsk] = useState<{ hub: string; kind: Kind } | null>(null);
   const [run, setRun] = useState<Run | null>(null);
+  const [askPublish, setAskPublish] = useState<PublishAction | null>(null);
+  const [publishing, setPublishing] = useState(false);
+  const [publishMsg, setPublishMsg] = useState<string | null>(null);
   const stop = useRef(false);
   useEffect(() => {
     const t = window.setInterval(() => setNow(Date.now()), 30_000);
@@ -273,9 +352,40 @@ export function Ops({ data, api }: { data: OpsData; api: Api }) {
     api.reloadFresh();
   };
 
+  const publish = async (a: PublishAction) => {
+    setAskPublish(null);
+    setPublishing(true);
+    setPublishMsg(null);
+    try {
+      const res = await api.call(`/api/admin/hubs/${a.action}?hub=${encodeURIComponent(a.hub)}`, { method: "POST" });
+      if (res.status === 403) setPublishMsg("개발 서버(읽기 전용)에서는 바꿀 수 없어요");
+      else if (!res.ok) setPublishMsg(`요청이 실패했어요 (${res.status})`);
+      else {
+        const j = (await res.json()) as { publicHubIds?: string[] };
+        if (Array.isArray(j.publicHubIds)) applyPublicHubIds(j.publicHubIds);
+        setPublishMsg(
+          a.action === "publish"
+            ? `${hubName(a.hub)}을(를) 공개했어요 — 다른 서버·화면에는 늦어도 몇 분 안에 보여요`
+            : `${hubName(a.hub)} 공개를 취소했어요 — Cron이 다시 공개하지 않아요`,
+        );
+        api.reloadFresh();
+      }
+    } catch {
+      setPublishMsg("네트워크 오류로 바꾸지 못했어요");
+    }
+    setPublishing(false);
+  };
+
   return (
     <div className="stack-lg">
       <AlertStrip alerts={data.alerts} />
+
+      <Candidates list={data.candidates ?? []} now={now} busy={publishing || running} onAsk={setAskPublish} />
+      {publishMsg && (
+        <p className="banner lv-info" role="status">
+          {publishMsg}
+        </p>
+      )}
 
       <section className="card">
         <div className="a-card-head">
@@ -439,6 +549,17 @@ export function Ops({ data, api }: { data: OpsData; api: Api }) {
         }
         onYes={() => ask && void start(ask.hub, ask.kind)}
         onNo={() => setAsk(null)}
+      />
+      <Confirm
+        open={askPublish !== null}
+        title={askPublish ? `${hubName(askPublish.hub)} ${askPublish.action === "publish" ? "지금 공개" : "공개 취소"}` : ""}
+        body={
+          askPublish?.action === "publish"
+            ? "감사 결과와 상관없이 지금 공개해요. 거점 메뉴·짧은 링크·목록 API에 보이고, 다른 서버·화면에는 늦어도 몇 분 안에 보여요."
+            : "거점 메뉴·목록 API에서 다시 숨겨요. Cron이 다시 자동 공개하지 않아요 — 다시 열려면 '지금 공개'를 눌러요."
+        }
+        onYes={() => askPublish && void publish(askPublish)}
+        onNo={() => setAskPublish(null)}
       />
     </div>
   );

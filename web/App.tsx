@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import { AUTO_DRAW_POLL_WAIT_MS, pollingElapsed, shouldAutoDraw } from "../shared/autoDraw";
 import { haversine, walkMinutes } from "../shared/geo";
 import { DEFAULT_HUB_ID, publicHubById } from "../shared/hubs";
+import { usePublicHubsVersion } from "./publicHubs";
 import { NEAR_HUB_MOVE_M, nearestHub, type MineItem, type MineSections } from "../shared/mine";
 import { kstDay } from "../shared/kst";
 import { hubListView } from "../shared/placesCache";
@@ -78,6 +79,8 @@ const kakaoPlaceUrl = (id: string) => `https://place.map.kakao.com/${id}`;
 
 export default function App() {
   const { settings, share, update, askHub, chooseHub } = useSettings();
+  // R68: 공개 거점 목록(/api/hubs)이 바뀌면 다시 그린다 — 거점 메뉴·첫 접속 질문이 새로 공개된 역을 보이고, 숨긴 역은 기본 거점으로
+  usePublicHubsVersion();
   const { filters } = settings;
   const hub = publicHubById(settings.hubId);
   const center = useMemo<LatLng>(() => ({ lat: hub.lat, lng: hub.lng }), [hub.lat, hub.lng]);

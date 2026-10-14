@@ -1,13 +1,13 @@
 import { deltaOf, type Alert, type Kpi, type OverviewData } from "../../shared/dashboard";
-import { HUBS, hubById } from "../../shared/hubs";
+import { HUBS, hubById, isCandidateHubId, isPublicHubId } from "../../shared/hubs";
 import { Mascot } from "../components/Mascot";
 import { Heatmap, Sparkline, StackedColumns } from "./charts";
 import { delta, num, pct, shortDay, weekdayLabel } from "./format";
 
 export const hubName = (id: string) => (HUBS.some((h) => h.id === id) ? hubById(id).name : id);
 
-/** R62: 준비 중 거점(ready: false)인가 — 모르는 id(예전 이벤트)는 아님 */
-const isUnready = (id: string) => HUBS.some((h) => h.id === id && !h.ready);
+/** R62·R68: 아직 공개되지 않은 후보(ready: false, 런타임 공개 목록에 없음)인가 — 모르는 id(예전 이벤트)는 아님 */
+const isUnready = (id: string) => isCandidateHubId(id) && !isPublicHubId(id);
 const UNREADY_LABEL = "준비 중";
 
 /** R62: 관리 화면 거점 고르기의 이름 — 준비 중 거점은 "(준비 중)"을 붙인다 */

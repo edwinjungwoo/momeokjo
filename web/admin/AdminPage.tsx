@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
+import { usePublicHubsVersion } from "../publicHubs";
 import { DASHBOARD_MAX_DAYS, addDays, daysBetween, type DashboardResponse, type DashboardTab } from "../../shared/dashboard";
 import { HUBS } from "../../shared/hubs";
 import { kstDay } from "../../shared/kst";
@@ -63,6 +64,8 @@ export type Api = {
 
 export default function AdminPage() {
   const [token, setToken] = useState(readToken);
+  // R68: 공개 목록(main.tsx가 /api/hubs로 받는다)이 바뀌면 거점 이름의 "준비 중" 표시를 다시 그린다
+  usePublicHubsVersion();
   const [draft, setDraft] = useState("");
   const [tab, setTab] = useState<DashboardTab>(tabFromHash);
   const today = kstDay(Date.now());

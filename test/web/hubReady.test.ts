@@ -3,6 +3,8 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 import { HUBS, publicHubs } from "../../shared/hubs";
 import { HubName, hubOptionLabel } from "../../web/admin/Overview";
+import { Candidates } from "../../web/admin/Ops";
+import { setPublishedHubIds } from "../../shared/hubs";
 import { HubPicker } from "../../web/components/HubPicker";
 import { UNREADY_HUB } from "../helpers/unreadyHub";
 
@@ -55,5 +57,28 @@ describe("R62 준비 중 거점 — 화면", () => {
     expect(page).toMatch(/HUBS\.map\(/);
     expect(page).toMatch(/hubOptionLabel\(/);
     expect(sources["../../web/admin/Ops.tsx"]).toMatch(/<HubName /);
+  });
+
+  it("R68: 운영 탭 공개 후보 — 공개 전이면 '지금 공개', 공개면 '공개 취소'와 누가, 막힌 조건을 한국어로. 공개된 후보는 '준비 중' 표시가 없다", () => {
+    const now = 1_800_000_000_000;
+    const html = (state: "public" | "hidden" | null) =>
+      renderToStaticMarkup(createElement(Candidates, {
+        list: [{ hub: UNREADY_HUB.id, state, by: state ? "admin" : null, at: state ? now - 60_000 : null, check: { at: now - 120_000, pass: false, reason: "coverage", coverage: 0.9 } }],
+        now, busy: false, onAsk: () => {},
+      }));
+    expect(html(null)).toContain("지금 공개");
+    expect(html(null)).toContain("공개 전");
+    expect(html(null)).toContain("상세 커버리지가 95% 미만이에요");
+    expect(html("public")).toContain("공개 취소");
+    expect(html("public")).toContain("공개 · 관리자");
+    expect(html("hidden")).toContain("지금 공개");
+    expect(renderToStaticMarkup(createElement(Candidates, { list: [], now, busy: false, onAsk: () => {} }))).toBe("");
+    setPublishedHubIds([UNREADY_HUB.id]);
+    try {
+      expect(hubOptionLabel(UNREADY_HUB.id)).toBe(UNREADY_HUB.name);
+      expect(renderToStaticMarkup(createElement(HubName, { id: UNREADY_HUB.id }))).not.toContain("준비 중");
+    } finally {
+      setPublishedHubIds([]);
+    }
   });
 });
